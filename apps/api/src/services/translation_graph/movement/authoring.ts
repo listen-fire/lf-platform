@@ -4,6 +4,9 @@
 // `saveMovement` applies, by the pin's route (./language_route.ts): the wasm
 // checker for an installed pin; parse → TypeScript check → the engine's dry
 // interpretability scan for a legacy id. A clean validation predicts a live save.
+// A pin a carried version checks is that version's own checker's, against its
+// own catalog (./carried_check.ts), so it is validated by
+// `validateMovementForTeam`, never against this release's catalog.
 // Diagnostics are returned as plain data with 1-based line/col spans,
 // codes, severities, and the offending source line, ready to hand to an
 // authoring agent (or any other consumer) for the repair half of the loop.
@@ -33,6 +36,8 @@ import type { MovementValidityStatus } from './store';
 import { listUnsupportedConstructs } from '@listen-fire/legacy-engine/services/movement_engine/interpretable';
 import { movementCatalogForTeam } from './catalog';
 import { checkInstalled, routeOf } from './language_route';
+import { validateUnderCarried } from './carried_check';
+import { importsAcrossVersions } from './imports_across_versions';
 import { editorPinOf } from './language_service';
 import { stepTimer, type StepTimer } from './timing';
 
@@ -153,6 +158,9 @@ export function diagnoseMovementSource(
      *  same assembly as `catalog`. An installed pin is checked against it and
      *  nothing else, so it is required there. */
     snapshot?: CatalogSnapshot;
+    /** The libraries the source reaches that are on another version
+     *  (`TeamMovementCatalog.importsAcrossVersions`): each an error. */
+    importsAcrossVersions?: ReadonlyMap<string, LanguageVersion>;
   },
 ): MovementValidation {
   const lines = source.split('\n');
@@ -171,6 +179,10 @@ export function diagnoseMovementSource(
       return diagnoseInstalled(source, route.pin, options);
     case 'legacy':
       return diagnoseLegacy(source, route.pin, options);
+    case 'carried':
+      throw new Error(
+        `language version ${route.pin} is checked by its own release against its own catalog (validateMovementForTeam), never against this release's`,
+      );
     default:
       return neverAsAny(route);
   }
@@ -229,7 +241,8 @@ function diagnoseInstalled(
     ...(options.upgradingFrom !== undefined ? { upgradingFrom: options.upgradingFrom } : {}),
     ...(options.resolveFile !== undefined ? { resolveFile: options.resolveFile } : {}),
   });
-  return validationOf(program, diagnostics, lines);
+  const across = options.importsAcrossVersions;
+  return validationOf(program, across !== undefined ? [...importsAcrossVersions(program, pin, across), ...diagnostics] : diagnostics, lines);
 }
 
 /** legacy-lang's verdict: its parse and TypeScript check, then the engine's
@@ -329,6 +342,10 @@ export async function validateMovementForTeam(input: {
   // catalog (which doesn't scan the source), so `diagnoseMovementSource` still
   // runs and the checker reports the parse error as a diagnostic. Non-source
   // (infra) failures propagate unchanged.
+  const route = routeOf(input.languageVersion ?? LANGUAGE_VERSION);
+  if (route.kind === 'carried') {
+    return validateUnderCarried({ teamId: input.teamId, source: input.source, pin: route.pin, lane: route.lane });
+  }
   const timer = stepTimer('authoring: validate', { teamId: input.teamId });
   try {
     return await runValidate(input, timer);
@@ -397,6 +414,7 @@ async function runValidate(
       resolveCredentialId: teamCatalog.resolveCredentialId,
       resolveFile: teamCatalog.resolveFile,
       ...(teamCatalog.runSnapshot !== undefined ? { snapshot: teamCatalog.runSnapshot() } : {}),
+      ...(teamCatalog.importsAcrossVersions !== undefined ? { importsAcrossVersions: teamCatalog.importsAcrossVersions } : {}),
       ...(input.languageVersion !== undefined ? { languageVersion: input.languageVersion } : {}),
       ...(input.upgradingFrom !== undefined ? { upgradingFrom: input.upgradingFrom } : {}),
     }),

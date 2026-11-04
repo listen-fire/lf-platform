@@ -1,0 +1,11 @@
+// The image's build of this package (deploy/Dockerfile): JavaScript beside
+// nothing but itself, in an output directory the deploy stage installs.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": false,
+    "sourceMap": false
+  },
+  "exclude": ["node_modules", "jest.config.cjs", "**/__test__/**"]
+}

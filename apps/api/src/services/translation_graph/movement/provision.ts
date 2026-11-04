@@ -88,7 +88,7 @@ import {
   movementFileFacets,
   type MovementFileFacets,
 } from './files';
-import { movementCatalogForTeam, type TeamMovementCatalog } from './catalog';
+import { movementCatalogForTeam, type CatalogGap, type TeamMovementCatalog } from './catalog';
 import {
   deleteMovementRow,
   getMovementRow,
@@ -111,9 +111,11 @@ import {
   assessMovementValidity,
   diagnoseMovementSource,
   type AuthoringDiagnostic,
+  type MovementValidation,
   type MovementValidityAssessment,
 } from './authoring';
 import { checkInstalled, routeOf } from './language_route';
+import { notRunDiagnostic, validateUnderCarried } from './carried_check';
 import { plannedListensOfSource } from './listen_plans';
 import { listenConfigSchema, type ListenConfig, type SavedListen } from '../../inbound/listen_door';
 import { resolveAndArm, resolvesListen } from '../../inbound/listen_resolve';
@@ -560,6 +562,9 @@ async function provisionListeners(input: {
   if (route.kind === 'refused') {
     return { ok: false, diagnostics: [route.diagnostic], catalogNotes: teamCatalog.notes };
   }
+  if (route.kind === 'carried') {
+    return { ok: false, diagnostics: [notRunDiagnostic(route.pin, LANGUAGE_VERSION)], catalogNotes: teamCatalog.notes };
+  }
   // A legacy pin's listens cannot fire under this release: inbound judges by
   // the listen plans only this release's checker makes. It is refused by
   // name until it is upgraded.
@@ -852,6 +857,69 @@ async function movementNameCollisionWarnings(input: {
  *     the file's listen statements exactly (zero listens = library, no
  *     triggers) and a version is minted.
  */
+/** A save's check, under the row's pin — which a re-save never moves. */
+interface SaveCheck {
+  validation: MovementValidation;
+  validity: MovementValidityAssessment;
+  notes: string[];
+  gaps: CatalogGap[];
+  /** This release's catalog, which the listeners are provisioned from;
+   *  absent for a pin a carried version checks, whose catalog is its own. */
+  teamCatalog?: TeamMovementCatalog;
+}
+
+async function checkForSave({ input, row, timer }: { input: SaveMovementInput; row: MovementRow; timer: StepTimer }): Promise<SaveCheck> {
+  // A pin a carried version checks is validated by that version's own checker
+  // against its own catalog; this release's catalog is never assembled for it.
+  const route = routeOf(row.languageVersion);
+  if (route.kind === 'carried') {
+    const carried = await timer.step('diagnose', () =>
+      validateUnderCarried({ teamId: input.teamId, source: input.source, pin: route.pin, lane: route.lane }),
+    );
+    return {
+      validation: carried,
+      validity: assessMovementValidity({ diagnostics: carried.diagnostics, gaps: carried.gaps }),
+      notes: carried.catalogNotes,
+      gaps: carried.gaps,
+    };
+  }
+
+  // Referenced-set catalog: introspect only the (adapter, credential)
+  // pairs this program (and its imported libraries) constructs, not the
+  // whole workspace.
+  const teamCatalog = await timer.step('catalog', () =>
+    movementCatalogForTeam(input.teamId as TeamId, {
+      source: input.source,
+      languageVersion: row.languageVersion,
+    }),
+  );
+  timer.note(teamCatalog.cost ?? {});
+
+  // Runtime validity (plans/2026-07-13-movement-validity-lifecycle): assess the
+  // source against the adapters' live shape using the catalog we just built (no
+  // second introspection). Records the validity axis on the row. NOTHING
+  // hard-blocks: a non-`valid` save without consent returns
+  // `needsConfirmation` (source already persisted, so the broken movement is
+  // retained as an artifact), never a wall.
+  const validation = await timer.step('diagnose', async () =>
+    diagnoseMovementSource(input.source, {
+      catalog: teamCatalog.catalog,
+      resolveCredentialId: teamCatalog.resolveCredentialId,
+      resolveFile: teamCatalog.resolveFile,
+      languageVersion: row.languageVersion,
+      ...(teamCatalog.runSnapshot !== undefined ? { snapshot: teamCatalog.runSnapshot() } : {}),
+      ...(teamCatalog.importsAcrossVersions !== undefined ? { importsAcrossVersions: teamCatalog.importsAcrossVersions } : {}),
+    }),
+  );
+  return {
+    validation,
+    validity: assessMovementValidity({ diagnostics: validation.diagnostics, gaps: teamCatalog.gaps }),
+    notes: teamCatalog.notes,
+    gaps: teamCatalog.gaps,
+    teamCatalog,
+  };
+}
+
 export async function saveMovement(input: SaveMovementInput): Promise<SaveMovementResult> {
   // One timing line per save, whatever gate it returns through — the authoring
   // loop's latency signal (./timing.ts). The steps live in `runSave`; the
@@ -965,40 +1033,7 @@ async function runSave(
     ...(input.changeSource !== undefined ? { source: input.changeSource } : {}),
   });
 
-  // Referenced-set catalog: introspect only the (adapter, credential)
-  // pairs this program (and its imported libraries) constructs, not the
-  // whole workspace.
-  const teamCatalog = await timer.step('catalog', () =>
-    movementCatalogForTeam(input.teamId as TeamId, {
-      source: input.source,
-      languageVersion: row.languageVersion,
-    }),
-  );
-  timer.note(teamCatalog.cost ?? {});
-
-  // Runtime validity (plans/2026-07-13-movement-validity-lifecycle): assess the
-  // source against the adapters' live shape using the catalog we just built (no
-  // second introspection). Records the validity axis on the row. NOTHING
-  // hard-blocks: a non-`valid` save without consent returns
-  // `needsConfirmation` (source already persisted, so the broken movement is
-  // retained as an artifact), never a wall.
-  const { validation, validity } = await timer.step('diagnose', async () => {
-    // Under the movement's pin — which a re-save never moves.
-    const diagnosed = diagnoseMovementSource(input.source, {
-      catalog: teamCatalog.catalog,
-      resolveCredentialId: teamCatalog.resolveCredentialId,
-      resolveFile: teamCatalog.resolveFile,
-      languageVersion: row.languageVersion,
-      ...(teamCatalog.runSnapshot !== undefined ? { snapshot: teamCatalog.runSnapshot() } : {}),
-    });
-    return {
-      validation: diagnosed,
-      validity: assessMovementValidity({
-        diagnostics: diagnosed.diagnostics,
-        gaps: teamCatalog.gaps,
-      }),
-    };
-  });
+  const { validation, validity, notes, gaps, teamCatalog } = await checkForSave({ input, row, timer });
   const sourceHash = movementSourceHash(input.source);
 
   // The acting user for journey milestones: a UI save threads it through
@@ -1031,7 +1066,7 @@ async function runSave(
   // and genuinely REPLACES what's running — even broken (it then fires and
   // fails; the prediction rule + issues take it from there).
   if (validity.status !== 'valid' && !consented) {
-    const gapErrors = teamCatalog.gaps.map(
+    const gapErrors = gaps.map(
       (g) =>
         `couldn't verify this automation against "${g.adapter}" (${g.detail}) — its writes weren't checked`,
     );
@@ -1049,7 +1084,7 @@ async function runSave(
       // Structured diagnostics ride validity.reason; these strings carry the
       // human summary (message + position) for surfaces that just print.
       errors: validity.status === 'unverified' ? gapErrors : diagnosticErrors,
-      catalogNotes: teamCatalog.notes,
+      catalogNotes: notes,
       movementId: row.id,
     };
   }
@@ -1060,16 +1095,21 @@ async function runSave(
   // best-effort: a consented-broken source may not compile far enough to
   // derive them, in which case the EXISTING trigger rows stay and now fire
   // this new source (which fails — fires-and-fails, by design).
-  const provisioned = await timer.step('listeners', () => provisionListeners({
-    teamId: input.teamId as TeamId,
-    movementRow: row,
-    source: input.source,
-    teamCatalog,
-    timer,
-    // A consented non-valid save ships: derive its declared listens despite
-    // check errors so it genuinely fires-and-fails (decision 3b).
-    ...(consented ? { provisionDespiteErrors: true } : {}),
-  }));
+  // A pin a carried version checks ships its text, and its listens are not
+  // provisioned: this platform does not run that version, and says so.
+  const provisioned: ProvisionMovementResult =
+    teamCatalog === undefined
+      ? { ok: false, diagnostics: [notRunDiagnostic(row.languageVersion, LANGUAGE_VERSION)], catalogNotes: notes }
+      : await timer.step('listeners', () => provisionListeners({
+          teamId: input.teamId as TeamId,
+          movementRow: row,
+          source: input.source,
+          teamCatalog,
+          timer,
+          // A consented non-valid save ships: derive its declared listens despite
+          // check errors so it genuinely fires-and-fails (decision 3b).
+          ...(consented ? { provisionDespiteErrors: true } : {}),
+        }));
 
   // Every shipped save is what runs — mint its immutable version (deduped by
   // content hash) so runs pin it and the version-match rule has its anchor.
@@ -1081,6 +1121,13 @@ async function runSave(
       languageVersion: row.languageVersion,
     }),
   );
+
+  // A carried version's save is its text and its check, under its own pin;
+  // nothing of this release's listener reconciliation reads its text.
+  if (teamCatalog === undefined) {
+    recordAutomationSavedMilestones({ actingUserId, teamId: input.teamId, viaMcp });
+    return { ...provisioned, movementId: row.id, validity };
+  }
 
   if (!provisioned.ok && validity.status === 'valid') {
     // A VALID program whose provisioning failed on infrastructure (config,
@@ -1131,7 +1178,7 @@ async function runSave(
         movementName: name,
         listeners: [],
         infos: [],
-        catalogNotes: teamCatalog.notes,
+        catalogNotes: notes,
         warnings: [
           'This source could not be read, so no listeners could be derived from it. You saved it anyway, so every listener this automation had has been retired — it will not fire again until a source that reads cleanly restores them.',
           ...collisionWarnings,
@@ -1150,7 +1197,7 @@ async function runSave(
       listeners: [],
       infos: [],
       catalogNotes: [
-        ...teamCatalog.notes,
+        ...notes,
         'listeners could not be derived from this source — existing listeners (if any) keep firing it',
       ],
       warnings: collisionWarnings,
@@ -1253,7 +1300,8 @@ export interface MovementListItem {
  *  trigger row (uniform dispatch). */
 function isRunnable(row: MovementRow): boolean {
   const route = routeOf(row.languageVersion);
-  if (route.kind === 'refused') return false;
+  // A pin this platform does not run has nothing "Run now" can start.
+  if (route.kind === 'refused' || route.kind === 'carried') return false;
   try {
     // A legacy pin's listens do not run under this release.
     if (route.kind === 'legacy') return false;

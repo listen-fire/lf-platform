@@ -35,15 +35,17 @@ RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 
 WORKDIR /srv/listen-fire
 
-# A language version's package set ships whole (its façade is plain
-# JavaScript): `pnpm deploy` installs it with that release's packages beside it,
-# which a copy vendored into the api's build could not resolve. Docker's COPY
-# cannot keep a glob's directories, so this stage gathers them; its output is
-# compared by content, so an edit elsewhere under packages/ re-runs nothing
+# Every language version package's manifest (`packages/lang-<version>`), found
+# by name, so carrying another version needs no line in this file. Docker's
+# COPY cannot keep a glob's directories, so this stage gathers them; its output
+# is compared by content, so an edit elsewhere under packages/ re-runs nothing
 # after it.
-FROM base AS language-version-packages
+FROM base AS language-version-manifests
 COPY packages /tmp/packages
-RUN mkdir -p /out/packages && cp -R /tmp/packages/lang-* /out/packages/
+RUN for manifest in /tmp/packages/lang-*/package.json; do \
+      dir="/out/packages/$(basename "$(dirname "$manifest")")"; \
+      mkdir -p "$dir" && cp "$manifest" "$dir/"; \
+    done
 
 # Manifests first, so editing source does not re-run the install. The frontends
 # are deployed separately (they are Next apps); this image is the API and its
@@ -64,9 +66,7 @@ COPY modules/native-valuations/package.json modules/native-valuations/
 COPY packages/legacy-engine/package.json packages/legacy-engine/
 COPY packages/legacy-lang/package.json packages/legacy-lang/
 COPY packages/language-versions/package.json packages/language-versions/
-# Every language version package (`packages/lang-<version>`), found by name, so
-# carrying another version needs no line here.
-COPY --from=language-version-packages /out/ ./
+COPY --from=language-version-manifests /out/ ./
 COPY packages/platform-constants/package.json packages/platform-constants/
 COPY packages/story-view/package.json packages/story-view/
 
@@ -89,12 +89,22 @@ RUN pnpm prisma generate
 ARG BUILD_HEAP_MB=6144
 RUN NODE_OPTIONS=--max-old-space-size=${BUILD_HEAP_MB} pnpm build
 
+# Each language version package, compiled for the deploy stage, which installs
+# it with that release's packages beside it. It is never vendored into the api's
+# build: a copy there would resolve them from the api's own node_modules, which
+# hold the current release.
+RUN for version in /srv/listen-fire/packages/lang-*/; do \
+      name="$(basename "$version")"; \
+      pnpm --dir "$version" exec tsc --project tsconfig.build.json --outDir "/srv/listen-fire/language-versions/$name" || exit 1; \
+    done
+
 # ---- deploy: the api's production dependency tree, and nothing else. ----
 # `pnpm install --prod` is not enough here: the root manifest depends on the web
 # app (for dependabot), so a filtered install still pulls Next and its toolchain
 # into the virtual store. `deploy` resolves only the api's own closure.
 FROM base AS deploy
 COPY --from=manifests / ./
+COPY --from=build /srv/listen-fire/language-versions/ packages/
 RUN pnpm --filter api deploy --prod /deploy
 
 # ---- api-slim: production dependencies + the compiled artifact. ----

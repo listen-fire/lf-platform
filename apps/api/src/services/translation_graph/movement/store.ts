@@ -19,7 +19,8 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { LANGUAGE_VERSION, compatible, type LanguageVersion } from 'movement-lang';
+import { LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang';
+import { isCurrent } from '@listen-fire/language-versions';
 
 import type { UserId } from '../../../generated/kysely/core/User';
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
@@ -165,8 +166,8 @@ export async function getMovementRowByName(input: {
 export function pendingUpgradeDiagnostics(
   row: Pick<MovementRow, 'languageVersion' | 'upgradeDiagnostics' | 'upgradeCheckedAgainst'>,
 ): AuthoringDiagnostic[] | null {
-  if (compatible(row.languageVersion, LANGUAGE_VERSION)) return null;
-  if (row.upgradeCheckedAgainst === null || !compatible(row.upgradeCheckedAgainst, LANGUAGE_VERSION)) return null;
+  if (isCurrent(row.languageVersion)) return null;
+  if (row.upgradeCheckedAgainst === null || !isCurrent(row.upgradeCheckedAgainst)) return null;
   return row.upgradeDiagnostics;
 }
 

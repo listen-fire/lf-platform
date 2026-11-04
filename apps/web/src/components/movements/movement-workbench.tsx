@@ -1736,9 +1736,10 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
             )}
           </section>
 
-          {props.languageVersion !== undefined && (
+          {props.languageVersion !== undefined && languageRoute !== undefined && (
             <LanguageVersionNotice
               languageVersion={props.languageVersion}
+              route={languageRoute}
               upgradeDiagnostics={props.upgradeDiagnostics ?? null}
             />
           )}

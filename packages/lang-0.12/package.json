@@ -3,7 +3,7 @@
   "private": true,
   "license": "Apache-2.0",
   "version": "0.12.13",
-  "description": "Language release 0.12's package set, at the exact versions production ran, by their real names so every module's peers resolve to 0.12 here. Only @listen-fire/language-versions imports it, through index.js.",
+  "description": "Language release 0.12's package set, at the exact versions production ran, by their real names so every module's peers resolve to 0.12 here, and 0.12's checking and editor service over them. Only @listen-fire/language-versions imports it.",
   "engines": {
     "node": "22.23.4"
   },
@@ -11,9 +11,10 @@
     "code:type-check": "tsc --pretty --noEmit",
     "test": "jest --config jest.config.cjs"
   },
-  "main": "index.js",
-  "files": ["index.js", "index.d.ts"],
-  "types": "index.d.ts",
+  "main": "index",
+  "files": [
+    "**/*.js"
+  ],
   "type": "commonjs",
   "dependencies": {
     "@listen-fire/affinity": "0.12.7",

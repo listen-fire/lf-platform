@@ -14,7 +14,9 @@
 //
 // Carrying another version takes, and only takes:
 //   - its package, `packages/lang-<key>`, named `@listen-fire/lang-<key>` at
-//     the release's own version, naming that release's packages exactly;
+//     the release's own version, naming that release's packages exactly, its
+//     façade `index.ts` (main `index`, shipping `**/*.js`: the image compiles
+//     it where `pnpm deploy` installs it beside those packages);
 //   - its entry below;
 //   - a dependency on its package here, and one in `apps/api` (the api's build
 //     vendors this registry into its own output, where an import of the
@@ -23,26 +25,124 @@
 // The image finds the package by its name (`deploy/Dockerfile`). A test holds
 // every entry to this list (`__test__/wiring.unit.test.ts`).
 //
-// A capability a version's entry does not provide is held: its pins are
-// refused exactly as if the version were not carried, never handed to another
-// version.
+// Each entry says how its pins are checked and how they run: by the current
+// core, by the version's own packages through its package's façade, or held. A
+// held capability refuses its pins exactly as if the version were not carried,
+// never handing them to another version.
 
-import { LANGUAGE_VERSION, compatibilityKey, neverAsAny, type LanguageVersion } from 'movement-lang';
+import {
+  LANGUAGE_VERSION,
+  compatibilityKey,
+  type Completions,
+  type Definition,
+  type HoverCard,
+  type LanguageVersion,
+} from 'movement-lang';
 
 /** What a version's package set says about itself once loaded. */
 export interface VersionPackages {
   readonly LANGUAGE_VERSION: string;
 }
 
+// ── What crosses into a carried version's checker: plain data only ──────────
+//
+// Never an object or a class of either release: TypeScript compares
+// structurally, so a value of one release would pass silently into the other's
+// functions. A version package states these same shapes in its own release's
+// terms, and the compiler holds it to them where its entry loads it.
+
+export type ConnectMethod = 'oauth' | 'key-entry' | 'intrinsic' | 'handshake' | 'app-only';
+
+/** What the platform knows of a team that a carried version's catalog is
+ *  built from. */
+export interface TeamFacts {
+  /** The team's stored credentials. */
+  credentials: readonly {
+    id: string;
+    name: string;
+    type: string;
+    module?: { adapterType: string; credential: string };
+  }[];
+  /** The team's saved files, each with its own pin: what an import resolves
+   *  against. */
+  files: readonly { name: string; source: string; languageVersion: string }[];
+  /** How a credential of `credentialType` is connected on the platform. */
+  connectOf(credentialType: string): ConnectMethod;
+  /** The store's change events arrive as a signed POST. */
+  kgChangeWebhooks: boolean;
+  /** The deployment lets a team connect MCP servers. */
+  mcpEnabled: boolean;
+  /** The shared WhatsApp number a manifest quotes, when one is set. */
+  whatsappNumber: string | null;
+}
+
+export interface LineCol {
+  line: number;
+  col: number;
+}
+
+export interface CheckedDiagnostic {
+  code: string;
+  message: string;
+  /** The carried release's severity for its code. */
+  severity: 'error' | 'warning' | 'info';
+  span: { start: LineCol; end: LineCol };
+  upgrade?: true;
+  fix?: { edits: { span: { start: LineCol; end: LineCol }; text: string }[]; safe?: true };
+}
+
+export interface CheckedSource {
+  diagnostics: CheckedDiagnostic[];
+  /** The movement each `listen` fires, in file order. */
+  firedMovements: string[];
+  /** Each connected system the check could not read: the program is then
+   *  unverified, never clean. */
+  gaps: { adapter: string; detail: string }[];
+  notes: string[];
+}
+
+export interface CheckRequest {
+  source: string;
+  /** The program's pin, on the carried version's key. */
+  pin: LanguageVersion;
+  team: TeamFacts;
+}
+
+export interface EditorRequest extends CheckRequest {
+  /** A UTF-16 offset into `source`. */
+  offset: number;
+}
+
+/** A carried version's own checker and editor service. The editor's answers
+ *  are the language service's shapes, which a carried version must answer in
+ *  exactly. */
+export interface CheckingLane {
+  checkSource(request: CheckRequest): Promise<CheckedSource>;
+  completionsAt(request: EditorRequest): Promise<Completions>;
+  hoverAt(request: EditorRequest): Promise<HoverCard | null>;
+  definitionAt(request: EditorRequest): Promise<Definition | null>;
+}
+
 /**
- * One capability of a carried version.
+ * Whether a carried version checks its pins: checking, diagnostics, the story
+ * and the editor.
  *
- * - `current`: the platform's own core provides it, imported directly.
- * - `held`: the version is carried but does not provide it. Its pins are
- *   refused here exactly as the current language refuses a key it does not
- *   read. Never a fallback to another version.
+ * - `current`: the platform's own core checks them, imported directly.
+ * - `carried`: the version's own checker does, through its package.
+ * - `held`: the version is carried but does not check. Its pins are refused
+ *   here exactly as the current language refuses a key it does not read.
  */
-export type Capability = { kind: 'current' } | { kind: 'held' };
+export type CheckCapability = { kind: 'current' } | { kind: 'carried'; lane: () => Promise<CheckingLane> } | { kind: 'held' };
+
+/**
+ * Whether a carried version runs its pins: running a segment, resuming a
+ * parked run, settling a race frame.
+ *
+ * - `current`: the platform's own engine runs them.
+ * - `held`: the version is carried but does not run. Its runs are refused
+ *   exactly as the current engine refuses a key it does not read.
+ */
+export type RunCapability = { kind: 'current' } | { kind: 'held' };
 
 export interface CarriedVersion {
   /** The compatibility key every pin this entry serves shares. */
@@ -52,14 +152,12 @@ export interface CarriedVersion {
   /** Loads the version's package set (lazily: an older line's wasm and engine
    *  are instantiated only when something asks for them). */
   load(): Promise<VersionPackages>;
-  /** Checking, diagnostics, the story and the editor. */
-  readonly check: Capability;
-  /** Running a segment, resuming a parked run, settling a race frame. */
-  readonly run: Capability;
+  readonly check: CheckCapability;
+  readonly run: RunCapability;
 }
 
-const HELD: Capability = { kind: 'held' };
-const CURRENT: Capability = { kind: 'current' };
+const HELD = { kind: 'held' } as const;
+const CURRENT = { kind: 'current' } as const;
 
 function keyOf(release: LanguageVersion): string {
   const key = compatibilityKey(release);
@@ -83,7 +181,7 @@ const CARRIED: readonly CarriedVersion[] = [
     key: '0.12',
     release: '0.12.13',
     load: () => import('@listen-fire/lang-0.12'),
-    check: HELD,
+    check: { kind: 'carried', lane: () => import('@listen-fire/lang-0.12') },
     run: HELD,
   },
 ];
@@ -117,19 +215,21 @@ export function versionOf(pin: LanguageVersion): CarriedVersion | undefined {
   return key === undefined ? undefined : BY_KEY.get(key);
 }
 
-/** What the version of `pin` provides for `capability`: `held` for a pin this
- *  build does not carry, so a caller has one refusal to write, not two. */
-export function capabilityOf(pin: LanguageVersion, capability: 'check' | 'run'): Capability {
-  const version = versionOf(pin);
-  if (version === undefined) return HELD;
-  switch (capability) {
-    case 'check':
-      return version.check;
-    case 'run':
-      return version.run;
-    default:
-      return neverAsAny(capability);
-  }
+/** Whether `pin` is on the current version: the platform's own core reads
+ *  it. */
+export function isCurrent(pin: LanguageVersion): boolean {
+  return versionOf(pin) === CURRENT_VERSION;
+}
+
+/** How `pin` is checked: `held` for a pin this build does not carry, so a
+ *  caller has one refusal to write, not two. */
+export function checkingOf(pin: LanguageVersion): CheckCapability {
+  return versionOf(pin)?.check ?? HELD;
+}
+
+/** How `pin` runs: `held` for a pin this build does not carry. */
+export function runningOf(pin: LanguageVersion): RunCapability {
+  return versionOf(pin)?.run ?? HELD;
 }
 
 /**

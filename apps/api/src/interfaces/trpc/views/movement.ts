@@ -36,6 +36,7 @@
 import { TRPCError } from '@trpc/server';
 import {
   LANGUAGE_VERSION,
+  neverAsAny,
   type Completions,
   type Definition,
   type HoverCard,
@@ -294,15 +295,26 @@ type MovementListItemResponse = Omit<MovementListItem, 'listeners'> & {
 
 /**
  * How the editor treats a pin. `kind`: whose checker lints it (`legacy`: the
- * browser's; `installed`: the server's `check`; `refused`: nothing reads it).
- * Completions, hover and definition follow the same kind.
+ * browser's; `installed`: the server's `check`, on the current version;
+ * `carried`: the server's `check` too, by the pin's own earlier release the
+ * platform carries; `refused`: nothing reads it). Completions, hover and
+ * definition follow the same kind. Only the kind crosses to the browser.
  */
 export interface MovementLanguageRoute {
-  kind: PinRoute['kind'];
+  kind: 'legacy' | 'installed' | 'carried' | 'refused';
 }
 
 function languageRouteOf(pin: LanguageVersion): MovementLanguageRoute {
-  return { kind: routeOf(pin).kind };
+  const route: PinRoute = routeOf(pin);
+  switch (route.kind) {
+    case 'legacy':
+    case 'installed':
+    case 'carried':
+    case 'refused':
+      return { kind: route.kind };
+    default:
+      return neverAsAny(route);
+  }
 }
 
 /** The skeleton, with the release a new movement is pinned to. */

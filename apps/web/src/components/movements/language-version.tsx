@@ -1,10 +1,15 @@
 // The language version an automation is written in, as a person sees it: the
-// release it pins, and — when the installed language does not read that pin
-// and something keeps it there — what that something is.
+// release it pins, and — when the pin is not on the current version and
+// something keeps it there — what that something is. Whether a pin is on the
+// current version is the server's answer (its `languageRoute`, from the
+// platform's registry of the versions it carries), never a comparison made
+// here.
 
-import { LANGUAGE_VERSION, compatible, type LanguageVersion } from "movement-lang";
+import { LANGUAGE_VERSION, type LanguageVersion } from "movement-lang";
 
 import { Badge } from "@/components/ui";
+
+import type { EditorLanguageRoute } from "./editor-lint";
 
 /** One stored diagnostic, as the api returns it. */
 export interface UpgradeDiagnostic {
@@ -25,13 +30,22 @@ function versionName(version: LanguageVersion): string {
 }
 
 /** What happens to it until it is upgraded: a legacy id runs on the platform's
- *  own engine; a release pin the installed language does not read stopped
- *  firing at the deploy that installed it. */
-function Meanwhile({ version }: { version: LanguageVersion }) {
-  return isLegacy(version) ? (
-    <>It keeps running as <VersionTag name={versionName(version)} /> until you upgrade it.</>
-  ) : (
+ *  own engine; a release pin of an earlier line stopped firing at the deploy
+ *  that installed the current version, and is still checked under its own
+ *  version when the platform carries that version's checker. */
+function Meanwhile({ version, route }: { version: LanguageVersion; route: EditorLanguageRoute }) {
+  if (isLegacy(version)) {
+    return <>It keeps running as <VersionTag name={versionName(version)} /> until you upgrade it.</>;
+  }
+  const stopped = (
     <>It stopped firing when <VersionTag name={versionName(LANGUAGE_VERSION)} /> was installed, and stays stopped until you upgrade it.</>
+  );
+  return route.kind === "carried" ? (
+    <>
+      {stopped} Edits to it are still checked under <VersionTag name={versionName(version)} />.
+    </>
+  ) : (
+    stopped
   );
 }
 
@@ -76,14 +90,17 @@ export function LanguageVersionCell({
  *  is behind, what stands between it and the current one. */
 export function LanguageVersionNotice({
   languageVersion,
+  route,
   upgradeDiagnostics,
 }: {
   languageVersion: LanguageVersion;
+  /** The server's account of the pin. */
+  route: EditorLanguageRoute;
   upgradeDiagnostics: UpgradeDiagnostic[] | null;
 }) {
   const name = versionName(languageVersion);
   const current = versionName(LANGUAGE_VERSION);
-  const isCurrent = compatible(languageVersion, LANGUAGE_VERSION);
+  const isCurrent = route.kind === "installed";
   const issues = upgradeDiagnostics ?? [];
   return (
     <section data-testid="language-version-notice">
@@ -102,14 +119,14 @@ export function LanguageVersionNotice({
       </p>
       {!isCurrent && issues.length === 0 && (
         <p className="mt-2 text-[12.5px] leading-relaxed text-gray-600">
-          <Meanwhile version={languageVersion} /> Ask your own agent to
+          <Meanwhile version={languageVersion} route={route} /> Ask your own agent to
           upgrade it, through the MCP connector.
         </p>
       )}
       {issues.length > 0 && (
         <>
           <p className="mt-2 text-[12.5px] leading-relaxed text-gray-600">
-            <Meanwhile version={languageVersion} />{" "}
+            <Meanwhile version={languageVersion} route={route} />{" "}
             <VersionTag name={current} /> reports the issues below; fix them,
             then ask your own agent to upgrade it, through the MCP connector.
           </p>

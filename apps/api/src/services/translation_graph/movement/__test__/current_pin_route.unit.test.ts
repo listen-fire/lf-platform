@@ -49,7 +49,7 @@ jest.mock('@listen-fire/legacy-engine/services/movement_engine/interpretable', (
 
 jest.mock('../catalog', () => ({ movementCatalogForTeam: jest.fn() }));
 
-import { LANGUAGE_VERSION, fromCatalogSnapshot, languageVersionDiagnostic, mockCatalogSnapshot, type LanguageVersion } from 'movement-lang';
+import { LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalogSnapshot, type LanguageVersion } from 'movement-lang';
 import { versionOf } from '@listen-fire/language-versions';
 
 import { diagnoseMovementSource } from '../authoring';
@@ -159,13 +159,11 @@ describe('routeOf', () => {
 });
 
 describe('routeOf, by the versions this build carries', () => {
-  it('a 0.12 pin is held while its version cannot check: refused exactly as before it was carried', () => {
-    expect(versionOf('0.12.13')?.check).toEqual({ kind: 'held' });
-    expect(routeOf('0.12.13')).toEqual({ kind: 'refused', diagnostic: languageVersionDiagnostic('0.12.13') });
-    const { validation, counters: asked } = diagnose(BARE_MANUAL, '0.12.13');
-    expect(validation.ok).toBe(false);
-    expect(validation.diagnostics).toEqual([expect.objectContaining({ code: 'MOV_LANGUAGE_VERSION_UNSUPPORTED' })]);
-    expect(asked).toEqual({ rust: 0, ts: 0, scan: 0 });
+  it("a 0.12 pin is its own version's to check, and this release's checker never reads it", () => {
+    expect(versionOf('0.12.13')?.check.kind).toBe('carried');
+    expect(routeOf('0.12.13')).toEqual({ kind: 'carried', pin: '0.12.13', lane: expect.any(Function) });
+    expect(() => diagnose(BARE_MANUAL, '0.12.13')).toThrow("language version 0.12.13 is checked by its own release against its own catalog");
+    expect({ ...counters }).toEqual({ rust: 0, ts: 0, scan: 0 });
   });
 });
 

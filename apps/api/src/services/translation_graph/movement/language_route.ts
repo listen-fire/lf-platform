@@ -1,17 +1,19 @@
 // Which checker judges a movement, by its pin. A legacy id ('1'..'4') is
 // legacy-lang's: its TypeScript checker and the TypeScript engine's
 // interpretability scan. A release pin chooses a carried version by its
-// compatibility key (`@listen-fire/language-versions`): the current version's
-// pin is the wasm's, against the run snapshot, the check its run on the Rust
-// engine enforces, so the verdict an author sees is the one the run holds. A
-// pin whose version this build carries without checking it, and a pin whose
-// key it does not carry, are refused alike with the language's own text, and
-// nothing reads them.
+// compatibility key (`@listen-fire/language-versions`):
+//   - the current version's pin is the wasm's, against the run snapshot: the
+//     check its run on the Rust engine enforces, so the verdict an author sees
+//     is the one the run holds;
+//   - a carried version that checks is its own checker's, through its package,
+//     against its own catalog (`carried_check.ts`): never this release's
+//     checker, which would read the text under a grammar it was not written in;
+//   - a carried version that does not check, and a key this build does not
+//     carry, are refused alike with the language's own text, and nothing
+//     reads them.
 //
-// Every verdict on a current pin goes through here; no caller hands a semver
-// to legacy-lang's checker or legacy-engine's scan. Presentation (completion,
-// hover, definition, the story) is not here: it follows `routeOf`'s kind, the
-// wasm for an installed pin and legacy-lang under its own id for a legacy one.
+// Every verdict, the story and the editor's answers on a pin go through here;
+// no caller hands a semver to legacy-lang's checker or legacy-engine's scan.
 
 import {
   RustCheckRefused,
@@ -29,19 +31,22 @@ import {
   type ResolveFile,
 } from 'movement-lang';
 import { isLegacyLanguageVersion, upgradeWarnings, withUpgradeWarnings } from 'legacy-lang';
-import { capabilityOf } from '@listen-fire/language-versions';
+import { checkingOf, type CheckingLane } from '@listen-fire/language-versions';
 
 export type PinRoute =
   | { kind: 'legacy'; pin: LanguageVersion }
   | { kind: 'installed'; pin: LanguageVersion }
+  | { kind: 'carried'; pin: LanguageVersion; lane: () => Promise<CheckingLane> }
   | { kind: 'refused'; diagnostic: Diagnostic };
 
 export function routeOf(pin: LanguageVersion): PinRoute {
   if (isLegacyLanguageVersion(pin)) return { kind: 'legacy', pin };
-  const checking = capabilityOf(pin, 'check');
+  const checking = checkingOf(pin);
   switch (checking.kind) {
     case 'current':
       return { kind: 'installed', pin };
+    case 'carried':
+      return { kind: 'carried', pin, lane: checking.lane };
     case 'held': {
       const diagnostic = languageVersionDiagnostic(pin);
       if (diagnostic === undefined) {

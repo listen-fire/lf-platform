@@ -3,9 +3,11 @@
  *
  * A legacy pin ('1'..'4') is checked in the browser by legacy-lang. A release
  * pin is the wasm checker's, against the run snapshot, and that checker is not
- * in the browser, so its lint is the server's `views.movement.check`. A pin
- * nothing reads goes to the server too, which answers with the version
- * diagnostic every other surface reports for it.
+ * in the browser, so its lint is the server's `views.movement.check`. A pin of
+ * an earlier release the platform carries (`carried`) is its own release's
+ * checker's, on the server too. A pin nothing reads goes to the server as
+ * well, which answers with the version diagnostic every other surface reports
+ * for it.
  *
  * Completions, hover and definition follow the same route: legacy-lang in the
  * browser for a legacy pin, the server's language service for a release pin
@@ -17,7 +19,7 @@ import type { MovementDiagnostic } from "legacy-lang";
 /** The server's account of a pin (`views.movement.get`'s `languageRoute`,
  *  `views.movement.catalog`'s `installed` for a new movement). */
 export interface EditorLanguageRoute {
-  kind: "legacy" | "installed" | "refused";
+  kind: "legacy" | "installed" | "carried" | "refused";
 }
 
 /** A diagnostic as the server reports it: 1-based line/col. */

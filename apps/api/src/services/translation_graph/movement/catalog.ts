@@ -84,6 +84,7 @@ import {
   type CatalogAdapterInput,
 } from 'movement-engine/public/catalog';
 import { closeDemandOverChains, closeDemandOverWriteVariants, demandSeed } from './demand';
+import { onOtherVersions } from './imports_across_versions';
 import { MANUAL_ADAPTER_TYPE, MANUAL_SURFACE } from '../adapters/manual';
 import { CRON_ADAPTER_TYPE, CRON_SURFACE } from '../adapters/cron';
 import { unitInstanceSchema } from '../adapters/unit_surface';
@@ -378,6 +379,13 @@ export interface TeamMovementCatalog {
    *  error (`invalid`) — so a consumer never has to parse `notes` strings.
    *  See plans/2026-07-13-movement-validity-lifecycle. */
   gaps: CatalogGap[];
+  /** Each file the source's imports reach that is pinned to another language
+   *  version than the source, by path, with its pin. A library is imported
+   *  only by programs on its own version, so these are kept out of the
+   *  resolver and the run snapshot: never read under the source's version,
+   *  never run in it (`importsAcrossVersions` in ./imports_across_versions.ts
+   *  reports them). */
+  importsAcrossVersions?: ReadonlyMap<string, LanguageVersion>;
   /** What this assembly cost, for the authoring-latency log (./timing.ts).
    *  Absent on a hand-built catalog — only the live assembly pays anything. */
   cost?: CatalogAssemblyCost;
@@ -698,6 +706,8 @@ async function assembleTeamCatalog(
   // Each file's language-version pin, beside its source: the pre-scan reads a
   // file as the version it was saved under.
   const filePins = new Map<string, LanguageVersion>();
+  const importsAcrossVersions = new Map<string, LanguageVersion>();
+  const rootPin = options.languageVersion ?? LANGUAGE_VERSION;
   const fileSources =
     options.source !== undefined
       ? await assembleMovementFileSources({
@@ -705,6 +715,10 @@ async function assembleTeamCatalog(
           load: async (path) => {
             const file = await loadImportedFile({ teamId, path, imports: options.imports ?? 'live' });
             if (file === null) return null;
+            if (onOtherVersions(rootPin, file.languageVersion)) {
+              importsAcrossVersions.set(path, file.languageVersion);
+              return null;
+            }
             filePins.set(path, file.languageVersion);
             return file.source;
           },
@@ -1240,6 +1254,7 @@ async function assembleTeamCatalog(
       gaps,
       instanceSchemas,
       positionArgOptions,
+      ...(importsAcrossVersions.size > 0 ? { importsAcrossVersions } : {}),
       cost: {
         pairs: pairs.length,
         positionedPairs: positionedTargets.size,

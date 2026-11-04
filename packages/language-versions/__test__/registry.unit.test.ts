@@ -2,7 +2,7 @@ import * as lang012 from '@listen-fire/lang-0.12';
 import { LANGUAGE_VERSION } from 'movement-lang';
 import * as currentErrors from 'movement-engine/public/errors';
 
-import { capabilityOf, carriedVersions, currentVersion, verifyCarriedVersions, versionOf } from '..';
+import { carriedVersions, checkingOf, currentVersion, isCurrent, runningOf, verifyCarriedVersions, versionOf } from '..';
 
 describe('the language versions this build carries', () => {
   it('a 0.12 pin belongs to the 0.12 entry, whichever 0.12 release wrote it', () => {
@@ -14,19 +14,26 @@ describe('the language versions this build carries', () => {
   it('the current release pin belongs to the current entry, which checks and runs', () => {
     expect(versionOf(LANGUAGE_VERSION)).toBe(currentVersion());
     expect(currentVersion()).toMatchObject({ release: LANGUAGE_VERSION, check: { kind: 'current' }, run: { kind: 'current' } });
-    expect(capabilityOf(LANGUAGE_VERSION, 'run')).toEqual({ kind: 'current' });
+    expect(runningOf(LANGUAGE_VERSION)).toEqual({ kind: 'current' });
+    expect(checkingOf(LANGUAGE_VERSION)).toEqual({ kind: 'current' });
+    expect(isCurrent(LANGUAGE_VERSION)).toBe(true);
   });
 
-  it('0.12 is carried, but neither checks nor runs yet: its pins are held', () => {
-    expect(capabilityOf('0.12.0', 'check')).toEqual({ kind: 'held' });
-    expect(capabilityOf('0.12.0', 'run')).toEqual({ kind: 'held' });
+  it("0.12 is checked by its own checker, and does not run: its runs are held", async () => {
+    const checking = checkingOf('0.12.0');
+    expect(checking.kind).toBe('carried');
+    if (checking.kind !== 'carried') return;
+    expect(typeof (await checking.lane()).checkSource).toBe('function');
+    expect(runningOf('0.12.0')).toEqual({ kind: 'held' });
+    expect(isCurrent('0.12.0')).toBe(false);
   });
 
   it('a key no entry carries, a legacy id and a text that is no version belong to none, and are held', () => {
     for (const pin of ['0.13.0', '0.14.2', '1.0.0', '4', '1', 'latest']) {
       expect(versionOf(pin)).toBeUndefined();
-      expect(capabilityOf(pin, 'run')).toEqual({ kind: 'held' });
-      expect(capabilityOf(pin, 'check')).toEqual({ kind: 'held' });
+      expect(runningOf(pin)).toEqual({ kind: 'held' });
+      expect(checkingOf(pin)).toEqual({ kind: 'held' });
+      expect(isCurrent(pin)).toBe(false);
     }
   });
 

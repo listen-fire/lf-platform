@@ -7,6 +7,8 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
+    // Compiling is `tsconfig.build.json`'s job, in the image. A bare tsc here
+    // would write .js beside every .ts, and jest then resolves those instead.
     "noEmit": true,
     "types": ["node", "jest"]
   },

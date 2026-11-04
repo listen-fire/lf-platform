@@ -1,6 +1,8 @@
 // The editor's completion, hover and definition for a release pin: the wasm's
 // language service, against the run snapshot `check` lints against, so what
-// completes is what the lint accepts. A legacy pin's language service is
+// completes is what the lint accepts. A pin a carried version checks is
+// answered by that version's own language service, on the server, against its
+// own catalog (./carried_check.ts). A legacy pin's language service is
 // legacy-lang's, in the browser; a pin the installed language does not read
 // gets the binding's empty answers, and no catalog is assembled for it.
 
@@ -21,8 +23,11 @@ import {
 } from 'movement-lang';
 import { getMovementCompletions } from 'legacy-lang';
 
+import type { CheckingLane, EditorRequest as CarriedEditorRequest } from '@listen-fire/language-versions';
 import type { TeamId } from '../../../generated/kysely/core/Team';
+
 import { movementCatalogForTeam, movementCatalogSnapshotForTeam, type TeamMovementCatalog } from './catalog';
+import { editorTeamFactsOf } from './carried_check';
 import { routeOf } from './language_route';
 import { getMovementRow } from './store';
 
@@ -130,8 +135,10 @@ interface EditorRequest {
 }
 
 type Ask<T> = (source: string, offset: number, snapshot: CatalogSnapshot, options: { languageVersion: LanguageVersion }) => T;
+/** The same question of a carried version's language service. */
+type AskCarried<T> = (lane: CheckingLane, request: CarriedEditorRequest) => Promise<T>;
 
-async function answerAt<T>(request: EditorRequest, ask: Ask<T>): Promise<EditorAnswer<T>> {
+async function answerAt<T>(request: EditorRequest, ask: Ask<T>, askCarried: AskCarried<T>): Promise<EditorAnswer<T>> {
   const pin = await editorPinOf(request);
   if (pin === null) return { kind: 'not-found' };
   const route = routeOf(pin);
@@ -146,6 +153,10 @@ async function answerAt<T>(request: EditorRequest, ask: Ask<T>): Promise<EditorA
       const snapshot = await editorSnapshotOf({ teamId: request.teamId, source: request.source, pin, offset: request.offset });
       return { kind: 'answer', answer: ask(request.source, request.offset, snapshot, { languageVersion: pin }) };
     }
+    case 'carried': {
+      const [lane, team] = await Promise.all([route.lane(), editorTeamFactsOf(request.teamId)]);
+      return { kind: 'answer', answer: await askCarried(lane, { source: request.source, offset: request.offset, pin: route.pin, team }) };
+    }
     default: {
       const unreachable: never = route;
       throw new Error(`unhandled pin route ${JSON.stringify(unreachable)}`);
@@ -154,15 +165,15 @@ async function answerAt<T>(request: EditorRequest, ask: Ask<T>): Promise<EditorA
 }
 
 export function completeAt(request: EditorRequest): Promise<EditorAnswer<Completions>> {
-  return answerAt(request, completionsAt);
+  return answerAt(request, completionsAt, (lane, asked) => lane.completionsAt(asked));
 }
 
 export function hoverAt(request: EditorRequest): Promise<EditorAnswer<HoverCard | null>> {
-  return answerAt(request, hoverInWasm);
+  return answerAt(request, hoverInWasm, (lane, asked) => lane.hoverAt(asked));
 }
 
 export function defineAt(request: EditorRequest): Promise<EditorAnswer<Definition | null>> {
-  return answerAt(request, definitionAt);
+  return answerAt(request, definitionAt, (lane, asked) => lane.definitionAt(asked));
 }
 
 interface AgentCompletions {
@@ -172,8 +183,9 @@ interface AgentCompletions {
 
 /**
  * The agent's completions at `offset` under `pin`. A release pin's are the
- * wasm's against the run snapshot; a legacy id's are legacy-lang's against the
- * skeleton; a pin nothing reads gets a note instead.
+ * wasm's against the run snapshot; a carried version's are its own language
+ * service's; a legacy id's are legacy-lang's against the skeleton; a pin
+ * nothing reads gets a note instead.
  */
 export async function agentCompletionsAt(input: {
   teamId: string;
@@ -186,6 +198,11 @@ export async function agentCompletionsAt(input: {
     case 'installed': {
       const snapshot = await editorSnapshotOf(input);
       const { items } = completionsAt(input.source, input.offset, snapshot, { languageVersion: input.pin });
+      return { completions: items.map(itemOf) };
+    }
+    case 'carried': {
+      const [lane, team] = await Promise.all([route.lane(), editorTeamFactsOf(input.teamId)]);
+      const { items } = await lane.completionsAt({ source: input.source, offset: input.offset, pin: route.pin, team });
       return { completions: items.map(itemOf) };
     }
     case 'legacy': {

@@ -27,6 +27,7 @@ import { storyOf, type Chip, type ChipPart, type StoryFilter, type StoryIR, type
 import { MovementParseError } from 'movement-lang';
 import { LRUCache } from 'lru-cache';
 
+import type { CheckingLane } from '@listen-fire/language-versions';
 import type { BrandIcon } from 'movement-engine/public/adapter';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type {
@@ -45,6 +46,7 @@ import { getAdapterManifest } from '../adapters/registry';
 import { resolveEventPhrase } from '../vocabulary';
 import { movementCatalogForTeam, type TeamMovementCatalog } from './catalog';
 import { routeOf } from './language_route';
+import { validateUnderCarried } from './carried_check';
 import { storyFromAnalysis } from './story_from_analysis';
 import {
   getMovementRow,
@@ -620,6 +622,7 @@ export async function projectStoryView(row: {
   if (route.kind === 'refused') {
     return { ok: false, reason: 'unreadable', movement, problems: [storyProblemOf(route.diagnostic)] };
   }
+  if (route.kind === 'carried') return carriedStoryView({ ...row, movement, pin: route.pin, lane: route.lane });
 
   // Same fallback the authoring path takes: assembling a source-scoped catalog
   // needs the source to parse, and the whole point of the unreadable branch is
@@ -674,6 +677,53 @@ export async function projectStoryView(row: {
         inboundAddress: inboundAddressOf(listener.config),
       })),
     }),
+  };
+}
+
+/**
+ * A pin a carried version checks has its own version's verdict and no
+ * picture: the picture is drawn from this release's story analysis, which
+ * reads only this release's programs. The verdict is never dropped: a program
+ * that does not read is `unreadable`, as any other is; one that reads says it
+ * is not drawn and lists what its own check found.
+ */
+async function carriedStoryView(input: {
+  teamId: string;
+  source: string;
+  movement: { id: string; name: string };
+  pin: LanguageVersion;
+  lane: () => Promise<CheckingLane>;
+}): Promise<StoryViewResult> {
+  const validation = await validateUnderCarried({ teamId: input.teamId, source: input.source, pin: input.pin, lane: input.lane });
+  const problems: StoryProblem[] = validation.diagnostics.map((d) => ({
+    code: d.code,
+    message: d.message,
+    severity: d.severity,
+    span: { start: { line: d.line, col: d.col }, end: { line: d.endLine, col: d.endCol } },
+  }));
+  if (validation.diagnostics.some((d) => d.code === 'MOV_PARSE')) {
+    return { ok: false, reason: 'unreadable', movement: input.movement, problems };
+  }
+  const unchecked = validation.gaps.map((gap) => gap.adapter);
+  const verdict =
+    validation.ok && unchecked.length === 0
+      ? `it checks clean under ${input.pin}`
+      : validation.ok
+        ? `it checks clean under ${input.pin}, without reading ${unchecked.join(', ')}`
+        : `its check under ${input.pin} found the problems below`;
+  return {
+    ok: false,
+    reason: 'not-drawn',
+    movement: input.movement,
+    problems: [
+      {
+        code: 'STORY_NOT_DRAWN',
+        message: `This automation is written in language ${input.pin}, whose picture this platform does not draw; ${verdict}.`,
+        severity: 'info',
+        span: { start: { line: 1, col: 1 }, end: { line: 1, col: 1 } },
+      },
+      ...problems,
+    ],
   };
 }
 

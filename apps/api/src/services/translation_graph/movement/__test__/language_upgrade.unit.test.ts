@@ -369,6 +369,39 @@ describe('a pin by the compatibility rule', () => {
     expect(issues.map((e) => e.reason)).toEqual([expect.stringContaining(OLDER_LINE), expect.stringContaining(NEWER_LINE)]);
   });
 
+  it("a 0.12 pin is validated under 0.12 by 0.12's own checker, and still stops: the platform does not run 0.12", async () => {
+    const store = fakeStore({
+      movements: [
+        movement({ id: 'clean-012', languageVersion: '0.12.13' }),
+        movement({ id: 'broken-012', languageVersion: '0.12.4' }),
+      ],
+      verdicts: { 'broken-012': { '0.12.4': [diagnostic('error', 'no field Textt')] } },
+    });
+
+    const summary = await runDeployCheck(store.deps);
+
+    expectNoPinMoved();
+    // Validated under its own pin, never under the current version, and the
+    // verdict recorded against that pin.
+    expect(store.validations.map((v) => [v.movement.id, v.languageVersion, v.upgradingFrom])).toEqual([
+      ['clean-012', '0.12.13', undefined],
+      ['broken-012', '0.12.4', undefined],
+    ]);
+    expect(store.validity.get('clean-012')).toBe('0.12.13');
+    expect(store.validity.get('broken-012')).toBe('0.12.4');
+    // Running stays exactly as before 0.12 could be checked: stopped, its
+    // listens removed, and nothing says it runs.
+    expect(summary?.automations.map((a) => [a.name, a.outcome])).toEqual([
+      ['clean-012', 'stopped'],
+      ['broken-012', 'stopped'],
+    ]);
+    expect(store.unprovisioned).toEqual(['clean-012', 'broken-012']);
+    const details = summary?.automations.map((a) => a.detail) ?? [];
+    expect(details[0]).toContain('checked under 0.12.13, it validates; it does not fire until it is upgraded');
+    expect(details[1]).toContain('checked under 0.12.4, it does not validate (line 3: no field Textt); it does not fire until it is upgraded');
+    for (const detail of details) expect(detail).not.toMatch(/\b(runs|keeps running|fires)\b/);
+  });
+
   it('keys the release by the installed language and the legacy ids', async () => {
     const store = fakeStore({ movements: [], verdicts: {} });
     await runDeployCheck(store.deps);

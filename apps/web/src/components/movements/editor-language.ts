@@ -8,6 +8,9 @@
  * answer from landing. Only TYPES come from movement-lang's service module:
  * the browser never loads the engine artifact.
  *
+ * A pin a carried version checks (an earlier release the platform keeps) is
+ * answered the same way, by that release's own service on the server.
+ *
  * A legacy pin's presentation stays legacy-lang's, in the browser
  * (movement-editor.tsx).
  */
@@ -60,6 +63,10 @@ export function presentationOf(
       // legacy id to read the text under.
       return languageVersion === undefined ? null : { kind: "legacy", options: { languageVersion } };
     case "installed":
+      return { kind: "installed", remote };
+    // A carried version's language service runs on the server too, with its
+    // own release's parser: the browser never loads another release's.
+    case "carried":
       return { kind: "installed", remote };
     case "refused":
       return null;

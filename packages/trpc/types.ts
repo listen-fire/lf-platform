@@ -905,13 +905,17 @@ export interface StoryView {
      *  looks records up by id. */
     flow: Step[];
 }
-/** Unreadable source yields no view — never a partial guess. */
+/**
+ * Unreadable source yields no view — never a partial guess. Nor does a program
+ * on a language version whose picture the platform does not draw (`not-drawn`):
+ * it carries its own version's check, and says why there is no picture.
+ */
 export type StoryViewResult = {
     ok: true;
     view: StoryView;
 } | {
     ok: false;
-    reason: 'unreadable';
+    reason: 'unreadable' | 'not-drawn';
     movement: {
         id: string;
         name: string;
@@ -1332,17 +1336,6 @@ export interface MovementDetail extends MovementRow {
     revision: string;
 }
 
-export type PinRoute = {
-    kind: 'legacy';
-    pin: LanguageVersion;
-} | {
-    kind: 'installed';
-    pin: LanguageVersion;
-} | {
-    kind: 'refused';
-    diagnostic: Diagnostic;
-};
-
 export type MovementRunItem = {
     id: string;
     status: string;
@@ -1364,11 +1357,13 @@ export type MovementRunItem = {
 };
 /**
  * How the editor treats a pin. `kind`: whose checker lints it (`legacy`: the
- * browser's; `installed`: the server's `check`; `refused`: nothing reads it).
- * Completions, hover and definition follow the same kind.
+ * browser's; `installed`: the server's `check`, on the current version;
+ * `carried`: the server's `check` too, by the pin's own earlier release the
+ * platform carries; `refused`: nothing reads it). Completions, hover and
+ * definition follow the same kind. Only the kind crosses to the browser.
  */
 export interface MovementLanguageRoute {
-    kind: PinRoute['kind'];
+    kind: 'legacy' | 'installed' | 'carried' | 'refused';
 }
 /** The skeleton, with the release a new movement is pinned to. */
 export type MovementCatalogResponse = TeamCatalogSnapshot & {

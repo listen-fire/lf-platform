@@ -5,7 +5,7 @@
 //   * it is shipped (it has a current version), and it is served at that
 //     version's text: a save that stopped at the consent gate is a draft, not
 //     what the author shipped;
-//   * its current version's pin is compatible with the installed language: an
+//   * its current version's pin is on the current language version: an
 //     older line stays on the platform's own engine, and lf checks every file
 //     under lf.yaml's one pin;
 //   * `<name>.mvt` is a movement path, so lf can name it (and import it by
@@ -30,7 +30,8 @@
 // module never reaches another tenant's rows.
 
 import { sql } from 'kysely';
-import { LANGUAGE_VERSION, compatible, parseProgram, type ImportStatement } from 'movement-lang';
+import { parseProgram, type ImportStatement } from 'movement-lang';
+import { isCurrent } from '@listen-fire/language-versions';
 import { isMovementPath } from 'engine-contracts/slots';
 
 import { logger } from 'movement-engine/public/log';
@@ -80,7 +81,10 @@ async function shippedMovements(tenant: string): Promise<ShippedMovement[]> {
   return rows.map((row) => ({ ...row, paused: Boolean(row.paused) }));
 }
 
-const servedPin = (pin: string) => compatible(pin, LANGUAGE_VERSION);
+/** A file is served to a runner on the current version only: the movements
+ *  protocol carries no pin, so a runner reads every file it is given as its
+ *  own version (`@listen-fire/language-versions`). */
+const servedPin = (pin: string) => isCurrent(pin);
 
 /** What a file imports that decides whether it is served: the credentials it
  *  names (as the secrets module names them, not as the file aliases them) and

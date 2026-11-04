@@ -212,6 +212,9 @@ describe("the route", () => {
 
     const installed = presentationOf({ kind: "installed" }, undefined, remote);
     expect(installed).toEqual({ kind: "installed", remote });
+    // A pin of an earlier release the platform carries is answered by that
+    // release's own service, on the server: never legacy-lang in the browser.
+    expect(presentationOf({ kind: "carried" }, "0.12.13", remote)).toEqual({ kind: "installed", remote });
     expect(calls).toHaveLength(0);
   });
 });

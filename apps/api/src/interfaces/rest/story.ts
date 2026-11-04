@@ -53,11 +53,17 @@ storyRouter.get('/:token', async (req: Request, res: Response) => {
       .status(200)
       .type('html')
       .send(
-        notice(
-          result.movement.name,
-          'We can’t show this one right now',
-          'There’s a problem in the automation itself, so there’s nothing safe to draw. Whoever set it up will see the details in Listen-Fire.',
-        ),
+        result.reason === 'not-drawn'
+          ? notice(
+              result.movement.name,
+              'We don’t draw this one',
+              'This automation is written in an earlier language version, which the picture is not drawn for. Whoever set it up will see the details in Listen-Fire.',
+            )
+          : notice(
+              result.movement.name,
+              'We can’t show this one right now',
+              'There’s a problem in the automation itself, so there’s nothing safe to draw. Whoever set it up will see the details in Listen-Fire.',
+            ),
       );
   }
 

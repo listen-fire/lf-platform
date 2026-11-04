@@ -10,7 +10,7 @@ import { carriedVersions, currentVersion } from '..';
 
 const REPO = path.resolve(__dirname, '../../..');
 
-function manifest(file: string): { name: string; version: string; dependencies?: Record<string, string> } {
+function manifest(file: string): { name: string; version: string; main?: string; files?: string[]; dependencies?: Record<string, string> } {
   return JSON.parse(fs.readFileSync(path.join(REPO, file), 'utf8'));
 }
 
@@ -22,6 +22,17 @@ describe.each(others.map((version) => [version.key, version] as const))('carried
 
   it(`is the package ${name} in ${dir}, at its release`, () => {
     expect(manifest(`${dir}/package.json`)).toMatchObject({ name, version: version.release });
+  });
+
+  it('resolves to its sources here and to its compiled JavaScript where the image installs it', () => {
+    // An extensionless main is `index.ts` to the compiler and jest, and
+    // `index.js` to Node in the image, where the build compiled it beside its
+    // release's packages and `files` let the deploy carry it.
+    const { main, files } = manifest(`${dir}/package.json`);
+    expect(main).toBe('index');
+    expect(files).toEqual(['**/*.js']);
+    expect(fs.existsSync(path.join(REPO, dir, 'index.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(REPO, dir, 'index.js'))).toBe(false);
   });
 
   it('is what its entry loads', async () => {

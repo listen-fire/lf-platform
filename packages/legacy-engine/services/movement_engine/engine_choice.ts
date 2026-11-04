@@ -8,7 +8,7 @@
 
 import { LANGUAGE_VERSION, languageVersionDiagnostic, neverAsAny, type LanguageVersion } from 'movement-lang';
 import { isLegacyLanguageVersion } from 'legacy-lang';
-import { capabilityOf } from '@listen-fire/language-versions';
+import { runningOf } from '@listen-fire/language-versions';
 
 import { MovementEngineError, PARKED_ON_TYPESCRIPT } from 'movement-engine/public/errors';
 
@@ -25,7 +25,7 @@ export type EngineChoice = 'rust' | 'ts';
  */
 export function engineFor(run: { languageVersion: LanguageVersion; parkedOn?: EngineChoice }): EngineChoice {
   if (isLegacyLanguageVersion(run.languageVersion)) return 'ts';
-  const running = capabilityOf(run.languageVersion, 'run');
+  const running = runningOf(run.languageVersion);
   switch (running.kind) {
     case 'current':
       break;
