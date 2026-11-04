@@ -7,6 +7,8 @@ import { MINUTE, SECOND } from '../../constants';
 import { registerAwaitWork } from '../movement_engine/await_resume';
 import { registerCallbackFireWork } from '../movement_engine/callback_fire';
 import { registerTimerWork } from '../movement_engine/timer_resume';
+import { registerCronWork } from '../movement_scheduler/worker';
+import { registerCarriedPollWork } from '../poll_source/carried_worker';
 import { registerPollWork } from '../poll_source/worker';
 import { registerListenSubscriptionWork } from '../translation_graph/movement/listen_subscriptions';
 import { registerBringUpListensWork } from '../translation_graph/movement/listens_up';
@@ -18,8 +20,13 @@ import { registerReadDeliveryWork } from '../inbound/carried_delivery';
 import { periodicUnitWorkKinds, type CoreWorkKind } from './kinds';
 import { ensurePeriodicWork, removeRetiredWork } from './store';
 
+/** Production's cadence for `cron_reconcile`: a 0.12.13 service beside this one
+ *  ensures the same row. */
+const CRON_RECONCILE_MS = 30 * SECOND;
+
 const CORE_PERIODIC_WORK: ReadonlyArray<{ kind: CoreWorkKind; intervalMs: number }> = [
   { kind: 'poll_reconcile', intervalMs: 30 * SECOND },
+  { kind: 'cron_reconcile', intervalMs: CRON_RECONCILE_MS },
   { kind: 'listen_subscription_retry', intervalMs: 5 * MINUTE },
   { kind: 'timer_sweep', intervalMs: 30 * SECOND },
   { kind: 'run_orphan_sweep', intervalMs: 30 * SECOND },
@@ -27,12 +34,7 @@ const CORE_PERIODIC_WORK: ReadonlyArray<{ kind: CoreWorkKind; intervalMs: number
 
 /** Kinds a past build ran and this one does not. Their periodic rows would
  *  otherwise sit in the table forever, claimed and released for want of a
- *  handler, so they are deleted where the periodic rows are ensured.
- *
- *  A 0.12.13 service runs beside this build, and a row it queued is a delivery
- *  or a schedule it still owes: `fire_cron`, `cron_reconcile` and `poll_source`
- *  are not on this list, though this build does not run them yet. They come
- *  back on it the release 0.12 is retired. */
+ *  handler, so they are deleted where the periodic rows are ensured. */
 const RETIRED_WORK_KINDS: readonly string[] = ['await_resume_sweep', 'ask_expiry_sweep'];
 
 /** Upsert every periodic row — the core's and each registered unit's — and
@@ -51,6 +53,8 @@ async function ensureAutomationsPeriodicWork(): Promise<void> {
 function registerCoreWork(): void {
   registerTimerWork();
   registerPollWork();
+  registerCarriedPollWork();
+  registerCronWork();
   registerListenSubscriptionWork();
   registerBringUpListensWork();
   registerFireEventWork();

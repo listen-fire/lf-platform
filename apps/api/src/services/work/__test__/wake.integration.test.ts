@@ -213,14 +213,14 @@ describe('a shipped schedule asking for a reconcile', () => {
     const [periodic] = await claimDueWork({ owner: 'ship-test', limit: 1, leaseMs: 60_000, kinds: ['timer_sweep'] });
     expect(periodic.key).toBe('timer_sweep');
 
-    await enqueueWork({ kind: 'timer_sweep', key: 'cron_reconcile:shipped' });
+    await enqueueWork({ kind: 'timer_sweep', key: 'timer_sweep:shipped' });
 
     const rows = await listWorkByKind('timer_sweep');
-    const shipped = rows.find((row) => row.key === 'cron_reconcile:shipped');
+    const shipped = rows.find((row) => row.key === 'timer_sweep:shipped');
     expect(shipped?.intervalMs).toBeNull();
     expect(shipped?.dueAt.getTime()).toBeLessThanOrEqual(Date.now());
     const [claimed] = await claimDueWork({ owner: 'ship-test', limit: 1, leaseMs: 60_000, kinds: ['timer_sweep'] });
-    expect(claimed.key).toBe('cron_reconcile:shipped');
+    expect(claimed.key).toBe('timer_sweep:shipped');
 
     await completeWork({ id: claimed.id, leaseToken: claimed.leaseToken!, claimedUpdatedAt: claimed.updatedAt });
     const after = await listWorkByKind('timer_sweep');

@@ -31,6 +31,7 @@ import { keptPage } from '../inbound/captured_request';
 import { lfEngineTeams } from '../lf_engine/team_engine';
 import { notifyWork, registerWorkHandler } from '../work/drain';
 import { enqueueWork, listWorkByKind, removeWork } from '../work/store';
+import { forgetCarriedPollProgress, reconcileCarriedPolls } from './carried_worker';
 import { edgePollerOf } from './edge_poller';
 import { listenEdgeKeysOf, type ListenEdgeKey } from '../inbound/listen_edge';
 
@@ -213,6 +214,8 @@ export const pollReconcileHandler: WorkHandler = {
     for (const row of rows) {
       if (!active.has(row.key)) await removeWork({ key: row.key });
     }
+    // A carried version's listens are polled per row, on their own cursors.
+    await reconcileCarriedPolls(ctx.now);
   },
 };
 
@@ -227,6 +230,7 @@ export async function forgetPollProgress(teamId: TeamId): Promise<void> {
   await sql`
     delete from automations.inbound_checkpoint
     where team_id = ${teamId}::uuid and subscription_id like 'edge-poll:%'`.execute(getAutomationsQb(['inbound_checkpoint']));
+  await forgetCarriedPollProgress(teamId);
 }
 
 /**
