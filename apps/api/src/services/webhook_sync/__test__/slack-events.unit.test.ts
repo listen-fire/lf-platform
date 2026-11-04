@@ -40,9 +40,11 @@ jest.mock('../../../lib/kysely', () => {
 const ARRIVAL = { edge: 'Messages', key: 'C1', identity: 'C1:1.0', landing: { recordId: 'C1:1.0', recordType: 'Slack Message', fields: { Text: 'hi' } } };
 const dispatchCalls: Array<{ team: string; cred: string | null; adapter: string; externalId: string | null; arrivals: unknown[] }> = [];
 let dispatchFails = false;
+let keepFails: Error | null = null;
 jest.mock('../../inbound/listen_door', () => ({
   deliverArrivals: jest.fn(async (input: any) => {
     if (dispatchFails) throw new Error('store unreachable');
+    if (keepFails !== null) throw keepFails;
     dispatchCalls.push({
       team: input.teamId,
       cred: input.delivered.credentialsId,
@@ -78,6 +80,7 @@ import type { AddressInfo } from 'node:net';
 
 import express from 'express';
 
+import { DoorsTryAgain } from '../../movement_engine/doors_hold';
 import { handleSlackEventsInbound, slackEventHandler } from '../slack_events';
 import { slackEventsRouter, verifySlackEventsRequest } from '../../../interfaces/rest/slackEvents';
 
@@ -97,6 +100,7 @@ beforeEach(() => {
   installByIdentifier.clear();
   dispatchCalls.length = 0;
   dispatchFails = false;
+  keepFails = null;
   queued.length = 0;
   holdEnqueue = undefined;
   preprocessInbound.mockClear();
@@ -287,5 +291,13 @@ describe('the route: durable, then answered; the drain does the work', () => {
 
     await expect(slackEventHandler.run(payload, ctx(1))).rejects.toThrow(/store unreachable/);
     await expect(slackEventHandler.run(payload, ctx(10))).resolves.toBeUndefined();
+  });
+
+  it('a door that could not wait is never given up on, however many attempts the row has spent', async () => {
+    installByIdentifier.set('teamId:T_SLACK', { id: 'cred-slack', team_id: TEAM });
+    keepFails = new DoorsTryAgain('the doors are busy');
+    const payload = { envelope: { ...eventCallback('T_SLACK'), event_id: 'Ev6' } };
+
+    await expect(slackEventHandler.run(payload, ctx(10))).rejects.toBeInstanceOf(DoorsTryAgain);
   });
 });

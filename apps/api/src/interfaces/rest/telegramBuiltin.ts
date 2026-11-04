@@ -28,6 +28,7 @@ import {
   handleSharedBotInbound,
   type SharedBotDelivery,
 } from '../../services/webhook_sync/telegram_builtin';
+import { DoorsTryAgain } from '../../services/movement_engine/doors_hold';
 import { logger } from 'movement-engine/public/log';
 import { notifyWork } from '../../services/work/drain';
 import { runHarnessDelivery } from '../../services/work/harness';
@@ -112,8 +113,9 @@ export async function authenticateAndHandle(args: {
 // The body is the raw Telegram `Update` JSON. Answers 200 (Telegram retries on
 // non-2xx, and an unlinked/ignored/unauthorized message is not worth a
 // retry-storm) — the JSON payload carries the classification + routing outcome
-// for the dev loop. The one exception is a delivery whose work rows could not be
-// queued: that answers 500, and the redelivery re-queues the stored receipt.
+// for the dev loop. The exceptions: a delivery whose work rows could not be
+// queued answers 500, and the redelivery re-queues the stored receipt; a door
+// that could not wait for its team's doors answers 500, having kept nothing.
 //
 // Capture, queue, then ack. Authentication, identity routing, the `/start`
 // handshake, the durable receipts and their work rows all finish inside the
@@ -163,6 +165,12 @@ telegramBuiltinRouter.post('/builtin', async (req: Request, res: Response) => {
     notifyWork();
   } catch (err) {
     logger.error('[telegram/builtin] shared-bot inbound failed:', err);
+    // A door that could not wait kept nothing for that team: only a redelivery
+    // brings it back.
+    if (err instanceof DoorsTryAgain) {
+      res.status(500).json({ ok: false, error: 'try_again' });
+      return;
+    }
     // Still 200 so Telegram doesn't retry-storm a genuine bug; surface the
     // error in the body for the dev loop.
     res.status(200).json({

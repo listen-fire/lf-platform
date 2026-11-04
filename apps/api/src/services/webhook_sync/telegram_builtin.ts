@@ -45,6 +45,7 @@ import { logger } from 'movement-engine/public/log';
 import { telegramInboundArrivals } from '@listen-fire/telegram/inbound';
 import { deliverArrivals } from '../inbound/listen_door';
 import { keepForEveryVersion } from '../inbound/carried_delivery';
+import { DoorsTryAgain } from '../movement_engine/doors_hold';
 import { capturedRequest } from '../inbound/captured_request';
 import { builtinModuleRequestKeeping } from '../translation_graph/adapters/builtin_modules';
 import { notifyWork } from '../work/drain';
@@ -260,6 +261,7 @@ export async function handleSharedBotInbound(raw: unknown): Promise<SharedBotDel
   // bot's install's: every Telegram listen of the team judges it, whatever
   // connection it names (the binding rows are the gate, not a credential).
   const delivered: string[] = [];
+  let tryAgain: DoorsTryAgain | undefined;
   for (const teamId of teamIds) {
     const { arrivals } = inbound;
     try {
@@ -299,8 +301,11 @@ export async function handleSharedBotInbound(raw: unknown): Promise<SharedBotDel
         telegramUserId: inbound.telegramUserId,
         error: err instanceof Error ? err.message : String(err),
       });
+      if (err instanceof DoorsTryAgain) tryAgain = err;
     }
   }
+  // The other teams are kept, and the update id dedupes them on the redelivery.
+  if (tryAgain !== undefined) throw tryAgain;
   const result: SharedBotResult = { ok: true, classification: 'message', routedTeamIds: delivered };
   return {
     result,

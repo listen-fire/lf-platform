@@ -7,8 +7,8 @@
 //     drain after it,
 //   • a test-harness delivery drains its rows and reports the outcome inline,
 //   • the always-200 policy survives auth refusals and a thrown service; an
-//     unparseable body (400, unchanged) and rows that could not be queued (500,
-//     so Telegram redelivers) are the exceptions.
+//     unparseable body (400, unchanged), rows that could not be queued and a door
+//     that could not wait (500, so Telegram redelivers) are the exceptions.
 //
 // Telegram permits answering a webhook with a Bot API method call in the
 // RESPONSE BODY. This door has never used that (replies are explicit Bot API
@@ -40,6 +40,7 @@ jest.mock('../../../services/work/store', () => ({
   awaitTeamWorkSettled: (input: unknown) => awaitTeamWorkSettled(input),
 }));
 
+import { DoorsTryAgain } from '../../../services/movement_engine/doors_hold';
 import { telegramBuiltinRouter } from '../telegramBuiltin';
 
 let server: Server;
@@ -209,6 +210,15 @@ describe('POST /builtin — the always-200 policy is unchanged', () => {
       classification: 'no_message',
       error: 'capture exploded',
     });
+  });
+
+  it('a door that could not wait is a 500, so Telegram redelivers what it did not keep', async () => {
+    handleSharedBotInbound.mockRejectedValue(new DoorsTryAgain('the doors are busy'));
+
+    const res = await post(UPDATE);
+
+    expect(res.status).toBe(500);
+    expect(res.body).toMatchObject({ ok: false, error: 'try_again' });
   });
 
   it('an unparseable body is still the one 400', async () => {

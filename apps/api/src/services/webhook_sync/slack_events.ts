@@ -23,6 +23,7 @@ import { z } from 'zod';
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { WorkHandler } from '../work/kinds';
 
+import { WorkDeferred } from '../work/deferred';
 import { notifyWork, registerWorkKinds } from '../work/drain';
 import { enqueueWork } from '../work/store';
 import { getAutomationsQb } from '../../lib/kysely';
@@ -169,7 +170,8 @@ export const slackEventHandler: WorkHandler = {
     try {
       await handleSlackEventsInbound(envelope);
     } catch (error) {
-      if (ctx.attempts < MAX_SLACK_EVENT_ATTEMPTS) throw error;
+      // A deferral says nothing about the delivery: never given up on.
+      if (ctx.attempts < MAX_SLACK_EVENT_ATTEMPTS || error instanceof WorkDeferred) throw error;
       logger.error('[SlackEvents] giving up on the delivery', {
         attempts: ctx.attempts,
         error: error instanceof Error ? error.message : String(error),

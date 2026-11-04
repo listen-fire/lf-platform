@@ -67,12 +67,14 @@ const deliverCalls: Array<{
   arrivals: Array<{ edge: string; identity: string }>;
 }> = [];
 let deliverShouldThrowForTeam: string | null = null;
+let deliverShouldThrowDoorsTryAgainForTeam: string | null = null;
 let notKeptForTeam: string | null = null;
 
 jest.mock('../../inbound/listen_door', () => ({
   deliverArrivals: jest.fn(async (input: any) => {
     deliverCalls.push(input);
     if (deliverShouldThrowForTeam === input.teamId) throw new Error(`keep boom for ${input.teamId}`);
+    if (deliverShouldThrowDoorsTryAgainForTeam === input.teamId) throw new DoorsTryAgain('the doors are busy');
     return {
       kept: notKeptForTeam === input.teamId ? { kept: false } : { kept: true },
       deliveryId: `delivery-${input.teamId}`,
@@ -131,6 +133,7 @@ jest.mock('../../asks/doors', () => ({
 
 import * as telegramBuiltinService from '../telegram_builtin';
 import { handleSharedBotInbound, classifySharedBotInbound } from '../telegram_builtin';
+import { DoorsTryAgain } from '../../movement_engine/doors_hold';
 import {
   authenticateAndHandle,
   verifyTelegramWebhookSecret,
@@ -165,6 +168,7 @@ beforeEach(() => {
   answerCalls.length = 0;
   answerOutcome = { kind: 'answered', ask: { id: 'ask-1' } };
   deliverShouldThrowForTeam = null;
+  deliverShouldThrowDoorsTryAgainForTeam = null;
   notKeptForTeam = null;
   testHarnessConfig.teamId = ORIGINAL_HARNESS_TEAM;
   bindResult = { ok: true, email: 'ada@example.com', telegramUserId: TG_USER };
@@ -287,6 +291,16 @@ describe('linked-message routing (route-all)', () => {
     // Both were attempted; only the team whose delivery was kept is routed.
     expect(deliverCalls.map((c) => c.teamId).sort()).toEqual(['team-A', 'team-B']);
     expect(res.routedTeamIds).toEqual(['team-B']);
+  });
+
+  it('a door that could not wait for a team fails the whole update once the others are kept, so Telegram redelivers it', async () => {
+    identities.push({ team_id: 'team-A', telegram_user_id: TG_USER });
+    identities.push({ team_id: 'team-B', telegram_user_id: TG_USER });
+    deliverShouldThrowDoorsTryAgainForTeam = 'team-A';
+
+    await expect(handleSharedBotInbound(privateMessage())).rejects.toBeInstanceOf(DoorsTryAgain);
+
+    expect(deliverCalls.map((c) => c.teamId).sort()).toEqual(['team-A', 'team-B']);
   });
 
   it('a delivery the store does not keep is not reported as routed', async () => {
