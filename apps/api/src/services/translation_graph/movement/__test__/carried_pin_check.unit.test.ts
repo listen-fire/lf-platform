@@ -12,6 +12,7 @@ jest.mock('../catalog', () => ({
 jest.mock('../store', () => ({
   listMovementRows: jest.fn(async () => []),
   getMovementRow: jest.fn(),
+  listDerivedTriggerRows: jest.fn(async () => []),
 }));
 jest.mock('../../adapters/remote/store', () => ({
   ...jest.requireActual('../../adapters/remote/store'),
@@ -164,21 +165,26 @@ describe("a 0.12 pin's story", () => {
   const story = (source: string) =>
     projectStoryView({ id: 'movement-1', teamId: TEAM, name: 'echo', source, validityStatus: null, languageVersion: '0.12.13' });
 
-  it("carries 0.12's verdict and says the picture is not drawn, never a picture from this release", async () => {
+  it("is drawn by 0.12's own analysis, in its systems' own words, with no current catalog", async () => {
     const result = await story(ECHO_012);
-    expect(result).toMatchObject({ ok: false, reason: 'not-drawn', movement: { id: 'movement-1', name: 'echo' } });
-    if (result.ok) return;
-    expect(result.problems).toEqual([
-      expect.objectContaining({ code: 'STORY_NOT_DRAWN', severity: 'info', message: expect.stringContaining('it checks clean under 0.12.13') }),
-    ]);
+    if (!result.ok) throw new Error(`no picture: ${JSON.stringify(result.problems)}`);
+    expect(result.view.movement).toMatchObject({ id: 'movement-1', name: 'echo', validity: { status: 'valid' } });
+    expect(result.view.triggers).toEqual([expect.objectContaining({ system: expect.objectContaining({ key: 'manual', label: 'Run now' }), sentence: expect.any(String) })]);
+    expect(result.view.flow.length).toBeGreaterThan(0);
     expect(movementCatalogForTeam).not.toHaveBeenCalled();
   });
 
-  it("lists what 0.12's check found", async () => {
+  it("carries what 0.12's check found on the picture", async () => {
     const result = await story(ECHO_012.replace('run.Text', 'run.Textt'));
-    if (result.ok) throw new Error('a 0.12 program is never drawn');
-    expect(result.reason).toBe('not-drawn');
-    expect(result.problems.map((p) => p.code)).toEqual(['STORY_NOT_DRAWN', 'MOV_UNKNOWN_PROPERTY']);
+    if (!result.ok) throw new Error('a program that reads is drawn');
+    expect(result.view.movement.validity.status).toBe('invalid');
+    expect(result.view.movement.validity.problems.map((p) => p.code)).toEqual(['MOV_UNKNOWN_PROPERTY']);
+  });
+
+  it("carries the platform's stored ruling", async () => {
+    const result = await projectStoryView({ id: 'movement-1', teamId: TEAM, name: 'echo', source: ECHO_012, validityStatus: 'unverified', languageVersion: '0.12.13' });
+    if (!result.ok) throw new Error('a program that reads is drawn');
+    expect(result.view.movement.validity.status).toBe('unverified');
   });
 
   it('a program 0.12 cannot read is unreadable, as any other', async () => {

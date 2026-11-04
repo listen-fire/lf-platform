@@ -905,17 +905,13 @@ export interface StoryView {
      *  looks records up by id. */
     flow: Step[];
 }
-/**
- * Unreadable source yields no view — never a partial guess. Nor does a program
- * on a language version whose picture the platform does not draw (`not-drawn`):
- * it carries its own version's check, and says why there is no picture.
- */
+/** Unreadable source yields no view — never a partial guess. */
 export type StoryViewResult = {
     ok: true;
     view: StoryView;
 } | {
     ok: false;
-    reason: 'unreadable' | 'not-drawn';
+    reason: 'unreadable';
     movement: {
         id: string;
         name: string;
@@ -1231,6 +1227,10 @@ export interface ProvisionedMovement {
      *  author — listeners retired by a consented unparseable save, a movement
      *  name another automation already fires. Never blocking; always shown. */
     warnings: string[];
+    /** A language upgrade's: the listens it left paused because it could not
+     *  tell which of the earlier listens a person had paused. Not a warning of
+     *  every save, so it is not among `warnings`. */
+    leftPaused?: string[];
 }
 export interface ProvisionMovementFailure {
     ok: false;

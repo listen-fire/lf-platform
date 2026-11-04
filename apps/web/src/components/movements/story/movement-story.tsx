@@ -50,18 +50,10 @@ export function MovementStory({
     return (
       <div className="h-full overflow-y-auto px-6 py-5">
         {unsavedEdits && <UnsavedNotice />}
-        {data.reason === "not-drawn" ? (
-          <Banner tone="warn" title="We don’t draw this one">
-            This automation is written in an earlier language version, which
-            the picture is not drawn for. It was checked under its own version;
-            what that check found is below.
-          </Banner>
-        ) : (
-          <Banner tone="stop" title="We can’t show this one yet">
-            There’s a problem in the script itself, so there’s nothing safe to
-            show — switch to the code to fix it.
-          </Banner>
-        )}
+        <Banner tone="stop" title="We can’t show this one yet">
+          There’s a problem in the script itself, so there’s nothing safe to
+          show — switch to the code to fix it.
+        </Banner>
         <Problems problems={data.problems} />
       </div>
     );
