@@ -156,13 +156,13 @@ describe('an upgraded automation whose listens could not be brought up', () => {
     expect(await workRows(id)).toHaveLength(1);
 
     // Failing, the row stays and counts; a first failure may be a blip.
-    expect((await pass()).failed).toBe(1);
-    expect((await pass()).failed).toBe(1);
+    expect(await pass()).toEqual(expect.objectContaining({ failed: 0, deferred: 1 }));
+    expect(await pass()).toEqual(expect.objectContaining({ failed: 0, deferred: 1 }));
     expect(await workRows(id)).toEqual([expect.objectContaining({ attempts: 2 })]);
     expect(await issues(id)).toEqual([]);
 
     // By the third, an issue says so, keeping the note that says why.
-    expect((await pass()).failed).toBe(1);
+    expect(await pass()).toEqual(expect.objectContaining({ failed: 0, deferred: 1 }));
     expect(await issues(id)).toEqual([
       {
         state: 'open',
@@ -246,7 +246,7 @@ describe('an upgraded automation whose listens could not be brought up', () => {
     expect(resolveAndArm).not.toHaveBeenCalled();
     jest.mocked(resolveAndArm).mockResolvedValue('LISTEN_RESOLVE_FAILED: it could not list the records it watches');
 
-    for (let failing = 0; failing < 3; failing++) expect((await pass()).failed).toBe(1);
+    for (let failing = 0; failing < 3; failing++) expect(await pass()).toEqual(expect.objectContaining({ failed: 0, deferred: 1 }));
 
     expect(await issues(id)).toEqual([expect.objectContaining({ state: 'open', message: expect.stringContaining('LISTEN_RESOLVE_FAILED') })]);
 
