@@ -387,7 +387,7 @@ describe('a pin by the compatibility rule', () => {
     expect(issues.map((e) => e.reason)).toEqual([expect.stringContaining(OLDER_LINE), expect.stringContaining(NEWER_LINE)]);
   });
 
-  it("a 0.12 pin is validated under 0.12 by 0.12's own checker, and still stops: the platform does not fire 0.12's listens", async () => {
+  it("a 0.12 pin is validated under 0.12 by 0.12's own checker, and its listens keep firing: nothing is unprovisioned", async () => {
     const store = fakeStore({
       movements: [
         movement({ id: 'clean-012', languageVersion: '0.12.13' }),
@@ -407,23 +407,18 @@ describe('a pin by the compatibility rule', () => {
     ]);
     expect(store.validity.get('clean-012')).toBe('0.12.13');
     expect(store.validity.get('broken-012')).toBe('0.12.4');
-    // Running stays exactly as before 0.12 could be checked: stopped, its
-    // listens removed, and nothing says it runs.
     expect(summary?.automations.map((a) => [a.name, a.outcome])).toEqual([
-      ['clean-012', 'stopped'],
-      ['broken-012', 'stopped'],
+      ['clean-012', 'carried'],
+      ['broken-012', 'carried'],
     ]);
-    expect(store.unprovisioned).toEqual(['clean-012', 'broken-012']);
+    expect(store.unprovisioned).toEqual([]);
     const details = summary?.automations.map((a) => a.detail) ?? [];
-    expect(details[0]).toContain('checked under 0.12.13, it validates; its listens do not fire until it is upgraded');
-    expect(details[1]).toContain('checked under 0.12.4, it does not validate (line 3: no field Textt); its listens do not fire until it is upgraded');
-    for (const detail of details) {
-      expect(detail).not.toMatch(/\b(keeps running|fires)\b/);
-      expect(detail).toContain('but not to fire its listens');
-    }
+    expect(details[0]).toContain('checked under 0.12.13, it validates');
+    expect(details[1]).toContain('checked under 0.12.4, it does not validate (line 3: no field Textt)');
+    for (const detail of details) expect(detail).toContain('its listens fire on');
   });
 
-  it('a 0.12 pin whose check throws is still stopped and unprovisioned, and the detail says it could not be checked', async () => {
+  it('a 0.12 pin whose check throws keeps listening: a check that cannot run stops nothing', async () => {
     const store = fakeStore({ movements: [movement({ id: 'unreadable-012', languageVersion: '0.12.13' })], verdicts: {} });
     const order: string[] = [];
     const unprovision = store.deps.unprovision;
@@ -438,12 +433,10 @@ describe('a pin by the compatibility rule', () => {
 
     const summary = await runDeployCheck(store.deps);
 
-    expect(order).toEqual(['unprovision', 'validate']);
-    expect(store.unprovisioned).toEqual(['unreadable-012']);
-    expect(summary?.automations.map((a) => [a.name, a.outcome])).toEqual([['unreadable-012', 'stopped']]);
-    const [entry] = summary?.automations ?? [];
-    expect(entry?.detail).toContain('it could not be checked under 0.12.13 (the 0.12 lane failed to load); its listens do not fire until it is upgraded');
-    expect(store.validity.has('unreadable-012')).toBe(false);
+    expect(order).toEqual(['validate']);
+    expect(store.unprovisioned).toEqual([]);
+    expect(summary?.automations.map((a) => [a.name, a.outcome])).toEqual([['unreadable-012', 'carried']]);
+    expect(summary?.automations[0]?.detail).toContain('its listens fire on');
   });
 
   it('keys the release by the installed language and the legacy ids', async () => {
