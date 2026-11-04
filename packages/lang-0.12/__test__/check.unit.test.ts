@@ -2,6 +2,7 @@
 // service, against the catalog 0.12's own modules describe.
 
 import { checkSource, completionsAt } from '..';
+import * as constructions from '../lane/constructions';
 import type { TeamFacts, TeamFile } from '../lane/types';
 import type { ModulePlatform } from '../lane/run_types';
 
@@ -157,6 +158,35 @@ describe("an ask's answer, typed by its own literals", () => {
   it('a Choose answer compared with an option it never offers is an error', async () => {
     const errors = await errorsOf('  c = write qa-[:Choose]-> { Prompt: "Which?", Options: ["Seed", "Series A"] }\n  a = await first(c-[:Response]->)\n  if (a.Answer == "Series B") { return 1 }\n  return 0\n');
     expect(errors.length).toBeGreaterThan(0);
+  });
+
+  it('options or fields that are not literals leave the answer its base type, as production kept it', async () => {
+    // Computed at run time, so nothing is known to narrow the answer to.
+    expect(await errorsOf('  opts = ["Seed", "Series A"]\n  c = write qa-[:Choose]-> { Prompt: "Which?", Options: opts }\n  a = await first(c-[:Response]->)\n  if (a.Answer == "Series B") { return 1 }\n  return 0\n')).toEqual([]);
+    expect(await errorsOf('  names = ["Budget"]\n  q = write qa-[:Form]-> { Prompt: "Deal?", Fields: names }\n  a = await first(q-[:Response]->)\n  return a.Budget\n')).toEqual([
+      expect.objectContaining({ code: 'MOV_UNKNOWN_PROPERTY', message: expect.stringContaining("Form Response has no field 'Budget'") }),
+    ]);
+  });
+
+  it('the same options in another order are another type: each ask is held to its own', async () => {
+    const errors = await errorsOf(
+      '  c = write qa-[:Choose]-> { Prompt: "Which?", Options: ["Seed", "Series A"] }\n  d = write qa-[:Choose]-> { Prompt: "Which?", Options: ["Series A", "Seed"] }\n' +
+        '  a = await first(c-[:Response]->)\n  b = await first(d-[:Response]->)\n  if (a.Answer == "Series B") { return 1 }\n  if (b.Answer == "Series C") { return 1 }\n  return 0\n',
+    );
+    expect(errors.map((d) => d.message)).toEqual([
+      expect.stringContaining('isn\'t a value of enum (Seed | Series A)'),
+      expect.stringContaining('isn\'t a value of enum (Series A | Seed)'),
+    ]);
+  });
+
+  it('each program is scanned for its writes once, not once per adapter the catalog describes', async () => {
+    const scan = jest.spyOn(constructions, 'scanInstanceChains');
+    try {
+      await errorsOf('  c = write qa-[:Check]-> { Prompt: "Sure?" }\n  return 1\n');
+      expect(scan).toHaveBeenCalledTimes(1);
+    } finally {
+      scan.mockRestore();
+    }
   });
 
   it('a library that decides its own ask is typed under the importer', async () => {

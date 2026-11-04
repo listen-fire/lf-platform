@@ -39,7 +39,7 @@ import { SystemAdapter } from '../modules/system/adapter';
 import { SYSTEM_MANIFEST } from '../modules/system/manifest';
 import { CRON_MANIFEST, createCronAdapter } from '../units/cron';
 import { MANUAL_MANIFEST, createManualAdapter } from '../units/manual';
-import { scanInstanceChains } from './constructions';
+import { scanInstanceChains, type InstanceChain } from './constructions';
 import { graftGenericLandings } from './generic_landings';
 import { manifestsOf } from './manifests';
 import { moduleTable } from './modules';
@@ -267,17 +267,26 @@ export interface TeamSnapshot {
   adapters: ReadonlySet<string>;
 }
 
+/** Every program's write chains under its own pin, scanned at most once for all
+ *  the adapters a catalog describes: each scan is a parse. */
+type ScannedSources = () => Array<{ pin: string; chains: InstanceChain[] }>;
+
+function scannedOnce(sources: readonly ProgramSource[]): ScannedSources {
+  let scanned: ReturnType<ScannedSources> | undefined;
+  return () => (scanned ??= sources.map(({ source, pin }) => ({ pin, chains: scanInstanceChains(source, pin) })));
+}
+
 /** A static surface's schema with the landings `sources` decide grafted in, as
  *  production grafted them: each write's literals, read under its own pin. */
 function withConstructionLandings(input: {
   adapterType: string;
   surface: DescribedSurface;
-  sources: readonly ProgramSource[];
+  scanned: ScannedSources;
 }): InstanceSchema {
   const { adapterType, surface } = input;
   let { schema } = surface;
-  for (const { source, pin } of input.sources) {
-    const chains = scanInstanceChains(source, pin).filter((chain) => chain.adapter.replace(/^@lf\//, '') === adapterType);
+  for (const { pin, chains: all } of input.scanned()) {
+    const chains = all.filter((chain) => chain.adapter.replace(/^@lf\//, '') === adapterType);
     if (chains.length === 0) continue;
     schema = graftGenericLandings({
       instance: { adapterType, schema, entryPoints: surface.entryPoints },
@@ -301,6 +310,7 @@ export async function teamSnapshot(input: {
   const notes: string[] = [];
   const manifests = [...manifestsOf(team), ...remoteManifestsOf(team, notes)];
   const schemas = await describedSchemas();
+  const scanned = scannedOnce(sources);
   const connected =
     reading !== undefined ? await readConnected(reading, team, manifests, new Set(schemas.keys())) : { schemas: new Map<string, Record<string, InstanceSchema>>(), notes: [], unread: new Map<string, string>() };
   notes.push(...connected.notes);
@@ -313,7 +323,7 @@ export async function teamSnapshot(input: {
     const own = schemas.get(manifest.adapterType);
     if (own !== undefined) {
       notes.push(...own.notes);
-      return { ...entry, schemas: { [instanceSchemaKey({ positionKey: '' })]: withConstructionLandings({ adapterType: manifest.adapterType, surface: own, sources }) } };
+      return { ...entry, schemas: { [instanceSchemaKey({ positionKey: '' })]: withConstructionLandings({ adapterType: manifest.adapterType, surface: own, scanned }) } };
     }
     const read = connected.schemas.get(manifest.adapterType);
     if (read !== undefined) return { ...entry, schemas: read };
