@@ -24,17 +24,13 @@ const CORE_PERIODIC_WORK: ReadonlyArray<{ kind: CoreWorkKind; intervalMs: number
 
 /** Kinds a past build ran and this one does not. Their periodic rows would
  *  otherwise sit in the table forever, claimed and released for want of a
- *  handler, so they are deleted where the periodic rows are ensured. */
-const RETIRED_WORK_KINDS: readonly string[] = [
-  'await_resume_sweep',
-  'ask_expiry_sweep',
-  'fire_callback',
-  'dispatch_event',
-  // A schedule is a polled edge since 0.13 (`poll_edge`), as every poll is.
-  'fire_cron',
-  'cron_reconcile',
-  'poll_source',
-];
+ *  handler, so they are deleted where the periodic rows are ensured.
+ *
+ *  A 0.12.13 service runs beside this build, and a row it queued is a delivery
+ *  or a callback it still owes: `dispatch_event`, `fire_callback`, `fire_cron`,
+ *  `cron_reconcile` and `poll_source` are not on this list, though this build
+ *  no longer runs them. They come back on it the release 0.12 is retired. */
+const RETIRED_WORK_KINDS: readonly string[] = ['await_resume_sweep', 'ask_expiry_sweep'];
 
 /** Upsert every periodic row — the core's and each registered unit's — and
  *  delete the retired kinds' rows. Idempotent; the drain loop retries it until

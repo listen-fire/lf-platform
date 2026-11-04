@@ -320,15 +320,7 @@ describe('registerAutomationsWork', () => {
 
   it('deletes the rows of retired kinds where the periodic rows are ensured', async () => {
     await registerAutomationsWork();
-    expect(removeRetired).toHaveBeenCalledWith([
-      'await_resume_sweep',
-      'ask_expiry_sweep',
-      'fire_callback',
-      'dispatch_event',
-      'fire_cron',
-      'cron_reconcile',
-      'poll_source',
-    ]);
+    expect(removeRetired).toHaveBeenCalledWith(['await_resume_sweep', 'ask_expiry_sweep']);
     // A retired kind is gone from the live list, not merely unscheduled.
     expect(new Set<string>(claimableWorkKinds()).has('await_resume_sweep')).toBe(false);
     expect(new Set<string>(claimableWorkKinds()).has('ask_expiry_sweep')).toBe(false);
