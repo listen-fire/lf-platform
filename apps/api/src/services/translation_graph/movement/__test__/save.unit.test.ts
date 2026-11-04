@@ -282,8 +282,16 @@ jest.mock('../../../../lib/journey', () => ({
 // MCP-originated save by returning `{ mcpDomain: 'automation' }`.
 jest.mock('../../../../services/context', () => ({
   unsafeCurrentContext: jest.fn(() => undefined),
-  // The upgrade's group transaction: entered, nothing more, in this file.
-  currentContext: () => ({ enterTransaction: async () => undefined }),
+  // The upgrade's group transaction: entered, which a save joining it can see,
+  // and nothing more in this file (its rollback is proved on Postgres:
+  // upgrade_group_transaction.integration.test.ts).
+  currentContext: () => ({
+    enterTransaction: async () => {
+      jest
+        .requireMock<{ unsafeCurrentContext: jest.Mock }>('../../../../services/context')
+        .unsafeCurrentContext.mockReturnValue({ kyselyTrx: {}, onChangesCommitted: (fn: () => unknown) => fn() });
+    },
+  }),
 }));
 
 import { LANGUAGE_VERSION, mockCatalog, mockCatalogSnapshot } from 'movement-lang';
@@ -1525,7 +1533,10 @@ listen to inbox-[e:Emails WHERE e.Key == "deals"]-> fire intake
       .spyOn(jest.requireActual<typeof import('../firing_context')>('../firing_context'), 'withTeamContext')
       .mockImplementation((_teamId, fn) => fn());
   });
-  afterEach(() => inTeam?.mockRestore());
+  afterEach(() => {
+    inTeam?.mockRestore();
+    jest.requireMock<{ unsafeCurrentContext: jest.Mock }>('../../../../services/context').unsafeCurrentContext.mockReturnValue(undefined);
+  });
 
   /** A movement as a version 4 save left it: the row, and its snapshot. */
   async function savedUnderFour(): Promise<string> {
