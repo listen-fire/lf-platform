@@ -222,16 +222,20 @@ async function listMembers(listen: SavedListen): Promise<Resolution> {
   return { heads, resolvedAt, failure: null, members };
 }
 
+/** What a listing answers when another process holds the listen's resolve claim:
+ *  how that listing comes out is not known yet. */
+export const HELD_ELSEWHERE = Symbol('another process is listing this listen');
+
 /** List the listen's members and keep what it comes to, under the store's
  *  hold: over the scope limit it is suspended, watched nowhere; a failed read
  *  keeps the records it had, with the new failure. Another process's live hold
  *  leaves it to that process. Answers the failure listing again may mend, if
  *  any: a suspension is kept in the store and lifts on the listen's own relist
  *  once its filter matches fewer, so it is not one to retry. */
-export async function resolveListen(listen: SavedListen): Promise<string | null> {
+export async function resolveListen(listen: SavedListen): Promise<string | null | typeof HELD_ELSEWHERE> {
   const scope = { tenant: listen.teamId };
   const held = await claimResolve(scope, { pipeline: listen.pipeline, ttlMs: RESOLVE_HOLD_MS });
-  if (held === null) return null;
+  if (held === null) return HELD_ELSEWHERE;
   const before = (await states(scope, { pipelines: [listen.pipeline] }))[listen.pipeline];
   let resolution: Resolution;
   let suspended = false;
@@ -253,7 +257,7 @@ export async function resolveListen(listen: SavedListen): Promise<string | null>
     }
   }
   const saved = await saveResolution(scope, { pipeline: listen.pipeline, token: held.token, resolution });
-  if (!saved) return null;
+  if (!saved) return HELD_ELSEWHERE;
   if (resolution.failure !== null) logger.warn('[ListenResolve] a listen could not be resolved', { pipeline: listen.pipeline, failure: resolution.failure });
   return suspended ? null : resolution.failure;
 }
@@ -304,7 +308,7 @@ export async function armResolve(listen: SavedListen, inMs = 0): Promise<void> {
 
 /** List now, synchronously, and arm the next clock relist: run at save so the
  *  first subscription sync sees the records the listen is subscribed under. */
-export async function resolveAndArm(listen: SavedListen): Promise<string | null> {
+export async function resolveAndArm(listen: SavedListen): Promise<string | null | typeof HELD_ELSEWHERE> {
   const failure = await resolveListen(listen);
   const everyMs = relistIntervalMs(listen);
   if (everyMs !== undefined) await armResolve(listen, everyMs);

@@ -368,6 +368,28 @@ describe('an upgraded automation whose listens could not be brought up', () => {
     expect(listed.filter((file) => file === 'member_b')).toHaveLength(3);
   });
 
+  it("a listen another process is listing is not yet up: the row defers, looks again, and hears that process's failure", async () => {
+    credential.usable = true;
+    plan.resolved = true;
+    const id = await seedShipped('held_elsewhere');
+    // Another process holds the listen's resolve claim, and the real resolve meets it.
+    jest.mocked(resolveAndArm).mockImplementation(async (listen) => {
+      await claimResolve({ tenant: listen.teamId }, { pipeline: listen.pipeline, ttlMs: 60_000 });
+      const { resolveAndArm: real } = jest.requireActual<typeof import('../../../inbound/listen_resolve')>('../../../inbound/listen_resolve');
+      return real(listen);
+    });
+    await upgradeMovement({ teamId, id, acknowledge: true, validate: clean });
+
+    expect(await pass(1)).toEqual(expect.objectContaining({ failed: 0, deferred: 1 }));
+    expect(await workRows(id)).toEqual([expect.objectContaining({ attempts: 0 })]);
+    expect(await issues(id)).toEqual([]);
+
+    // That process failed. Looking again lists it here and hears the same failure.
+    jest.mocked(resolveAndArm).mockResolvedValue('LISTEN_RESOLVE_FAILED: it could not list the records it watches');
+    expect(await pass(11)).toEqual(expect.objectContaining({ failed: 0, deferred: 1 }));
+    expect(await issues(id)).toEqual([expect.objectContaining({ state: 'open', failure_class: 'MOV_LISTENS_NOT_UP' })]);
+  });
+
   it('a credential that is unusable only for seconds raises no issue however often it was tried, and one that stays so for ten minutes does', async () => {
     const id = await seedShipped('stamp');
     await upgradeMovement({ teamId, id, acknowledge: true, validate: clean });

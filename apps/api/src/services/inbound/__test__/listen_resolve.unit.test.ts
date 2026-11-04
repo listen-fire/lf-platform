@@ -28,7 +28,7 @@ jest.mock('../listen_door', () => ({ savedListenOf: jest.fn() }));
 import { claimResolve as claimResolveImport, saveResolution as saveResolutionImport, states as statesImport } from '../../lf_store/listens';
 import { resolveAdapter as resolveAdapterImport } from '../../translation_graph/adapters/resolve';
 import { enqueueWork as enqueueWorkImport } from '../../work/store';
-import { armResolveForArrivals, relistIntervalMs, resolveListen, resolvesListen } from '../listen_resolve';
+import { HELD_ELSEWHERE, armResolveForArrivals, relistIntervalMs, resolveListen, resolvesListen } from '../listen_resolve';
 
 const claimResolve = claimResolveImport as jest.Mock;
 const saveResolution = saveResolutionImport as jest.Mock;
@@ -94,7 +94,7 @@ describe('listing a listen`s base members by its WHERE', () => {
   it('holds the listen while it lists, so one process lists it at a time', async () => {
     claimResolve.mockResolvedValue(null);
 
-    await resolveListen(airtableListen());
+    await expect(resolveListen(airtableListen())).resolves.toBe(HELD_ELSEWHERE);
 
     expect(getRelated).not.toHaveBeenCalled();
     expect(saveResolution).not.toHaveBeenCalled();
@@ -127,7 +127,7 @@ describe('listing a listen`s base members by its WHERE', () => {
     getRelated.mockResolvedValue([base('appHiring', 'Hiring')]);
     saveResolution.mockResolvedValue(false);
 
-    await expect(resolveListen(airtableListen())).resolves.toBeNull();
+    await expect(resolveListen(airtableListen())).resolves.toBe(HELD_ELSEWHERE);
   });
 });
 

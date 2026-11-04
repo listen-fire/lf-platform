@@ -12,7 +12,9 @@
 // take days): the upgrade has already answered `upgraded`, and asking again
 // answers `already_current`, so this row is the only retry there is. Failing
 // for ten minutes raises an issue on the automation, on the surface a refused
-// firing uses; coming up closes it.
+// firing uses; coming up closes it. A listen another process is listing is not
+// up yet: the row defers and reads how that came out on its next look, so that
+// process's failure is not lost.
 //
 // One row per group, not per member: the subscription sync is per team, and two
 // at once could register the same subscription twice.
@@ -28,8 +30,8 @@ import type { WorkContext } from '../../work/kinds';
 import { logger } from 'movement-engine/public/log';
 import { savedListens, type SavedListen } from '../../inbound/listen_door';
 import { listenEdgeKeysOf } from '../../inbound/listen_edge';
-import { resolveAndArm, resolvesListen, withWatchingOne } from '../../inbound/listen_resolve';
-import { registerWorkHandler, WorkKeepsTrying } from '../../work/drain';
+import { HELD_ELSEWHERE, resolveAndArm, resolvesListen, withWatchingOne } from '../../inbound/listen_resolve';
+import { registerWorkHandler, WorkDeferred, WorkKeepsTrying } from '../../work/drain';
 import { enqueueWork } from '../../work/store';
 import { withTeamContext } from './firing_context';
 import { recordMovementFailureIssue, resolveMovementIssuesOfClass } from './issues';
@@ -77,26 +79,36 @@ async function listedSince(listen: SavedListen, requestedAt: Date): Promise<bool
   return watching !== undefined && watching.failure === null && watching.resolvedAt !== null && Date.parse(watching.resolvedAt) >= requestedAt.getTime();
 }
 
-async function resolvedFailuresOf(listens: readonly SavedListen[], requestedAt: Date): Promise<string[]> {
+/** What listing an automation's listens came to: the failures, and whether
+ *  another process holds one of them, so how that one comes out is not known. */
+async function listingOf(listens: readonly SavedListen[], requestedAt: Date): Promise<{ failures: string[]; heldElsewhere: boolean }> {
   const failures: string[] = [];
+  let heldElsewhere = false;
   for (const listen of listens) {
     if (!resolvesListen(listen)) continue;
     if (await listedSince(listen, requestedAt)) continue;
-    const failure = await resolveAndArm(listen);
-    if (failure !== null) failures.push(failure);
+    const answer = await resolveAndArm(listen);
+    if (answer === HELD_ELSEWHERE) heldElsewhere = true;
+    else if (answer !== null) failures.push(answer);
   }
-  return failures;
+  return { failures, heldElsewhere };
 }
 
 /** Bring `movementIds`' listens up, once. Answers each automation still not
- *  up: its name and why. */
-async function bringUp(input: { teamId: TeamId; movementIds: readonly string[]; requestedAt: Date }): Promise<Array<{ movementId: string; name: string; why: string[] }>> {
+ *  up, with its name and why, and those with a listen another process is listing:
+ *  neither up nor down yet, so the row looks again. */
+async function bringUp(input: { teamId: TeamId; movementIds: readonly string[]; requestedAt: Date }): Promise<{ notUp: Array<{ movementId: string; name: string; why: string[] }>; heldElsewhere: Set<string> }> {
   const { teamId } = input;
   const listensOf = (movementId: string) => savedListens({ teamId, movementId: movementId as MovementId });
 
   // Listed first: a subscription per record is made under the records this finds.
   const resolving = new Map<string, string[]>();
-  for (const movementId of input.movementIds) resolving.set(movementId, await resolvedFailuresOf(await listensOf(movementId), input.requestedAt));
+  const heldElsewhere = new Set<string>();
+  for (const movementId of input.movementIds) {
+    const listing = await listingOf(await listensOf(movementId), input.requestedAt);
+    resolving.set(movementId, listing.failures);
+    if (listing.heldElsewhere) heldElsewhere.add(movementId);
+  }
 
   const { notes, unregistered } = await syncListenSubscriptions({ teamId });
   if (notes.length > 0) logger.warn('[ListensUp] the subscription sync left notes', { teamId, notes });
@@ -110,7 +122,7 @@ async function bringUp(input: { teamId: TeamId; movementIds: readonly string[]; 
     const [first] = listens;
     if (first !== undefined && why.length > 0) notUp.push({ movementId, name: first.file, why });
   }
-  return notUp;
+  return { notUp, heldElsewhere };
 }
 
 /** The issue for a bring up that stopped on an error rather than answering: the
@@ -135,9 +147,9 @@ async function runBringUp(payload: unknown, ctx: WorkContext): Promise<void> {
   const requestedAt = new Date(requestedAtText);
   const longEnough = ctx.now.getTime() - requestedAt.getTime() >= ISSUE_AFTER_MS;
   await withTeamContext(teamId as TeamId, async () => {
-    let notUp: Awaited<ReturnType<typeof bringUp>>;
+    let brought: Awaited<ReturnType<typeof bringUp>>;
     try {
-      notUp = await bringUp({ teamId: teamId as TeamId, movementIds, requestedAt });
+      brought = await bringUp({ teamId: teamId as TeamId, movementIds, requestedAt });
     } catch (error) {
       // The retry the drain gives a thrown row is the same one; only saying so
       // is added. Saying so must not hide the error it is about.
@@ -148,11 +160,15 @@ async function runBringUp(payload: unknown, ctx: WorkContext): Promise<void> {
       }
       throw error;
     }
+    const { notUp, heldElsewhere } = brought;
     const stillDown = new Set(notUp.map(({ movementId }) => movementId));
     for (const movementId of movementIds) {
-      if (!stillDown.has(movementId)) await resolveMovementIssuesOfClass({ movementId, failureClass: NOT_UP_CLASS });
+      if (!stillDown.has(movementId) && !heldElsewhere.has(movementId)) await resolveMovementIssuesOfClass({ movementId, failureClass: NOT_UP_CLASS });
     }
-    if (notUp.length === 0) return;
+    if (notUp.length === 0) {
+      if (heldElsewhere.size > 0) throw new WorkDeferred(`another process is listing listens of ${[...heldElsewhere].join(', ')}: how that comes out is read on the next look`);
+      return;
+    }
     if (longEnough) {
       for (const { movementId, name, why } of notUp) {
         await recordMovementFailureIssue({
