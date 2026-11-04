@@ -14,8 +14,8 @@ import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 
 import { tenantIdOf } from 'engine-contracts';
 import { positionData } from 'engine-contracts/catalog';
-import { containerAssociation, type Adapter } from 'movement-engine/public/adapter';
-import { withFileOwners } from 'movement-engine/public/files';
+import { containerAssociation, type Adapter, type FileRef } from 'movement-engine/public/adapter';
+import { FileOutsideTeamError, withFileOwners } from 'movement-engine/public/files';
 import type { LlmCallResult } from 'movement-engine/public/models';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { credentialIdsFor, makeTestHost } from 'movement-engine/public/testing';
@@ -24,6 +24,7 @@ import { runFailureCause } from '@listen-fire/legacy-engine/services/movement_en
 
 import { services } from '../../../adapters/registry';
 import { UnconfiguredOcrAdapter } from '../../../adapters/ocr/unconfigured';
+import { runPlatformFor } from '../../translation_graph/movement/carried_run';
 import { sharedRunServices } from '../../translation_graph/movement/engine_host';
 import { NEVER_CANCELLED } from 'movement-engine/public/host';
 import { inMemoryRawTextStore } from '../../translation_graph/movement/raw_text_store';
@@ -158,7 +159,10 @@ describe('an image in a run, through the real reader', () => {
   it('File.read gives the words on it, read as a PNG, and the trace says what it read', async () => {
     const { result } = await run(READ, PNG_WITH_TEXT, {});
     expect(readMock).toHaveBeenCalledWith(expect.any(Readable), { numpages: 1, size: PNG_WITH_TEXT.length, mimeType: 'image/png' });
-    expect(result).toMatchObject({ trace: [{ kind: 'read', name: 'screenshot.png', contentType: 'image/png', chars: WORDS.length }] });
+    expect(result).toMatchObject({
+      trace: [{ kind: 'read', name: 'screenshot.png', contentType: 'image/png', chars: WORDS.length }],
+      spentBySource: { 'service:google.document_ai': 1500 },
+    });
   });
 
   it('extractOne reads the words on it', async () => {
@@ -170,7 +174,10 @@ describe('an image in a run, through the real reader', () => {
   it('File.read of a blank image is absent, with the reason on the trace, and the run ends well', async () => {
     const { result } = await run(READ, PNG_BLANK, {});
     expect(result).not.toHaveProperty('failed');
-    expect(result).toMatchObject({ trace: [{ kind: 'read', name: 'screenshot.png', unreadable: 'no_text' }] });
+    expect(result).toMatchObject({
+      trace: [{ kind: 'read', name: 'screenshot.png', unreadable: 'no_text' }],
+      spentBySource: { 'service:google.document_ai': 1500 },
+    });
   });
 
   it('extractOne with a blank image as its ONLY source: unreadable with its reason, the answer absent, and the run ends well', async () => {
@@ -182,6 +189,26 @@ describe('an image in a run, through the real reader', () => {
     // The engine still asks the model, telling it the file could not be read.
     expect(asked).toHaveLength(1);
     expect(asked[0]?.[0]).toContain('[this file could not be read: no_text]');
+  });
+
+  it('extract with a blank image as its only source finds nothing, and the run ends well', async () => {
+    const source = `${NAMED}movement m(msg: <inbox-[:message]->>) {\n  found = extract([msg.\`shot\`], Named)\n}`;
+    const { result } = await run(source, PNG_BLANK, { records: [] });
+    expect(result).not.toHaveProperty('failed');
+    expect(result).toMatchObject({ trace: [{ files: [{ unreadable: 'no_text' }], emissions: { Named: 0 } }] });
+  });
+
+  // The engine asks the model even when no source could be read, so these two
+  // are the model's doing, not the image's. Held here so a change to either is seen.
+  it('a model inventing a record from a blank image is believed: the run ends well, and the trace shows the file unreadable beside the record', async () => {
+    const { result } = await run(EXTRACT_ONE, PNG_BLANK, { record: { name: { value: 'Invented', evidence: { item: 0, quote: 'not in the source' } } } });
+    expect(result).not.toHaveProperty('failed');
+    expect(result).toMatchObject({ trace: [{ files: [{ unreadable: 'no_text' }], emissions: { Named: 1 } }] });
+  });
+
+  it('a model answering outside the shape twice fails the run, as it does over any source', async () => {
+    const { result } = await run(EXTRACT_ONE, PNG_BLANK, { record: [1] });
+    expect(result).toMatchObject({ failed: expect.stringContaining('answered with something its shape does not describe, twice') });
   });
 
   it('a run with no OCR provider ends well too, its trace saying why', async () => {
@@ -204,5 +231,29 @@ describe('an image in a run, through the real reader', () => {
     const { result } = await run(twice, PNG_WITH_TEXT, {}, { costCapMicrodollars: 1000 });
     expect(readMock).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({ failed: expect.stringContaining('cap') });
+  });
+});
+
+describe('a run pinned to a carried release stays as it was', () => {
+  const file: FileRef = { __brand: 'FileRef', name: 'shot.png', contentType: 'image/png', source: { ownerAdapterType: 'slack', handle: 'F1' } };
+  const budget = { remainingMicrodollars: null };
+
+  beforeEach(() => {
+    services.ocr = { extractPdf: jest.fn(), read: readMock };
+  });
+
+  it("the carried host's reader skips an image unopened, costing nothing", async () => {
+    const { files } = runPlatformFor({ teamId: teamOfTenant(TEAM_ID), cancel: NEVER_CANCELLED });
+    expect(await files.resolveFileText({ segmentId: 'seg-1', file, budget })).toEqual({
+      unreadable: 'unsupported_type',
+      detail: 'image/png',
+      cost: [],
+    });
+    expect(readMock).not.toHaveBeenCalled();
+  });
+
+  it('why it must: with no file owners, as that host holds none, opening the image fails the run by name', async () => {
+    const shared = sharedRunServices({ teamId: teamOfTenant(TEAM_ID), cancel: NEVER_CANCELLED, rawText: inMemoryRawTextStore() });
+    await expect(shared.resolveFileText({ segmentId: 'seg-1', file, budget })).rejects.toThrow(FileOutsideTeamError);
   });
 });

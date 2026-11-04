@@ -235,6 +235,8 @@ export function sharedRunServices(input: {
   cancel: CancelGate;
   rawText?: RawTextStore;
   locks?: WriteLocks;
+  /** Images read as `unsupported_type`, unopened. */
+  skipImages?: boolean;
 }): {
   llm: EngineHost['llm'];
   resolveFileText: ResolveFileText;
@@ -251,7 +253,10 @@ export function sharedRunServices(input: {
       arbitrateEntities: (arbitration) => usage(() => refusingPastBudget(() => meteredArbitration(arbitration))),
     },
     resolveFileText: billedFileText(
-      makeFileTextResolver(input.rawText ?? postgresRawTextStore(input.teamId), { teamId: input.teamId }),
+      makeFileTextResolver(input.rawText ?? postgresRawTextStore(input.teamId), {
+        teamId: input.teamId,
+        ...(input.skipImages === true ? { skipImages: true } : {}),
+      }),
       usage,
     ),
     render: renderFileArtifactFor(input.teamId),

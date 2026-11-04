@@ -112,7 +112,10 @@ export type FileTextReader = (input: { file: FileRef }) => Promise<FileTextResol
  * resolution (`streamFileRef`, for the run's team) → text extraction → the
  * raw-text store, which is a parameter so tests need no database.
  */
-export function makeFileTextResolver(rawText: RawTextStore, bytes: StreamFileRefOptions): FileTextReader {
+export function makeFileTextResolver(
+  rawText: RawTextStore,
+  { skipImages = false, ...bytes }: StreamFileRefOptions & { skipImages?: boolean },
+): FileTextReader {
   const read: PackageFileTextReader<FileRef> = makeResolver<FileRef>({
     // A file that is not the team's is refused by name, never read as one
     // whose bytes were merely unavailable, and a read past the run's budget
@@ -120,7 +123,7 @@ export function makeFileTextResolver(rawText: RawTextStore, bytes: StreamFileRef
     openBytes: (ref) => streamFileRef(ref, bytes),
     isRefusal: (error) => error instanceof FileOutsideTeamError || isBudgetExhausted(error),
     ocrPdf,
-    ocrImage,
+    ...(skipImages ? {} : { ocrImage }),
     transcribe: (input) =>
       transcribe('whisper-1', { ...input, label: 'file_transcription' }),
     analyzeSheet,
