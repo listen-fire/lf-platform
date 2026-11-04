@@ -120,6 +120,8 @@ import { notListenedDiagnostic, validateUnderCarried } from './carried_check';
 import { runningOf } from '@listen-fire/language-versions';
 import { plannedListensOfSource } from './listen_plans';
 import { carriedPauses, listenIdentityOf, type CarriedPause } from './carried_pauses';
+import { carriedRunTriggerId } from './carried_names';
+import { revokeCallbacksForRuns } from '../../movement_engine/callback_store';
 import { listenConfigSchema, type ListenConfig, type SavedListen } from '../../inbound/listen_door';
 import { resolveAndArm, resolvesListen } from '../../inbound/listen_resolve';
 import { listenPauses, type ListenPause } from '../../inbound/listen_pause';
@@ -1499,16 +1501,25 @@ export async function deleteMovement(input: { teamId: string; id: string }): Pro
   const derived = await listDerivedTriggerRows(row.id);
   const triggerIds = new Set(derived.map((d) => d.id));
   if (row.triggerId !== null) triggerIds.add(row.triggerId); // legacy link
+  // A Run now of a version this platform does not fire listens for has no
+  // trigger row; its run is recorded under the movement's own id.
+  const runTriggerIds = [...triggerIds, carriedRunTriggerId(row.id)];
 
   // Deleting the movement cascades its `movement_version` rows away, which
   // nulls `trigger_run.movement_version_id` on every run parked against these
   // triggers — leaving them permanently unresumable. Settle them FIRST, while
   // the pin still resolves and we can still say why the work stopped.
   await settleRunsParkedOnTriggers({
-    triggerIds: [...triggerIds],
+    triggerIds: runTriggerIds,
     reason:
       'This run was still waiting to continue when the automation was deleted, so it was stopped.',
   });
+
+  // A RUNNING run isn't parked, so the settle above doesn't reach it, but its
+  // callbacks are just as unfireable once the version pin is gone (a fire has no
+  // program to resume into). Revoke every callback of every run of these
+  // triggers, so a late tap gets the closed answer rather than a router error.
+  await revokeCallbacksOfTriggers(runTriggerIds);
 
   for (const triggerId of triggerIds) {
     await qb
@@ -1522,6 +1533,14 @@ export async function deleteMovement(input: { teamId: string; id: string }): Pro
   await syncListenSubscriptions({ teamId: input.teamId as TeamId });
   emitMovementChange({ teamId: input.teamId, movementId: input.id, action: 'deleteMovement' });
   return true;
+}
+
+/** Revoke every callback minted by any run of these triggers (movement delete).
+ *  Scoped by run so it is one indexed read plus one update: the callback table
+ *  keys on the run, never on the trigger. */
+async function revokeCallbacksOfTriggers(triggerIds: readonly string[]): Promise<void> {
+  const runs = await getAutomationsQb(['trigger_run']).selectFrom('trigger_run').where('trigger_id', 'in', [...triggerIds]).select('id').execute();
+  await revokeCallbacksForRuns(runs.map((run) => run.id));
 }
 
 /** The first movement declaration's name. Uses the real parser (the installed
