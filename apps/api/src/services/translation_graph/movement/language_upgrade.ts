@@ -112,6 +112,7 @@ import {
   lockMovementRow,
   recordUpgradeCheck,
   recordValidityOutcome,
+  triggersUnfinishedRunsName,
   type MovementRow,
 } from './store';
 import { movementSourceHash } from './version_store';
@@ -900,10 +901,11 @@ export function liveDeployCheckDeps(release: DeployCheckRelease): DeployCheckDep
       }
       // A paused row stays: it is the only record of the pause, and the upgrade
       // that brings this automation back must find it. It fires nothing here. A
-      // row a waiting run names stays too: the run reads what it fired through
-      // from it when it resumes.
+      // row an unfinished run names stays too, whether or not that run has parked
+      // yet: an old pod may be stepping it right now, and it reads what it fired
+      // through from this row when it resumes.
       const pauses = await listenPauses({ teamId: movement.teamId as TeamId, triggerIds });
-      const named = resumes ? await triggersWaitingRunsName(triggerIds) : new Set<string>();
+      const named = resumes ? await triggersUnfinishedRunsName({ triggerIds }) : new Set<string>();
       const unpaused = triggers.filter((t) => t.run_mode !== 'off' && !pauses.has(t.id) && !named.has(t.id)).map((t) => t.id);
       if (unpaused.length === 0) return;
       await getAutomationsQb(['trigger']).deleteFrom('trigger').where('id', 'in', unpaused).execute();
@@ -1034,19 +1036,6 @@ export type UpgradeMovementResult =
        *  because it could not tell which of them a person had paused. */
       warnings?: string[];
     };
-
-/** The triggers of `triggerIds` a run parked on a leaf still names. */
-async function triggersWaitingRunsName(triggerIds: readonly string[]): Promise<Set<string>> {
-  const rows = await getAutomationsQb(['trigger_run', 'parked_run'])
-    .selectFrom('trigger_run')
-    .innerJoin('parked_run', 'parked_run.run_id', 'trigger_run.id')
-    .where('trigger_run.host', '=', 'platform')
-    .where('trigger_run.trigger_id', 'in', [...triggerIds])
-    .select('trigger_run.trigger_id')
-    .distinct()
-    .execute();
-  return new Set(rows.map((row) => row.trigger_id));
-}
 
 /** One member of the group, checked for the move. */
 interface CheckedMember {

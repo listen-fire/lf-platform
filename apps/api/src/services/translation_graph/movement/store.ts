@@ -474,6 +474,28 @@ export async function listDerivedTriggerRowsForMovements(
   return result;
 }
 
+/** Which of `triggerIds` a run still running or parked names: the row it reads
+ *  what it fired through from when it resumes. `pinnedOtherThan` keeps only runs
+ *  on another language version than that one. */
+export async function triggersUnfinishedRunsName(input: {
+  triggerIds: readonly string[];
+  pinnedOtherThan?: LanguageVersion;
+}): Promise<Set<string>> {
+  if (input.triggerIds.length === 0) return new Set();
+  let query = getAutomationsQb(['trigger_run', 'movement_version'])
+    .selectFrom('trigger_run')
+    .where('trigger_run.host', '=', 'platform')
+    .where('trigger_run.status', 'in', ['running', 'parked'])
+    .where('trigger_run.trigger_id', 'in', [...input.triggerIds]);
+  if (input.pinnedOtherThan !== undefined) {
+    query = query
+      .innerJoin('movement_version', 'movement_version.id', 'trigger_run.movement_version_id')
+      .where('movement_version.language_version', '!=', input.pinnedOtherThan);
+  }
+  const rows = await query.select('trigger_run.trigger_id').distinct().execute();
+  return new Set(rows.map((row) => row.trigger_id));
+}
+
 /** One listener in this team that fires a movement of a given name, and the
  *  file it belongs to. */
 export interface ListenerFiringMovementName {

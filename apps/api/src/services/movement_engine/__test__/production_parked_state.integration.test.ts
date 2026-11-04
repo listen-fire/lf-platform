@@ -39,20 +39,22 @@ interface Fixture {
  *  added takes its default; one it dropped would fail here, by name. */
 const AUTOMATIONS_TABLES = ['movement', 'movement_version', 'trigger', 'trigger_run', 'parked_run', 'join_pending', 'join_branch_export', 'adapter_await', 'callback', 'park_library_source', 'work'];
 
+async function insertRow(table: string, row: Record<string, unknown>): Promise<void> {
+  // A movement and its current version name each other: the pointer lands once
+  // the version is in.
+  const columns = Object.keys(row).filter((column) => !(table === 'movement' && column === 'current_version_id'));
+  await sql`
+    INSERT INTO ${sql.table(`automations.${table}`)} (${sql.join(columns.map((c) => sql.ref(c)))})
+    SELECT ${sql.join(columns.map((c) => sql.ref(c)))}
+    FROM jsonb_populate_record(null::${sql.table(`automations.${table}`)}, ${JSON.stringify(row)}::jsonb)
+  `.execute(getAutomationsQb(['trigger_run']));
+}
+
 async function load(name: string): Promise<Fixture & { runId: TriggerRunId }> {
   const fixture = JSON.parse(readFileSync(join(FIXTURES, `${name}.json`), 'utf8')) as Fixture;
   const db = getAutomationsQb(['trigger_run']);
   for (const table of AUTOMATIONS_TABLES) {
-    for (const row of fixture.rows[table] ?? []) {
-      // A movement and its current version name each other: the pointer lands
-      // once the version is in.
-      const columns = Object.keys(row).filter((column) => !(table === 'movement' && column === 'current_version_id'));
-      await sql`
-        INSERT INTO ${sql.table(`automations.${table}`)} (${sql.join(columns.map((c) => sql.ref(c)))})
-        SELECT ${sql.join(columns.map((c) => sql.ref(c)))}
-        FROM jsonb_populate_record(null::${sql.table(`automations.${table}`)}, ${JSON.stringify(row)}::jsonb)
-      `.execute(db);
-    }
+    for (const row of fixture.rows[table] ?? []) await insertRow(table, row);
   }
   for (const row of fixture.rows.movement ?? []) {
     await sql`UPDATE automations.movement SET current_version_id = ${String(row.current_version_id)}::uuid WHERE id = ${String(row.id)}::uuid`.execute(db);
@@ -197,6 +199,24 @@ describe('a run production parked', () => {
     await timersDue(runId);
     await drain();
     expect(await runOf(runId)).toMatchObject({ status: 'success' });
+  });
+
+  it('still in its first segment at the deploy check keeps its row, so it wakes once it has parked', async () => {
+    const { runId, rows } = await load('timer');
+    // An old pod is stepping the run: it is running, and has parked nothing yet.
+    await getAutomationsQb(['parked_run']).deleteFrom('parked_run').where('run_id', '=', runId).execute();
+    await getAutomationsQb(['trigger_run']).updateTable('trigger_run').set({ status: 'running' }).where('id', '=', runId).execute();
+    const deps = liveDeployCheckDeps(thisDeployCheckRelease('test'));
+    const movement = await getMovementRow({ teamId: TEAM, id: String(rows.movement?.[0]?.id) });
+    if (movement === null) throw new Error('test: no movement');
+    await deps.unprovision(movement);
+    // The pod then parks it, as production wrote it.
+    for (const row of rows.parked_run ?? []) await insertRow('parked_run', row);
+    await getAutomationsQb(['trigger_run']).updateTable('trigger_run').set({ status: 'parked' }).where('id', '=', runId).execute();
+    await timersDue(runId);
+    await drain();
+    expect(await runOf(runId)).toMatchObject({ status: 'success' });
+    expect(await asksOfTeam()).toEqual([{ prompt: 'written before the park: timer', state: 'open' }]);
   });
 
   it('cancelled closes what stands behind it: its correlation, its ask, its callback', async () => {
