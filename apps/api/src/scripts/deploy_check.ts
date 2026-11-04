@@ -82,7 +82,7 @@ export function renderSummary(summary: DeployCheckSummary): string {
   for (const entry of legacy) {
     lines.push(`    - ${entry.name} (${entry.pin}): ${entry.remedy}`);
     if (entry.waitingRuns.length > 0) {
-      lines.push(`      paused on a question, a callback or a reply, which cannot continue here: ${entry.waitingRuns.join(', ')}. Cancel them, or answer them on 0.12.13 before deploying`);
+      lines.push(`      paused on a question, a callback or a reply, which cannot continue here: ${entry.waitingRuns.join(', ')}. Cancel them, then upgrade the automation`);
     }
   }
   if (summary.automations.length === 0) lines.push('  No saved automations.');

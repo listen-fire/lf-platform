@@ -42,7 +42,7 @@ import { listRemoteAdapters, parseStoredManifest } from '../translation_graph/ad
 import { mayBeRemoteSlug } from '../translation_graph/adapters/remote/slugs';
 import { LEGACY_INTERCEPTS, builtInVerifierFor } from '../inbound/legacy_signature_headers';
 import { builtinModuleInboundVerifier, builtinModuleRequestKeeping } from '../translation_graph/adapters/builtin_modules';
-import { capturedRequest } from '../inbound/captured_request';
+import { capturedRequest, type RequestKeeping } from '../inbound/captured_request';
 import { answerTappedCallbacks } from '../whatsapp/inbound_message';
 import { judgedEmpty, keepForEveryVersion, waitingKeyOf } from '../inbound/carried_delivery';
 
@@ -101,7 +101,7 @@ function signingSecretFor(subscription: InboundSubscription): string {
 }
 
 /** What a door does with a verified delivery before any version reads it. */
-type KeepFirst = (source: { adapterType: string; credentialsId: string }) => Promise<void>;
+type KeepFirst = (source: { adapterType: string; credentialsId: string; keeping?: RequestKeeping }) => Promise<void>;
 
 /** A module that checks its own inbound is the only thing that can verify a
  *  request, so the delivery is kept the moment it accepts, before anything of
@@ -141,7 +141,11 @@ function builtInSource(subscription: InboundSubscription, keepFirst?: KeepFirst)
       const adapterType = resolveAdapterSlug(subscription.providerKey);
       if (!hasAdapter(adapterType)) return null;
       const checkedByModule = 'checkedBy' in verifier;
-      if (!checkedByModule) await keepFirst?.({ adapterType, credentialsId });
+      const { intercept } = builtInIntercept({ adapterType, subscription, credentialsId });
+      // A delivery the door's own handling ends is never kept: a button tap
+      // carries an ask's answer token. What it passes on is kept before either
+      // version reads it.
+      if (!checkedByModule && intercept === undefined) await keepFirst?.({ adapterType, credentialsId });
       const adapter = await resolveAdapter({
         adapterType,
         teamId: subscription.teamId as TeamId,
@@ -151,7 +155,15 @@ function builtInSource(subscription: InboundSubscription, keepFirst?: KeepFirst)
         adapterType,
         credentialsId,
         adapter: checkedByModule && keepFirst !== undefined ? keepingOnceAccepted(adapter, () => keepFirst({ adapterType, credentialsId })) : adapter,
-        ...builtInIntercept({ adapterType, subscription, credentialsId }),
+        ...(intercept !== undefined
+          ? {
+              intercept: async (body: unknown) => {
+                const answer = await intercept(body);
+                if (answer === 'continue' && !checkedByModule) await keepFirst?.({ adapterType, credentialsId });
+                return answer;
+              },
+            }
+          : {}),
       };
     },
   };
@@ -222,17 +234,24 @@ async function remoteSource(subscription: InboundSubscription, keepFirst?: KeepF
   // resolved, and the adapter is resolved once, when the delivery is read.
   const stored = parseStoredManifest(install);
   const checksItsOwn = stored.ok && stored.manifest.methods.includes('checkInbound');
+  // What the remote declares of its requests binds its kept ones as a built in's does.
+  const declared = stored.ok ? stored.manifest.inbound : undefined;
+  const keeping: RequestKeeping = {
+    ...(declared?.captureHeaders !== undefined ? { captureHeaders: declared.captureHeaders } : {}),
+    ...(declared?.redactFields !== undefined ? { redactFields: declared.redactFields } : {}),
+  };
   let opened: Promise<OpenedSource> | undefined;
   return {
     verifier: checksItsOwn ? CHECKED_BY_MODULE : REMOTE_VERIFIER,
     secret: subscription.secret,
     open: () =>
       (opened ??= (async () => {
-        const kept = { adapterType: install.adapter_type, credentialsId };
+        const kept = { adapterType: install.adapter_type, credentialsId, keeping };
         if (!checksItsOwn) await keepFirst?.(kept);
         const adapter = await resolveAdapter({ adapterType: install.adapter_type, teamId: subscription.teamId as TeamId });
         return {
-          ...kept,
+          adapterType: kept.adapterType,
+          credentialsId,
           adapter: checksItsOwn && keepFirst !== undefined ? keepingOnceAccepted(adapter, () => keepFirst(kept)) : adapter,
         };
       })()),
@@ -358,19 +377,20 @@ export interface ReceivedRequest {
  *  (redacted) before any version reads it: each version reads that, and a listen
  *  can be put through it again. */
 export function platformInboundStoreFor(received: ReceivedRequest): InboundStore<CapturedReceipts> {
-  let rawKept: { id: string; keptAt: Date } | undefined;
+  let rawKept: { id: string; keptAt: Date; keeping: RequestKeeping | undefined } | undefined;
   const keepFirstFor =
     (subscription: InboundSubscription): KeepFirst =>
-    async ({ adapterType, credentialsId }) => {
+    async ({ adapterType, credentialsId, keeping: declared }) => {
       if (rawKept !== undefined) return;
+      const keeping = declared ?? builtinModuleRequestKeeping(adapterType);
       const kept = await keepForEveryVersion({
         origin: { teamId: subscription.teamId as TeamId, adapterType, providerKey: subscription.providerKey, credentialsId },
         subscriptionId: subscription.id,
         externalId: waitingKeyOf({ rawBody: received.rawBody, ...(received.query !== undefined ? { query: received.query } : {}) }),
         source: 'webhook',
-        request: requestAsKept({ received, adapterType, subscription, arrivals: [] }),
+        request: requestAsKept({ received, keeping, subscription, arrivals: [] }),
       });
-      if (kept.kind === 'read') rawKept = { id: kept.deliveryId, keptAt: kept.keptAt };
+      if (kept.kind === 'read') rawKept = { id: kept.deliveryId, keptAt: kept.keptAt, keeping };
     };
   // The current version read it and found nothing: it is judged, and an identical
   // delivery after this is a new one.
@@ -394,10 +414,10 @@ export function platformInboundStoreFor(received: ReceivedRequest): InboundStore
   };
 }
 
-function requestAsKept(input: { received: ReceivedRequest; adapterType: string; subscription: InboundSubscription; arrivals: readonly Arrival[] }) {
+function requestAsKept(input: { received: ReceivedRequest; keeping: RequestKeeping | undefined; subscription: InboundSubscription; arrivals: readonly Arrival[] }) {
   const { received, subscription } = input;
   return capturedRequest({
-    keeping: builtinModuleRequestKeeping(input.adapterType),
+    keeping: input.keeping,
     headers: received.headers,
     rawBody: received.rawBody,
     ...(received.method !== undefined ? { method: received.method } : {}),
@@ -414,7 +434,7 @@ function requestAsKept(input: { received: ReceivedRequest; adapterType: string; 
 async function keepWebhookDelivery(
   { subscription, source, arrivals, checkpoint }: Parameters<InboundStore<CapturedReceipts>['keepDelivery']>[0],
   received: ReceivedRequest | null,
-  rawKept?: { id: string; keptAt: Date },
+  rawKept?: { id: string; keptAt: Date; keeping: RequestKeeping | undefined },
 ): Promise<{ kept: boolean; arrivalMark?: number }> {
   const listens = await listensOfSubscription({
     teamId: subscription.teamId as TeamId,
@@ -430,7 +450,9 @@ async function keepWebhookDelivery(
     arrivals,
     ...(checkpoint !== undefined ? { checkpoint } : {}),
     ...(listens !== undefined ? { listens } : {}),
-    ...(received !== null ? { request: requestAsKept({ received, adapterType: source.adapterType, subscription, arrivals }) } : {}),
+    ...(received !== null
+      ? { request: requestAsKept({ received, keeping: rawKept !== undefined ? rawKept.keeping : builtinModuleRequestKeeping(source.adapterType), subscription, arrivals }) }
+      : {}),
     ...(rawKept !== undefined ? { rawKeptId: rawKept.id, keptAt: rawKept.keptAt } : {}),
   });
   if (!kept.kept) return { kept: false };

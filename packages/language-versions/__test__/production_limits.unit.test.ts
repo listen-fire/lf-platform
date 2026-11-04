@@ -9,10 +9,12 @@ import type { AddressInfo } from 'node:net';
 
 import { credentialIdsFor, makeTestHost } from 'movement-engine/public/testing';
 import { positionData } from 'movement-engine/public/catalog';
+import { isAdapterCallCeilingExceeded, withSegment } from 'movement-engine/public/adapter-support';
 import type { Adapter } from 'movement-engine/public/adapter';
 import { InMemoryWriteLocks } from 'movement-engine/public/write-locks';
 import { runMovement } from 'movement-engine/public/movement-engine';
 import { mockCatalogSnapshot, LANGUAGE_VERSION } from 'movement-lang';
+import { AffinityAPIClient } from '@listen-fire/affinity/api_client';
 
 import { runningOf, type RunPlatform, type RunningLane, type TeamFacts } from '..';
 
@@ -183,12 +185,14 @@ describe('AFFINITY_MAX_CALLS_PER_RUN, read by each version\'s Affinity module in
   let server: http.Server;
   let baseUrl: string;
   let requests = 0;
+  let answersOrganizations = false;
 
   beforeAll(async () => {
-    server = http.createServer((_req, res) => {
+    server = http.createServer((req, res) => {
       requests += 1;
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end('[]');
+      // A read of an organization of this release is answered as Affinity does; a 0.12 run's reads fail on `[]`.
+      res.end(answersOrganizations && req.url?.startsWith('/organizations/') === true ? JSON.stringify({ id: 1 }) : '[]');
     });
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
     baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -205,5 +209,27 @@ describe('AFFINITY_MAX_CALLS_PER_RUN, read by each version\'s Affinity module in
     ]);
     expect(outcome.kind).not.toBe('ran');
     expect(JSON.stringify(outcome)).toContain('AFFINITY_MAX_CALLS_PER_RUN');
+  }, 30_000);
+
+  it('a 0.15 run\'s Affinity module stops at the same ceiling, in the process a 0.12 run just did', async () => {
+    // The 0.12 run first: both versions' copies of the run scope live in this process.
+    requests = 0;
+    await run012(SYNC, 'sync', platform({ fields: { apiKey: 'k', baseUrl } }), [{ id: 'cred-affinity', name: 'Acme Affinity', type: 'AFFINITY' }]);
+
+    // Then this release's Affinity module, in a segment as the engine's host opens one.
+    requests = 0;
+    answersOrganizations = true;
+    const client = new AffinityAPIClient({ apiKey: 'k', baseUrl });
+    const failure = await withSegment({ teamId: TEAM }, async () => {
+      await client.getOrganisationById(1);
+      await client.getOrganisationById(2);
+      return client.getOrganisationById(3).catch((error: unknown) => error);
+    }).finally(() => {
+      answersOrganizations = false;
+    });
+
+    expect(isAdapterCallCeilingExceeded(failure)).toBe(true);
+    expect(String(failure)).toContain('AFFINITY_MAX_CALLS_PER_RUN');
+    expect(requests).toBe(2);
   }, 30_000);
 });

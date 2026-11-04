@@ -3,6 +3,7 @@
 // loop runs it whole). Webhooks, schedules and polls under 0.12, and an upgrade
 // with events on both sides of it.
 
+import { carriedVersions } from '@listen-fire/language-versions';
 import { createHmac, randomUUID } from 'node:crypto';
 
 jest.mock('../../translation_graph/movement/execute', () => {

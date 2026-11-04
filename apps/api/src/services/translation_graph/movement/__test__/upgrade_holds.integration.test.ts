@@ -100,7 +100,7 @@ describe('an upgrade held where it is', () => {
     if (result.status !== 'blocked') return;
     expect(result.detail).toContain(name);
     expect(result.detail).toContain(runId);
-    expect(result.detail).toContain('which this release cannot resume: answer it on 0.12.13 before deploying, or cancel it');
+    expect(result.detail).toContain('which this release cannot resume: cancel it, then upgrade the automation');
     expect(result.detail).not.toContain('until they finish');
   });
 

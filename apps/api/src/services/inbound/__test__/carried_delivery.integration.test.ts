@@ -39,7 +39,9 @@ import { answerDelivery } from 'movement-engine/public/inbound';
 import { runMovementFiring } from '../../translation_graph/movement/execute';
 import { mintMovementVersionIfChanged } from '../../translation_graph/movement/version_store';
 import { findTriggerByInboundKey } from '../../translation_graph/storage/tg_table';
-import { readDeliveryHandler } from '../carried_delivery';
+import { carriedVersions } from '@listen-fire/language-versions';
+import { READ_DELIVERY_ATTEMPTS, readDeliveryHandler, receiveJudgedEvent } from '../carried_delivery';
+import { pruneTriggerRuns } from '../../translation_graph/runs/prune';
 import { testWorkContext } from '../../../test/harness/work';
 import { WorkDeferred } from '../../work/drain';
 import { carriedRunHandler } from '../../translation_graph/movement/carried_run_now';
@@ -181,18 +183,57 @@ describe('one door, two versions (real Postgres)', () => {
     expect(firing).not.toHaveBeenCalled();
   });
 
-  describe('a dispatch_event row', () => {
-    const event = (triggerId: string) => ({ pipelineInputId: `trigger:${triggerId}`, adapterType: 'attio', triggerType: 'webhook', payload: { a: 1 }, occurredAt: new Date().toISOString() });
+  describe('a delivery 0.12 cannot read', () => {
+    it('is retried, then given up on with an issue on the automation, its raw delivery kept', async () => {
+      const secret = 'sekrit-secret-sekrit';
+      const sub = await subscription(secret);
+      const movement = await movementOn('0.12.13', ATTIO_012);
+      await listenRow({ movementId: movement });
+      expect((await deliver(sub, attioBody(randomUUID()), secret)).status).toBe(200);
+      const [queued] = await workOf('read_delivery');
+      const keptId = (await deliveries(sub)).rows[0]!.id;
+      const issues = () => getAutomationsQb(['movement_issue']).selectFrom('movement_issue').where('team_id', '=', teamId).select(['movement_id', 'message']).execute();
 
-    async function queueOldRow(triggerId: string) {
+      // 0.12's Attio reads its workspace's catalogs: with the provider down, it throws.
+      (fetch as jest.Mock).mockRejectedValue(new Error('attio is down'));
+      try {
+        await expect(readDeliveryHandler.run(queued!.payload, { ...testWorkContext(), attempts: 1 })).rejects.toThrow('attio is down');
+        expect(await issues()).toEqual([]);
+
+        // The attempt the drain would have given up at.
+        await getAutomationsQb(['work']).updateTable('work').set({ attempts: READ_DELIVERY_ATTEMPTS - 1 }).where('team_id', '=', teamId).where('kind', '=', 'read_delivery').execute();
+        await drainUntilIdle({ teamId });
+      } finally {
+        (fetch as jest.Mock).mockImplementation(async () => new Response(JSON.stringify({ data: [] }), { status: 200, headers: { 'content-type': 'application/json' } }));
+      }
+
+      const [row] = await workOf('read_delivery');
+      expect(row!.dead_at).not.toBeNull();
+      const [issue] = await issues();
+      expect(issue).toMatchObject({ movement_id: movement, message: expect.stringContaining(`delivery ${keptId} could not be read under language version 0.12`) });
+      expect(issue!.message).toContain('attio is down');
+      expect(await receipts()).toEqual([]);
+
+      // The request stays, past its retention, while the row is dead.
+      await pruneTriggerRuns({ teamId, olderThanDays: -1 });
+      const { rows } = await deliveries(sub);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.request).not.toBeNull();
+    });
+  });
+
+  describe('a dispatch_event row', () => {
+    const event = (triggerId: string, occurredAt = new Date().toISOString()) => ({ pipelineInputId: `trigger:${triggerId}`, adapterType: 'attio', triggerType: 'webhook', payload: { a: 1 }, occurredAt });
+
+    async function queueOldRow(triggerId: string, occurredAt?: string) {
       const stored = await getAutomationsQb(['trigger_event'])
         .insertInto('trigger_event')
-        .values({ team_id: teamId, trigger_id: triggerId, adapter_type: 'attio', trigger_type: 'webhook', payload: JSON.stringify(event(triggerId)) as never })
+        .values({ team_id: teamId, trigger_id: triggerId, adapter_type: 'attio', trigger_type: 'webhook', payload: JSON.stringify(event(triggerId, occurredAt)) as never })
         .returning('id')
         .executeTakeFirstOrThrow();
       await getAutomationsQb(['work'])
         .insertInto('work')
-        .values({ team_id: teamId, kind: 'dispatch_event', key: `dispatch_event:${stored.id}`, host: 'platform', due_at: new Date(), payload: JSON.stringify({ triggerId, teamId, triggerEvent: event(triggerId), storedEventId: stored.id, duplicate: false }) as never })
+        .values({ team_id: teamId, kind: 'dispatch_event', key: `dispatch_event:${stored.id}`, host: 'platform', due_at: new Date(), payload: JSON.stringify({ triggerId, teamId, triggerEvent: event(triggerId, occurredAt), storedEventId: stored.id, duplicate: false }) as never })
         .execute();
       return stored.id;
     }
@@ -206,6 +247,23 @@ describe('one door, two versions (real Postgres)', () => {
       expect(firing).toHaveBeenCalledTimes(1);
       expect((await receiptOf(receipt)).status).toBe('dispatched');
       expect(await workOf('dispatch_event')).toEqual([]);
+    });
+
+    it('a row whose event carries a timezone offset runs, as production ran it', async () => {
+      const triggerId = await listenRow({ movementId: await movementOn('0.12.13', ATTIO_012) });
+      const receipt = await queueOldRow(triggerId, '2026-11-04T10:00:00+01:00');
+      await drainUntilIdle({ teamId });
+      expect(firing).toHaveBeenCalledTimes(1);
+      expect((await receiptOf(receipt)).status).toBe('dispatched');
+    });
+
+    it('a new reading of an event with a timezone offset keeps its receipt and runs it', async () => {
+      const triggerId = await listenRow({ movementId: await movementOn('0.12.13', ATTIO_012) });
+      const lane = await carriedVersions().find((version) => version.key === '0.12')!.listenRows!();
+      await receiveJudgedEvent({ teamId, triggerId, event: event(triggerId, '2026-11-04T10:00:00+01:00'), lane });
+      await drainUntilIdle({ teamId });
+      expect(firing).toHaveBeenCalledTimes(1);
+      expect((await receipts()).map((receipt) => receipt.status)).toEqual(['dispatched']);
     });
 
     it('run mode off keeps the receipt, suppressed, and fires nothing', async () => {
@@ -321,6 +379,23 @@ describe('one door, two versions (real Postgres)', () => {
     await readDeliveryHandler.run({ teamId, version: '0.12', adapterType: 'slack', credentialsId: null, deliveryId }, testWorkContext());
     const wakes = await workOf('wake_await');
     expect(wakes.map((wake) => wake.payload)).toEqual([{ adapterType: 'slack', teamId, correlationKey: expect.stringContaining('1700000000.000100') }]);
+  });
+
+  it('a form encoded delivery is read as the door read it, not as JSON', async () => {
+    const runId = randomUUID();
+    const movement = await movementOn('0.12.13', ATTIO_012);
+    const version = await getAutomationsQb(['movement']).selectFrom('movement').where('id', '=', movement as MovementId).select('current_version_id').executeTakeFirstOrThrow();
+    await getAutomationsQb(['trigger_run'])
+      .insertInto('trigger_run')
+      .values({ id: runId as never, team_id: teamId, trigger_id: movement, trigger_type: 'webhook', status: 'parked', movement_version_id: version.current_version_id as never })
+      .execute();
+    await getAutomationsQb(['adapter_await']).insertInto('adapter_await').values({ adapter_type: 'slack', correlation_key: 'C1:1700000000.000100', run_id: runId as never, team_id: teamId, address: 'a' }).execute();
+    const deliveryId = randomUUID();
+    await sql`insert into automations.delivery (id, team_id, subscription_id, received_at, source, inline, events, event_count, request)
+      values (${deliveryId}::uuid, ${teamId}::uuid, 'SLACK', now(), 'webhook', false, '[]'::jsonb, 0,
+              ${JSON.stringify({ method: 'POST', path: '', query: '', headers: { 'content-type': 'application/x-www-form-urlencoded; charset=utf-8' }, body: Buffer.from('team_id=T1&text=hello').toString('base64') })}::text::jsonb)`.execute(getAutomationsQb(['delivery']));
+
+    await expect(readDeliveryHandler.run({ teamId, version: '0.12', adapterType: 'slack', credentialsId: null, deliveryId }, testWorkContext())).resolves.toBeUndefined();
   });
 
   it('a public inbox key under 0.12 finds its claimant from the config', async () => {

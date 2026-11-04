@@ -13,7 +13,7 @@ import {
 } from './kinds';
 import { logger } from 'movement-engine/public/log';
 import { runWithoutAmbientIdentity } from '../context';
-import { claimDueWork, completeWork, deferWork, heartbeatWork, releaseWork } from './store';
+import { buryWork, claimDueWork, completeWork, deferWork, heartbeatWork, releaseWork } from './store';
 import { announceWork } from './wake';
 
 // One process is one owner: owner is only informational (the lease token fences),
@@ -51,6 +51,15 @@ export class WorkKeepsTrying extends Error {
   constructor(reason: string) {
     super(reason);
     this.name = 'WorkKeepsTrying';
+  }
+}
+
+/** Thrown by a handler that has told a person what it could not do and gives
+ *  up: the row is kept dead with the reason, and not claimed again. */
+export class WorkGivesUp extends Error {
+  constructor(reason: string) {
+    super(reason);
+    this.name = 'WorkGivesUp';
   }
 }
 
@@ -240,6 +249,16 @@ async function runRow(input: {
       }
       await announceWork(row.kind, dueAt);
       return 'deferred';
+    }
+    if (error instanceof WorkGivesUp) {
+      logger.warn('[work] handler gave up; the row is kept dead', { kind: row.kind, key: row.key, attempts: row.attempts, reason: error.message });
+      clearInterval(timer);
+      try {
+        await buryWork({ id: row.id, leaseToken, reason: error.message });
+      } catch (buryError) {
+        logger.warn('[work] burying failed; the lease will lapse instead', { kind: row.kind, key: row.key, error: buryError });
+      }
+      return 'failed';
     }
     if (error instanceof WorkKeepsTrying) {
       logger.info('[work] handler keeps trying; releasing for retry', { kind: row.kind, key: row.key, attempts: row.attempts, reason: error.message });
