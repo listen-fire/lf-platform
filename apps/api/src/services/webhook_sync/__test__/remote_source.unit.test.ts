@@ -80,7 +80,7 @@ describe('a remote install as an inbound source', () => {
     mockKeep.mockReset().mockResolvedValue({ kind: 'read', deliveryId: randomUUID(), keptAt: new Date() });
     mockInstalls.push(
       install(['manifest', 'preprocessInbound'], {
-        providerKey: webhookProviderKey({ adapterType: ADAPTER_TYPE }),
+        providerKey: ADAPTER_TYPE,
         scheme: 'remote',
         signatureHeaders: ['x-listen-fire-signature'],
         captureHeaders: ['x-acme-event'],
