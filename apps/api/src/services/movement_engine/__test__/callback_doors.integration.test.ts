@@ -22,6 +22,7 @@ import { slackInteractivityRouter } from '../../../interfaces/rest/slackInteract
 import { getAsksQb, getAutomationsQb, getCoreQb } from '../../../lib/kysely';
 import { cleanupTeam } from '../../../test/harness/cleanup';
 import { RETIRED_CALLBACK_TEXT } from '../../interaction/retired_callback';
+import { registerSlackResponseWork } from '../../webhook_sync/slack_response_url';
 import { runMovementAsync } from '../../translation_graph/movement/run_now';
 import { mintMovementVersionIfChanged } from '../../translation_graph/movement/version_store';
 import { drainUntilIdle, inProcessNotifier, resetWorkHandlersForTests, setWorkNotifier } from '../../work/drain';
@@ -48,6 +49,7 @@ describe('a tap on a 0.12 callback through the Slack door', () => {
   beforeAll(async () => {
     resetWorkHandlersForTests();
     registerCoreWork();
+    registerSlackResponseWork();
     setWorkNotifier({ notify() {} });
     teamId = randomUUID() as TeamId;
     await getCoreQb(['team']).insertInto('team').values({ id: teamId, name: `doors-${teamId.slice(0, 8)}` } as never).execute();
