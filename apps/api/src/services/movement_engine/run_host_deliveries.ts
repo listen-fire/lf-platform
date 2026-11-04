@@ -10,6 +10,7 @@ import { sql } from 'kysely';
 
 import type { DeliveryRowStore, KeepDelivery, NewWorkRow, WaitWake } from 'movement-engine/public/run-host';
 
+import { doorsLockQb } from '../../lib/kysely';
 import { isWorkKind } from '../work/kinds';
 import {
   announceQueued,
@@ -69,7 +70,8 @@ export const WAITING_KEY_PREFIX = 'waiting:';
 /** The doors of a team hold this shared while a delivery is kept and what it owes
  *  each version is read; an upgrade holds it alone (`holdDoorsAlone`). So a
  *  delivery is on one side of a move: its keep sees the move, or the move sees
- *  what it queued. */
+ *  what it queued. A request behind an upgrade's waits, and everything shared
+ *  queues behind that request, so only the upgrade waits holding the main pool. */
 function doorsLockKey(teamId: string) {
   return sql`hashtextextended(${`doors:${teamId}`}::text, 0)`;
 }
@@ -80,14 +82,21 @@ async function holdDoorsShared(exec: Exec, teamId: string): Promise<void> {
 
 /** `body` with the team's doors held shared: for a door that reads a delivery's
  *  listens version by version itself, so an upgrade is not between its reads.
- *  The lock's transaction only holds the lock: `body` writes as it always does. */
-export function withDoorsHeld<T>(teamId: string, body: () => Promise<T>): Promise<T> {
-  return storeDb()
-    .transaction()
-    .execute(async (trx) => {
-      await holdDoorsShared(trx, teamId);
-      return body();
-    });
+ *  The lock's transaction only holds the lock, on a connection of its own
+ *  (`doorsLockQb`): `body` writes as it always does, through the main pool. So a
+ *  door waiting behind an upgrade holds nothing of the main pool, and the door
+ *  that upgrade waits for can always get on. Inside a transaction, as an
+ *  upgrade's own, the lock joins it, since a second session would wait for it. */
+export async function withDoorsHeld<T>(teamId: string, body: () => Promise<T>): Promise<T> {
+  const open = storeDb();
+  if (open.isTransaction) {
+    await holdDoorsShared(open, teamId);
+    return body();
+  }
+  return doorsLockQb.transaction().execute(async (trx) => {
+    await holdDoorsShared(trx, teamId);
+    return body();
+  });
 }
 
 /** Holds the team's doors for the rest of the open transaction. Answers the
@@ -175,8 +184,10 @@ export function deliveryRowStore(owner: { host: Host; teamId: string }): Platfor
     },
 
     async keepRawDelivery({ delivery, work }) {
-      const written = await inStoreTransaction(async (trx) => {
-        await holdDoorsShared(trx, owner.teamId);
+      // The lock first, off the main pool: a keep waiting behind an upgrade holds
+      // none of it, or enough of them would stop the door that upgrade waits for.
+      // It is let go after the write commits, so the move sees what this queued.
+      const written = await withDoorsHeld(owner.teamId, () => inStoreTransaction(async (trx) => {
         // A waiting key names a delivery only for as long as a provider retries.
         if (delivery.externalId !== null && delivery.externalId.startsWith(WAITING_KEY_PREFIX)) {
           await sql`
@@ -201,7 +212,7 @@ export function deliveryRowStore(owner: { host: Host; teamId: string }): Platfor
         const queued: Queued[] = [];
         for (const row of await work(trx)) queued.push(await queueRow(trx, { host: owner.host }, { ...row, teamId: row.teamId ?? owner.teamId }));
         return { id: delivery.id, alreadyKept: false, judged: false, keptAt: first.received_at, queued };
-      });
+      }));
       await announceQueued(written.queued);
       return { id: written.id, alreadyKept: written.alreadyKept, judged: written.judged, keptAt: written.keptAt };
     },

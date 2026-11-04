@@ -50,6 +50,26 @@ if (databaseUrl.schemaName) {
 const globalQb = qb;
 
 /**
+ * The connections that hold a team's doors lock (run_host_deliveries.ts), and do
+ * nothing else. What a door does under the lock waits for the main pool, so the
+ * lock must not hold a connection of that pool: held by every door at once, none
+ * could go on. Very small, since every process brings it, and with no connection
+ * timeout: a door waits its turn here, it does not fail.
+ */
+const DOORS_LOCK_CONNECTIONS = 2;
+const doorsLockPool = new Pool({
+  connectionString: databaseUrl.url,
+  max: DOORS_LOCK_CONNECTIONS,
+  application_name: 'lf-doors-lock',
+});
+// An idle connection the server drops (a restart, a failover) is an `error`
+// event, and an unheard one ends the process. The next door reconnects.
+doorsLockPool.on('error', (error) => {
+  logger.warn('[doors] an idle connection holding no lock failed', { cause: error.message });
+});
+const doorsLockQb = new Kysely<Record<string, never>>({ dialect: new PostgresDialect({ pool: doorsLockPool }) });
+
+/**
  * A schema-qualified view of a unit's tables: `valuations.legal_entity` and
  * friends. Kysely resolves `'<schema>.<table> as x'` at both the type level and
  * the SQL level, which is what lets ONE query name tables in two schemas — a
@@ -208,6 +228,7 @@ export {
   getCoreQb,
   getValuationsQb,
   globalQb,
+  doorsLockQb,
   sqlArray,
   pathString,
   path,
