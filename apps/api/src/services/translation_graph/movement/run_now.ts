@@ -40,6 +40,7 @@ import {
 } from '../adapters/manual';
 import { manualListenerMovements } from './files';
 import { getMovementRow } from './store';
+import { heldRunRefusal } from '@listen-fire/legacy-engine/dispatch';
 import {
   describeRunAwaits,
   type AwaitDescription,
@@ -722,6 +723,10 @@ async function resolveManualListen(
   if (!row) {
     return { ok: false, errors: [`movement ${input.movementId} not found`] };
   }
+  // A pin this build does not run is refused before this release's parser
+  // reads its text.
+  const refusal = heldRunRefusal(row.languageVersion);
+  if (refusal !== undefined) return { ok: false, errors: [refusal] };
 
   let manualTargets: string[];
   try {

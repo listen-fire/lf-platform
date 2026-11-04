@@ -46,6 +46,9 @@ import type { SavedListen } from '../../../inbound/listen_door';
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { TriggerId } from '../../../../generated/kysely/automations/Trigger';
 
+import { LANGUAGE_VERSION } from 'movement-lang';
+import { runRefusal } from '@listen-fire/language-versions';
+
 import { runMovementNow, runMovementAsync, getMovementRunStatus } from '../run_now';
 
 const { getAutomationsQb } = jest.requireMock('../../../../lib/kysely') as {
@@ -147,6 +150,7 @@ beforeEach(() => {
     teamId: TEAM,
     name: 'backfill',
     source: LIVE_SOURCE,
+    languageVersion: LANGUAGE_VERSION,
   });
   savedListens.mockResolvedValue([LISTEN]);
   savedListenOf.mockResolvedValue(LISTEN);
@@ -249,12 +253,26 @@ describe('runMovementAsync', () => {
       teamId: TEAM,
       name: 'backfill',
       source: LIVE_SOURCE.replace('listen to manual-[:Invocations]-> fire backfill\n', ''),
+      languageVersion: LANGUAGE_VERSION,
     });
     const result = await runMovementAsync({ teamId: TEAM, movementId: MOVEMENT_ID });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.errors[0]).toContain('has no manual listen');
     expect(result.errors[0]).toContain('listen to manual-[:Invocations]-> fire');
+  });
+
+  it("a movement pinned to a version this build does not run is refused by the registry, never told it does not parse", async () => {
+    getMovementRow.mockResolvedValueOnce({
+      id: MOVEMENT_ID,
+      teamId: TEAM,
+      name: 'backfill',
+      source: 'function echo(run: <manual-[:Invocation]->>) {\n  return run.Text\n}\nlisten to manual fire echo\n',
+      languageVersion: '0.12.13',
+    });
+    const result = await runMovementAsync({ teamId: TEAM, movementId: MOVEMENT_ID });
+    expect(result).toEqual({ ok: false, errors: [runRefusal('0.12.13')] });
+    expect(savedListens).not.toHaveBeenCalled();
   });
 
   it('a manual listen with no provisioned row points at saving', async () => {

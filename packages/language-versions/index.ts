@@ -37,6 +37,7 @@
 import {
   LANGUAGE_VERSION,
   compatibilityKey,
+  languageVersionDiagnostic,
   type Completions,
   type Definition,
   type HoverCard,
@@ -234,6 +235,30 @@ export function checkingOf(pin: LanguageVersion): CheckCapability {
 /** How `pin` runs: `held` for a pin this build does not carry. */
 export function runningOf(pin: LanguageVersion): RunCapability {
   return versionOf(pin)?.run ?? HELD;
+}
+
+/**
+ * What a run of `pin` is told when this build does not run it: the language's
+ * own refusal, naming the pin and the remedy. One text for every door that
+ * would run it, given before anything reads the program. A carried version
+ * that does not run reads exactly as a key this build does not carry.
+ * Undefined when the pin runs.
+ */
+export function runRefusal(pin: LanguageVersion): string | undefined {
+  const running = runningOf(pin);
+  switch (running.kind) {
+    case 'current':
+      return undefined;
+    case 'held':
+      return (
+        languageVersionDiagnostic(pin, LANGUAGE_VERSION)?.message ??
+        `this automation pins language ${pin}, which this release (${LANGUAGE_VERSION}) does not read`
+      );
+    default: {
+      const unknown: never = running;
+      throw new Error(`unknown run capability ${JSON.stringify(unknown)}`);
+    }
+  }
 }
 
 /**

@@ -24,7 +24,7 @@ import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { anthropicChat } from '../../../lib/anthropic';
 import { runCostCapFromEnv } from 'movement-engine/public/models';
 import { logger } from 'movement-engine/public/log';
-import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { heldRunRefusal, runMovement } from '@listen-fire/legacy-engine/dispatch';
 import { resolveAdapterSlug } from '../adapters/registry';
 import { resolveAdapter } from '../adapters/resolve';
 import { loadTriggerById } from '../storage/tg_table';
@@ -101,6 +101,11 @@ export async function runMovementTestRun(
       error: `This automation's movement (${trigger.movementId}) is missing.`,
     };
   }
+
+  // A pin this build does not run is refused before anything reads the
+  // program: no introspection of its source, no model inventing an event.
+  const refusal = heldRunRefusal(movementRow.languageVersion);
+  if (refusal !== undefined) return { ok: false, error: refusal };
 
   // The trigger's kind IS the source adapter slug (Model A); resolve any
   // legacy uppercase channel kind to the canonical slug so the synthetic

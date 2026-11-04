@@ -55,7 +55,11 @@ import {
   MovementEditor,
   type MovementEditorHandle,
 } from "@/components/movements/movement-editor";
-import type { CheckRemote, EditorLanguageRoute } from "@/components/movements/editor-lint";
+import {
+  typesAgainstCurrentCatalog,
+  type CheckRemote,
+  type EditorLanguageRoute,
+} from "@/components/movements/editor-lint";
 import type { LanguageRemote } from "@/components/movements/editor-language";
 import { runConnectAction } from "@/components/movements/connect-actions";
 import { MovementStory } from "@/components/movements/story/movement-story";
@@ -534,6 +538,7 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
   const ensureSchemasFor = useCallback(
     (source: string) => {
       if (!catalog) return;
+      if (props.languageRoute !== undefined && !typesAgainstCurrentCatalog(props.languageRoute)) return;
       if (typedForSourceRef.current === source) return;
       typedForSourceRef.current = source;
       typeForSourceRef.current
@@ -551,7 +556,7 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
           if (typedForSourceRef.current === source) typedForSourceRef.current = undefined;
         });
     },
-    [catalog],
+    [catalog, props.languageRoute],
   );
   ensureSchemasForRef.current = ensureSchemasFor;
 

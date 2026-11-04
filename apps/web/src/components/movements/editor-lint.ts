@@ -40,6 +40,24 @@ export function lintsInBrowser(route: EditorLanguageRoute): boolean {
   return route.kind === "legacy";
 }
 
+/** Whether the editor types the program against this release's catalog. A
+ *  pin another version checks, or none does, never has its text read by this
+ *  release's catalog (nor its connected systems introspected for it). */
+export function typesAgainstCurrentCatalog(route: EditorLanguageRoute): boolean {
+  switch (route.kind) {
+    case "legacy":
+    case "installed":
+      return true;
+    case "carried":
+    case "refused":
+      return false;
+    default: {
+      const unknown: never = route.kind;
+      throw new Error(`unknown language route ${String(unknown)}`);
+    }
+  }
+}
+
 export function remoteToEditorDiagnostics(
   source: string,
   remote: RemoteDiagnostic[],

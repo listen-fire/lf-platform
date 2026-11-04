@@ -1,6 +1,7 @@
 import {
   lintsInBrowser,
   remoteToEditorDiagnostics,
+  typesAgainstCurrentCatalog,
   type RemoteDiagnostic,
 } from "../editor-lint";
 
@@ -45,5 +46,12 @@ describe("the route switch", () => {
     expect(lintsInBrowser({ kind: "legacy" })).toBe(true);
     expect(lintsInBrowser({ kind: "installed" })).toBe(false);
     expect(lintsInBrowser({ kind: "refused" })).toBe(false);
+  });
+
+  it("a carried or refused pin's text never goes to this release's catalog (the workbench skips catalogForSource)", () => {
+    expect(typesAgainstCurrentCatalog({ kind: "legacy" })).toBe(true);
+    expect(typesAgainstCurrentCatalog({ kind: "installed" })).toBe(true);
+    expect(typesAgainstCurrentCatalog({ kind: "carried" })).toBe(false);
+    expect(typesAgainstCurrentCatalog({ kind: "refused" })).toBe(false);
   });
 });

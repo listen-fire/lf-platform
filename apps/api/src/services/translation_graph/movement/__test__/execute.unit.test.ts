@@ -84,6 +84,9 @@ jest.mock('../../../../lib/llm_usage', () => ({
 jest.mock('@listen-fire/legacy-engine/dispatch', () => ({
   runMovement: jest.fn(),
   resumeMovement: jest.fn(),
+  // The front door's pin refusal is the real one: a pin this build does not
+  // run never reaches the catalog.
+  refuseHeldRun: jest.requireActual('@listen-fire/legacy-engine/services/movement_engine/engine_choice').refuseHeldRun,
 }));
 jest.mock('movement-engine/public/movement-engine', () => {
   class MovementRunFailed extends Error {
@@ -135,6 +138,9 @@ jest.mock('../issues', () => ({
 
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type { TeamId } from '../../../../generated/kysely/core/Team';
+
+import { LANGUAGE_VERSION } from 'movement-lang';
+import { runRefusal } from '@listen-fire/language-versions';
 
 import { RunLeaseLost } from '../../../movement_engine/run_lease';
 import { movementForTrigger, resumeMovementFiring, runMovementFiring, shippedMovementForTrigger } from '../execute';
@@ -191,7 +197,7 @@ const movementRow = (overrides: Record<string, unknown> = {}) => ({
  *  live text is a draft that must never run. */
 const shippedMovement = (versionOverrides: Record<string, unknown> = {}) => ({
   row: movementRow({ source: 'movement half_written(' }),
-  version: { id: 'mv-1', source: CLEAN_SOURCE, languageVersion: '0.12.0', ...versionOverrides },
+  version: { id: 'mv-1', source: CLEAN_SOURCE, languageVersion: LANGUAGE_VERSION, ...versionOverrides },
 });
 
 const event: TriggerEvent = {
@@ -251,7 +257,7 @@ describe('runMovementFiring', () => {
     // The SHIPPED text, never the row's draft, with its imports' shipped text.
     expect(runCatalogSnapshotForTeam).toHaveBeenCalledWith(TEAM, {
       source: CLEAN_SOURCE,
-      languageVersion: '0.12.0',
+      languageVersion: LANGUAGE_VERSION,
       imports: 'shipped',
     });
     expect(runMovement).toHaveBeenCalledWith(
@@ -349,6 +355,22 @@ describe('runMovementFiring', () => {
     expect(finish).not.toHaveBeenCalled();
     expect(markParked).not.toHaveBeenCalled();
     expect(noteFirstFiringLeaseLost).toHaveBeenCalledWith('run-1');
+  });
+
+  it('a firing pinned to a version this build does not run is refused by the registry, before any catalog is assembled', async () => {
+    const outcome = await runMovementFiring({
+      teamId: TEAM,
+      triggerId: 't-1',
+      triggerName: 'movement/intake_file/intake',
+      movement: shippedMovement({ languageVersion: '0.12.13' }) as never,
+      event,
+      recordingTriggerType: 'webhook',
+    });
+
+    expect(runCatalogSnapshotForTeam).not.toHaveBeenCalled();
+    expect(runMovement).not.toHaveBeenCalled();
+    expect(outcome.result).toBeNull();
+    expect(outcome.error).toContain(runRefusal('0.12.13'));
   });
 
   it('contains a thrown engine error: failed step recorded, error returned as a value', async () => {
@@ -511,6 +533,14 @@ describe('resumeMovementFiring', () => {
     resumeMovement.mockResolvedValue({ movementName: 'intake', writes: [], extractionSites: {}, trace: [] });
     await resumeMovementFiring({ ...resumeInput, answer: true });
     expect(resumeMovement).toHaveBeenCalledWith(expect.objectContaining({ languageVersion: '1' }));
+  });
+
+  it('a run parked under a version this build does not run is refused by the registry, before any catalog is assembled', async () => {
+    const outcome = await resumeMovementFiring({ ...resumeInput, pinnedLanguageVersion: '0.12.13', answer: true });
+
+    expect(runCatalogSnapshotForTeam).not.toHaveBeenCalled();
+    expect(resumeMovement).not.toHaveBeenCalled();
+    expect(outcome.error).toContain(runRefusal('0.12.13'));
   });
 
   it('resumes on the engine the run row says parked it', async () => {

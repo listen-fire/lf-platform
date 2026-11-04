@@ -18,7 +18,7 @@ import type { EngineHost } from 'movement-engine/public/host';
 import * as typescript from './public/movement-engine';
 import { engineFor } from './services/movement_engine/engine_choice';
 
-export { engineFor, type EngineChoice } from './services/movement_engine/engine_choice';
+export { engineFor, heldRunRefusal, refuseHeldRun, type EngineChoice } from './services/movement_engine/engine_choice';
 
 type MovementRunResult = rust.MovementRunResult;
 

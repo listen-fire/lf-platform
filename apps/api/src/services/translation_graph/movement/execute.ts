@@ -30,7 +30,7 @@ import type { TriggerEvent } from 'movement-engine/public/inbound';
 
 import { describeError } from 'movement-engine/public/errors';
 import { logger } from 'movement-engine/public/log';
-import { runMovement, resumeMovement, settleRaceFrame } from '@listen-fire/legacy-engine/dispatch';
+import { refuseHeldRun, runMovement, resumeMovement, settleRaceFrame } from '@listen-fire/legacy-engine/dispatch';
 import { MovementRunFailed, runFailureCause, type CancelGate, type MovementRunResult } from 'movement-engine/public/movement-engine';
 import { makeDbCancelGate } from '../../movement_engine/cancel_gate';
 import { failRunAndCancelRequests } from '../../interaction/run_failure';
@@ -89,6 +89,9 @@ async function interpretMovementFiring(input: {
    *  the waits it opened on the trigger read from there. */
   triggerMark?: number;
 }): Promise<MovementRunResult> {
+  // A pin this build does not run is refused before its text reaches this
+  // release's catalog.
+  refuseHeldRun(input.version.languageVersion);
   const teamCatalog = await runCatalogSnapshotForTeam(input.teamId, {
     source: input.version.source,
     languageVersion: input.version.languageVersion,
@@ -589,6 +592,7 @@ async function resumeMovementFiringInContext(
   });
   try {
     const languageVersion = input.pinnedLanguageVersion;
+    refuseHeldRun(languageVersion);
     const teamCatalog = await runCatalogSnapshotForTeam(input.teamId, {
       source: input.pinnedSource,
       languageVersion,
