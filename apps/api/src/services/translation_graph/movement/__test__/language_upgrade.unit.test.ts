@@ -19,7 +19,15 @@ jest.mock('../authoring', () => ({
     sourceLine: '',
   }),
 }));
-jest.mock('../firing_context', () => ({ withTeamContext: jest.fn() }));
+// The team's context runs what it is given; the group's transaction is a
+// context transaction, entered and nothing more here (its rollback is proved
+// on Postgres: upgrade_group_transaction.integration.test.ts).
+jest.mock('../firing_context', () => ({ withTeamContext: jest.fn((_teamId: string, fn: () => Promise<unknown>) => fn()) }));
+const enterTransaction = jest.fn(async () => undefined);
+jest.mock('../../../context', () => ({
+  currentContext: () => ({ enterTransaction }),
+  unsafeCurrentContext: () => undefined,
+}));
 jest.mock('../store', () => ({
   advanceMovementLanguageVersion: jest.fn(),
   getMovementRow: jest.fn(),
@@ -599,6 +607,49 @@ describe('an upgrade moves the whole import group, or nothing', () => {
     expect(result.detail).toContain('old-app (line 3: no field Textt)');
     // Each member's own check is still recorded against the target.
     expect(jest.mocked(recordUpgradeCheck).mock.calls.map(([call]) => call.id)).toEqual(['lib', 'app', 'old-app']);
+  });
+
+  it('a group moves in one transaction: a member whose save fails rolls back the members before it', async () => {
+    jest.mocked(getMovementRow).mockResolvedValueOnce(rows[1]);
+    jest.mocked(listMovementRows).mockResolvedValueOnce(rows);
+    jest.mocked(assessMovementValidity).mockReturnValue({ status: 'valid', reason: null } as never);
+    const { validate } = groupOf({});
+    const moved: string[] = [];
+    const outcomes: Array<'committed' | 'rolled back'> = [];
+    const together = async (_teamId: string, moves: () => Promise<void>) => {
+      try {
+        await moves();
+        outcomes.push('committed');
+      } catch (err) {
+        outcomes.push('rolled back');
+        throw err;
+      }
+    };
+    const advance = async ({ movement: m }: { movement: { name: string } }) => {
+      if (m.name === 'app') return { ok: false as const, detail: 'the rewritten text did not ship' };
+      moved.push(m.name);
+      return { ok: true as const };
+    };
+
+    const result = await upgradeMovement({ teamId: 'team-1', id: 'app', acknowledge: true, validate, advance, together });
+
+    expect(moved).toEqual(['lib']);
+    expect(outcomes).toEqual(['rolled back']);
+    expect(result).toEqual(expect.objectContaining({ status: 'unverified', detail: 'app: the rewritten text did not ship; nothing moved' }));
+  });
+
+  it('the default group move enters one context transaction and moves every member inside it', async () => {
+    jest.mocked(getMovementRow).mockResolvedValueOnce(rows[1]);
+    jest.mocked(listMovementRows).mockResolvedValueOnce(rows);
+    jest.mocked(assessMovementValidity).mockReturnValue({ status: 'valid', reason: null } as never);
+    const { validate, advanced, advance } = groupOf({});
+    enterTransaction.mockClear();
+
+    const result = await upgradeMovement({ teamId: 'team-1', id: 'app', acknowledge: true, validate, advance });
+
+    expect(result.status).toBe('upgraded');
+    expect(enterTransaction).toHaveBeenCalledTimes(1);
+    expect(advanced.map((a) => a.id)).toEqual(['lib', 'app', 'old-app']);
   });
 
   it('without acknowledge, a clean group is reported and nothing moves', async () => {

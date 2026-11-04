@@ -99,6 +99,7 @@ import {
 } from './authoring';
 import { teamFactsOncePerTeam } from './carried_check';
 import { withTeamContext } from './firing_context';
+import { currentContext, unsafeCurrentContext } from '../../context';
 import { importGroupOf } from './imports_across_versions';
 import { saveMovement } from './provision';
 import {
@@ -904,9 +905,10 @@ export const advanceLive: Advance = async ({ movement, to, source }) => {
     await advanceMovementLanguageVersion({ teamId: movement.teamId, id: movement.id, to });
     return { ok: true };
   }
-  const saved = await withTeamContext(movement.teamId as TeamId, () =>
-    saveMovement({ teamId: movement.teamId, id: movement.id, source, languageUpgrade: { to } }),
-  );
+  // Inside a group's transaction the save joins it; on its own it runs as the
+  // team.
+  const save = () => saveMovement({ teamId: movement.teamId, id: movement.id, source, languageUpgrade: { to } });
+  const saved = unsafeCurrentContext()?.kyselyTrx !== undefined ? await save() : await withTeamContext(movement.teamId as TeamId, save);
   if (saved.ok) return { ok: true };
   return { ok: false, detail: `the rewritten text did not ship: ${(saved.errors ?? []).join('; ') || 'the save stopped short of shipping'}` };
 };
@@ -1004,6 +1006,8 @@ export async function upgradeMovement(input: {
   applyAllFixes?: boolean;
   validate?: ValidateUnder;
   advance?: Advance;
+  /** How the group's moves are made together; absent, one transaction. */
+  together?: MoveTogether;
 }): Promise<UpgradeMovementResult> {
   const movement = await getMovementRow({ teamId: input.teamId, id: input.id });
   if (!movement) return { status: 'not_found' };
@@ -1066,33 +1070,60 @@ export async function upgradeMovement(input: {
   }
   if (!input.acknowledge) return { status: 'needs_acknowledgement', ...shown, diagnostics };
 
-  // Libraries first, so each importer is saved against what it imports as
-  // moved.
+  // Every member moves in one transaction, libraries first so each importer
+  // is saved against what it imports as moved: a member that cannot move
+  // undoes the members before it, so no importer is left on one version
+  // importing a library moved to another.
   const advance = input.advance ?? advanceLive;
-  const moved: string[] = [];
-  for (const member of checked) {
-    const advanced = await advance({
-      movement: member.movement,
-      to,
-      ...(member.rewrite.changed ? { source: member.rewrite.source } : {}),
+  const together = input.together ?? inOneTransaction;
+  try {
+    await together(movement.teamId, async () => {
+      for (const member of checked) {
+        const advanced = await advance({
+          movement: member.movement,
+          to,
+          ...(member.rewrite.changed ? { source: member.rewrite.source } : {}),
+        });
+        if (!advanced.ok) throw new GroupMoveStopped(member.movement.name, advanced.detail);
+        const assessment = assessMovementValidity({ diagnostics: member.rewrite.validation.diagnostics, gaps: [] });
+        await recordValidityOutcome({
+          id: member.movement.id,
+          status: assessment.status,
+          reason: assessment.reason,
+          sourceHash: movementSourceHash(member.rewrite.source),
+          checkedAgainst: to,
+        });
+      }
     });
-    if (!advanced.ok) {
-      const who = others.length > 0 ? `${member.movement.name}: ` : '';
-      const already = moved.length > 0 ? `; already moved: ${moved.join(', ')}` : '';
-      return { status: 'unverified', ...shown, diagnostics, detail: `${who}${advanced.detail}${already}` };
-    }
-    moved.push(member.movement.name);
-    const assessment = assessMovementValidity({ diagnostics: member.rewrite.validation.diagnostics, gaps: [] });
-    await recordValidityOutcome({
-      id: member.movement.id,
-      status: assessment.status,
-      reason: assessment.reason,
-      sourceHash: movementSourceHash(member.rewrite.source),
-      checkedAgainst: to,
-    });
+  } catch (err) {
+    if (!(err instanceof GroupMoveStopped)) throw err;
+    const who = others.length > 0 ? `${err.member}: ` : '';
+    const nothing = others.length > 0 ? '; nothing moved' : '';
+    return { status: 'unverified', ...shown, diagnostics, detail: `${who}${err.detail}${nothing}` };
   }
   return { status: 'upgraded', ...shown, diagnostics };
 }
+
+/** A member of an upgrading group that could not move: the group's
+ *  transaction rolls back. */
+class GroupMoveStopped extends Error {
+  constructor(
+    readonly member: string,
+    readonly detail: string,
+  ) {
+    super(`${member}: ${detail}`);
+  }
+}
+
+/** Runs `moves` as the team, in one database transaction: every write a save
+ *  makes joins it, and a throw rolls all of them back. */
+export type MoveTogether = (teamId: string, moves: () => Promise<void>) => Promise<void>;
+
+export const inOneTransaction: MoveTogether = (teamId, moves) =>
+  withTeamContext(teamId as TeamId, async () => {
+    await currentContext().enterTransaction();
+    await moves();
+  });
 
 /** Why a group stays: the members that cannot move, each with its reason. */
 function heldDetail(heldBy: readonly HeldMember[]): string {

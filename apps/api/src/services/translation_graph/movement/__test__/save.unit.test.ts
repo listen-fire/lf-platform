@@ -282,6 +282,8 @@ jest.mock('../../../../lib/journey', () => ({
 // MCP-originated save by returning `{ mcpDomain: 'automation' }`.
 jest.mock('../../../../services/context', () => ({
   unsafeCurrentContext: jest.fn(() => undefined),
+  // The upgrade's group transaction: entered, nothing more, in this file.
+  currentContext: () => ({ enterTransaction: async () => undefined }),
 }));
 
 import { LANGUAGE_VERSION, mockCatalog, mockCatalogSnapshot } from 'movement-lang';
