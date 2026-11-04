@@ -159,8 +159,12 @@ describe('a run production parked', () => {
   it('with a callback tapped and its body queued by production finishes: the queued rows run here', async () => {
     const { runId, rows } = await load('callback-tapped');
     expect((rows.work ?? []).map((row) => row.kind).sort()).toEqual(['fire_callback', 'wake_await']);
-    await getAutomationsQb(['work']).updateTable('work').set({ due_at: new Date(Date.now() - 1000) }).where('team_id', '=', TEAM).execute();
-    await drain();
+    // The two rows race for the run's lease: the one that finds it held defers, as
+    // it would on any drain, so the clock moves on until it has run too.
+    for (let pass = 0; pass < 4; pass++) {
+      await getAutomationsQb(['work']).updateTable('work').set({ due_at: new Date(Date.now() - 1000) }).where('team_id', '=', TEAM).execute();
+      await drain();
+    }
     expect(await runOf(runId)).toMatchObject({ status: 'success' });
     expect((await asksOfTeam()).map((ask) => ask.prompt).sort()).toEqual(['body', 'written before the park: callback']);
   });
