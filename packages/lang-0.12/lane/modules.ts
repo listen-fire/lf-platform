@@ -143,6 +143,12 @@ export function moduleAdapterTypes(): string[] {
   return [...Object.keys(MODULES), MANUAL_ADAPTER_TYPE, CRON_ADAPTER_TYPE];
 }
 
+/** Every adapter type a 0.12 run reaches through a module the platform hosts:
+ *  each needs a module line on the platform. */
+export function hostedModuleTypes(): string[] {
+  return Object.keys(MODULES);
+}
+
 function declarationOf(definition: AdapterModuleDefinition): ModuleDeclaration {
   return {
     name: definition.name,

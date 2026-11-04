@@ -69,7 +69,7 @@ jest.mock('movement-engine/public/modules', () => ({
   createRemoteAdapter: (input: unknown) => mockCreateRemoteAdapter(input),
 }));
 
-import { resolveAdapter } from '../../resolve';
+import { remoteInstallPieces, resolveAdapter } from '../../resolve';
 
 const TEAM = 'team-1' as never;
 
@@ -297,5 +297,47 @@ describe('resolveAdapter — slug aliasing', () => {
     await expect(resolveAdapter({ adapterType: 'ACME_CRM', teamId: TEAM })).rejects.toThrow(
       /Unknown adapter type: ACME_CRM \(slug: acme_crm\)/,
     );
+  });
+});
+
+// What a carried version's own remote adapter is built from (`remoteInstall`,
+// handed to the lane). The lane reads the stored manifest itself, in its own
+// terms, so the row's JSON goes over untouched.
+describe('remoteInstallPieces — a carried version building its own remote adapter', () => {
+  const INSTALL = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d';
+  const PROVIDER = 'b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e';
+
+  const withCredentials = (row: ReturnType<typeof remoteRow>) => {
+    mockGetRemoteAdapter.mockResolvedValue(row);
+    mockCredRow.mockResolvedValue({ id: 'cred-1', credentials: Buffer.from('enc'), app_id: row.adapter_type, declared_credential: 'crm_token' });
+    mockDecryptToken.mockResolvedValue(JSON.stringify({ secret: 'install-secret' }));
+  };
+
+  it("hands over the stored manifest as stored, the install's secret and its credential id", async () => {
+    const row = remoteRow('acme_crm', INSTALL);
+    withCredentials(row);
+
+    const pieces = await remoteInstallPieces({ adapterType: 'acme_crm', teamId: TEAM, credentialsId: INSTALL });
+
+    expect(pieces.manifest).toBe(row.manifest);
+    expect(pieces.secret).toBe('install-secret');
+    expect(pieces.credentialsId).toBe(INSTALL);
+    expect(pieces.credential).toBeUndefined();
+  });
+
+  it("adds the connection's provider credential when it names one the module declares", async () => {
+    const row = remoteRow('acme_crm', INSTALL);
+    row.manifest = { ...row.manifest, credentials: [{ name: 'crm_token', kind: 'oauth2', fields: [], oauth2: { authorizeUrl: 'https://p.test/a', tokenUrl: 'https://p.test/t' } }] } as typeof row.manifest;
+    withCredentials(row);
+
+    const pieces = await remoteInstallPieces({ adapterType: 'acme_crm', teamId: TEAM, credentialsId: PROVIDER });
+
+    expect(pieces.credentialsId).toBe(PROVIDER);
+    expect(pieces.credential).toMatchObject({ name: 'crm_token', ref: PROVIDER });
+  });
+
+  it('refuses a provider credential the module does not declare, before anything is sent', async () => {
+    withCredentials(remoteRow('acme_crm', INSTALL));
+    await expect(remoteInstallPieces({ adapterType: 'acme_crm', teamId: TEAM, credentialsId: PROVIDER })).rejects.toThrow(/which the module does not declare/);
   });
 });

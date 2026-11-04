@@ -2,12 +2,16 @@
 // kit, with the platform's services as a fake. What the platform sees back is
 // plain data: a result, or why the segment failed.
 
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
+
 import { InMemoryWriteLocks } from '@listen-fire/engine/public/embed';
 import * as errors012 from '@listen-fire/engine/public/errors';
 
 import { manualInvocationEvent, manualListens, readEvent, runSegment } from '..';
 import { ledgered } from '../lane/run';
 import { heldSchemaCount, readOnce } from '../lane/catalog';
+import { moduleTable } from '../lane/modules';
 import type { HostAdapters } from '@listen-fire/engine/public/host';
 import type { RunPlatform, SegmentRequest } from '../lane/run_types';
 import type { TeamFacts } from '../lane/types';
@@ -229,5 +233,123 @@ describe("a connection's schema, held for the minute it is shared", () => {
     await readOnce('team-c|attio|', reading);
     expect(heldSchemaCount()).toBeLessThan(held);
     expect(heldSchemaCount()).toBe(1);
+  });
+});
+
+/** A remote adapter server's one writable record type, `Company`. */
+function answerOf(request: { method: string; params?: { recordType?: string; fields?: unknown } }): unknown {
+  switch (request.method) {
+    case 'listEntryPoints':
+      return [{ typeId: 'Company', displayName: 'Company', scope: 'self-configured', writable: true, readable: false }];
+    case 'describe':
+      return {
+        typeId: 'Company',
+        displayName: 'Company',
+        fields: [{ fieldId: 'Name', displayName: 'Name', kind: 'string', writable: true, required: true }],
+        references: [],
+      };
+    case 'createRecord':
+      return { adapterType: 'acme_crm', externalId: 'company-1', recordType: request.params?.recordType, data: request.params?.fields };
+    default:
+      return [];
+  }
+}
+
+describe("a team's install of a remote adapter, in a 0.12 run", () => {
+  let server: http.Server;
+  let baseUrl: string;
+  const requests: { headers: http.IncomingHttpHeaders; body: { method: string; credential?: unknown } }[] = [];
+
+  beforeAll(async () => {
+    server = http.createServer((req, res) => {
+      let body = '';
+      req.on('data', (chunk: Buffer) => (body += chunk.toString()));
+      req.on('end', () => {
+        const parsed: { method: string; params?: { typeId?: string; recordType?: string; fields?: unknown } } = JSON.parse(body);
+        requests.push({ headers: req.headers, body: parsed });
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true, result: answerOf(parsed) }));
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+  afterAll(async () => {
+    await new Promise((resolve) => server.close(resolve));
+  });
+  beforeEach(() => {
+    requests.length = 0;
+  });
+
+  const stored = (over: Record<string, unknown> = {}) => ({
+    protocolVersion: 2,
+    adapterType: 'acme_crm',
+    baseUrl,
+    authStrategy: { kind: 'bearer' },
+    supportedTriggers: [],
+    runtimeCapabilities: { traversal: { incoming: false, edgeProperties: false }, resources: false },
+    methods: ['listEntryPoints', 'describe', 'resolveEntity', 'getFieldValue', 'getRelated', 'createRecord', 'updateRecord', 'deleteRecord'],
+    ...over,
+  });
+
+  const tableWith = (manifest: unknown) => {
+    const asked: unknown[] = [];
+    const modules = platform().modules;
+    const table = moduleTable({
+      ...modules,
+      parts: {
+        ...modules.parts,
+        remoteInstall: async (input) => {
+          asked.push(input);
+          return { manifest, secret: 'install-secret', credentialsId: 'cred-install', documents: {} as never };
+        },
+      },
+    });
+    return { table, asked };
+  };
+
+  it("runs through 0.12's own remote adapter: built from the stored manifest, calling the server with the install's secret and the team", async () => {
+    const { table, asked } = tableWith(stored());
+    const adapter = await table.resolve('acme_crm', { teamId: TEAM, credentialsId: 'cred-install' });
+    expect(asked).toEqual([{ adapterType: 'acme_crm', teamId: TEAM, credentialsId: 'cred-install' }]);
+    expect(await adapter.listEntryPoints()).toEqual([expect.objectContaining({ typeId: 'Company' })]);
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.body.method).toBe('listEntryPoints');
+    expect(requests[0]?.headers.authorization).toBe('Bearer install-secret');
+    expect(requests[0]?.headers['x-listen-fire-team']).toBe(TEAM);
+  });
+
+  it("a 0.12 run writes through the install, on 0.12's own remote adapter", async () => {
+    const source = 'import { acme_crm } from adapters\ncrm = connect acme_crm\nfunction go(run: <manual-[:Invocation]->>) {\n  write crm-[:Company]-> { Name: run.Text }\n}\nlisten to manual fire go\n';
+    const asked: unknown[] = [];
+    const modules = platform().modules;
+    const outcome = await runSegment(
+      request(source, { team: { ...team(), remoteAdapters: [{ adapterType: 'acme_crm', manifest: stored() }] } }),
+      platform({
+        modules: {
+          ...modules,
+          parts: {
+            ...modules.parts,
+            remoteInstall: async (input) => {
+              asked.push(input);
+              return { manifest: stored(), secret: 'install-secret', credentialsId: 'cred-install', documents: {} as never };
+            },
+          },
+        },
+      }),
+    );
+    if (outcome.kind !== 'ran') throw new Error(`the run did not finish: ${JSON.stringify(outcome)}`);
+    expect(outcome.result.movementName).toBe('go');
+    expect(outcome.result.writes.map((write) => [write.adapterType, write.externalId])).toEqual([['acme_crm', 'company-1']]);
+    const written = requests.find((sent) => sent.body.method === 'createRecord');
+    expect(written?.headers.authorization).toBe('Bearer install-secret');
+    expect(written?.headers['x-listen-fire-team']).toBe(TEAM);
+    expect(asked).toContainEqual({ adapterType: 'acme_crm', teamId: TEAM });
+  });
+
+  it('refuses a stored manifest 0.12 cannot read, by the install and by language', async () => {
+    const { table } = tableWith(stored({ baseUrl: 'not a url' }));
+    await expect(table.resolve('acme_crm', { teamId: TEAM })).rejects.toThrow(/the stored manifest of 'acme_crm' is not one language 0\.12 reads/);
+    expect(requests).toEqual([]);
   });
 });

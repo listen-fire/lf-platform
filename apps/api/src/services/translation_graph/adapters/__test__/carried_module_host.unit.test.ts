@@ -1,7 +1,9 @@
 // A carried version's module is hosted as this release's is: the same line's
 // stored credential, read through the platform's secrets store, refreshed
 // under the store's one lock. Two versions holding the same connection and
-// finding its token expired refresh it once between them.
+// finding its token expired refresh it once between them. And every module a
+// carried version reaches has a line here: a retired one would otherwise fail
+// only at run time.
 
 const vault: { current?: ReturnType<typeof import('movement-engine/public/secrets').createMemoryVault> } = {};
 jest.mock('../../../credentials/secrets_postgres', () => ({
@@ -13,11 +15,15 @@ jest.mock('../../../credentials/secrets_postgres', () => ({
 }));
 
 import { createMemoryVault } from 'movement-engine/public/secrets';
+import { makeMetaPosition } from 'movement-engine/public/catalog';
+import { BASE_RUNTIME_CAPABILITIES } from 'movement-engine/public/adapter';
+import { defineModule, type ModuleContext } from 'module-kit';
 import { airtableModule } from '@listen-fire/airtable';
+import { runningOf } from '@listen-fire/language-versions';
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 
-import { moduleHostFor } from '../builtin_modules';
+import { BUILTIN_MODULES, loadBuiltinModule, moduleHostFor } from '../builtin_modules';
 
 const TEAM = '00000000-0000-4000-8000-0000000000a1' as TeamId;
 const CREDENTIAL = 'cred-airtable';
@@ -57,13 +63,61 @@ describe("a carried version's module, hosted by the platform", () => {
       declaration: { name: airtableModule.name, displayName: airtableModule.manifest.displayName, credentials: airtableModule.credentials },
     }).credential;
 
-  it('refreshes an expired token once, however many versions ask at once', async () => {
-    const [a, b] = await Promise.all([credentialOf().fields(), credentialOf().fields()]);
+  /** This release's path to the same connection: its own Airtable line, loaded
+   *  as every 0.15 run loads it (`loadBuiltinModule`). The module answers the
+   *  token it is handed, so nothing else of Airtable's API is needed. */
+  const currentReleaseToken = () => {
+    const entry = BUILTIN_MODULES.airtable;
+    if (entry?.kind !== 'adapter' || entry.line !== 'module') throw new Error('test: airtable is no module line');
+    const probe = defineModule({
+      kind: 'adapter',
+      name: airtableModule.name,
+      manifest: airtableModule.manifest,
+      credentials: airtableModule.credentials,
+      create: (ctx: ModuleContext) => ({
+        adapterType: 'airtable',
+        supportedTriggers: [],
+        runtimeCapabilities: () => BASE_RUNTIME_CAPABILITIES,
+        listEntryPoints: async () => [],
+        describe: async () => null,
+        resolveEntity: async () => ({ candidates: [] }),
+        getFieldValue: async () => (await ctx.credential.fields()).access_token ?? null,
+        getRelated: async () => [],
+        createRecord: async () => {
+          throw new Error('read-only');
+        },
+        updateRecord: async () => {
+          throw new Error('read-only');
+        },
+        deleteRecord: async () => {
+          throw new Error('read-only');
+        },
+      }),
+    });
+    const loaded = loadBuiltinModule({ ...entry, load: () => probe }, { teamId: TEAM, credentialsId: CREDENTIAL });
+    return loaded.adapter.getFieldValue({ position: makeMetaPosition('airtable'), fieldId: 'token' });
+  };
+
+  it("refreshes an expired token once when a carried version's module and this release's find it expired together", async () => {
+    const [carried, current] = await Promise.all([credentialOf().fields(), currentReleaseToken()]);
     expect(tokenCalls).toBe(1);
     // The memory vault keeps the fields as stored (the shape is the Postgres
     // store's); both versions read the one refreshed token.
-    expect(a).toMatchObject({ access_token: 'fresh-1' });
-    expect(b).toMatchObject({ access_token: 'fresh-1' });
+    expect(carried).toMatchObject({ access_token: 'fresh-1' });
+    expect(current).toBe('fresh-1');
+  });
+
+  it('every module a carried version reaches has a line on this platform', async () => {
+    const running = runningOf('0.12.13');
+    if (running.kind !== 'carried') throw new Error('0.12 does not run on this build');
+    const lane = await running.lane();
+    const types = lane.hostedModuleTypes();
+    expect(types).toContain('affinity');
+    const lineless = types.filter((adapterType) => {
+      const entry = BUILTIN_MODULES[adapterType];
+      return entry?.kind !== 'adapter' || entry.line !== 'module';
+    });
+    expect(lineless).toEqual([]);
   });
 
   it("refuses a declaration this platform cannot read, by the module's name", () => {

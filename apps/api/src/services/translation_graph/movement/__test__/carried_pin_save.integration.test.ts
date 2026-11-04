@@ -13,7 +13,9 @@ import type { MovementId } from '../../../../generated/kysely/automations/Moveme
 
 import { getAutomationsQb, getCoreQb } from '../../../../lib/kysely';
 import { cleanupTeam } from '../../../../test/harness/cleanup';
-import { saveMovement } from '../provision';
+import { runningOf } from '@listen-fire/language-versions';
+
+import { getMovement, listMovements, saveMovement } from '../provision';
 import { getMovementRow } from '../store';
 
 jest.mock('../../../credentials/credential_lifecycle', () => ({
@@ -132,5 +134,21 @@ describe('a 0.12 movement saved (real Postgres)', () => {
     expect(saved.errors).toEqual(
       expect.arrayContaining([expect.stringMatching(new RegExp(`on language ${LANGUAGE_VERSION.replace(/\./g, '\\.')}, and the library 'lib-012' it imports is on language 0\\.12\\.13`))]),
     );
+  });
+
+  it("listing automations answers 0.12's Run now availability without loading 0.12", async () => {
+    const running = runningOf('0.12.13');
+    if (running.kind !== 'carried') throw new Error('0.12 does not run on this build');
+    const loads = jest.spyOn(running, 'lane');
+    const pressable = await seed('pressable', ECHO_012('Text'), '0.12.13');
+    const scheduled = await seed('scheduled', 'function tick(t: <cron-[:Tick]->>) {\n}\nlisten to cron { every: "1h" } fire tick\n', '0.12.13');
+
+    const listed = await listMovements(teamId);
+
+    expect(listed.find((m) => m.id === pressable)?.runnable).toBe(true);
+    expect(listed.find((m) => m.id === scheduled)?.runnable).toBe(false);
+    expect((await getMovement({ teamId, id: pressable }))?.runnable).toBe(true);
+    expect(loads).not.toHaveBeenCalled();
+    loads.mockRestore();
   });
 });

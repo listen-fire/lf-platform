@@ -12,4 +12,5 @@
 export { LANGUAGE_VERSION } from '@listen-fire/movement-lang';
 export * as errors from '@listen-fire/engine/public/errors';
 export { checkSource, completionsAt, definitionAt, hoverAt } from './lane/check';
+export { hostedModuleTypes } from './lane/modules';
 export { manualInvocationEvent, manualListens, readEvent, runSegment } from './lane/run';

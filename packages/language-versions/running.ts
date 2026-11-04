@@ -175,6 +175,9 @@ export interface RunningLane {
   /** An event in the version's own shape, read with its own schema: what the
    *  platform records of it, or why it cannot be read. */
   readEvent: (event: CarriedEvent) => CarriedEventReading;
+  /** Every adapter type a run reaches through a module the platform hosts:
+   *  each needs a module line on the platform. */
+  hostedModuleTypes: () => string[];
 }
 
 /** What a remote adapter of this release stores fetched files in, and the

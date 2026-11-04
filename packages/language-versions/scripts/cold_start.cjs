@@ -11,8 +11,10 @@
 
 const path = require('node:path');
 
-const CARRIED = ['engine@0.12.13', `${path.sep}lang-0.12${path.sep}`];
-const loadedCarried = () => Object.keys(require.cache).filter((file) => CARRIED.some((marker) => file.includes(marker))).length;
+// Anything of a 0.12 release: its packages (`movement-lang@0.12.13`, a module
+// at `attio@0.12.7`, each installed under its own version) and this package.
+const CARRIED = [/@0\.12\.\d/, new RegExp(`\\${path.sep}lang-0\\.12\\${path.sep}`)];
+const loadedCarried = () => Object.keys(require.cache).filter((file) => CARRIED.some((marker) => marker.test(file))).length;
 
 const started = process.hrtime.bigint();
 const rssAtStart = process.memoryUsage().rss;

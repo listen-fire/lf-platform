@@ -10,12 +10,15 @@ import type { Arrival } from 'engine-contracts';
 import type { AdapterCall, AdapterCallAnswer, AdapterMethod, HostAdapters, ResolvedAdapter } from 'movement-engine/public/host';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { SavedListen } from '../listen_door';
+import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
+import type { DbCancelGate } from '../../movement_engine/cancel_gate';
 
 import { arrivalReceiptKey } from 'movement-engine/public/inbound';
 
 import { getAutomationsQb } from '../../../lib/kysely';
 import { claimReceipt, type FireRow } from '../listen_door';
 import { chainBefore, ledgeredAdapters, loopLine } from '../loop_breaker';
+import { runPlatformFor } from '../../translation_graph/movement/carried_run';
 
 const SETTINGS = { windowMs: 20_000, depth: 10 };
 const PIPELINE = 'listen:sync.lf:stamp:0a1b2c3d';
@@ -153,6 +156,15 @@ describe('chainBefore: the chain the run an arrival fires continues', () => {
     );
     await wrote(lfRun, 1, new Date(now.getTime() - 1_000));
     expect(await chainBefore({ teamId, listen, arrival: echo(), now, settings: SETTINGS })).toEqual(['run-0', lfRun]);
+  });
+
+  it("a write a carried version's run sent is found too: it enters the one ledger, under that run", async () => {
+    const now = new Date();
+    const carriedRun = await queuedRun([]);
+    const platform = runPlatformFor({ teamId, triggerRunId: carriedRun as TriggerRunId, cancel: { cancelled: async () => false, cancelledNow: async () => false, reason: () => null } as unknown as DbCancelGate });
+    await platform.keepWrite?.({ adapterType: 'attio', recordType: 'Companies', externalId: 'company-1', at: new Date(now.getTime() - 1_000).toISOString() });
+    expect(await ledger()).toEqual([{ external_id: 'company-1', run_id: carriedRun, depth: 0 }]);
+    expect(await chainBefore({ teamId, listen, arrival: echo(), now, settings: SETTINGS })).toEqual([carriedRun]);
   });
 
   it('names the listen and the chain it pauses', () => {
