@@ -8,6 +8,13 @@ import { AUTOMATION_INSTRUCTIONS, automationConnectorOptions } from '../automati
 const tools = automationConnectorOptions().tools ?? {};
 const description = (name: string) => tools[name]?.description ?? '';
 
+describe('what upgradeAutomation says of a carried line', () => {
+  it('says what the registry says: 0.12 keeps firing, so nothing invites a second automation beside it', () => {
+    expect(description('upgradeAutomation')).toContain('Until it is upgraded, on 0.12, its listens keep firing');
+    expect(description('upgradeAutomation')).not.toContain('do not fire');
+  });
+});
+
 describe('the build loop the connector teaches', () => {
   it('points at getStarted first', () => {
     expect(AUTOMATION_INSTRUCTIONS).toContain('Call getStarted first');

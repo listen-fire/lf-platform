@@ -10,6 +10,7 @@ import {
   isCurrent,
   listeningOf,
   providedFlagsFor,
+  untilUpgraded,
   refusalOf,
   resumeRefusal,
   resumingOf,
@@ -64,6 +65,11 @@ describe('the language versions this build carries', () => {
     expect(resumeRefusal('0.12.4')).toBeUndefined();
     expect(refusalOf('0.12.4', 'listen')).toBeUndefined();
     expect(providedFlagsFor('0.12.4')).toEqual({ check: true, run: true, resume: true, listen: true });
+  });
+
+  it('says what an automation does until it is upgraded, from what its version provides', () => {
+    expect(untilUpgraded('0.12.13')).toBe('its listens keep firing, and a run of it that waits (an ask, a pause) resumes');
+    expect(untilUpgraded('0.14.0')).toBe('its listens do not fire, and a run of it that would wait (an ask, a pause) is stopped');
   });
 
   it('a key no entry carries and a text that is no version belong to none, and are refused in the language\'s own text', () => {

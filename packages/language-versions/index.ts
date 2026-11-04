@@ -572,6 +572,16 @@ export function describeProvided(provides: Provided): string {
   return `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]} its automations`;
 }
 
+/** What an automation on `pin` does until it is upgraded, in words, from what
+ *  its version provides: an agent believing the wrong answer builds a second
+ *  automation beside a live one, so the sentence follows the registry. */
+export function untilUpgraded(pin: LanguageVersion): string {
+  const provides = providedFor(pin);
+  const listens = provides.listen.kind === 'held' ? 'its listens do not fire' : 'its listens keep firing';
+  const waits = provides.resume.kind === 'held' ? 'a run of it that would wait (an ask, a pause) is stopped' : 'a run of it that waits (an ask, a pause) resumes';
+  return `${listens}, and ${waits}`;
+}
+
 /** Plain flags for a surface (the web's version panel, the save pane): what
  *  `pin`'s version provides. */
 export function providedFlagsFor(pin: LanguageVersion): { check: boolean; run: boolean; resume: boolean; listen: boolean } {
