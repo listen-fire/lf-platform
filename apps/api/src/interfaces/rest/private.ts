@@ -10,6 +10,7 @@ import { getQb } from '../../lib/kysely';
 import { TeamId } from '../../generated/kysely/core/Team';
 import type { Arrival } from 'engine-contracts';
 import { deliverArrivals } from '../../services/inbound/listen_door';
+import { carriedListensOn, receiveJudgedEvent } from '../../services/inbound/carried_delivery';
 import { keptPage } from '../../services/inbound/captured_request';
 import { notifyWork } from '../../services/work/drain';
 import {
@@ -126,6 +127,13 @@ const acceptInboundEmail = async (
     });
     if (!kept.kept) return res.status(201).send();
     fired = fires.length;
+    // A carried version's listen on the key this was sent to: its own event,
+    // built as its door built it.
+    const carried = route?.trigger != null ? await carriedEmailListen({ teamId, triggerId: route.trigger.id }) : undefined;
+    if (carried !== undefined) {
+      await receiveJudgedEvent({ teamId, triggerId: carried.id, event: carriedEmailEvent({ triggerId: carried.id, kind: carried.kind, payload: emailPayload, messageId }), lane: await carried.lane() });
+      fired += 1;
+    }
   } catch (err) {
     logger.error('[InboundEmail] failed to keep the delivery', {
       teamId,
@@ -172,6 +180,31 @@ const acceptInboundEmail = async (
  * and go no further: not into the email's record, a run, a kept delivery or
  * a quarantined body.
  */
+const CARRIED_EMAIL_RECORD_TYPE = 'email:message';
+
+async function carriedEmailListen(input: { teamId: TeamId; triggerId: string }) {
+  const listens = await carriedListensOn({ teamId: input.teamId, adapterType: EMAIL_ADAPTER_TYPE });
+  return listens.find((listen) => listen.id === input.triggerId);
+}
+
+/** Production's email event at 0.12.13: the Message-Id is both the record's
+ *  durable identity and the delivery id its receipt dedupes on. */
+function carriedEmailEvent(input: { triggerId: string; kind: string; payload: unknown; messageId: string | undefined }): Record<string, unknown> {
+  const { messageId } = input;
+  return {
+    pipelineInputId: `trigger:${input.triggerId}`,
+    adapterType: input.kind.toLowerCase(),
+    triggerType: 'webhook',
+    payload: input.payload,
+    changeType: 'create',
+    rootRecordType: CARRIED_EMAIL_RECORD_TYPE,
+    ...(messageId !== undefined
+      ? { idempotencyKey: messageId, externalRecordRef: { adapterType: EMAIL_ADAPTER_TYPE, externalId: messageId, recordType: CARRIED_EMAIL_RECORD_TYPE } }
+      : {}),
+    occurredAt: new Date().toISOString(),
+  };
+}
+
 const receiveInboundEmail: RequestHandler = async (req, res) =>
   acceptInboundEmail(req, res, {
     payload: normaliseInboundEmailPayload(withoutMailgunSigning((req.body ?? {}) as Record<string, unknown>)),

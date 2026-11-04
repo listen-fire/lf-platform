@@ -61,6 +61,8 @@ import { drainUntilIdle, notifyWork } from '../../work/drain';
 import { QUEUED_RUN_WORK_KINDS } from '../../work/kinds';
 import { carriedRunLaneOf } from './carried_run';
 import { CARRIED_RUN_NOW_NAME, carriedRunTriggerId, queueCarriedRunNow } from './carried_run_now';
+import { isLegacyLanguageVersion } from 'legacy-lang';
+import { legacyStartRefusal } from './execute';
 
 export interface MovementRunNowSuccess {
   ok: true;
@@ -222,6 +224,8 @@ export async function runMovementAsync(
 /** A Run now of a movement whose pin a carried version runs: queued on that
  *  version's run host (./carried_run_now.ts). Undefined for any other. */
 async function carriedRunNowOf(input: RunMovementNowInput, row: MovementRow): Promise<MovementRunAsyncResult | undefined> {
+  // No new run starts on a legacy id: said here, with the remedy.
+  if (isLegacyLanguageVersion(row.languageVersion)) return { ok: false, errors: [legacyStartRefusal(row.languageVersion)] };
   const lane = await carriedRunLaneOf(row.languageVersion);
   if (lane === undefined) return undefined;
   return queueCarriedRunNow({

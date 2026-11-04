@@ -283,7 +283,9 @@ function askReply(outcome: AskDoorOutcome): SlackReply {
       }
     : outcome.kind === 'invalid'
       ? { response_type: 'ephemeral', replace_original: false, text: `That answer could not be accepted: ${outcome.message}` }
-      : { response_type: 'ephemeral', replace_original: false, text: 'This request was already closed.' };
+      : outcome.kind === 'held'
+        ? { response_type: 'ephemeral', replace_original: false, text: outcome.message }
+        : { response_type: 'ephemeral', replace_original: false, text: 'This request was already closed.' };
 }
 
 function parsePayload(rawBody: Buffer): BlockActionsPayload | null {

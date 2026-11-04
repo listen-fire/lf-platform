@@ -3618,6 +3618,10 @@ CREATE TABLE automations.delivery (
     replay_of uuid,
     events jsonb NOT NULL,
     event_count integer NOT NULL,
+    -- When the platform's own version finished reading it. A delivery is kept
+    -- before any version reads it, so a retry of one not yet judged reads it
+    -- again rather than taking it for a duplicate.
+    judged_at timestamptz,
     -- The request the delivery was received as, so a listen can be put through
     -- it again: its body and query without the fields its module redacts, only
     -- the headers its module declares it reads, and the ids of the arrivals it

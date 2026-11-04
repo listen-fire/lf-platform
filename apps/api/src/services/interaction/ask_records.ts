@@ -105,6 +105,7 @@ export async function answerAskRecordForTeam(input: {
     case 'closed':
       return { askId: outcome.ask.id as unknown as string, state: outcome.ask.state };
     case 'invalid':
+    case 'held':
       throw new Error(outcome.message);
     case 'not_found':
     case 'not_ours':

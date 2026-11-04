@@ -240,6 +240,7 @@ export async function answerForTeam(input: {
     case 'closed':
       return { ok: false, reason: 'already_resolved' };
     case 'invalid':
+    case 'held':
       return { ok: false, reason: 'invalid', message: outcome.message };
     case 'not_found':
     case 'not_ours':

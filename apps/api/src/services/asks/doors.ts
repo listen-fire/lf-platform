@@ -18,12 +18,16 @@
 import type { AskId } from '../../generated/kysely/asks/Ask';
 import type { TeamId } from '../../generated/kysely/core/Team';
 
+import { waitingRunIsLegacy } from './waiting_run';
 import { answerAsk, cancelAsk, createAsk as createModuleAsk, type AskOutcome, type CreateAskInput } from '@listen-fire/ask';
 import { getAsk, lookupAskByToken, platformAskRecords, platformView, type AskRecord } from './store';
 
 export { AskResponseRefused } from '@listen-fire/ask';
 
 export type AskDoorOutcome =
+  /** The run behind it is on a language version this release cannot continue:
+   *  nothing was recorded, and the message says what can be done. */
+  | { kind: 'held'; message: string; ask: AskRecord }
   /** The token is not an ask's — the caller should fall through to the
    *  legacy path (link page only; other callers treat it as not-found). */
   | { kind: 'not_ours' }
@@ -65,7 +69,11 @@ function doorOutcome(outcome: AskOutcome, held: AskRecord): AskDoorOutcome {
   }
 }
 
+const LEGACY_RUN_HELD =
+  "This can't continue: the automation behind this question was written for an earlier release, and its run cannot continue on this release, so nothing was recorded. Ask its owner to cancel the run and upgrade the automation.";
+
 async function answer(ask: AskRecord, raw: unknown): Promise<AskDoorOutcome> {
+  if (ask.state === 'open' && (await waitingRunIsLegacy(ask.id))) return { kind: 'held', message: LEGACY_RUN_HELD, ask };
   return doorOutcome(await answerAsk(platformAskRecords(ask.teamId), { id: ask.id, raw }), ask);
 }
 
@@ -105,6 +113,7 @@ export async function cancelAskAndWake(input: { id: AskId }): Promise<CancelOutc
       return { ok: true, ask: outcome.ask };
     case 'closed':
     case 'invalid':
+    case 'held':
       return { ok: false, reason: 'settled', ask: outcome.ask };
     case 'not_found':
     case 'not_ours':

@@ -40,10 +40,12 @@ function outcomeHeading(outcome: DeployCheckOutcome): string {
       return 'Legacy versions clean under the installed language — offered the upgrade, pin unchanged';
     case 'current':
       return 'On the installed language';
+    case 'carried':
+      return 'On a version this release carries — they keep firing on it, pin unchanged';
     case 'warned':
       return 'Kept on a legacy version — not clean under the installed language';
     case 'stopped':
-      return 'Written for an earlier release — refused by name, their listens removed: they do not fire until upgraded';
+      return 'Written for an earlier release — refused by name: they do not fire until upgraded';
     case 'refused':
       return 'NOT VALIDATING under their own version, or pinned to a newer language than this release reads (a legacy version failing, unless marked already failing, is a bug — report it)';
     case 'unverified':
@@ -73,6 +75,14 @@ export function renderSummary(summary: DeployCheckSummary): string {
       const detail = entry.detail === '' ? '' : ` — ${entry.detail}`;
       lines.push(`    - ${entry.name} (${move}${entry.deprecated ? ', deprecated' : ''})${detail}`);
       if (entry.notes !== undefined) lines.push(`      note (does not block): ${entry.notes}`);
+    }
+  }
+  const legacy = summary.legacyStopped ?? [];
+  if (legacy.length > 0) lines.push(`  On language versions 1 to 4 — no new run starts on them until they are upgraded: ${legacy.length}`);
+  for (const entry of legacy) {
+    lines.push(`    - ${entry.name} (${entry.pin}): ${entry.remedy}`);
+    if (entry.waitingRuns.length > 0) {
+      lines.push(`      paused on a question, a callback or a reply, which cannot continue here: ${entry.waitingRuns.join(', ')}. Cancel them, or answer them on 0.12.13 before deploying`);
     }
   }
   if (summary.automations.length === 0) lines.push('  No saved automations.');

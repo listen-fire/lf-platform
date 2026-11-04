@@ -13,6 +13,11 @@
 
 import './env';
 
+jest.mock('../carried_delivery', () => ({
+  keepForEveryVersion: jest.fn(async () => ({ kind: 'read', deliveryId: 'kept-first' })),
+  carriedListensOn: jest.fn(async () => []),
+  receiveJudgedEvent: jest.fn(async () => undefined),
+}));
 jest.mock('../../../lib/kysely', () => ({ ...jest.requireActual('../../../lib/kysely'), ...require('./fakes').kyselyFake() }));
 jest.mock('../../../lib/recording', () => ({ ...jest.requireActual('../../../lib/recording'), ...require('./fakes').recordingFake() }));
 jest.mock('../../translation_graph/adapters/resolve', () => ({

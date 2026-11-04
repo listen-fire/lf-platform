@@ -27,6 +27,11 @@
 interface IdentityRow { team_id: string; telegram_user_id: string }
 const identities: IdentityRow[] = [];
 
+jest.mock('../../inbound/carried_delivery', () => ({
+  keepForEveryVersion: jest.fn(async () => ({ kind: 'read', deliveryId: 'kept-first' })),
+  carriedListensOn: jest.fn(async () => []),
+  receiveJudgedEvent: jest.fn(async () => undefined),
+}));
 jest.mock('../../../lib/kysely', () => ({
   getAutomationsQb: () => ({
     selectFrom: () => {

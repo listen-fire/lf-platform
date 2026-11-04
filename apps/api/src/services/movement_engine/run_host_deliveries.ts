@@ -8,7 +8,7 @@
 
 import { sql } from 'kysely';
 
-import type { DeliveryRowStore, KeepDelivery, WaitWake } from 'movement-engine/public/run-host';
+import type { DeliveryRowStore, KeepDelivery, NewWorkRow, WaitWake } from 'movement-engine/public/run-host';
 
 import { isWorkKind } from '../work/kinds';
 import {
@@ -29,10 +29,28 @@ import { keepUnjudgedIn, type UnjudgedArrival } from '../lf_store/records_door';
  *  listens that could not judge the delivery's arrivals, kept in its write. */
 export interface PlatformKeepDelivery extends KeepDelivery {
   unjudged?: readonly UnjudgedArrival[];
+  /** The door kept this delivery before reading it (`keepRawDelivery`): this
+   *  write is its judging. `kept: false` when it was judged before. */
+  rawKept?: { id: string };
+}
+
+/** The row a door keeps before any version reads the delivery. */
+export interface RawDelivery {
+  id: string;
+  subscriptionId: string;
+  externalId: string | null;
+  receivedAt: string;
+  source: KeepDelivery['delivery']['source'];
+  request: unknown;
 }
 
 export interface PlatformDeliveryRowStore extends DeliveryRowStore {
   keepDelivery(input: PlatformKeepDelivery): ReturnType<DeliveryRowStore['keepDelivery']>;
+  /** The delivery as it arrived, and the rows owed by it in the same write:
+   *  `alreadyKept` when its external id was kept before. Then its id is that
+   *  delivery's, `judged` says whether the platform's version read it, and
+   *  nothing is written. */
+  keepRawDelivery(input: { delivery: RawDelivery; work: readonly NewWorkRow[] }): Promise<{ id: string; alreadyKept: boolean; judged: boolean }>;
 }
 
 const FIRE_EVENT = 'fire_event';
@@ -73,13 +91,21 @@ export function deliveryRowStore(owner: { host: Host; teamId: string }): Platfor
         for (const row of input.work) if (!isWorkKind(row.kind)) throw new Error(`'${row.kind}' is not a work kind this process knows`);
       }
       const written = await inStoreTransaction(async (trx) => {
-        const { rows } = await sql<{ id: string }>`
-          insert into automations.delivery (id, team_id, subscription_id, external_id, received_at, source, inline, replay_of, events, event_count, request)
-          values (${delivery.id}::uuid, ${owner.teamId}::uuid, ${subscriptionId}::text, ${delivery.externalId ?? null}::text,
-                  ${delivery.receivedAt}::timestamptz, ${delivery.source}::text, ${delivery.inline}::bool, ${delivery.replayOf ?? null}::uuid,
-                  ${JSON.stringify(delivery.events)}::text::jsonb, ${delivery.events.length}::int,
-                  ${delivery.request === undefined ? null : JSON.stringify(delivery.request)}::text::jsonb)
-          on conflict do nothing returning id::text as id`.execute(trx);
+        const { rows } =
+          input.rawKept !== undefined
+            ? await sql<{ id: string }>`
+                update automations.delivery
+                set judged_at = now(), events = ${JSON.stringify(delivery.events)}::text::jsonb, event_count = ${delivery.events.length}::int,
+                    request = coalesce(${delivery.request === undefined ? null : JSON.stringify(delivery.request)}::text::jsonb, request)
+                where id = ${input.rawKept.id}::uuid and team_id = ${owner.teamId}::uuid and judged_at is null
+                returning id::text as id`.execute(trx)
+            : await sql<{ id: string }>`
+                insert into automations.delivery (id, team_id, subscription_id, external_id, received_at, source, inline, replay_of, events, event_count, request, judged_at)
+                values (${delivery.id}::uuid, ${owner.teamId}::uuid, ${subscriptionId}::text, ${delivery.externalId ?? null}::text,
+                        ${delivery.receivedAt}::timestamptz, ${delivery.source}::text, ${delivery.inline}::bool, ${delivery.replayOf ?? null}::uuid,
+                        ${JSON.stringify(delivery.events)}::text::jsonb, ${delivery.events.length}::int,
+                        ${delivery.request === undefined ? null : JSON.stringify(delivery.request)}::text::jsonb, now())
+                on conflict do nothing returning id::text as id`.execute(trx);
         if (rows.length === 0) return null;
         if ('checkpoint' in input) await saveCheckpointIn(trx, { teamId: owner.teamId, subscriptionId, checkpoint: input.checkpoint });
         const mark = await arrivalMark(trx);
@@ -101,6 +127,29 @@ export function deliveryRowStore(owner: { host: Host; teamId: string }): Platfor
       return written.wakes === undefined
         ? { kept: true, arrivalMark: written.mark }
         : { kept: true, arrivalMark: written.mark, wakes: written.wakes };
+    },
+
+    async keepRawDelivery({ delivery, work }) {
+      const written = await inStoreTransaction(async (trx) => {
+        const { rows } = await sql<{ id: string }>`
+          insert into automations.delivery (id, team_id, subscription_id, external_id, received_at, source, inline, events, event_count, request)
+          values (${delivery.id}::uuid, ${owner.teamId}::uuid, ${delivery.subscriptionId}::text, ${delivery.externalId}::text,
+                  ${delivery.receivedAt}::timestamptz, ${delivery.source}::text, false, '[]'::jsonb, 0, ${JSON.stringify(delivery.request)}::text::jsonb)
+          on conflict do nothing returning id::text as id`.execute(trx);
+        if (rows.length === 0) {
+          const before = await sql<{ id: string; judged: boolean }>`
+            select id::text as id, judged_at is not null as judged from automations.delivery
+            where team_id = ${owner.teamId}::uuid and subscription_id = ${delivery.subscriptionId}::text and external_id = ${delivery.externalId}::text`.execute(trx);
+          const first = before.rows[0];
+          if (first === undefined) throw new Error(`delivery ${delivery.id} conflicted with no kept delivery`);
+          return { id: first.id, alreadyKept: true, judged: first.judged, queued: [] };
+        }
+        const queued: Queued[] = [];
+        for (const row of work) queued.push(await queueRow(trx, { host: owner.host }, { ...row, teamId: row.teamId ?? owner.teamId }));
+        return { id: delivery.id, alreadyKept: false, judged: false, queued };
+      });
+      await announceQueued(written.queued);
+      return { id: written.id, alreadyKept: written.alreadyKept, judged: written.judged };
     },
 
     /** The row gave up: kept dead with its reason, never claimed again,

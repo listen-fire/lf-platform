@@ -10,6 +10,11 @@
 
 import type { Arrival } from 'engine-contracts';
 
+jest.mock('../../inbound/carried_delivery', () => ({
+  keepForEveryVersion: jest.fn(async () => ({ kind: 'read', deliveryId: 'kept-first' })),
+  carriedListensOn: jest.fn(async () => []),
+  receiveJudgedEvent: jest.fn(async () => undefined),
+}));
 jest.mock('../../translation_graph/adapters/resolve', () => ({ resolveAdapter: jest.fn() }));
 jest.mock('../../inbound/listen_door', () => ({ deliverArrivals: jest.fn() }));
 jest.mock('../../work/drain', () => ({ registerWorkKinds: jest.fn(), notifyWork: jest.fn() }));
@@ -68,6 +73,7 @@ describe('queueKnowledgeChange: a graph change through the inbound path', () => 
       delivered: { adapterType: 'kg', credentialsId: null },
       subscriptionId: 'KG_MUTATION',
       externalId: 'knowledge_outbox:ob-1',
+        rawKeptId: 'kept-first',
       source: 'emit',
       arrivals: [CHANGE],
       // The change as the graph wrote it, so a replay reads it again.

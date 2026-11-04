@@ -212,6 +212,10 @@ asksRouter.post('/:token', async (req: Request, res: Response) => {
         .send(unavailablePage('invalid', { detail: outcome.message }));
       return;
     }
+    if (outcome.kind === 'held') {
+      res.status(409).type('html').send(messagePage('This question cannot be answered', outcome.message));
+      return;
+    }
     // Settled/expired mid-flight (or vanished) — closed request wins.
     const settled = outcome.kind === 'closed' ? outcome.ask : newAsk;
     const term = newAskTerminal(settled) ?? { status: 410, html: unavailablePage('already_resolved') };

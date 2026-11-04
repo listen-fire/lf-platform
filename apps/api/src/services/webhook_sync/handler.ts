@@ -9,6 +9,7 @@ import { sql } from 'kysely';
 import type { WebhookSubscriptionId } from '../../generated/kysely/automations/WebhookSubscription';
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { Arrival } from 'engine-contracts';
+import type { Adapter } from 'movement-engine/public/adapter';
 import type { HarnessDelivery, SettleReport } from '../work/harness';
 import type {
   EventError,
@@ -42,6 +43,7 @@ import { mayBeRemoteSlug } from '../translation_graph/adapters/remote/slugs';
 import { LEGACY_INTERCEPTS, builtInVerifierFor } from '../inbound/legacy_signature_headers';
 import { builtinModuleInboundVerifier, builtinModuleRequestKeeping } from '../translation_graph/adapters/builtin_modules';
 import { capturedRequest } from '../inbound/captured_request';
+import { keepForEveryVersion } from '../inbound/carried_delivery';
 
 /** What capture keeps of one event: nothing. Every listen is judged on the
  *  delivery's arrivals as it is kept (`keepDelivery`), so no event is matched
@@ -95,9 +97,27 @@ function signingSecretFor(subscription: InboundSubscription): string {
     : subscription.secret;
 }
 
+/** What a door does with a verified delivery before any version reads it. */
+type KeepFirst = (source: { adapterType: string; credentialsId: string }) => Promise<void>;
+
+/** A module that checks its own inbound is the only thing that can verify a
+ *  request, so the delivery is kept the moment it accepts, before anything of
+ *  what it read is used: an unverified request is never kept. */
+function keepingOnceAccepted(adapter: Adapter, keep: () => Promise<void>): Adapter {
+  const check = adapter.checkInbound;
+  if (check === undefined) return adapter;
+  const keeping: Adapter = Object.create(adapter);
+  keeping.checkInbound = async (input) => {
+    const answer = await check.call(adapter, input);
+    if (answer.outcome === 'accepted') await keep();
+    return answer;
+  };
+  return keeping;
+}
+
 /** A built-in provider's subscription: verified by the frozen table, read by
  *  the adapter its provider key aliases. */
-function builtInSource(subscription: InboundSubscription): InboundSource | null {
+function builtInSource(subscription: InboundSubscription, keepFirst?: KeepFirst): InboundSource | null {
   // A built-in on a module line that declares its inbound is held to the
   // host's one rule for a declared signed inbound; the rest keep their door's.
   const verifier = builtInVerifierFor({
@@ -117,12 +137,19 @@ function builtInSource(subscription: InboundSubscription): InboundSource | null 
       // resolver — NOT a naming convention (INBOUND_WHATSAPP is no slug).
       const adapterType = resolveAdapterSlug(subscription.providerKey);
       if (!hasAdapter(adapterType)) return null;
+      const checkedByModule = 'checkedBy' in verifier;
+      if (!checkedByModule) await keepFirst?.({ adapterType, credentialsId });
       const adapter = await resolveAdapter({
         adapterType,
         teamId: subscription.teamId as TeamId,
         credentialsId,
       });
-      return { adapterType, credentialsId, adapter, ...builtInIntercept({ adapterType, subscription, credentialsId }) };
+      return {
+        adapterType,
+        credentialsId,
+        adapter: checkedByModule && keepFirst !== undefined ? keepingOnceAccepted(adapter, () => keepFirst({ adapterType, credentialsId })) : adapter,
+        ...builtInIntercept({ adapterType, subscription, credentialsId }),
+      };
     },
   };
 }
@@ -159,7 +186,7 @@ function builtInIntercept(input: {
  * signs in the protocol's own header, and only that header. The row carries no
  * credential of its own; the install's credential is the channel's.
  */
-async function remoteSource(subscription: InboundSubscription): Promise<InboundSource | null> {
+async function remoteSource(subscription: InboundSubscription, keepFirst?: KeepFirst): Promise<InboundSource | null> {
   const installs = await listRemoteAdapters({ teamId: subscription.teamId as TeamId });
   const install = installs.find(
     (row) =>
@@ -184,11 +211,15 @@ async function remoteSource(subscription: InboundSubscription): Promise<InboundS
     verifier: checksItsOwn ? CHECKED_BY_MODULE : REMOTE_VERIFIER,
     secret: subscription.secret,
     open: () =>
-      (opened ??= resolveAdapter({ adapterType: install.adapter_type, teamId: subscription.teamId as TeamId }).then((adapter) => ({
-        adapterType: install.adapter_type,
-        credentialsId,
-        adapter,
-      }))),
+      (opened ??= (async () => {
+        const kept = { adapterType: install.adapter_type, credentialsId };
+        if (!checksItsOwn) await keepFirst?.(kept);
+        const adapter = await resolveAdapter({ adapterType: install.adapter_type, teamId: subscription.teamId as TeamId });
+        return {
+          ...kept,
+          adapter: checksItsOwn && keepFirst !== undefined ? keepingOnceAccepted(adapter, () => keepFirst(kept)) : adapter,
+        };
+      })()),
   };
 }
 
@@ -286,10 +317,45 @@ export interface ReceivedRequest {
   query?: string;
 }
 
-/** The platform's store for one received request: its delivery keeps the
- *  request (redacted), so a listen can be put through it again. */
+/** The platform's store for one received request. The verified request is kept
+ *  (redacted) before any version reads it: each version reads that, and a listen
+ *  can be put through it again. */
 export function platformInboundStoreFor(received: ReceivedRequest): InboundStore<CapturedReceipts> {
-  return { ...platformInboundStore, keepDelivery: (input) => keepWebhookDelivery(input, received) };
+  let rawKeptId: string | undefined;
+  const keepFirstFor =
+    (subscription: InboundSubscription): KeepFirst =>
+    async ({ adapterType, credentialsId }) => {
+      if (rawKeptId !== undefined) return;
+      const kept = await keepForEveryVersion({
+        origin: { teamId: subscription.teamId as TeamId, adapterType, providerKey: subscription.providerKey, credentialsId },
+        subscriptionId: subscription.id,
+        externalId: null,
+        source: 'webhook',
+        request: requestAsKept({ received, adapterType, subscription, arrivals: [] }),
+      });
+      if (kept.kind === 'read') rawKeptId = kept.deliveryId;
+    };
+  return {
+    ...platformInboundStore,
+    sourceFor: async (subscription) =>
+      getWebhookProvider(subscription.providerKey) ? builtInSource(subscription, keepFirstFor(subscription)) : remoteSource(subscription, keepFirstFor(subscription)),
+    keepDelivery: (input) => keepWebhookDelivery(input, received, rawKeptId),
+  };
+}
+
+function requestAsKept(input: { received: ReceivedRequest; adapterType: string; subscription: InboundSubscription; arrivals: readonly Arrival[] }) {
+  const { received, subscription } = input;
+  return capturedRequest({
+    keeping: builtinModuleRequestKeeping(input.adapterType),
+    headers: received.headers,
+    rawBody: received.rawBody,
+    ...(received.method !== undefined ? { method: received.method } : {}),
+    ...(received.path !== undefined ? { path: received.path } : {}),
+    ...(received.query !== undefined ? { query: received.query } : {}),
+    // The cursor it was read against, so another reading reads it the same way.
+    ...(subscription.checkpoint !== undefined && subscription.checkpoint !== null ? { checkpoint: subscription.checkpoint } : {}),
+    arrivals: input.arrivals,
+  });
 }
 
 /** A webhook delivery's one write, with the request it came as when the door
@@ -297,6 +363,7 @@ export function platformInboundStoreFor(received: ReceivedRequest): InboundStore
 async function keepWebhookDelivery(
   { subscription, source, arrivals, checkpoint }: Parameters<InboundStore<CapturedReceipts>['keepDelivery']>[0],
   received: ReceivedRequest | null,
+  rawKeptId?: string,
 ): Promise<{ kept: boolean; arrivalMark?: number }> {
   const listens = await listensOfSubscription({
     teamId: subscription.teamId as TeamId,
@@ -312,21 +379,8 @@ async function keepWebhookDelivery(
     arrivals,
     ...(checkpoint !== undefined ? { checkpoint } : {}),
     ...(listens !== undefined ? { listens } : {}),
-    ...(received !== null
-      ? {
-          request: capturedRequest({
-            keeping: builtinModuleRequestKeeping(source.adapterType),
-            headers: received.headers,
-            rawBody: received.rawBody,
-            ...(received.method !== undefined ? { method: received.method } : {}),
-            ...(received.path !== undefined ? { path: received.path } : {}),
-            ...(received.query !== undefined ? { query: received.query } : {}),
-            // The cursor it was read against, so a replay reads it the same way.
-            ...(subscription.checkpoint !== undefined && subscription.checkpoint !== null ? { checkpoint: subscription.checkpoint } : {}),
-            arrivals,
-          }),
-        }
-      : {}),
+    ...(received !== null ? { request: requestAsKept({ received, adapterType: source.adapterType, subscription, arrivals }) } : {}),
+    ...(rawKeptId !== undefined ? { rawKeptId } : {}),
   });
   if (!kept.kept) return { kept: false };
   await refreshBridgedLinkedObjects({ arrivals, subscription: subscriptionRow(subscription, source) });

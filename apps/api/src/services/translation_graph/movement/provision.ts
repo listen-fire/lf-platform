@@ -119,7 +119,8 @@ import {
   type MovementValidityAssessment,
 } from './authoring';
 import { checkInstalled, routeOf } from './language_route';
-import { notListenedDiagnostic, validateUnderCarried } from './carried_check';
+import { notListenedDiagnostic, teamFactsOf, validateUnderCarried } from './carried_check';
+import { listeningOf, type ListeningLane } from '@listen-fire/language-versions';
 import { runningOf } from '@listen-fire/language-versions';
 import { plannedListensOfSource } from './listen_plans';
 import { carriedPauses, listenIdentityOf, type CarriedPause } from './carried_pauses';
@@ -215,8 +216,9 @@ interface DesiredListener {
   adapter: string;
   /** `listen as "…"`: the trigger's name when present. */
   alias?: string;
-  /** What the trigger row keeps (listen_door.ts `listenConfigSchema`). */
-  config: { listen: ListenConfig };
+  /** What the trigger row keeps (listen_door.ts `listenConfigSchema`; a
+   *  carried version's listener keeps its own). */
+  config: { listen: ListenConfig } | Record<string, unknown>;
   /** The text-derived dry_run⇄live axis (the universal `dry_run`
    *  construction parameter). */
   textRunMode: Extract<TriggerRunMode, 'live' | 'dry_run'>;
@@ -629,6 +631,44 @@ async function reconcileDerivedTriggers(input: {
 }
 
 // ── Provision: check the program, then reconcile the listeners ──────────────
+
+/** A carried version's listens: its own collection of them, kept as production's
+ *  rows kept them, read and judged only by that version (carried_delivery.ts).
+ *  Reaching providers for them comes with its subscriptions. */
+async function provisionCarriedListeners(input: {
+  teamId: TeamId;
+  movementRow: MovementRow;
+  source: string;
+  lane: ListeningLane;
+  keepPauses?: boolean;
+  notes: string[];
+}): Promise<ProvisionMovementResult> {
+  const pin = input.movementRow.languageVersion;
+  const team = await teamFactsOf(input.teamId, { imports: 'live' });
+  const credentialOf = (name: string): string | null => team.credentials.find((row) => row.name === name)?.id ?? null;
+  const { listeners, leftPaused } = await reconcileDerivedTriggers({
+    teamId: input.teamId,
+    movementRow: input.movementRow,
+    desired: input.lane.listenersOf({ source: input.source, pin }).map((statement) => ({
+      movementName: statement.movementName,
+      adapter: statement.adapter,
+      ...(statement.alias !== undefined ? { alias: statement.alias } : {}),
+      config: statement.config,
+      textRunMode: 'live',
+      credentialsId: statement.credentialName !== undefined ? credentialOf(statement.credentialName) : null,
+    })),
+    ...(input.keepPauses === true ? { keepPauses: true } : {}),
+  });
+  return {
+    ok: true,
+    movementName: input.movementRow.name,
+    listeners,
+    infos: [],
+    catalogNotes: input.notes,
+    warnings: [],
+    ...(leftPaused.length > 0 ? { leftPaused } : {}),
+  };
+}
 
 async function provisionListeners(input: {
   teamId: TeamId;
@@ -1244,8 +1284,18 @@ async function runSave(
   // this new source (which fails — fires-and-fails, by design).
   // A pin a carried version checks ships its text, and its listens are not
   // provisioned: this platform does not run that version, and says so.
+  const carriedListening = teamCatalog === undefined ? listeningOf(row.languageVersion) : undefined;
   const provisioned: ProvisionMovementResult =
-    teamCatalog === undefined
+    carriedListening?.kind === 'carried'
+      ? await provisionCarriedListeners({
+          teamId: input.teamId as TeamId,
+          movementRow: row,
+          source: input.source,
+          lane: await carriedListening.lane(),
+          ...(input.languageUpgrade !== undefined ? { keepPauses: true } : {}),
+          notes,
+        })
+      : teamCatalog === undefined
       ? { ok: false, diagnostics: [notListenedDiagnostic(row.languageVersion)], catalogNotes: notes }
       : await timer.step('listeners', () => provisionListeners({
           teamId: input.teamId as TeamId,

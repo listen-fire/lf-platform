@@ -54,7 +54,7 @@ export async function holdsOnMoving(group: readonly MovementRow[]): Promise<stri
  *  identity, or a callback still taking calls. Those are written only under a
  *  version that parks on keys, and a person's or a system's call reaches them by
  *  that key, so the automation stays on that version until they finish. */
-async function runsWaitingOnKeys(movementIds: readonly string[]): Promise<Map<string, Array<{ id: string; pin: LanguageVersion }>>> {
+export async function runsWaitingOnKeys(movementIds: readonly string[]): Promise<Map<string, Array<{ id: string; pin: LanguageVersion }>>> {
   const rows = await getAutomationsQb(['trigger_run', 'movement_version', 'adapter_await', 'callback'])
     .selectFrom('trigger_run')
     .innerJoin('movement_version', 'movement_version.id', 'trigger_run.movement_version_id')

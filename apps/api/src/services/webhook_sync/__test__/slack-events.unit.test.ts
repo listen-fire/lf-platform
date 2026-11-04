@@ -10,6 +10,11 @@ import crypto from "node:crypto";
 
 // external_service_credentials lookup — keyed by the `identifier` (teamId:<id>).
 const installByIdentifier = new Map<string, { id: string; team_id: string }>();
+jest.mock('../../inbound/carried_delivery', () => ({
+  keepForEveryVersion: jest.fn(async () => ({ kind: 'read', deliveryId: 'kept-first' })),
+  carriedListensOn: jest.fn(async () => []),
+  receiveJudgedEvent: jest.fn(async () => undefined),
+}));
 jest.mock('../../../lib/kysely', () => {
   const qb = () => ({
     selectFrom: () => {

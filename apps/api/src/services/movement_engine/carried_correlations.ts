@@ -3,10 +3,27 @@
 // parked on an adapter identity, woken by a `wake_await` row naming that
 // identity. The current version's waits never touch it.
 
+import { randomUUID } from 'node:crypto';
+
 import type { CarriedRunStore, CorrelatedPark } from '@listen-fire/language-versions';
 import type { TriggerRunId } from '../../generated/kysely/automations/TriggerRun';
 
 import { getAutomationsQb } from '../../lib/kysely';
+import { enqueueWork } from '../work/store';
+
+/** A wake per correlation key one signal named: a key nothing is parked on
+ *  drains as a no-op. A signal's wake is never coalesced, so a second signal on
+ *  one identity still drives what the first pass looked past. */
+export async function queueAwaitWakesOf(input: { adapterType: string; teamId: string; keys: readonly string[] }): Promise<void> {
+  for (const correlationKey of input.keys) {
+    await enqueueWork({
+      kind: 'wake_await',
+      key: `wake_await:${randomUUID()}`,
+      teamId: input.teamId,
+      payload: { adapterType: input.adapterType, teamId: input.teamId, correlationKey },
+    });
+  }
+}
 
 const runIdOf = (runId: string) => runId as TriggerRunId;
 

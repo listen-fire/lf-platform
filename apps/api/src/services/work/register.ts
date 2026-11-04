@@ -13,6 +13,8 @@ import { registerBringUpListensWork } from '../translation_graph/movement/listen
 import { registerRunOrphanSweepWork } from '../translation_graph/runs/trigger_run';
 import { registerFireEventWork } from '../inbound/fire_event';
 import { registerCarriedRunWork } from '../translation_graph/movement/carried_run_now';
+import { registerDispatchWork } from '../translation_graph/triggers/dispatch_event';
+import { registerReadDeliveryWork } from '../inbound/carried_delivery';
 import { periodicUnitWorkKinds, type CoreWorkKind } from './kinds';
 import { ensurePeriodicWork, removeRetiredWork } from './store';
 
@@ -28,8 +30,9 @@ const CORE_PERIODIC_WORK: ReadonlyArray<{ kind: CoreWorkKind; intervalMs: number
  *  handler, so they are deleted where the periodic rows are ensured.
  *
  *  A 0.12.13 service runs beside this build, and a row it queued is a delivery
- *  or a schedule it still owes: `dispatch_event`, `fire_cron`, `cron_reconcile`
- *  and `poll_source` are not on this list, though this build no longer runs them. They come back on it the release 0.12 is retired. */
+ *  or a schedule it still owes: `fire_cron`, `cron_reconcile` and `poll_source`
+ *  are not on this list, though this build does not run them yet. They come
+ *  back on it the release 0.12 is retired. */
 const RETIRED_WORK_KINDS: readonly string[] = ['await_resume_sweep', 'ask_expiry_sweep'];
 
 /** Upsert every periodic row — the core's and each registered unit's — and
@@ -52,6 +55,8 @@ function registerCoreWork(): void {
   registerBringUpListensWork();
   registerFireEventWork();
   registerCarriedRunWork();
+  registerDispatchWork();
+  registerReadDeliveryWork();
   registerAwaitWork();
   registerCallbackFireWork();
   registerRunOrphanSweepWork();

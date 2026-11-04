@@ -181,6 +181,8 @@ function ackText(outcome: AskDoorOutcome): string {
       return 'Thanks — your answer was recorded.';
     case 'invalid':
       return `That answer could not be accepted: ${outcome.message}`;
+    case 'held':
+      return outcome.message;
     case 'closed':
     case 'not_found':
     case 'not_ours':

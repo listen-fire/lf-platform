@@ -19,6 +19,7 @@ import type { Server } from 'node:http';
 const lookupAskByTokenMock = jest.fn();
 const answerAskMock = jest.fn();
 
+jest.mock('../../../services/asks/waiting_run', () => ({ waitingRunIsLegacy: jest.fn(async () => false) }));
 jest.mock('../../../services/asks/store', () => {
   const actual = jest.requireActual('../../../services/asks/store');
   return {

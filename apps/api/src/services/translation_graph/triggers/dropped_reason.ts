@@ -5,6 +5,10 @@ import { neverAsAny } from 'movement-engine/public/types';
 
 /** Why the dispatch produced no evaluations. */
 export type DroppedReason =
+  // A carried version's firing whose change its own token made, or whose
+  // author asked not to hear its own writes (`suppress_self`).
+  | 'native_echo'
+  | 'echo_suppressed'
   | 'trigger_not_found'
   | 'no_bound_tgs'
   | 'run_mode_off'
@@ -41,6 +45,10 @@ export type DroppedReason =
  */
 export function describeDroppedReason(reason: DroppedReason): string {
   switch (reason) {
+    case 'echo_suppressed':
+      return "suppressed as this automation's own echo (suppress_self is on and the source change was written by it)";
+    case 'native_echo':
+      return "dropped as this workspace's own echo — the inbound change was made by its automations";
     case 'run_mode_off':
       return "this listener is paused (run mode 'off') — set it live to run it";
     case 'loop_guard_paused':

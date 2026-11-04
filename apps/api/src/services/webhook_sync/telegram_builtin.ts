@@ -44,6 +44,7 @@ import { getAutomationsQb } from '../../lib/kysely';
 import { logger } from 'movement-engine/public/log';
 import { telegramInboundArrivals } from '@listen-fire/telegram/inbound';
 import { deliverArrivals } from '../inbound/listen_door';
+import { keepForEveryVersion } from '../inbound/carried_delivery';
 import { capturedRequest } from '../inbound/captured_request';
 import { builtinModuleRequestKeeping } from '../translation_graph/adapters/builtin_modules';
 import { notifyWork } from '../work/drain';
@@ -262,6 +263,25 @@ export async function handleSharedBotInbound(raw: unknown): Promise<SharedBotDel
   for (const teamId of teamIds) {
     const { arrivals } = inbound;
     try {
+      // The update as Telegram sent it, kept once per team before any version
+      // reads it, so a listen can be put through it again (listen_replay.ts).
+      // Routing to a team needed the sender, so the current module classified
+      // it first. The bot's own credential is no gate on what a listen hears.
+      const requestWith = (brought: typeof arrivals) =>
+        capturedRequest({
+          keeping: builtinModuleRequestKeeping(TELEGRAM_ADAPTER_TYPE),
+          headers: { 'content-type': 'application/json' },
+          rawBody: Buffer.from(JSON.stringify(raw), 'utf8'),
+          arrivals: brought,
+        });
+      const first = await keepForEveryVersion({
+        origin: { teamId: teamId as TeamId, adapterType: TELEGRAM_ADAPTER_TYPE, providerKey: TELEGRAM_PROVIDER_KEY, credentialsId: null, matchAnyCredential: true },
+        subscriptionId: TELEGRAM_PROVIDER_KEY,
+        externalId: updateIdOf(raw),
+        source: 'webhook',
+        request: requestWith([]),
+      });
+      if (first.kind === 'duplicate') continue;
       const { kept } = await deliverArrivals({
         teamId: teamId as TeamId,
         delivered: { adapterType: TELEGRAM_ADAPTER_TYPE, credentialsId: null },
@@ -269,14 +289,8 @@ export async function handleSharedBotInbound(raw: unknown): Promise<SharedBotDel
         externalId: updateIdOf(raw),
         source: 'webhook',
         arrivals,
-        // The update as Telegram sent it, so a listen can be put through it
-        // again (listen_replay.ts).
-        request: capturedRequest({
-          keeping: builtinModuleRequestKeeping(TELEGRAM_ADAPTER_TYPE),
-          headers: { 'content-type': 'application/json' },
-          rawBody: Buffer.from(JSON.stringify(raw), 'utf8'),
-          arrivals,
-        }),
+        request: requestWith(arrivals),
+        rawKeptId: first.deliveryId,
       });
       if (kept.kept) delivered.push(teamId);
     } catch (err) {

@@ -21,18 +21,23 @@ import { logger } from 'movement-engine/public/log';
 import { runRefusal, type RunningLane, type ManualInvocation } from '@listen-fire/language-versions';
 import type { LanguageVersion } from 'movement-lang';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
+import type { MovementId } from '../../../generated/kysely/automations/Movement';
 import type { WorkHandler } from '../../work/kinds';
 
 import { getAutomationsQb } from '../../../lib/kysely';
 import { teamIdSchema } from '../../../lib/team_id';
 import { enqueueWork } from '../../work/store';
-import { notifyWork, registerWorkHandler } from '../../work/drain';
+import { notifyWork, registerWorkHandler, WorkDeferred } from '../../work/drain';
 import { isLfEngineTeam } from '../../lf_engine/team_engine';
-import { mapRecordingTriggerType } from '../triggers/router';
+import { applyLoopGuard, mapRecordingTriggerType } from '../triggers/router';
+import { parseRunMode, runModeGate } from '../triggers/run_mode';
 import { describeDroppedReason } from '../triggers/dropped_reason';
 import { runMovementFiring, shippedMovementForTrigger } from './execute';
 import { CARRIED_RUN_NOW_NAME, carriedRunTriggerId } from './carried_names';
 import { carriedRunLaneOf } from './carried_run';
+
+/** The kind a manual listen's trigger row is filed under. */
+const MANUAL_KIND = 'manual';
 
 /** The work kind a carried version's Run now is queued under. */
 export const CARRIED_RUN_WORK_KIND = 'run_carried';
@@ -160,6 +165,19 @@ async function runCarriedRow(payload: unknown): Promise<void> {
   if (lane === undefined) return failUnstarted(row, runRefusal(row.pin) ?? `language ${row.pin} is not run by a carried version on this platform`);
   const read = lane.readEvent(row.event);
   if (!read.ok) return failUnstarted(row, `the queued press could not be read under language ${row.pin}: ${read.reason}`);
+  // A press passes the gates every firing does: the manual listen's run mode,
+  // and the loop guard. A kept row is the listen they are kept on; with none,
+  // the guard counts the press against the automation itself.
+  const manual = await manualListenRow({ movementId: row.movementId, movementName: row.movementName });
+  const triggerId = manual?.id ?? carriedRunTriggerId(row.movementId);
+  const gate = runModeGate(parseRunMode(manual?.run_mode ?? 'live'));
+  if (!gate.dispatch) return failUnstarted(row, describeDroppedReason(gate.droppedReason));
+  if (!gate.dryRun) {
+    const guarded = await applyLoopGuard({ triggerId, teamId, triggerName: manual?.name ?? CARRIED_RUN_NOW_NAME, movementId: row.movementId });
+    // Held, not dropped: the row retries once the guard's rate window has passed.
+    if (guarded === 'loop_guard_throttled') throw new WorkDeferred(`a press of ${row.movementName} is held by the loop guard's rate floor`);
+    if (guarded !== undefined) return failUnstarted(row, describeDroppedReason(guarded));
+  }
   await runMovementFiring({
     teamId,
     door: { kind: 'manual', event: row.event },
@@ -170,7 +188,18 @@ async function runCarriedRow(payload: unknown): Promise<void> {
     event: read.record,
     recordingTriggerType: mapRecordingTriggerType(read.record.triggerType),
     existingRunId: row.runId as TriggerRunId,
+    ...(gate.dryRun ? { dryRun: true } : {}),
   });
+}
+
+async function manualListenRow(input: { movementId: string; movementName: string }) {
+  return getAutomationsQb(['trigger'])
+    .selectFrom('trigger')
+    .where('movement_id', '=', input.movementId as MovementId)
+    .where('fired_movement_name', '=', input.movementName)
+    .where('kind', '=', MANUAL_KIND)
+    .select(['id', 'name', 'run_mode'])
+    .executeTakeFirst();
 }
 
 export const carriedRunHandler: WorkHandler = { run: runCarriedRow, recover: runCarriedRow };

@@ -302,7 +302,7 @@ export async function dispatchTriggerByIdEvent(
  * a guard fault can never crash dispatch — it allows the run.
  *
  */
-async function applyLoopGuard(input: {
+export async function applyLoopGuard(input: {
   triggerId: string;
   teamId: TeamId;
   triggerName: string;

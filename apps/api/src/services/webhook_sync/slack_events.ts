@@ -31,6 +31,8 @@ import { teamIdSchema } from '../../lib/team_id';
 import { resolveAdapter } from '../translation_graph/adapters/resolve';
 import { SLACK_ADAPTER_TYPE } from '@listen-fire/slack/types';
 import { deliverArrivals } from '../inbound/listen_door';
+import { keepForEveryVersion } from '../inbound/carried_delivery';
+import type { Arrival } from 'engine-contracts';
 import { capturedRequest } from '../inbound/captured_request';
 import { builtinModuleRequestKeeping } from '../translation_graph/adapters/builtin_modules';
 import { SLACK_APP_ID } from '../credentials/app_id';
@@ -90,6 +92,25 @@ export async function handleSlackEventsInbound(raw: unknown): Promise<SlackEvent
     return { ok: true, classification: 'unknown_workspace', teamId };
   }
 
+  const eventId = slackEventIdSchema.safeParse(raw);
+  const externalId = eventId.success ? `slack:${eventId.data.event_id}` : null;
+  const requestWith = (arrivals: readonly Arrival[]) =>
+    capturedRequest({
+      keeping: builtinModuleRequestKeeping(SLACK_ADAPTER_TYPE),
+      headers: { 'content-type': 'application/json' },
+      rawBody: Buffer.from(JSON.stringify(raw), 'utf8'),
+      arrivals,
+    });
+  // Kept before any version reads it.
+  const first = await keepForEveryVersion({
+    origin: { teamId: install.nativeTeamId, adapterType: SLACK_ADAPTER_TYPE, providerKey: SLACK_PROVIDER_KEY, credentialsId: install.credentialsId },
+    subscriptionId: SLACK_PROVIDER_KEY,
+    externalId,
+    source: 'webhook',
+    request: requestWith([]),
+  });
+  if (first.kind === 'duplicate') return { ok: true, classification: 'dispatched', teamId, eventsProcessed: 0 };
+
   const adapter = await resolveAdapter({
     adapterType: SLACK_ADAPTER_TYPE,
     teamId: install.nativeTeamId,
@@ -99,22 +120,17 @@ export async function handleSlackEventsInbound(raw: unknown): Promise<SlackEvent
   const { arrivals = [] } = await adapter.preprocessInbound({ raw });
   if (arrivals.length === 0) return { ok: true, classification: 'no_events', teamId };
 
-  const eventId = slackEventIdSchema.safeParse(raw);
   const { kept, fires } = await deliverArrivals({
     teamId: install.nativeTeamId,
     delivered: { adapterType: SLACK_ADAPTER_TYPE, credentialsId: install.credentialsId },
     subscriptionId: SLACK_PROVIDER_KEY,
-    externalId: eventId.success ? `slack:${eventId.data.event_id}` : null,
+    externalId,
     source: 'webhook',
     arrivals,
     // Kept as Slack sent it, as JSON, so a listen can be put through it again
     // (listen_replay.ts); the work row keeps the envelope, not its bytes.
-    request: capturedRequest({
-      keeping: builtinModuleRequestKeeping(SLACK_ADAPTER_TYPE),
-      headers: { 'content-type': 'application/json' },
-      rawBody: Buffer.from(JSON.stringify(raw), 'utf8'),
-      arrivals,
-    }),
+    request: requestWith(arrivals),
+    rawKeptId: first.deliveryId,
   });
   if (kept.kept) notifyWork();
   return { ok: true, classification: 'dispatched', teamId, eventsProcessed: kept.kept ? fires.length : 0 };

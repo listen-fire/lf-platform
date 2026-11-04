@@ -14,6 +14,7 @@ import { sql } from 'kysely';
 import type { EvaluationResult } from '../engine/types';
 import type { MovementRunResult } from 'movement-engine/public/movement-engine';
 import type { TeamId } from '../../../generated/kysely/core/Team';
+import type { TriggerEventId } from '../../../generated/kysely/automations/TriggerEvent';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { QUEUED_RUN_WORK_KINDS, type WorkHandler } from '../../work/kinds';
@@ -75,6 +76,8 @@ export interface TriggerRunFiring {
   /** The row is inserted waiting in the work queue: no segment has started,
    *  so it carries no heartbeat until a worker starts it. */
   queued?: boolean;
+  /** The receipt it runs from, when a carried version's door kept one. */
+  triggerEventId?: TriggerEventId;
 }
 
 type StepStatus = 'success' | 'partial' | 'failed';
@@ -282,6 +285,7 @@ export class TriggerRunRecorder {
           dry_run: this.firing.dryRun ?? false,
           started_at: this.startedAt,
           last_heartbeat_at: this.firing.queued === true ? null : new Date(),
+          trigger_event_id: this.firing.triggerEventId ?? null,
         })
         .onConflict((oc) => oc.column('id').doNothing())
         .execute();
@@ -1013,6 +1017,18 @@ export async function runningSegment(
 
 /** Put a started run back in the queue (a guard held it before it fired), so
  *  its row, released to retry, starts it again. */
+export async function claimQueuedRun(runId: TriggerRunId): Promise<boolean> {
+  const claimed = await getAutomationsQb(['trigger_run'])
+    .updateTable('trigger_run')
+    .set({ last_heartbeat_at: sql<Date>`now()` })
+    .where('id', '=', runId)
+    .where('status', '=', 'running')
+    .where('last_heartbeat_at', 'is', null)
+    .returning('id')
+    .executeTakeFirst();
+  return claimed !== undefined;
+}
+
 export async function requeueRun(runId: TriggerRunId): Promise<void> {
   await getAutomationsQb(['trigger_run'])
     .updateTable('trigger_run')

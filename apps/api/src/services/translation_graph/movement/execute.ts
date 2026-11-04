@@ -21,10 +21,11 @@
 // interpretability check (movement_engine/interpretable.ts) makes that a
 // last line of defence, not the discovery mechanism.
 
-import type { LanguageVersion } from 'movement-lang';
+import { LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { MovementTraceEntry } from 'movement-engine/public/trace';
 import type { AnyParkedScopeState } from 'engine-contracts';
+import type { TriggerEventId } from '../../../generated/kysely/automations/TriggerEvent';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 
@@ -97,7 +98,7 @@ async function interpretMovementFiring(input: {
   // A person's press of a pin a carried version runs is run by that
   // version's own engine and modules, on the event in its own shape: this
   // release's catalog and parser never read its text.
-  if (input.door.kind === 'manual') {
+  if (input.door.kind === 'manual' || input.door.kind === 'judged') {
     const carried = await carriedRunLaneOf(input.version.languageVersion);
     if (carried !== undefined) {
       return runCarriedSegment({
@@ -299,7 +300,13 @@ async function refreshValidityOnContradiction(input: {
  * carried version's Run now) needs it to run a segment, and carries the event
  * in that version's own shape, read only by that version.
  */
-export type FiringDoor = { kind: 'listen' } | { kind: 'manual'; event: CarriedEvent };
+export type FiringDoor =
+  | { kind: 'listen' }
+  | { kind: 'manual'; event: CarriedEvent }
+  /** A firing a carried version judged itself, its event in that version's
+   *  shape (carried_delivery.ts, or a row a 0.12.13 door queued). The judging
+   *  is done, so only the running is asked. */
+  | { kind: 'judged'; event: CarriedEvent };
 
 /** The capability a firing's door needs of the pin's version. */
 function neededBy(door: FiringDoor): RunningCapability {
@@ -307,17 +314,23 @@ function neededBy(door: FiringDoor): RunningCapability {
     case 'listen':
       return 'listen';
     case 'manual':
+    case 'judged':
       return 'run';
     default:
       return neverAsAny(door);
   }
 }
 
+/** What a start of a legacy id is told: this release starts no new run on
+ *  them, and carries no old engine for them. */
+export function legacyStartRefusal(pin: LanguageVersion): string {
+  return `this automation is pinned to language version ${pin}, and this release starts no new run on versions 1 to 4: upgrade it to ${LANGUAGE_VERSION}`;
+}
+
 /** Why `pin`'s version does not serve `door`, in the registry's text;
- *  undefined when it does. A legacy id is the legacy packages' to run, by
- *  their own rules, and is not asked. */
+ *  undefined when it does. */
 export function doorRefusal(pin: LanguageVersion, door: FiringDoor): string | undefined {
-  return isLegacyLanguageVersion(pin) ? undefined : refusalOf(pin, neededBy(door));
+  return isLegacyLanguageVersion(pin) ? legacyStartRefusal(pin) : refusalOf(pin, neededBy(door));
 }
 
 type MovementFiringInput = {
@@ -344,6 +357,8 @@ type MovementFiringInput = {
   existingRunId?: TriggerRunId;
   /** Where the delivery that started the run was kept in the arrival log. */
   triggerMark?: number;
+  /** The receipt it runs from, when a carried version's door kept one. */
+  triggerEventId?: TriggerEventId;
 };
 
 /** A fresh firing of a listener's movement. */
@@ -406,6 +421,7 @@ async function runMovementFiringInContext(
     // Pin the version the run executes (P11): the shipped one it runs.
     movementVersionId: input.movement.version.id,
     ...(input.existingRunId !== undefined ? { existingRunId: input.existingRunId } : {}),
+    ...(input.triggerEventId !== undefined ? { triggerEventId: input.triggerEventId } : {}),
   });
   await recorder.startOpsRun();
   const movementName = input.firedMovementName ?? firedMovementNameFromTriggerName(input.triggerName);

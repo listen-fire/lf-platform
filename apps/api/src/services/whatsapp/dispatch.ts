@@ -22,6 +22,7 @@ import { exposeFile } from '../translation_graph/engine/files/expose';
 import { classifyMetaMessage, whatsappInboundArrivals } from '@listen-fire/whatsapp/inbound';
 import { WHATSAPP_ADAPTER_TYPE } from '../translation_graph/adapters/whatsapp';
 import { deliverArrivals } from '../inbound/listen_door';
+import { carriedListensOn, receiveJudgedEvent } from '../inbound/carried_delivery';
 import { keptPage } from '../inbound/captured_request';
 import { notifyWork } from '../work/drain';
 import { getMetaWhatsappApi, movementsPhoneNumberId } from './metaApi';
@@ -119,6 +120,50 @@ async function resolveAttachments(
   }
 }
 
+/** 0.12's own names for each kind of message's record. */
+const CARRIED_WHATSAPP_RECORD_TYPES: Readonly<Record<string, string>> = {
+  message: 'whatsapp:message',
+  reaction: 'whatsapp:reaction',
+  location: 'whatsapp:location',
+};
+
+/** A carried version's listens on the message: production's event at 0.12.13,
+ *  per listen whose `events` take its kind (none means messages only). The wamid
+ *  is the delivery id its receipt dedupes on. */
+async function receiveCarriedWhatsapp(input: {
+  teamId: TeamId;
+  classified: { kind: string };
+  payload: unknown;
+  messageId: string;
+}): Promise<number> {
+  const { teamId, classified, messageId } = input;
+  const rootRecordType = CARRIED_WHATSAPP_RECORD_TYPES[classified.kind] ?? CARRIED_WHATSAPP_RECORD_TYPES['message'];
+  const listens = await carriedListensOn({ teamId, adapterType: WHATSAPP_ADAPTER_TYPE, providerKey: WHATSAPP_KIND });
+  let received = 0;
+  for (const listen of listens) {
+    const events = (listen.config as { events?: unknown } | null)?.events;
+    const named = Array.isArray(events) ? events : [];
+    if (named.length === 0 ? classified.kind !== 'message' : !named.includes(classified.kind)) continue;
+    await receiveJudgedEvent({
+      teamId,
+      triggerId: listen.id,
+      lane: await listen.lane(),
+      event: {
+        pipelineInputId: `trigger:${listen.id}`,
+        adapterType: WHATSAPP_ADAPTER_TYPE,
+        triggerType: 'webhook',
+        payload: input.payload,
+        rootRecordType,
+        externalRecordRef: { adapterType: WHATSAPP_ADAPTER_TYPE, recordType: rootRecordType, externalId: messageId },
+        occurredAt: new Date().toISOString(),
+        idempotencyKey: messageId,
+      },
+    });
+    received += 1;
+  }
+  return received;
+}
+
 /** Dispatch one inbound Meta message dumbly. Public webhook → no auth ctx, so we
  *  resolve the team from the sender and run under a Context built for it. */
 export async function dispatchWhatsappMessage(input: {
@@ -212,15 +257,16 @@ export async function dispatchWhatsappMessage(input: {
       request: keptPage({ adapterType: WHATSAPP_ADAPTER_TYPE, credentialsId: null, arrivals }),
     });
     if (!kept.kept) return;
+    const carriedRuns = await receiveCarriedWhatsapp({ teamId: resolved.teamId as TeamId, classified, payload, messageId: message.id });
     notifyWork();
     // Read receipt at preprocess: a message a movement will handle shows blue
     // ticks immediately (ruling 2026-07-07). Fire-and-forget — a receipt
     // failure must never affect dispatch. Messages only; Meta has no receipt
     // for reactions/locations.
-    if (classified.kind === 'message' && fires.length > 0) {
+    if (classified.kind === 'message' && fires.length + carriedRuns > 0) {
       void getMetaWhatsappApi(businessPhoneNumberId).markMessageRead(message.id).catch(() => {});
     }
-    if (fires.length === 0) {
+    if (fires.length + carriedRuns === 0) {
       logger.info('[whatsapp-dispatch] no listen took the message — dropping', { teamId: resolved.teamId, from: message.from });
     }
   });

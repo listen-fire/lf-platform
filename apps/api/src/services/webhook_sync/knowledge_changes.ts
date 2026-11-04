@@ -27,6 +27,8 @@ import { drainOnce } from '../knowledge/mutation_outbox/worker';
 import { notifyWork, registerWorkKinds } from '../work/drain';
 import { resolveAdapter } from '../translation_graph/adapters/resolve';
 import { deliverArrivals } from '../inbound/listen_door';
+import { keepForEveryVersion } from '../inbound/carried_delivery';
+import type { Arrival } from 'engine-contracts';
 import { capturedRequest } from '../inbound/captured_request';
 import { NATIVE_KNOWLEDGE_PROVIDER_KEY } from './providers/native_knowledge';
 
@@ -63,6 +65,22 @@ export async function queueKnowledgeChange(input: {
     logger.info('[knowledge] a change on a team with no connection to its graph is heard by no listen', { teamId, outboxId: input.outboxId });
     return { queued: 0 };
   }
+  const externalId = `knowledge_outbox:${input.outboxId}`;
+  const requestWith = (arrivals: readonly Arrival[]) =>
+    capturedRequest({
+      keeping: undefined,
+      headers: { 'content-type': 'application/json' },
+      rawBody: Buffer.from(JSON.stringify(input.envelope), 'utf8'),
+      arrivals,
+    });
+  const first = await keepForEveryVersion({
+    origin: { teamId, adapterType: KG_ADAPTER_TYPE, providerKey: NATIVE_KNOWLEDGE_PROVIDER_KEY, credentialsId: connection },
+    subscriptionId: NATIVE_KNOWLEDGE_PROVIDER_KEY,
+    externalId,
+    source: 'emit',
+    request: requestWith([]),
+  });
+  if (first.kind === 'duplicate') return { queued: 0 };
   const adapter = await resolveAdapter({ adapterType: KG_ADAPTER_TYPE, teamId, credentialsId: connection });
   if (adapter.preprocessInbound === undefined) {
     throw new Error('the knowledge graph module reads no inbound events (preprocessInbound)');
@@ -73,16 +91,12 @@ export async function queueKnowledgeChange(input: {
     teamId,
     delivered: { adapterType: KG_ADAPTER_TYPE, credentialsId: null },
     subscriptionId: NATIVE_KNOWLEDGE_PROVIDER_KEY,
-    externalId: `knowledge_outbox:${input.outboxId}`,
+    externalId,
     source: 'emit',
     arrivals,
     // The change as the graph wrote it, read again by the module on a replay.
-    request: capturedRequest({
-      keeping: undefined,
-      headers: { 'content-type': 'application/json' },
-      rawBody: Buffer.from(JSON.stringify(input.envelope), 'utf8'),
-      arrivals,
-    }),
+    request: requestWith(arrivals),
+    rawKeptId: first.deliveryId,
   });
   if (!kept.kept) return { queued: 0 };
   notifyWork();

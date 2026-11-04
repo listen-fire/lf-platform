@@ -431,10 +431,12 @@ export async function keepJudgedDelivery(input: {
   replayOf?: string;
   /** A replay forced past its listen's receipt. */
   forced?: boolean;
+  /** The row the door kept before reading it (carried_delivery.ts). */
+  rawKeptId?: string;
   now: Date;
 }): Promise<{ kept: KeptDelivery; deliveryId: string; fires: FireRow[] }> {
   const { teamId, judged, now } = input;
-  const deliveryId = randomUUID();
+  const deliveryId = input.rawKeptId ?? randomUUID();
   const waits = await deliveryWaitsOf({ teamId, adapterType: input.adapterType, minted: judged.minted });
   const fires: FireRow[] = judged.minted.map((run) => ({
     teamId,
@@ -449,6 +451,7 @@ export async function keepJudgedDelivery(input: {
   const resendSeconds = getAdapterManifest(input.adapterType)?.resendWindowSeconds;
   const kept = await deliveryRowStore({ host: 'platform', teamId }).keepDelivery({
     subscriptionId: input.subscriptionId,
+    ...(input.rawKeptId !== undefined ? { rawKept: { id: input.rawKeptId } } : {}),
     ...('checkpoint' in input ? { checkpoint: input.checkpoint } : {}),
     delivery: {
       id: deliveryId,
@@ -568,6 +571,8 @@ export async function deliverArrivals(input: {
    *  module: a poll's are the listens sharing it, since an arrival its module
    *  says it filtered (`takenApplied`) is judged without the filter. */
   listens?: readonly SavedListen[];
+  /** The row the door kept before reading it (carried_delivery.ts). */
+  rawKeptId?: string;
 }): Promise<{ kept: KeptDelivery; deliveryId: string; fires: FireRow[] }> {
   const now = new Date();
   const listens = input.listens ?? (await savedListens({ teamId: input.teamId, adapterType: input.delivered.adapterType }));
@@ -582,6 +587,7 @@ export async function deliverArrivals(input: {
     judged,
     ...('checkpoint' in input ? { checkpoint: input.checkpoint } : {}),
     ...(input.request !== undefined ? { request: input.request } : {}),
+    ...(input.rawKeptId !== undefined ? { rawKeptId: input.rawKeptId } : {}),
     now,
   });
   // A module that pushes its members' changes reports them as arrivals on the

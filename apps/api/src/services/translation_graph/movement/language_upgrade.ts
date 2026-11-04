@@ -68,7 +68,7 @@ import {
   isLegacyLanguageVersion,
   upgradeSourceAsync,
 } from 'legacy-lang';
-import { checkingOf, isCurrent, listeningOf, refusalOf, versionOf } from '@listen-fire/language-versions';
+import { checkingOf, isCurrent, keepsListenRows, listeningOf, refusalOf, versionOf } from '@listen-fire/language-versions';
 import { logger } from 'movement-engine/public/log';
 import {
   DEPRECATED_VERSION,
@@ -85,7 +85,7 @@ import { movementCatalogForTeam, type ImportedFile } from './catalog';
 import { getAutomationsQb } from '../../../lib/kysely';
 import { listenPauses } from '../../inbound/listen_pause';
 import { settleRunsParkedOnTriggers } from '../../interaction/run_failure';
-import { holdsOnMoving } from './upgrade_holds';
+import { holdsOnMoving, runsWaitingOnKeys } from './upgrade_holds';
 import {
   automationUrl,
   automationsUrl,
@@ -296,6 +296,11 @@ export type DeployCheckOutcome =
    *  installed language: the pin stays, the diagnostics are stored, a
    *  `Validation Issue` is emitted. */
   | 'warned'
+  /** A release pin a carried version runs and listens for: it keeps firing,
+   *  on that version. The pin stays. */
+  | 'carried'
+  /** A legacy id: this release starts no new run on it. Named with the remedy,
+   *  and its paused runs named too. Reported beside its own check's outcome. */
   /** A release pin of an older compatibility key: the installed language
    *  refuses it by name, so its listens are unprovisioned and it does not
    *  fire until someone upgrades it (ruling 2). The pin stays. */
@@ -311,6 +316,7 @@ export type DeployCheckOutcome =
 export const DEPLOY_CHECK_OUTCOMES: readonly DeployCheckOutcome[] = [
   'upgradable',
   'current',
+  'carried',
   'warned',
   'stopped',
   'refused',
@@ -356,6 +362,10 @@ export interface DeployCheckSummary {
   ranAt: string;
   counts: Record<DeployCheckOutcome, number>;
   automations: DeployCheckEntry[];
+  /** Every automation on a legacy version: this release starts no new run on
+   *  them. Each names the runs paused on a question, a callback or a reply,
+   *  which it cannot continue. */
+  legacyStopped?: Array<{ name: string; pin: LanguageVersion; movementId: string; waitingRuns: string[]; remedy: string }>;
 }
 
 /** The languages a platform release reads: the installed language's
@@ -387,6 +397,8 @@ export interface DeployCheckDeps {
   /** Whether a check already ran for this release. */
   alreadyRan(input: { tag: string; languageRelease: string }): Promise<boolean>;
   listMovements(): Promise<MovementRow[]>;
+  /** The runs of each movement paused on a question, a callback or a reply. */
+  runsWaitingOnKeys?(movementIds: readonly string[]): Promise<ReadonlyMap<string, ReadonlyArray<{ id: string }>>>;
   validate: ValidateUnder;
   /** The content hash validity records name their source by. */
   sourceHash(source: string): string;
@@ -424,7 +436,8 @@ export async function runDeployCheck(deps: DeployCheckDeps): Promise<DeployCheck
   const current = release.language.current;
   const entries: DeployCheckEntry[] = [];
 
-  for (const movement of await deps.listMovements()) {
+  const movements = await deps.listMovements();
+  for (const movement of movements) {
     let entry: DeployCheckEntry;
     try {
       entry = await checkOne({ deps, movement, current, at });
@@ -440,6 +453,24 @@ export async function runDeployCheck(deps: DeployCheckDeps): Promise<DeployCheck
     entries.push(entry);
   }
 
+  const legacy = movements.filter((movement) => isLegacyLanguageVersion(movement.languageVersion));
+  const waiting = legacy.length > 0 && deps.runsWaitingOnKeys !== undefined ? await deps.runsWaitingOnKeys(legacy.map((movement) => movement.id)) : new Map<string, ReadonlyArray<{ id: string }>>();
+  const legacyStopped = legacy.map((movement) => {
+    const waitingRuns = (waiting.get(movement.id) ?? []).map((run) => run.id);
+    logger.warn('[DeployCheck] an automation on a legacy version starts no new run until it is upgraded', {
+      movementId: movement.id,
+      teamId: movement.teamId,
+      languageVersion: movement.languageVersion,
+      waitingRuns,
+    });
+    return {
+      name: movement.name,
+      pin: movement.languageVersion,
+      movementId: movement.id,
+      waitingRuns,
+      remedy: `this release starts no new run on version ${movement.languageVersion}: upgrade it to ${current}`,
+    };
+  });
   const summary: DeployCheckSummary = {
     release: release.tag,
     languageRelease,
@@ -447,6 +478,7 @@ export async function runDeployCheck(deps: DeployCheckDeps): Promise<DeployCheck
     ranAt: at,
     counts: countOutcomes(entries),
     automations: entries,
+    ...(legacyStopped.length > 0 ? { legacyStopped } : {}),
   };
 
   // One per workspace that has automations — a listener lives in a team, and
@@ -593,6 +625,11 @@ async function checkReleasePin(input: {
       break;
     case 'held':
       return releasePinNotListened(input);
+    case 'carried': {
+      // Its version reads its deliveries and fires its listens: nothing stops.
+      const checked = await checkedUnderOwnPin(deps, movement);
+      return entryFor(movement, 'carried', pin, releaseLanguage, `${checked}its listens fire on ${pin}, unchanged`);
+    }
     default:
       return neverAsAny(listening);
   }
@@ -799,6 +836,7 @@ function countOutcomes(entries: DeployCheckEntry[]): Record<DeployCheckOutcome, 
   const counts: Record<DeployCheckOutcome, number> = {
     upgradable: 0,
     current: 0,
+    carried: 0,
     warned: 0,
     stopped: 0,
     refused: 0,
@@ -861,6 +899,7 @@ export function liveDeployCheckDeps(release: DeployCheckRelease): DeployCheckDep
       return row !== undefined;
     },
     listMovements: listAllMovementRows,
+    runsWaitingOnKeys,
     // One read of each team's facts for the whole sweep, however many of its
     // automations a carried version checks.
     validate: liveValidation(teamFactsOncePerTeam()),
@@ -882,6 +921,9 @@ export function liveDeployCheckDeps(release: DeployCheckRelease): DeployCheckDep
       recordUpgradeCheck({ id: movement.id, diagnostics, checkedAgainst }),
     emit: recordSystemEvent,
     unprovision: async (movement) => {
+      // A carried version's rows are its listens, whether or not they fire yet:
+      // the release that turns its listens on finds them here.
+      if (keepsListenRows(movement.languageVersion)) return;
       const triggers = await getAutomationsQb(['trigger'])
         .selectFrom('trigger')
         .where('movement_id', '=', movement.id as MovementId)
