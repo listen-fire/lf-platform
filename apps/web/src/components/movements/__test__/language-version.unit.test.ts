@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { LANGUAGE_VERSION } from "movement-lang";
 
-import type { EditorLanguageRoute } from "../editor-lint";
+import { saveGoesLive, type EditorLanguageRoute } from "../editor-lint";
 import { LanguageVersionCell, LanguageVersionNotice } from "../language-version";
 
 const cell = (languageVersion: string) =>
@@ -47,5 +47,27 @@ describe("the language version a person sees", () => {
     expect(notice).toContain("still checked under");
     expect(notice).toContain("0.12.13");
     expect(notice).not.toContain("the current version.");
+  });
+
+  it("the notice says exactly what the platform provides a carried version: run now, and no resume, when it runs", () => {
+    const notice = renderToStaticMarkup(
+      createElement(LanguageVersionNotice, {
+        languageVersion: "0.12.13",
+        route: { kind: "carried", provides: { run: true, resume: false, listen: false } },
+        upgradeDiagnostics: null,
+      }),
+    );
+    expect(notice).toContain("stopped firing");
+    expect(notice).toContain("Run now and test runs run it under");
+    expect(notice).toContain("is stopped where it waits");
+  });
+
+  it("a clean save goes live only where the route's version fires its listens", () => {
+    expect(saveGoesLive({ kind: "installed" })).toBe(true);
+    expect(saveGoesLive({ kind: "carried", provides: { run: true, resume: false, listen: false } })).toBe(false);
+    expect(saveGoesLive({ kind: "carried", provides: { run: true, resume: true, listen: true } })).toBe(true);
+    expect(saveGoesLive({ kind: "carried" })).toBe(false);
+    expect(saveGoesLive({ kind: "legacy" })).toBe(false);
+    expect(saveGoesLive({ kind: "refused" })).toBe(false);
   });
 });

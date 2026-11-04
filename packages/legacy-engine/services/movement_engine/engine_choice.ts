@@ -8,23 +8,25 @@
 
 import type { LanguageVersion } from 'movement-lang';
 import { isLegacyLanguageVersion } from 'legacy-lang';
-import { runRefusal } from '@listen-fire/language-versions';
+import { refusalOf, type RunningCapability } from '@listen-fire/language-versions';
 import { MovementEngineError, PARKED_ON_TYPESCRIPT } from 'movement-engine/public/errors';
 
 /** An engine: the one a run's segment runs on. */
 export type EngineChoice = 'rust' | 'ts';
 
-/** Why a run pinned to `languageVersion` does not run on this build, in the
- *  registry's text; undefined when it runs (a legacy id always does). */
-export function heldRunRefusal(languageVersion: LanguageVersion): string | undefined {
-  return isLegacyLanguageVersion(languageVersion) ? undefined : runRefusal(languageVersion);
+/** Why a run pinned to `languageVersion` does not get `needed` (a segment
+ *  someone starts, by default) on this build, in the registry's text;
+ *  undefined when it does (a legacy id always does). */
+export function heldRunRefusal(languageVersion: LanguageVersion, needed: RunningCapability = 'run'): string | undefined {
+  return isLegacyLanguageVersion(languageVersion) ? undefined : refusalOf(languageVersion, needed);
 }
 
-/** Refuses a run pinned to a version this build does not run. A door that
- *  would run a program calls it before it reads the program's text, assembles
- *  a catalog for it or asks a model anything about it. */
-export function refuseHeldRun(languageVersion: LanguageVersion): void {
-  const refusal = heldRunRefusal(languageVersion);
+/** Refuses a run pinned to a version that does not provide `needed`. A door
+ *  that would start, resume or fire a program calls it before it reads the
+ *  program's text, assembles a catalog for it or asks a model anything about
+ *  it. */
+export function refuseHeldRun(languageVersion: LanguageVersion, needed: RunningCapability = 'run'): void {
+  const refusal = heldRunRefusal(languageVersion, needed);
   if (refusal !== undefined) throw new MovementEngineError('MOVENG_LANGUAGE_VERSION', refusal);
 }
 
@@ -38,7 +40,7 @@ export function refuseHeldRun(languageVersion: LanguageVersion): void {
  */
 export function engineFor(run: { languageVersion: LanguageVersion; parkedOn?: EngineChoice }): EngineChoice {
   if (isLegacyLanguageVersion(run.languageVersion)) return 'ts';
-  refuseHeldRun(run.languageVersion);
+  refuseHeldRun(run.languageVersion, run.parkedOn !== undefined ? 'resume' : 'run');
   if (run.parkedOn === 'ts') {
     throw new MovementEngineError(
       'MOVENG_UNSUPPORTED',

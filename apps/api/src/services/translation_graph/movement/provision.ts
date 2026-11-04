@@ -115,7 +115,7 @@ import {
   type MovementValidityAssessment,
 } from './authoring';
 import { checkInstalled, routeOf } from './language_route';
-import { notRunDiagnostic, validateUnderCarried } from './carried_check';
+import { notListenedDiagnostic, validateUnderCarried } from './carried_check';
 import { plannedListensOfSource } from './listen_plans';
 import { listenConfigSchema, type ListenConfig, type SavedListen } from '../../inbound/listen_door';
 import { resolveAndArm, resolvesListen } from '../../inbound/listen_resolve';
@@ -563,7 +563,7 @@ async function provisionListeners(input: {
     return { ok: false, diagnostics: [route.diagnostic], catalogNotes: teamCatalog.notes };
   }
   if (route.kind === 'carried') {
-    return { ok: false, diagnostics: [notRunDiagnostic(route.pin, LANGUAGE_VERSION)], catalogNotes: teamCatalog.notes };
+    return { ok: false, diagnostics: [notListenedDiagnostic(route.pin)], catalogNotes: teamCatalog.notes };
   }
   // A legacy pin's listens cannot fire under this release: inbound judges by
   // the listen plans only this release's checker makes. It is refused by
@@ -1099,7 +1099,7 @@ async function runSave(
   // provisioned: this platform does not run that version, and says so.
   const provisioned: ProvisionMovementResult =
     teamCatalog === undefined
-      ? { ok: false, diagnostics: [notRunDiagnostic(row.languageVersion, LANGUAGE_VERSION)], catalogNotes: notes }
+      ? { ok: false, diagnostics: [notListenedDiagnostic(row.languageVersion)], catalogNotes: notes }
       : await timer.step('listeners', () => provisionListeners({
           teamId: input.teamId as TeamId,
           movementRow: row,

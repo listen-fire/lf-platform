@@ -592,7 +592,7 @@ async function resumeMovementFiringInContext(
   });
   try {
     const languageVersion = input.pinnedLanguageVersion;
-    refuseHeldRun(languageVersion);
+    refuseHeldRun(languageVersion, 'resume');
     const teamCatalog = await runCatalogSnapshotForTeam(input.teamId, {
       source: input.pinnedSource,
       languageVersion,

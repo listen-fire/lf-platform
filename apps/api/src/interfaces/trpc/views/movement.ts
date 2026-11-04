@@ -94,6 +94,7 @@ import {
   routeOf,
   type PinRoute,
 } from '../../../services/translation_graph/movement/language_route';
+import { providedFlagsFor } from '@listen-fire/language-versions';
 import {
   LEGACY_PRESENTATION_MESSAGE,
   completeAt,
@@ -302,6 +303,10 @@ type MovementListItemResponse = Omit<MovementListItem, 'listeners'> & {
  */
 export interface MovementLanguageRoute {
   kind: 'legacy' | 'installed' | 'carried' | 'refused';
+  /** For a carried pin, what its version provides on this platform: whether
+   *  someone can run it (Run now, a test run), whether its parked runs
+   *  resume, and whether its listens fire. */
+  provides?: { run: boolean; resume: boolean; listen: boolean };
 }
 
 function languageRouteOf(pin: LanguageVersion): MovementLanguageRoute {
@@ -309,9 +314,12 @@ function languageRouteOf(pin: LanguageVersion): MovementLanguageRoute {
   switch (route.kind) {
     case 'legacy':
     case 'installed':
-    case 'carried':
     case 'refused':
       return { kind: route.kind };
+    case 'carried': {
+      const { run, resume, listen } = providedFlagsFor(pin);
+      return { kind: route.kind, provides: { run, resume, listen } };
+    }
     default:
       return neverAsAny(route);
   }

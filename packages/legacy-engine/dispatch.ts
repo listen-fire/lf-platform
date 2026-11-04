@@ -16,7 +16,8 @@ import * as rust from 'movement-engine/public/movement-engine';
 import type { EngineHost } from 'movement-engine/public/host';
 
 import * as typescript from './public/movement-engine';
-import { engineFor } from './services/movement_engine/engine_choice';
+import { engineFor, refuseHeldRun } from './services/movement_engine/engine_choice';
+import type { RunningCapability } from '@listen-fire/language-versions';
 
 export { engineFor, heldRunRefusal, refuseHeldRun, type EngineChoice } from './services/movement_engine/engine_choice';
 
@@ -27,22 +28,28 @@ export async function runMovement(input: rust.RunMovementInput): Promise<Movemen
 }
 
 export async function resumeMovement(input: rust.ResumeMovementInput): Promise<MovementRunResult> {
-  const engine = engineOf(input);
+  const engine = engineOf(input, 'resume');
   refuseUnsupportedParkStateVersion(input.state.version);
   return engine === 'rust' ? rust.resumeMovement(input) : typescript.resumeMovement(input);
 }
 
 export async function settleRaceFrame(input: SettleRaceInput & { host: EngineHost }): Promise<MovementRunResult> {
-  const engine = engineOf(input);
+  const engine = engineOf(input, 'resume');
   refuseUnsupportedParkStateVersion(input.state.version);
   return engine === 'rust' ? rust.settleRaceFrame(input) : typescript.settleRaceFrame(input);
 }
 
 /** The engine a segment of `input`'s run runs on: the run's pin, and, for a
- *  resume, the engine its row says parked it. */
-function engineOf(input: { languageVersion?: rust.RunMovementInput['languageVersion']; parkedOnEngine?: 'ts' | 'rust' }) {
+ *  resume, the engine its row says parked it. A resume is refused unless the
+ *  pin's version resumes. */
+function engineOf(
+  input: { languageVersion?: rust.RunMovementInput['languageVersion']; parkedOnEngine?: 'ts' | 'rust' },
+  needed: RunningCapability = 'run',
+) {
+  const languageVersion = input.languageVersion ?? LANGUAGE_VERSION;
+  if (needed === 'resume') refuseHeldRun(languageVersion, 'resume');
   return engineFor({
-    languageVersion: input.languageVersion ?? LANGUAGE_VERSION,
+    languageVersion,
     ...(input.parkedOnEngine !== undefined ? { parkedOn: input.parkedOnEngine } : {}),
   });
 }

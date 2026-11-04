@@ -80,7 +80,7 @@ describe('a 0.12 movement saved (real Postgres)', () => {
     expect(saved.diagnostics).toEqual([
       expect.objectContaining({
         code: 'MOV_LANGUAGE_VERSION_UNSUPPORTED',
-        message: expect.stringContaining(`it is saved and checked under 0.12.13, but this platform does not run 0.12.13's listens`),
+        message: expect.stringContaining(`it is saved and checked under 0.12.13; this automation pins language 0.12.13: this platform carries 0.12.13 to check`),
       }),
     ]);
     expect(await triggerCount(id)).toBe(0);

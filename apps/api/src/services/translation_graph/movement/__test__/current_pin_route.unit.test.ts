@@ -160,7 +160,7 @@ describe('routeOf', () => {
 
 describe('routeOf, by the versions this build carries', () => {
   it("a 0.12 pin is its own version's to check, and this release's checker never reads it", () => {
-    expect(versionOf('0.12.13')?.check.kind).toBe('carried');
+    expect(versionOf('0.12.13')?.provides.check.kind).toBe('carried');
     expect(routeOf('0.12.13')).toEqual({ kind: 'carried', pin: '0.12.13', lane: expect.any(Function) });
     expect(() => diagnose(BARE_MANUAL, '0.12.13')).toThrow("language version 0.12.13 is checked by its own release against its own catalog");
     expect({ ...counters }).toEqual({ rust: 0, ts: 0, scan: 0 });

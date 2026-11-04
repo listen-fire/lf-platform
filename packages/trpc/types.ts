@@ -1364,6 +1364,14 @@ export type MovementRunItem = {
  */
 export interface MovementLanguageRoute {
     kind: 'legacy' | 'installed' | 'carried' | 'refused';
+    /** For a carried pin, what its version provides on this platform: whether
+     *  someone can run it (Run now, a test run), whether its parked runs
+     *  resume, and whether its listens fire. */
+    provides?: {
+        run: boolean;
+        resume: boolean;
+        listen: boolean;
+    };
 }
 /** The skeleton, with the release a new movement is pinned to. */
 export type MovementCatalogResponse = TeamCatalogSnapshot & {

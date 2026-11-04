@@ -20,6 +20,27 @@ import type { MovementDiagnostic } from "legacy-lang";
  *  `views.movement.catalog`'s `installed` for a new movement). */
 export interface EditorLanguageRoute {
   kind: "legacy" | "installed" | "carried" | "refused";
+  /** For a carried pin, what its version provides on this platform. */
+  provides?: { run: boolean; resume: boolean; listen: boolean };
+}
+
+/** Whether a clean save of a program on this route makes its listens fire:
+ *  the platform's own language does, a carried version only when it
+ *  provides listening. */
+export function saveGoesLive(route: EditorLanguageRoute): boolean {
+  switch (route.kind) {
+    case "installed":
+      return true;
+    case "carried":
+      return route.provides?.listen === true;
+    case "legacy":
+    case "refused":
+      return false;
+    default: {
+      const unknown: never = route.kind;
+      throw new Error(`unknown language route ${String(unknown)}`);
+    }
+  }
 }
 
 /** A diagnostic as the server reports it: 1-based line/col. */

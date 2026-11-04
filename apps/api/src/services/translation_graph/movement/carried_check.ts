@@ -12,6 +12,7 @@ import type { Diagnostic, LanguageVersion } from 'movement-lang';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TeamMovementValidation } from './authoring';
 
+import { refusalOf } from '@listen-fire/language-versions';
 import { connectMethodForType } from '../../credentials/connect_link';
 import { mutationDelivery } from '../../knowledge/mutation_outbox/delivery_mode';
 import { isCredentialType } from '../adapters/credential_type';
@@ -88,15 +89,14 @@ export async function validateUnderCarried(input: {
   };
 }
 
-/** What a pin a carried version checks but this platform does not run is
- *  told when it would go live: it is saved and checked under its own version,
- *  and its listens are not run. */
-export function notRunDiagnostic(pin: LanguageVersion, current: LanguageVersion): Diagnostic {
+/** What a save of a pin whose version does not fire its listens is told
+ *  where it would go live: it is saved and checked under its own version, and
+ *  what its version provides, in the registry's words. */
+export function notListenedDiagnostic(pin: LanguageVersion): Diagnostic {
+  const refusal = refusalOf(pin, 'listen') ?? `language ${pin}'s listens fire`;
   return {
     code: 'MOV_LANGUAGE_VERSION_UNSUPPORTED',
-    message:
-      `this automation is pinned to language version ${pin}: it is saved and checked under ${pin}, ` +
-      `but this platform does not run ${pin}'s listens, so it does not fire until it is upgraded to ${current}`,
+    message: `it is saved and checked under ${pin}; ${refusal}`,
     span: { start: { line: 1, col: 1 }, end: { line: 1, col: 1 } },
   };
 }

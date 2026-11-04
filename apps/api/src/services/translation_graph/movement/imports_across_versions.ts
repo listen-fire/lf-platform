@@ -12,24 +12,18 @@
 // together: an upgrade moves the whole import group, or nothing
 // (`importGroupOf`, ./language_upgrade.ts), so it never stops an importer.
 
-import { compatibilityKey, type Diagnostic, type LanguageVersion, type Program } from 'movement-lang';
-import { isLegacyLanguageVersion, referencedFileImports } from 'legacy-lang';
+import { type Diagnostic, type LanguageVersion, type Program } from 'movement-lang';
+import { referencedFileImports } from 'legacy-lang';
+import { importKeyOf } from '@listen-fire/language-versions';
 
 import type { MovementRow } from './store';
 
 /** The diagnostic a library import across versions is reported under. */
 export const IMPORT_ACROSS_VERSIONS = 'MOV_IMPORT_LANGUAGE_VERSION';
 
-/** The key the legacy ids ('1' to '4') are on: they ran beside 0.12, and
- *  they join 0.12's entry with its run host. */
-const LEGACY_IDS_KEY = '0.12';
-
-/** The key two pins are compared by: a release's compatibility key, and
- *  0.12's for a legacy id. */
-export function importKeyOf(pin: LanguageVersion): string {
-  if (isLegacyLanguageVersion(pin)) return LEGACY_IDS_KEY;
-  return compatibilityKey(pin) ?? pin;
-}
+/** The key two pins are compared by: a release's compatibility key, and the
+ *  key of the release a legacy id ran beside (the registry says which). */
+export { importKeyOf };
 
 /** Whether a program pinned to `importer` and a library pinned to `library`
  *  are on different versions, so the import is not allowed. */

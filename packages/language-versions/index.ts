@@ -29,10 +29,11 @@
 // modules as they stood at that release, by design: a shared file would
 // resolve the wrong release's packages.
 //
-// Each entry says how its pins are checked and how they run: by the current
-// core, by the version's own packages through its package's façade, or held. A
-// held capability refuses its pins exactly as if the version were not carried,
-// never handing them to another version.
+// Each entry says what it provides its pins, one capability each: checking,
+// running a segment someone starts, resuming a parked run, and firing its
+// listens. Each is the current core's, the version's own through its
+// package's façade, or held. A held capability refuses its pins with one text
+// per capability (`refusalOf`), never handing them to another version.
 
 import {
   LANGUAGE_VERSION,
@@ -140,25 +141,51 @@ export interface CheckingLane {
 export type CheckCapability = { kind: 'current' } | { kind: 'carried'; lane: () => Promise<CheckingLane> } | { kind: 'held' };
 
 /**
- * Whether a carried version runs its pins: running a segment, resuming a
- * parked run, settling a race frame.
+ * Whether a carried version runs a segment someone starts: Run now, a test
+ * run, a validate-then-run.
  *
- * - `current`: the platform's own engine runs them.
+ * - `current`: the platform's own engine runs it.
  * - `held`: the version is carried but does not run. Its runs are refused
- *   exactly as the current engine refuses a key it does not read.
+ *   with the registry's text before anything reads the program.
  */
 export type RunCapability = { kind: 'current' } | { kind: 'held' };
+
+/** Whether a carried version resumes a run it parked: a timer, an ask, an
+ *  await, a limit pause, a race settling. `held` refuses the resume, and a
+ *  segment of that version that tries to park is stopped with the same text. */
+export type ResumeCapability = { kind: 'current' } | { kind: 'held' };
+
+/** Whether a carried version's listens fire: inbound deliveries, polls and
+ *  schedules start its runs. `held` keeps its automations unprovisioned. */
+export type ListenCapability = { kind: 'current' } | { kind: 'held' };
+
+/** What a carried version provides its pins, one capability each. */
+export interface Provided {
+  readonly check: CheckCapability;
+  readonly run: RunCapability;
+  readonly resume: ResumeCapability;
+  readonly listen: ListenCapability;
+}
+
+/** The capabilities whose absence refuses a run: what a door that would start,
+ *  resume or fire a program asks for. Checking refuses by diagnostic instead. */
+export type RunningCapability = 'run' | 'resume' | 'listen';
 
 export interface CarriedVersion {
   /** The compatibility key every pin this entry serves shares. */
   readonly key: string;
   /** The exact release whose packages this build carries for the key. */
   readonly release: LanguageVersion;
+  /** The legacy ids (from before the language was versioned by its release)
+   *  that ran beside this release in production, so they share its key: an
+   *  import between them and this release's programs is on one version.
+   *  They are checked and run by the legacy packages, never by this entry's
+   *  capabilities. */
+  readonly legacyIds?: readonly LanguageVersion[];
   /** Loads the version's package set (lazily: an older line's wasm and engine
    *  are instantiated only when something asks for them). */
   load(): Promise<VersionPackages>;
-  readonly check: CheckCapability;
-  readonly run: RunCapability;
+  readonly provides: Provided;
 }
 
 const HELD = { kind: 'held' } as const;
@@ -174,8 +201,7 @@ const CURRENT_VERSION: CarriedVersion = {
   key: keyOf(LANGUAGE_VERSION),
   release: LANGUAGE_VERSION,
   load: async () => ({ LANGUAGE_VERSION }),
-  check: CURRENT,
-  run: CURRENT,
+  provides: { check: CURRENT, run: CURRENT, resume: CURRENT, listen: CURRENT },
 };
 
 const CARRIED: readonly CarriedVersion[] = [
@@ -185,9 +211,14 @@ const CARRIED: readonly CarriedVersion[] = [
   {
     key: '0.12',
     release: '0.12.13',
+    legacyIds: ['1', '2', '3', '4'],
     load: () => import('@listen-fire/lang-0.12'),
-    check: { kind: 'carried', lane: () => import('@listen-fire/lang-0.12') },
-    run: HELD,
+    provides: {
+      check: { kind: 'carried', lane: () => import('@listen-fire/lang-0.12') },
+      run: HELD,
+      resume: HELD,
+      listen: HELD,
+    },
   },
 ];
 
@@ -203,6 +234,18 @@ const BY_KEY: ReadonlyMap<string, CarriedVersion> = (() => {
   return byKey;
 })();
 
+const BY_LEGACY_ID: ReadonlyMap<string, CarriedVersion> = (() => {
+  const byId = new Map<string, CarriedVersion>();
+  for (const version of CARRIED) {
+    for (const id of version.legacyIds ?? []) {
+      if (compatibilityKey(id) !== undefined) throw new Error(`the language version registry names release ${id} as a legacy id`);
+      if (byId.has(id)) throw new Error(`the language version registry files legacy id ${id} twice`);
+      byId.set(id, version);
+    }
+  }
+  return byId;
+})();
+
 /** Every version this build carries, the current one first. */
 export function carriedVersions(): readonly CarriedVersion[] {
   return CARRIED;
@@ -213,11 +256,26 @@ export function currentVersion(): CarriedVersion {
   return CURRENT_VERSION;
 }
 
-/** The carried version a pin belongs to, by its compatibility key; undefined
- *  for a pin whose key this build does not carry, or that is not a release. */
+/** The carried version a release pin belongs to, by its compatibility key;
+ *  undefined for a pin whose key this build does not carry, a legacy id, or a
+ *  text that is not a release. */
 export function versionOf(pin: LanguageVersion): CarriedVersion | undefined {
   const key = compatibilityKey(pin);
   return key === undefined ? undefined : BY_KEY.get(key);
+}
+
+/** The carried version whose key a legacy id shares (the release it ran
+ *  beside in production); undefined for anything else. */
+export function versionOfLegacyId(pin: LanguageVersion): CarriedVersion | undefined {
+  return BY_LEGACY_ID.get(pin);
+}
+
+/** The key two pins are compared by when one program imports another: a
+ *  release's compatibility key, the key of the release a legacy id ran
+ *  beside, and the text itself for anything else (so it matches only
+ *  itself). */
+export function importKeyOf(pin: LanguageVersion): string {
+  return versionOfLegacyId(pin)?.key ?? compatibilityKey(pin) ?? pin;
 }
 
 /** Whether `pin` is on the current version: the platform's own core reads
@@ -226,39 +284,123 @@ export function isCurrent(pin: LanguageVersion): boolean {
   return versionOf(pin) === CURRENT_VERSION;
 }
 
-/** How `pin` is checked: `held` for a pin this build does not carry, so a
- *  caller has one refusal to write, not two. */
+/** What `pin`'s version provides; everything held for a pin this build does
+ *  not carry, so a caller has one refusal to write, not two. */
+export function providedFor(pin: LanguageVersion): Provided {
+  return versionOf(pin)?.provides ?? NOTHING_PROVIDED;
+}
+
+const NOTHING_PROVIDED: Provided = { check: HELD, run: HELD, resume: HELD, listen: HELD };
+
+/** How `pin` is checked. */
 export function checkingOf(pin: LanguageVersion): CheckCapability {
-  return versionOf(pin)?.check ?? HELD;
+  return providedFor(pin).check;
 }
 
-/** How `pin` runs: `held` for a pin this build does not carry. */
+/** How a segment someone starts on `pin` runs. */
 export function runningOf(pin: LanguageVersion): RunCapability {
-  return versionOf(pin)?.run ?? HELD;
+  return providedFor(pin).run;
 }
 
-/**
- * What a run of `pin` is told when this build does not run it: the language's
- * own refusal, naming the pin and the remedy. One text for every door that
- * would run it, given before anything reads the program. A carried version
- * that does not run reads exactly as a key this build does not carry.
- * Undefined when the pin runs.
- */
-export function runRefusal(pin: LanguageVersion): string | undefined {
-  const running = runningOf(pin);
-  switch (running.kind) {
-    case 'current':
-      return undefined;
-    case 'held':
-      return (
-        languageVersionDiagnostic(pin, LANGUAGE_VERSION)?.message ??
-        `this automation pins language ${pin}, which this release (${LANGUAGE_VERSION}) does not read`
-      );
+/** How a parked run of `pin` resumes. */
+export function resumingOf(pin: LanguageVersion): ResumeCapability {
+  return providedFor(pin).resume;
+}
+
+/** Whether `pin`'s listens fire. */
+export function listeningOf(pin: LanguageVersion): ListenCapability {
+  return providedFor(pin).listen;
+}
+
+/** What a door asks of `pin`'s version, by the capability it needs. */
+function capabilityOf(pin: LanguageVersion, needed: RunningCapability): RunCapability | ResumeCapability | ListenCapability {
+  switch (needed) {
+    case 'run':
+      return runningOf(pin);
+    case 'resume':
+      return resumingOf(pin);
+    case 'listen':
+      return listeningOf(pin);
     default: {
-      const unknown: never = running;
-      throw new Error(`unknown run capability ${JSON.stringify(unknown)}`);
+      const unknown: never = needed;
+      throw new Error(`unknown capability ${JSON.stringify(unknown)}`);
     }
   }
+}
+
+/** What a capability is, as a refusal says it is not provided. */
+const NOT_PROVIDED: Record<RunningCapability, string> = {
+  run: 'run its automations',
+  resume: 'resume its parked runs, so a run of it that parks is stopped where it parks',
+  listen: 'fire its listens',
+};
+
+/**
+ * What a door that needs `needed` of `pin`'s version is told when the version
+ * does not provide it. One text per capability, given before anything reads
+ * the program. A key this build does not carry at all is refused in the
+ * language's own text, naming the remedy. A carried version names what it
+ * provides and what it does not. Undefined when `needed` is provided.
+ */
+export function refusalOf(pin: LanguageVersion, needed: RunningCapability): string | undefined {
+  const capability = capabilityOf(pin, needed);
+  switch (capability.kind) {
+    case 'current':
+      return undefined;
+    case 'held': {
+      const version = versionOf(pin);
+      if (version === undefined) {
+        return (
+          languageVersionDiagnostic(pin, LANGUAGE_VERSION)?.message ??
+          `this automation pins language ${pin}, which this release (${LANGUAGE_VERSION}) does not read`
+        );
+      }
+      return (
+        `this automation pins language ${pin}: this platform carries ${version.release} to ${describeProvided(version.provides)}, ` +
+        `but not to ${NOT_PROVIDED[needed]}; upgrade it to ${LANGUAGE_VERSION} for that`
+      );
+    }
+    default: {
+      const unknown: never = capability;
+      throw new Error(`unknown capability ${JSON.stringify(unknown)}`);
+    }
+  }
+}
+
+/** What a run of `pin` started by someone is told when this build does not
+ *  run it. */
+export function runRefusal(pin: LanguageVersion): string | undefined {
+  return refusalOf(pin, 'run');
+}
+
+/** What a resume of a run parked under `pin` is told, and what a segment of
+ *  it that tries to park is stopped with, when this build does not resume it. */
+export function resumeRefusal(pin: LanguageVersion): string | undefined {
+  return refusalOf(pin, 'resume');
+}
+
+/** The capabilities a version provides, in words: "check and run", say. */
+export function describeProvided(provides: Provided): string {
+  const words: string[] = [];
+  if (provides.check.kind !== 'held') words.push('check');
+  if (provides.run.kind !== 'held') words.push('run');
+  if (provides.resume.kind !== 'held') words.push('resume');
+  if (provides.listen.kind !== 'held') words.push('fire the listens of');
+  if (words.length === 0) return 'carry nothing of';
+  if (words.length === 1) return `${words[0]} its automations`;
+  return `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]} its automations`;
+}
+
+/** Plain flags for a surface (the web's version panel, the save pane): what
+ *  `pin`'s version provides. */
+export function providedFlagsFor(pin: LanguageVersion): { check: boolean; run: boolean; resume: boolean; listen: boolean } {
+  const provides = providedFor(pin);
+  return {
+    check: provides.check.kind !== 'held',
+    run: provides.run.kind !== 'held',
+    resume: provides.resume.kind !== 'held',
+    listen: provides.listen.kind !== 'held',
+  };
 }
 
 /**

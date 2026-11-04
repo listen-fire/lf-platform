@@ -68,7 +68,7 @@ import {
   isLegacyLanguageVersion,
   upgradeSourceAsync,
 } from 'legacy-lang';
-import { checkingOf, isCurrent, runningOf } from '@listen-fire/language-versions';
+import { checkingOf, isCurrent, listeningOf, refusalOf, versionOf } from '@listen-fire/language-versions';
 import { logger } from 'movement-engine/public/log';
 import {
   DEPRECATED_VERSION,
@@ -551,13 +551,14 @@ async function checkOne(input: {
 
 /**
  * A release pin: what the registry of carried versions says of it
- * (`@listen-fire/language-versions`). A pin on the current version is
- * validated under it, `current` when clean of errors. A pin of an earlier
- * line this platform does not run stops firing (`stopped`); when the platform
- * carries that line's checker, it is first validated under its own pin and the
- * verdict recorded, so it is still checked, but it never reads as running. Any
- * other pin is `refused` with the rule's text (an older line moves by an
- * explicit upgrade).
+ * (`@listen-fire/language-versions`). A pin whose version fires its listens is
+ * validated under it and stays provisioned, `current` when clean of errors. A
+ * pin of an earlier line whose listens this platform does not fire stops
+ * firing (`stopped`): it is unprovisioned, and when the platform carries that
+ * line's checker it is validated under its own pin and the verdict recorded.
+ * It never reads as firing; the detail says what its version still provides
+ * (Run now and test runs, when it runs). Any other pin is `refused` with the
+ * rule's text (an older line moves by an explicit upgrade).
  */
 async function checkReleasePin(input: {
   deps: DeployCheckDeps;
@@ -569,14 +570,14 @@ async function checkReleasePin(input: {
   const releaseLanguage = deps.release.language;
   const pin = movement.languageVersion;
 
-  const running = runningOf(pin);
-  switch (running.kind) {
+  const listening = listeningOf(pin);
+  switch (listening.kind) {
     case 'current':
       break;
     case 'held':
-      return releasePinNotRun(input);
+      return releasePinNotListened(input);
     default:
-      return neverAsAny(running);
+      return neverAsAny(listening);
   }
 
   const underPin = await deps.validate(validationUnder(movement, pin));
@@ -605,10 +606,10 @@ async function checkReleasePin(input: {
   return entryFor(movement, 'current', pin, releaseLanguage, '');
 }
 
-/** A release pin this platform does not run: an earlier line stops firing,
- *  checked first under its own pin when its checker is carried; a newer line,
- *  or a text that is no release, is refused. */
-async function releasePinNotRun(input: {
+/** A release pin whose listens this platform does not fire: an earlier line
+ *  stops firing, and is then checked under its own pin when its checker is
+ *  carried; a newer line, or a text that is no release, is refused. */
+async function releasePinNotListened(input: {
   deps: DeployCheckDeps;
   movement: MovementRow;
   current: LanguageVersion;
@@ -629,9 +630,13 @@ async function releasePinNotRun(input: {
     // comes first: a check that fails cannot leave the automation firing.
     await deps.unprovision(movement);
     const checked = await checkedUnderOwnPin(deps, movement);
-    const detail =
-      `${releaseVersionDiagnostic(pin, current)?.message ?? `this automation pins language ${pin}, which the installed language ${current} does not read`}; ` +
-      `${checked}it does not fire until it is upgraded`;
+    // A carried version says what it still provides (it may run when someone
+    // starts it); a key this build does not carry, the language's own text.
+    const why =
+      (versionOf(pin) !== undefined ? refusalOf(pin, 'listen') : undefined) ??
+      releaseVersionDiagnostic(pin, current)?.message ??
+      `this automation pins language ${pin}, which the installed language ${current} does not read`;
+    const detail = `${why}; ${checked}its listens do not fire until it is upgraded`;
     await emitSafely(deps, () => ({
       teamId: movement.teamId,
       kind: VALIDATION_ISSUE,

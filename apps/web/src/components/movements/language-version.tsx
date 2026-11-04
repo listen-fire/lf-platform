@@ -31,21 +31,29 @@ function versionName(version: LanguageVersion): string {
 
 /** What happens to it until it is upgraded: a legacy id runs on the platform's
  *  own engine; a release pin of an earlier line stopped firing at the deploy
- *  that installed the current version, and is still checked under its own
- *  version when the platform carries that version's checker. */
+ *  that installed the current version unless its version still fires its
+ *  listens, and the panel says exactly what the platform still does with it
+ *  when it carries that version (checking edits, running it when someone
+ *  starts it, resuming its parked runs). */
 function Meanwhile({ version, route }: { version: LanguageVersion; route: EditorLanguageRoute }) {
   if (isLegacy(version)) {
     return <>It keeps running as <VersionTag name={versionName(version)} /> until you upgrade it.</>;
   }
-  const stopped = (
-    <>It stopped firing when <VersionTag name={versionName(LANGUAGE_VERSION)} /> was installed, and stays stopped until you upgrade it.</>
+  const own = <VersionTag name={versionName(version)} />;
+  const listens = route.provides?.listen === true;
+  const stopped = listens ? null : (
+    <>Its listens stopped firing when <VersionTag name={versionName(LANGUAGE_VERSION)} /> was installed, and stay stopped until you upgrade it. </>
   );
-  return route.kind === "carried" ? (
+  if (route.kind !== "carried") return stopped;
+  return (
     <>
-      {stopped} Edits to it are still checked under <VersionTag name={versionName(version)} />.
+      {stopped}
+      Edits to it are still checked under {own}.
+      {route.provides?.run === true && <> Run now and test runs run it under {own}.</>}
+      {route.provides?.run === true && route.provides.resume !== true && (
+        <> A run of it that would wait (an ask, a pause, a wait for an event) is stopped where it waits.</>
+      )}
     </>
-  ) : (
-    stopped
   );
 }
 

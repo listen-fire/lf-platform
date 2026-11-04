@@ -140,7 +140,7 @@ import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 
 import { LANGUAGE_VERSION } from 'movement-lang';
-import { runRefusal } from '@listen-fire/language-versions';
+import { resumeRefusal, runRefusal } from '@listen-fire/language-versions';
 
 import { RunLeaseLost } from '../../../movement_engine/run_lease';
 import { movementForTrigger, resumeMovementFiring, runMovementFiring, shippedMovementForTrigger } from '../execute';
@@ -540,7 +540,7 @@ describe('resumeMovementFiring', () => {
 
     expect(runCatalogSnapshotForTeam).not.toHaveBeenCalled();
     expect(resumeMovement).not.toHaveBeenCalled();
-    expect(outcome.error).toContain(runRefusal('0.12.13'));
+    expect(outcome.error).toContain(resumeRefusal('0.12.13'));
   });
 
   it('resumes on the engine the run row says parked it', async () => {

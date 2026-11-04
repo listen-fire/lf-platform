@@ -44,7 +44,7 @@ describe.each(others.map((version) => [version.key, version] as const))('carried
   it('is what its carried checker loads, when it checks', async () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const required: object = require(name);
-    const { check } = version;
+    const { check } = version.provides;
     switch (check.kind) {
       case 'carried':
         expect(await check.lane()).toEqual(expect.objectContaining(required));

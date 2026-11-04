@@ -6,7 +6,8 @@
 // TypeScript engine. The engine settings that once chose otherwise are
 // refused at boot.
 
-import { LANGUAGE_VERSION, EMPTY_CATALOG_SNAPSHOT, languageVersionDiagnostic, mockCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
+import { LANGUAGE_VERSION, EMPTY_CATALOG_SNAPSHOT, mockCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
+import { resumeRefusal } from '@listen-fire/language-versions';
 import { tenantIdOf } from 'engine-contracts';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 
@@ -157,13 +158,13 @@ describe('the engine a segment runs on', () => {
   });
 });
 
-describe('a version this build carries but cannot yet run (0.12)', () => {
+describe('a version this build carries but does not resume (0.12)', () => {
   const OLDER = '0.12.13';
-  const refusal = languageVersionDiagnostic(OLDER, LANGUAGE_VERSION)!.message;
+  const refusal = resumeRefusal(OLDER)!;
 
-  it('is refused by pin, with the same text as a key the build does not carry', () => {
-    expect(() => engineFor({ languageVersion: OLDER })).toThrow(MovementEngineError);
-    expect(() => engineFor({ languageVersion: OLDER })).toThrow(`MOVENG_LANGUAGE_VERSION: ${refusal}`);
+  it("a resume is refused by pin, in the registry's text naming what the version provides", () => {
+    expect(refusal).toMatch(/^this automation pins language 0\.12\.13: this platform carries 0\.12\.13 to /);
+    expect(() => engineFor({ languageVersion: OLDER, parkedOn: 'rust' })).toThrow(MovementEngineError);
     expect(() => engineFor({ languageVersion: OLDER, parkedOn: 'rust' })).toThrow(`MOVENG_LANGUAGE_VERSION: ${refusal}`);
   });
 

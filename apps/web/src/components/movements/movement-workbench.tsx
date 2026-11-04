@@ -56,6 +56,7 @@ import {
   type MovementEditorHandle,
 } from "@/components/movements/movement-editor";
 import {
+  saveGoesLive,
   typesAgainstCurrentCatalog,
   type CheckRemote,
   type EditorLanguageRoute,
@@ -1751,9 +1752,11 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
 
           {/* How saving works */}
           <p className="mt-auto text-[12px] leading-relaxed text-gray-400">
-            Saving always keeps your script. When it has no problems, the
-            movement also goes live; otherwise it stays a draft and the last
-            live version keeps running.
+            {languageRoute === undefined || saveGoesLive(languageRoute)
+              ? "Saving always keeps your script. When it has no problems, the movement also goes live; otherwise it stays a draft and the last live version keeps running."
+              : languageRoute.provides?.run === true
+                ? "Saving always keeps your script. When it has no problems, it becomes the version Run now and test runs use; its listens do not fire until you upgrade it."
+                : "Saving always keeps your script and checks it. It does not go live until you upgrade it."}
           </p>
         </aside>
       </div>

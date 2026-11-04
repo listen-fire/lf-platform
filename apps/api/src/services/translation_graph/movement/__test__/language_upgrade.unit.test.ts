@@ -372,7 +372,7 @@ describe('a pin by the compatibility rule', () => {
     expect(issues.map((e) => e.reason)).toEqual([expect.stringContaining(OLDER_LINE), expect.stringContaining(NEWER_LINE)]);
   });
 
-  it("a 0.12 pin is validated under 0.12 by 0.12's own checker, and still stops: the platform does not run 0.12", async () => {
+  it("a 0.12 pin is validated under 0.12 by 0.12's own checker, and still stops: the platform does not fire 0.12's listens", async () => {
     const store = fakeStore({
       movements: [
         movement({ id: 'clean-012', languageVersion: '0.12.13' }),
@@ -400,9 +400,12 @@ describe('a pin by the compatibility rule', () => {
     ]);
     expect(store.unprovisioned).toEqual(['clean-012', 'broken-012']);
     const details = summary?.automations.map((a) => a.detail) ?? [];
-    expect(details[0]).toContain('checked under 0.12.13, it validates; it does not fire until it is upgraded');
-    expect(details[1]).toContain('checked under 0.12.4, it does not validate (line 3: no field Textt); it does not fire until it is upgraded');
-    for (const detail of details) expect(detail).not.toMatch(/\b(runs|keeps running|fires)\b/);
+    expect(details[0]).toContain('checked under 0.12.13, it validates; its listens do not fire until it is upgraded');
+    expect(details[1]).toContain('checked under 0.12.4, it does not validate (line 3: no field Textt); its listens do not fire until it is upgraded');
+    for (const detail of details) {
+      expect(detail).not.toMatch(/\b(keeps running|fires)\b/);
+      expect(detail).toContain('but not to fire its listens');
+    }
   });
 
   it('a 0.12 pin whose check throws is still stopped and unprovisioned, and the detail says it could not be checked', async () => {
@@ -424,7 +427,7 @@ describe('a pin by the compatibility rule', () => {
     expect(store.unprovisioned).toEqual(['unreadable-012']);
     expect(summary?.automations.map((a) => [a.name, a.outcome])).toEqual([['unreadable-012', 'stopped']]);
     const [entry] = summary?.automations ?? [];
-    expect(entry?.detail).toContain('it could not be checked under 0.12.13 (the 0.12 lane failed to load); it does not fire until it is upgraded');
+    expect(entry?.detail).toContain('it could not be checked under 0.12.13 (the 0.12 lane failed to load); its listens do not fire until it is upgraded');
     expect(store.validity.has('unreadable-012')).toBe(false);
   });
 
