@@ -100,9 +100,11 @@ describe('version 5 checker leftovers, in both checkers', () => {
   // The dialect reads version 5 through the installed parser, and 0.15 made
   // `Text.lower` the spelling inside a walk, so it finds nothing here. It serves
   // only the upgrade warnings of pins 1 to 4, and stays on the current core until
-  // 0.12 retires (K5a rulings).
-  it.failing('Text.lower inside walk brackets: the TypeScript dialect agrees', () => {
-    check(V5('  b = c-[n:notes WHERE Text.lower(n.title) == "x"]->'), 5);
+  // 0.12 retires (K5a rulings). Pinned to what it answers, so a change of that
+  // answer in either direction fails here.
+  it('Text.lower inside walk brackets: the TypeScript dialect finds nothing', () => {
+    const source = V5('  b = c-[n:notes WHERE Text.lower(n.title) == "x"]->');
+    expect(said(checkProgram(parseProgram(source, { languageVersion: 5 }), catalog, { languageVersion: 5 }))).toEqual([]);
   });
 
   it('a field read off text is refused from 5, and warned under 3 and 4', () => {

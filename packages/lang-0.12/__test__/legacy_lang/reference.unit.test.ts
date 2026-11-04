@@ -6,8 +6,9 @@
 // reads through the installed parser. 0.15 changed the words inside a walk, so
 // the dialect no longer answers as 0.12 did. That dialect serves only the upgrade
 // warnings of pins 1 to 4, and stays on the current core until 0.12 retires (K5a
-// rulings), so each difference is pinned below rather than mended: if one ever
-// goes away, its `it.failing` fails and says so.
+// rulings), so each difference is pinned below rather than mended: each pin states
+// what the dialect answers today, so it fails if that answer changes in either
+// direction, toward 0.12's or to something else.
 
 import { LANGUAGE_VERSION } from '@listen-fire/movement-lang/language_version';
 import { spellCode } from '@listen-fire/movement-lang/parser/surface';
@@ -127,19 +128,19 @@ describe('the 0.12 surface, by the carried 0.12.13 checker', () => {
 });
 
 describe('where legacy-lang\'s dialect no longer answers as 0.12 did', () => {
-  it.failing('a read hop\'s alias: it refuses `EXISTS` inside the walk', () => {
-    expect(dialectErrors(HOP_WHERE, REGISTRY)).toEqual([]);
+  it('a read hop\'s alias: it refuses `EXISTS` inside the walk', () => {
+    expect(dialectErrors(HOP_WHERE, REGISTRY)).toEqual(['MOV_V5_SPELLING: inside walk brackets `EXISTS` is written `exists`, as it is outside them']);
   });
 
-  it.failing('the quorum form: it refuses `EXISTS` inside the walk', () => {
-    expect(dialectErrors(QUORUM, ASKS)).toEqual([]);
+  it('the quorum form: it refuses `EXISTS` inside the walk', () => {
+    expect(dialectErrors(QUORUM, ASKS)).toEqual(['MOV_V5_SPELLING: inside walk brackets `EXISTS` is written `exists`, as it is outside them']);
   });
 
-  it.failing('walk words: it respells `LENGTH` as `Text.length`', () => {
-    expect(dialectErrors(WALK_WORDS, CHAT).filter((line) => line.startsWith('MOV_V5_SPELLING'))).toEqual([]);
+  it('walk words: it respells `LENGTH` as `Text.length`', () => {
+    expect(dialectErrors(WALK_WORDS, CHAT)).toEqual(['MOV_V5_SPELLING: inside walk brackets `LENGTH` is written `Text.length`, as it is outside them']);
   });
 
-  it.failing('a message: it spells `LOWER` as `Text.lower`', () => {
-    expect(dialectSpellCode(LOWER_IN_A_WALK, '5')).toBe(LOWER_IN_A_WALK);
+  it('a message: it spells `LOWER` as `Text.lower`', () => {
+    expect(dialectSpellCode(LOWER_IN_A_WALK, '5')).toBe('crm-[c:Companies WHERE Text.lower(c.Name) CONTAINS "x"]->');
   });
 });
