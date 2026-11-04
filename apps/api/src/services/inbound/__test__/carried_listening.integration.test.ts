@@ -3,6 +3,7 @@
 // loop runs it whole). Webhooks, schedules and polls under 0.12, and an upgrade
 // with events on both sides of it.
 
+import { carriedVersions } from '@listen-fire/language-versions';
 import { createHmac, randomUUID } from 'node:crypto';
 
 jest.mock('../../translation_graph/movement/execute', () => {
@@ -350,7 +351,7 @@ describe('0.12 listens beside the current version (real Postgres)', () => {
       const { receiveJudgedEvent } = jest.requireActual('../carried_delivery');
       const { triggerId } = await kept({ source: DAILY_012, pin: PIN, kind: 'cron', config: { schedule: '0 9 * * *' }, firedMovementName: 'digest' });
       const event = { pipelineInputId: `trigger:${triggerId}`, adapterType: 'cron', triggerType: 'webhook', payload: { firedAt: new Date().toISOString(), schedule: '0 9 * * *' } };
-      const lane = await jest.requireActual('@listen-fire/lang-0.12');
+      const lane = await carriedVersions().find((version) => version.key === '0.12')!.listenRows!();
       for (let attempt = 0; attempt < 2; attempt++) await receiveJudgedEvent({ teamId, triggerId, event, lane, stableKey: 'delivery:d:0' });
       expect(await receipts()).toHaveLength(1);
     });
