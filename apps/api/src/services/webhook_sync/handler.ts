@@ -138,7 +138,11 @@ function builtInSource(subscription: InboundSubscription, keepFirst?: KeepFirst)
       const adapterType = resolveAdapterSlug(subscription.providerKey);
       if (!hasAdapter(adapterType)) return null;
       const checkedByModule = 'checkedBy' in verifier;
-      if (!checkedByModule) await keepFirst?.({ adapterType, credentialsId });
+      const { intercept } = builtInIntercept({ adapterType, subscription, credentialsId });
+      // A delivery the door's own handling ends is never kept: a button tap
+      // carries an ask's answer token. What it passes on is kept before either
+      // version reads it.
+      if (!checkedByModule && intercept === undefined) await keepFirst?.({ adapterType, credentialsId });
       const adapter = await resolveAdapter({
         adapterType,
         teamId: subscription.teamId as TeamId,
@@ -148,7 +152,15 @@ function builtInSource(subscription: InboundSubscription, keepFirst?: KeepFirst)
         adapterType,
         credentialsId,
         adapter: checkedByModule && keepFirst !== undefined ? keepingOnceAccepted(adapter, () => keepFirst({ adapterType, credentialsId })) : adapter,
-        ...builtInIntercept({ adapterType, subscription, credentialsId }),
+        ...(intercept !== undefined
+          ? {
+              intercept: async (body: unknown) => {
+                const answer = await intercept(body);
+                if (answer === 'continue' && !checkedByModule) await keepFirst?.({ adapterType, credentialsId });
+                return answer;
+              },
+            }
+          : {}),
       };
     },
   };
