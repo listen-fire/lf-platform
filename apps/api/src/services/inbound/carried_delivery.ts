@@ -20,14 +20,14 @@ import { isLegacyLanguageVersion } from 'legacy-lang';
 import { carriedVersions, versionOf, versionOfLegacyId, type CarriedEvent, type CarriedKeptDelivery, type CarriedVersion, type ListenRow, type ListeningLane } from '@listen-fire/language-versions';
 
 import type { TeamId } from '../../generated/kysely/core/Team';
-import type { WorkHandler } from '../work/kinds';
+import type { WorkContext, WorkHandler } from '../work/kinds';
 import type { TriggerEventId } from '../../generated/kysely/automations/TriggerEvent';
 
 import { getAutomationsQb } from '../../lib/kysely';
 import { teamIdSchema } from '../../lib/team_id';
 import { queueAwaitWakesOf } from '../movement_engine/carried_correlations';
 import { WAITING_KEY_PREFIX, deliveryRowStore } from '../movement_engine/run_host_deliveries';
-import { notifyWork, registerWorkHandler } from '../work/drain';
+import { WorkGivesUp, notifyWork, registerWorkHandler } from '../work/drain';
 import { enqueueWork } from '../work/store';
 import { modulePlatform } from '../translation_graph/movement/carried_run';
 import { MOVEMENT_LISTEN_PROVISIONER } from '../translation_graph/movement/carried_subscriptions';
@@ -35,6 +35,7 @@ import { edgeSubscriptionOf } from '../translation_graph/movement/listen_subscri
 import { siblingKindsForAdapter } from '../translation_graph/adapters/registry';
 import { dispatchWorkKey } from '../translation_graph/triggers/dispatch_event';
 import { storeTriggerEvent } from '../translation_graph/triggers/event_store';
+import { recordMovementFailureIssue } from '../translation_graph/movement/issues';
 import { readKeptRequest } from './captured_request';
 
 /** What a door says of a delivery, for the versions that read it after it. */
@@ -48,6 +49,10 @@ export interface DeliveryOrigin {
 }
 
 const READ_DELIVERY = 'read_delivery';
+
+/** The attempts a reading gets before it is given up on (the drain backs off
+ *  between them, to five minutes), and an operator is told. */
+export const READ_DELIVERY_ATTEMPTS = 10;
 
 const readDeliveryRowSchema = z.object({
   teamId: teamIdSchema,
@@ -263,8 +268,60 @@ async function receiptStatus(id: TriggerEventId): Promise<string | undefined> {
   return row?.status;
 }
 
-async function runReadDelivery(payload: unknown): Promise<void> {
+/** The automations a delivery was owed to under a version: those with a listen
+ *  it might have fired, and those with a run parked on the module's keys, whose
+ *  reply it might have been. */
+async function ownersOfDelivery(row: ReadDeliveryRow, version: CarriedVersion): Promise<Array<{ movementId: string; movementName: string; triggerName: string }>> {
+  const listens = (await listenRowsFor(row, version)).map((listen) => listen.id);
+  const heard =
+    listens.length === 0
+      ? []
+      : await getAutomationsQb(['trigger', 'movement'])
+          .selectFrom('trigger')
+          .innerJoin('movement', 'movement.id', 'trigger.movement_id')
+          .where('trigger.id', 'in', listens as never[])
+          .select(['movement.id as movementId', 'movement.name as movementName', 'trigger.name as triggerName'])
+          .execute();
+  const parked =
+    version.provides.resume.kind !== 'carried'
+      ? []
+      : await getAutomationsQb(['adapter_await', 'trigger_run', 'movement_version', 'movement'])
+          .selectFrom('adapter_await')
+          .innerJoin('trigger_run', 'trigger_run.id', 'adapter_await.run_id')
+          .innerJoin('movement_version', 'movement_version.id', 'trigger_run.movement_version_id')
+          .innerJoin('movement', 'movement.id', 'movement_version.movement_id')
+          .where('adapter_await.team_id', '=', row.teamId)
+          .where('adapter_await.adapter_type', '=', row.adapterType)
+          .select(['movement.id as movementId', 'movement.name as movementName'])
+          .distinct()
+          .execute();
+  return [...heard, ...parked.map((owner) => ({ ...owner, triggerName: row.adapterType }))];
+}
+
+/** A reading given up on is no silent loss: each automation it was owed to has
+ *  an issue naming the delivery, which stays as it was received. */
+async function tellOwnersOfLostReading(row: ReadDeliveryRow, input: { attempts: number; error: unknown }): Promise<void> {
+  const version = carriedVersions().find((candidate) => candidate.key === row.version);
+  const reason = input.error instanceof Error ? input.error.message : String(input.error);
+  const message = `delivery ${row.deliveryId} could not be read under language version ${row.version} after ${input.attempts} attempts, so the event it carried ran nothing under it: ${reason}. The delivery is kept as it was received`;
+  for (const owner of version === undefined ? [] : await ownersOfDelivery(row, version)) {
+    await recordMovementFailureIssue({ teamId: row.teamId, ...owner, message });
+  }
+  logger.error(`[ReadDelivery] ${message}`);
+}
+
+async function runReadDelivery(payload: unknown, ctx: WorkContext): Promise<void> {
   const row = readDeliveryRowSchema.parse(payload);
+  try {
+    await readKeptDelivery(row);
+  } catch (error) {
+    if (ctx.attempts < READ_DELIVERY_ATTEMPTS) throw error;
+    await tellOwnersOfLostReading(row, { attempts: ctx.attempts, error });
+    throw new WorkGivesUp(`delivery ${row.deliveryId} could not be read under ${row.version} after ${ctx.attempts} attempts: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+async function readKeptDelivery(row: ReadDeliveryRow): Promise<void> {
   const version = carriedVersions().find((candidate) => candidate.key === row.version);
   const laneOf = version?.listenRows;
   if (version === undefined || laneOf === undefined) {

@@ -40,7 +40,8 @@ import { runMovementFiring } from '../../translation_graph/movement/execute';
 import { mintMovementVersionIfChanged } from '../../translation_graph/movement/version_store';
 import { findTriggerByInboundKey } from '../../translation_graph/storage/tg_table';
 import { carriedVersions } from '@listen-fire/language-versions';
-import { readDeliveryHandler, receiveJudgedEvent } from '../carried_delivery';
+import { READ_DELIVERY_ATTEMPTS, readDeliveryHandler, receiveJudgedEvent } from '../carried_delivery';
+import { pruneTriggerRuns } from '../../translation_graph/runs/prune';
 import { testWorkContext } from '../../../test/harness/work';
 import { WorkDeferred } from '../../work/drain';
 import { carriedRunHandler } from '../../translation_graph/movement/carried_run_now';
@@ -196,6 +197,45 @@ describe('one door, two versions (real Postgres)', () => {
     await drainUntilIdle({ teamId });
     expect(await receipts()).toEqual([]);
     expect(firing).not.toHaveBeenCalled();
+  });
+
+  describe('a delivery 0.12 cannot read', () => {
+    it('is retried, then given up on with an issue on the automation, its raw delivery kept', async () => {
+      const secret = 'sekrit-secret-sekrit';
+      const sub = await subscription(secret);
+      const movement = await movementOn('0.12.13', ATTIO_012);
+      await listenRow({ movementId: movement });
+      expect((await deliver(sub, attioBody(randomUUID()), secret)).status).toBe(200);
+      const [queued] = await workOf('read_delivery');
+      const keptId = (await deliveries(sub)).rows[0]!.id;
+      const issues = () => getAutomationsQb(['movement_issue']).selectFrom('movement_issue').where('team_id', '=', teamId).select(['movement_id', 'message']).execute();
+
+      // 0.12's Attio reads its workspace's catalogs: with the provider down, it throws.
+      (fetch as jest.Mock).mockRejectedValue(new Error('attio is down'));
+      try {
+        await expect(readDeliveryHandler.run(queued!.payload, { ...testWorkContext(), attempts: 1 })).rejects.toThrow('attio is down');
+        expect(await issues()).toEqual([]);
+
+        // The attempt the drain would have given up at.
+        await getAutomationsQb(['work']).updateTable('work').set({ attempts: READ_DELIVERY_ATTEMPTS - 1 }).where('team_id', '=', teamId).where('kind', '=', 'read_delivery').execute();
+        await drainUntilIdle({ teamId });
+      } finally {
+        (fetch as jest.Mock).mockImplementation(async () => new Response(JSON.stringify({ data: [] }), { status: 200, headers: { 'content-type': 'application/json' } }));
+      }
+
+      const [row] = await workOf('read_delivery');
+      expect(row!.dead_at).not.toBeNull();
+      const [issue] = await issues();
+      expect(issue).toMatchObject({ movement_id: movement, message: expect.stringContaining(`delivery ${keptId} could not be read under language version 0.12`) });
+      expect(issue!.message).toContain('attio is down');
+      expect(await receipts()).toEqual([]);
+
+      // The request stays, past its retention, while the row is dead.
+      await pruneTriggerRuns({ teamId, olderThanDays: -1 });
+      const { rows } = await deliveries(sub);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.request).not.toBeNull();
+    });
   });
 
   describe('a dispatch_event row', () => {

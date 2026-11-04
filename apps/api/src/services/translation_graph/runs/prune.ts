@@ -59,22 +59,26 @@ export async function pruneTriggerRuns(
 /**
  * A delivery's kept request is forgotten at the same retention as the runs
  * (ruling 3), and the delivery with it once nothing still running needs it:
- * a run that is not settled, or a `fire_event` row yet to start one.
+ * a run that is not settled, or a `fire_event` row yet to start one. A
+ * `read_delivery` row a version gave up on keeps its delivery and its request:
+ * the issue it left names the delivery, and an operator may need it.
  */
 async function pruneDeliveries(input: { cutoff: Date; teamId: TeamId | null }): Promise<number> {
   const exec = getAutomationsQb(['delivery', 'trigger_run', 'work']);
   const { cutoff, teamId } = input;
   await sql`
-    update automations.delivery set request = null
-    where received_at < ${cutoff} and request is not null
-      and (${teamId}::uuid is null or team_id = ${teamId}::uuid)`.execute(exec);
+    update automations.delivery d set request = null
+    where d.received_at < ${cutoff} and d.request is not null
+      and (${teamId}::uuid is null or d.team_id = ${teamId}::uuid)
+      and not exists (select 1 from automations.work w
+                      where w.team_id = d.team_id and w.kind = 'read_delivery' and w.dead_at is not null and w.payload->>'deliveryId' = d.id::text)`.execute(exec);
   const { rows } = await sql`
     delete from automations.delivery d
     where d.received_at < ${cutoff} and (${teamId}::uuid is null or d.team_id = ${teamId}::uuid)
       and not exists (select 1 from automations.trigger_run r
                       where r.team_id = d.team_id and r.delivery_id = d.id and r.status in ('running', 'parked'))
       and not exists (select 1 from automations.work w
-                      where w.team_id = d.team_id and w.kind = 'fire_event' and w.payload->>'deliveryId' = d.id::text)
+                      where w.team_id = d.team_id and w.kind in ('fire_event', 'read_delivery') and w.payload->>'deliveryId' = d.id::text)
     returning 1`.execute(exec);
   return rows.length;
 }

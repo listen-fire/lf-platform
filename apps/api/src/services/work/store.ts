@@ -225,6 +225,15 @@ export async function completeWork(input: {
     WHERE ${heldBy(input)}`.execute(qb);
 }
 
+/** A row its handler gave up on: kept dead with its reason, never claimed again
+ *  until a queue of the same key re-arms it. Fenced on the claim, as a release. */
+export async function buryWork(input: { id: string; leaseToken: string; reason: string }): Promise<void> {
+  await sql`
+    UPDATE automations.work
+    SET dead_at = now(), dead_reason = ${input.reason}::text, lease_owner = NULL, lease_until = NULL, lease_token = NULL
+    WHERE ${heldBy(input)}`.execute(getAutomationsQb(['work']));
+}
+
 /** Clear the lease so the row retries: at `dueAt` when given (backoff), else at its due_at.
  *  A re-arm since claim (updated_at moved past `claimedUpdatedAt`) wins over `dueAt`, as it
  *  does in completeWork. Not a re-arm itself, so updated_at is left alone. */
