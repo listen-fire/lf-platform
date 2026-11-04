@@ -104,6 +104,7 @@ import { withTeamContext } from './firing_context';
 import { currentContext } from '../../context';
 import { importGroupOf } from './imports_across_versions';
 import { holdDoorsAlone } from '../../movement_engine/run_host_deliveries';
+import { DoorsTryAgain } from '../../movement_engine/doors_hold';
 import { notifyWork } from '../../work/drain';
 import { bringUpListensLater } from './listens_up';
 import { moveNeverShippedPin, saveMovement } from './provision';
@@ -1320,6 +1321,9 @@ export async function upgradeMovement(input: {
   } catch (err) {
     if (err instanceof EventsInFlight) {
       return { status: 'blocked', ...shown, diagnostics, detail: `${err.flying.join('; ')}: nothing moved, so nothing is lost; try again in a moment` };
+    }
+    if (err instanceof DoorsTryAgain) {
+      return { status: 'blocked', ...shown, diagnostics, detail: 'deliveries of this team are on their way in: nothing moved, so nothing is lost; try again in a moment' };
     }
     if (err instanceof GroupHeldMeanwhile) return { status: 'blocked', ...shown, diagnostics, detail: holdsDetail(err.holds) };
     if (!(err instanceof GroupMoveStopped)) throw err;

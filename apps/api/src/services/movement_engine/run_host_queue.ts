@@ -16,6 +16,7 @@ import { z } from 'zod';
 
 import { getAutomationsQb } from '../../lib/kysely';
 import { announceWork } from '../work/wake';
+import { stillHoldingDoors } from './doors_hold';
 
 // The engine's own rows the store queues in its writes: a race a run owes,
 // and the runs a kept delivery queues. Claimed by the process that registers
@@ -52,7 +53,11 @@ export type StoreDb = ReturnType<typeof storeDb>;
 export function inStoreTransaction<T>(body: (trx: StoreDb) => Promise<T>): Promise<T> {
   const db = storeDb();
   if (db.isTransaction) return body(db);
-  return db.transaction().execute((trx) => body(trx));
+  return db.transaction().execute(async (trx) => {
+    const written = await body(trx);
+    stillHoldingDoors();
+    return written;
+  });
 }
 
 export interface QueuedRow {

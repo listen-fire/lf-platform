@@ -8,10 +8,12 @@
 
 import { sql } from 'kysely';
 
+import { logger } from 'movement-engine/public/log';
 import type { DeliveryRowStore, KeepDelivery, NewWorkRow, WaitWake } from 'movement-engine/public/run-host';
 
-import { doorsLockQb } from '../../lib/kysely';
+import { DOOR_WAIT_MS, doorsLockPool } from '../../lib/kysely';
 import { isWorkKind } from '../work/kinds';
+import { DoorsTryAgain, underDoorsHold, type DoorsHold } from './doors_hold';
 import {
   announceQueued,
   inStoreTransaction,
@@ -72,37 +74,135 @@ export const WAITING_KEY_PREFIX = 'waiting:';
  *  delivery is on one side of a move: its keep sees the move, or the move sees
  *  what it queued. A request behind an upgrade's waits, and everything shared
  *  queues behind that request, so only the upgrade waits holding the main pool. */
-function doorsLockKey(teamId: string) {
-  return sql`hashtextextended(${`doors:${teamId}`}::text, 0)`;
+function doorsLockName(teamId: string) {
+  return `doors:${teamId}`;
 }
 
-async function holdDoorsShared(exec: Exec, teamId: string): Promise<void> {
-  await sql`select pg_advisory_xact_lock_shared(${doorsLockKey(teamId)})`.execute(exec);
+/**
+ * How long an upgrade waits for the doors: seconds fewer than a door will
+ * (`DOOR_WAIT_MS`), since every door of the team queues behind its request, and a
+ * door behind it should get through when it gives up. It holds a main connection
+ * while it waits, so enough upgrades at once would stop the door they wait for
+ * until this ends. Far under the 30 seconds an upgrade gives what is in flight:
+ * that time is spent between looks, holding nothing, and an upgrade answered
+ * "try again" costs far less than doors standing still.
+ */
+const UPGRADE_DOORS_WAIT_MS = 3_000;
+
+/**
+ * How long a keep waits for a row lock, as on a delivery id another process's
+ * open transaction holds. A hung process would otherwise stop the keep with a
+ * connection of the doors' two held for it, and so every team's doors. Normally
+ * such a wait is a duplicate's commit, milliseconds. Under a door's wait
+ * (`DOOR_WAIT_MS`), so a door queued behind stuck keeps gets its turn.
+ */
+const KEEP_ROW_WAIT_MS = 3_000;
+
+const LOCK_NOT_AVAILABLE = '55P03';
+
+function isLockTimeout(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === LOCK_NOT_AVAILABLE;
+}
+
+/** `work`, whose waits for a lock end after `ms`. Only `work`'s: the transaction it
+ *  runs in may go on, as an upgrade's does, with moves of no such limit. */
+async function boundingLockWaits<T>(exec: Exec, wait: { what: string; ms: number }, work: () => Promise<T>): Promise<T> {
+  const { rows } = await sql<{ prior: string }>`select current_setting('lock_timeout') as prior`.execute(exec);
+  const prior = rows[0]?.prior;
+  if (prior === undefined) throw new Error('the database answered no lock_timeout');
+  await sql`select set_config('lock_timeout', ${`${wait.ms}ms`}, true)`.execute(exec);
+  try {
+    const answer = await work();
+    await sql`select set_config('lock_timeout', ${prior}, true)`.execute(exec);
+    return answer;
+  } catch (error) {
+    if (isLockTimeout(error)) throw new DoorsTryAgain(`${wait.what} waited ${wait.ms} ms for a lock`, { cause: error });
+    throw error;
+  }
+}
+
+/** One keep's write. A door that times out here fails with nothing kept. */
+function inKeepTransaction<T>(body: (trx: StoreDb) => Promise<T>): Promise<T> {
+  return inStoreTransaction((trx) => boundingLockWaits(trx, { what: 'a keep', ms: KEEP_ROW_WAIT_MS }, () => body(trx)));
 }
 
 /** `body` with the team's doors held shared: for a door that reads a delivery's
  *  listens version by version itself, so an upgrade is not between its reads.
  *  The lock's transaction only holds the lock, on a connection of its own
- *  (`doorsLockQb`): `body` writes as it always does, through the main pool. So a
+ *  (`doorsLockPool`): `body` writes as it always does, through the main pool. So a
  *  door waiting behind an upgrade holds nothing of the main pool, and the door
  *  that upgrade waits for can always get on. Inside a transaction, as an
- *  upgrade's own, the lock joins it, since a second session would wait for it. */
+ *  upgrade's own, the lock joins it, since a second session would wait for it.
+ *
+ *  A door waits `DOOR_WAIT_MS` at most, and then fails with nothing kept, so its
+ *  retry is no second delivery even with no id to dedupe on. If the lock's
+ *  connection goes during `body`, what it has not committed does not commit
+ *  (`stillHoldingDoors`) and the door fails. It answers success only when the
+ *  lock's own commit says the lock lived through all of `body`: what `body` read
+ *  after losing it cannot be trusted, and a retry dedupes what it did keep. */
 export async function withDoorsHeld<T>(teamId: string, body: () => Promise<T>): Promise<T> {
   const open = storeDb();
   if (open.isTransaction) {
-    await holdDoorsShared(open, teamId);
+    await sql`select pg_advisory_xact_lock_shared(hashtextextended(${doorsLockName(teamId)}::text, 0))`.execute(open);
     return body();
   }
-  return doorsLockQb.transaction().execute(async (trx) => {
-    await holdDoorsShared(trx, teamId);
-    return body();
+  const asked = Date.now();
+  const lock = await doorsLockPool.connect().catch((cause: unknown) => {
+    throw new DoorsTryAgain(`a door waited ${DOOR_WAIT_MS} ms for a connection to hold the team's doors`, { cause });
   });
+  const hold: DoorsHold = { lost: false };
+  // Checked out, the pool does not hear this connection, and an unheard `error`
+  // ends the process. A connection that failed keeps this listener as it is
+  // destroyed: ending a dead socket can raise another.
+  const heard = (error: Error) => {
+    hold.lost = true;
+    logger.warn("[doors] the connection holding a team's doors failed during a door", { teamId, cause: error.message });
+  };
+  lock.on('error', heard);
+  let healthy = false;
+  try {
+    try {
+      await lock.query('begin');
+      const left = Math.max(1, DOOR_WAIT_MS - (Date.now() - asked));
+      await lock.query("select set_config('lock_timeout', $1, true)", [`${left}ms`]);
+      await lock.query('select pg_advisory_xact_lock_shared(hashtextextended($1::text, 0))', [doorsLockName(teamId)]);
+    } catch (cause) {
+      throw new DoorsTryAgain(`a door could not hold the team's doors within ${DOOR_WAIT_MS} ms`, { cause });
+    }
+    let answer: T;
+    try {
+      answer = await underDoorsHold(hold, body);
+    } catch (error) {
+      if (hold.lost && !(error instanceof DoorsTryAgain)) throw new DoorsTryAgain("the connection holding the team's doors was lost during this door", { cause: error });
+      throw error;
+    }
+    try {
+      await lock.query('commit');
+    } catch (cause) {
+      throw new DoorsTryAgain("the connection holding the team's doors was lost during this door", { cause });
+    }
+    healthy = true;
+    return answer;
+  } finally {
+    if (!healthy && !hold.lost) {
+      // A body that failed, or a lock not granted, on a live connection: the pool can
+      // have it back once it has let go.
+      healthy = await lock.query('rollback').then(
+        () => true,
+        () => false,
+      );
+    }
+    if (healthy) lock.removeListener('error', heard);
+    lock.release(!healthy);
+  }
 }
 
-/** Holds the team's doors for the rest of the open transaction. Answers the
- *  database's clock once it has them, the instant a move is on the far side of. */
+/** Holds the team's doors for the rest of the open transaction, or fails with
+ *  `DoorsTryAgain` when it cannot soon, as the doors would stand still behind it.
+ *  Answers the database's clock once it has them, the instant a move is on the far
+ *  side of. */
 export async function holdDoorsAlone(exec: Exec, teamId: string): Promise<Date> {
-  await sql`select pg_advisory_xact_lock(${doorsLockKey(teamId)})`.execute(exec);
+  await boundingLockWaits(exec, { what: 'an upgrade', ms: UPGRADE_DOORS_WAIT_MS }, () => sql`select pg_advisory_xact_lock(hashtextextended(${doorsLockName(teamId)}::text, 0))`.execute(exec));
   const { rows } = await sql<{ at: Date }>`select clock_timestamp() as at`.execute(exec);
   const at = rows[0]?.at;
   if (at === undefined) throw new Error('the database answered no clock');
@@ -144,7 +244,7 @@ export function deliveryRowStore(owner: { host: Host; teamId: string }): Platfor
       if (owner.host === 'platform') {
         for (const row of input.work) if (!isWorkKind(row.kind)) throw new Error(`'${row.kind}' is not a work kind this process knows`);
       }
-      const written = await inStoreTransaction(async (trx) => {
+      const written = await inKeepTransaction(async (trx) => {
         const { rows } =
           input.rawKept !== undefined
             ? await sql<{ id: string }>`
@@ -187,7 +287,7 @@ export function deliveryRowStore(owner: { host: Host; teamId: string }): Platfor
       // The lock first, off the main pool: a keep waiting behind an upgrade holds
       // none of it, or enough of them would stop the door that upgrade waits for.
       // It is let go after the write commits, so the move sees what this queued.
-      const written = await withDoorsHeld(owner.teamId, () => inStoreTransaction(async (trx) => {
+      const written = await withDoorsHeld(owner.teamId, () => inKeepTransaction(async (trx) => {
         // A waiting key names a delivery only for as long as a provider retries.
         if (delivery.externalId !== null && delivery.externalId.startsWith(WAITING_KEY_PREFIX)) {
           await sql`

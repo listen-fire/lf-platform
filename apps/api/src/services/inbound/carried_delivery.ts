@@ -27,6 +27,7 @@ import { getAutomationsQb } from '../../lib/kysely';
 import { teamIdSchema } from '../../lib/team_id';
 import { queueAwaitWakesOf } from '../movement_engine/carried_correlations';
 import { WAITING_KEY_PREFIX, deliveryRowStore, withDoorsHeld } from '../movement_engine/run_host_deliveries';
+import { stillHoldingDoors } from '../movement_engine/doors_hold';
 import type { StoreDb } from '../movement_engine/run_host_queue';
 import { WorkGivesUp, notifyWork, registerWorkHandler } from '../work/drain';
 import { enqueueWork } from '../work/store';
@@ -254,6 +255,7 @@ async function keptDeliveryOf(row: ReadDeliveryRow): Promise<CarriedKeptDelivery
  *  `stableKey`: what names the event when its source gave it no id, so a reading
  *  taken again keeps one receipt. */
 export async function receiveJudgedEvent(input: { teamId: TeamId; triggerId: string; event: CarriedEvent; lane: Pick<ListeningLane, 'readEvent'>; stableKey?: string }): Promise<void> {
+  stillHoldingDoors();
   const read = input.lane.readEvent(input.event);
   if (!read.ok) throw new Error(`a judged event could not be read by its own version: ${read.reason}`);
   const idempotencyKey = read.record.idempotencyKey ?? input.stableKey;
