@@ -13,7 +13,7 @@ import { Router, type Request, type Response } from 'express';
 
 import type { CallbackParamSpec, CallbackRecord } from '../../services/movement_engine/callback_store';
 
-import { fireCallback, getDoorCallback, type CallbackFireOutcome } from '../../services/movement_engine/callback_fire';
+import { callbackAckText, fireCallback, getDoorCallback, type CallbackFireOutcome } from '../../services/movement_engine/callback_fire';
 import { logger } from 'movement-engine/public/log';
 
 export const callbacksRouter: ReturnType<typeof Router> = Router();
@@ -100,6 +100,8 @@ function outcomeTitle(outcome: CallbackFireOutcome): string {
       return 'This action has expired';
     case 'mismatch':
       return "That doesn't match what this action expects";
+    case 'held':
+      return 'This action cannot be recorded here';
   }
 }
 
@@ -124,6 +126,8 @@ function describeOutcome(outcome: CallbackFireOutcome): { status: number; messag
     case 'mismatch':
       // LOUD, never a silent default: say exactly what was expected.
       return { status: 400, message: outcome.message };
+    case 'held':
+      return { status: 409, message: callbackAckText(outcome) };
   }
 }
 

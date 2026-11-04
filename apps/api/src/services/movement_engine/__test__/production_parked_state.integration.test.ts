@@ -14,17 +14,18 @@ import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
 
 import { getAsksQb, getAutomationsQb, getCoreQb } from '../../../lib/kysely';
+import { captureEngineLogs } from '../../../test/engine_logs';
 import { cleanupTeam } from '../../../test/harness/cleanup';
 import { answerAskById } from '../../asks/doors';
 import { notifyEngineOfSettledAsks } from '../../asks/in_process_notifier';
 import { resetAskSettledNotifierForTests } from '../../asks/notifier';
 import { drainUntilIdle, resetWorkHandlersForTests } from '../../work/drain';
 import { registerCoreWork } from '../../work/register';
-import { registerAskClosedSweepWork } from '../../asks/closed_sweep';
+import { askClosedSweepHandler, registerAskClosedSweepWork } from '../../asks/closed_sweep';
 import { failRunAndCancelRequests } from '../../interaction/run_failure';
 import { liveDeployCheckDeps, thisDeployCheckRelease } from '../../translation_graph/movement/language_upgrade';
 import { getMovementRow } from '../../translation_graph/movement/store';
-import { fireCallback } from '../callback_fire';
+import { callbackAckText, fireCallback } from '../callback_fire';
 import { resumeLimitPausedRun } from '../limit_resume';
 
 const FIXTURES = join(__dirname, 'fixtures', 'production-0.12.13');
@@ -235,10 +236,59 @@ describe('a run production parked', () => {
     expect(await runOf(runId)).toMatchObject({ status: 'success' });
   });
 
-  it('on a legacy 4 ask stays parked, loudly unresumed, rather than being failed: this build has no way to step it', async () => {
-    const { runId, rows } = await load('legacy-4-ask');
-    await answerAskById(rows.ask?.[0]?.id as AskId, { Budget: '10' });
-    await drain();
-    expect(await runOf(runId)).toMatchObject({ status: 'parked' });
+  describe('on a legacy 4 question stays parked: nothing here can step it', () => {
+    const logs = captureEngineLogs();
+    const correlationsOf = (runId: TriggerRunId) => getAutomationsQb(['adapter_await']).selectFrom('adapter_await').where('run_id', '=', runId).select('id').execute();
+    const wakeKeys = async () => (await getAutomationsQb(['work']).selectFrom('work').where('team_id', '=', TEAM).where('kind', '=', 'wake_await').select('key').execute()).map((row) => row.key);
+    const errorsAbout = (runId: string) => logs.error().filter((line) => JSON.stringify(line).includes(runId));
+
+    it('an answer and the closed sweep queue no wake for it, while the same sweep wakes a 0.12 run beside it', async () => {
+      const legacy = await load('legacy-4-ask');
+      const beside = await load('ask');
+      expect(await answerAskById(legacy.rows.ask?.[0]?.id as AskId, { Budget: '10' })).toMatchObject({ kind: 'answered' });
+      expect(await wakeKeys()).toEqual([]);
+
+      // The 0.12 run's wake was lost: only the sweep can find it.
+      const besideAsk = beside.rows.ask?.[0]?.id as AskId;
+      await answerAskById(besideAsk, { Budget: '10' });
+      await getAutomationsQb(['work']).deleteFrom('work').where('team_id', '=', TEAM).where('kind', '=', 'wake_await').execute();
+      await askClosedSweepHandler.run({}, { now: new Date() } as never);
+      expect(await wakeKeys()).toEqual([`wake_await:ask_closed:${besideAsk}`]);
+
+      await drain();
+      expect(await runOf(beside.runId)).toMatchObject({ status: 'success' });
+      expect(await runOf(legacy.runId)).toMatchObject({ status: 'parked', failure_reason: null });
+      expect(await correlationsOf(legacy.runId)).toHaveLength(1);
+      expect(errorsAbout(legacy.runId)).toEqual([]);
+
+      await askClosedSweepHandler.run({}, { now: new Date() } as never);
+      expect(await wakeKeys()).toEqual([]);
+    });
+
+    it("production's own wake row is consumed once, says so, and leaves the run and its correlation standing", async () => {
+      const { runId, rows } = await load('legacy-4-ask');
+      const asked = rows.ask?.[0]?.id as AskId;
+      await answerAskById(asked, { Budget: '10' });
+      await insertRow('work', { kind: 'wake_await', key: `wake_await:${asked}`, team_id: TEAM, due_at: new Date(Date.now() - 1000).toISOString(), payload: { adapterType: 'ask', teamId: TEAM, correlationKey: asked } });
+      expect(await wakeKeys()).toEqual([`wake_await:${asked}`]);
+      await drain();
+      expect(await wakeKeys()).toEqual([]);
+      expect(errorsAbout(runId)).toHaveLength(1);
+      expect(await runOf(runId)).toMatchObject({ status: 'parked', failure_reason: null });
+      expect(await correlationsOf(runId)).toHaveLength(1);
+    });
+
+    it('a tap on its callback is refused and says why: the call is not spent and nothing is queued', async () => {
+      const { runId } = await load('legacy-4-ask');
+      const minted = (JSON.parse(readFileSync(join(FIXTURES, 'callback.json'), 'utf8')) as Fixture).rows.callback?.[0];
+      await insertRow('callback', { ...minted, run_id: runId });
+      const id = String(minted?.id);
+      const outcome = await fireCallback({ id, values: {} });
+      expect(outcome).toMatchObject({ kind: 'held' });
+      expect(callbackAckText(outcome)).toContain('its run cannot continue on this release');
+      expect(await getAutomationsQb(['work']).selectFrom('work').where('team_id', '=', TEAM).select('kind').execute()).toEqual([]);
+      const callback = await getAutomationsQb(['callback']).selectFrom('callback').where('id', '=', id).select(['status', 'calls']).executeTakeFirstOrThrow();
+      expect(callback).toEqual({ status: 'live', calls: [] });
+    });
   });
 });

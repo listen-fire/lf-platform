@@ -93,9 +93,15 @@ describe('an upgrade held where it is', () => {
     expect((await getMovementRow({ teamId: TEAM, id: movementId }))?.languageVersion).toBe('0.12.8');
   });
 
-  it('a legacy 4 run parked on an ask holds its automation too', async () => {
-    const { movementId } = await load('legacy-4-ask');
-    expect(await upgrade(movementId)).toMatchObject({ status: 'blocked' });
+  it('a legacy 4 run parked on an ask holds its automation too, and the refusal gives the only remedy there is', async () => {
+    const { movementId, runId, name } = await load('legacy-4-ask');
+    const result = await upgrade(movementId);
+    expect(result).toMatchObject({ status: 'blocked' });
+    if (result.status !== 'blocked') return;
+    expect(result.detail).toContain(name);
+    expect(result.detail).toContain(runId);
+    expect(result.detail).toContain('which this release cannot resume: answer it on 0.12.13 before deploying, or cancel it');
+    expect(result.detail).not.toContain('until they finish');
   });
 
   it('a run parked on a timer holds nothing: it finishes on its own version', async () => {

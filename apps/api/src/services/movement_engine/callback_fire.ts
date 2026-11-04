@@ -16,6 +16,7 @@
 
 import { z } from 'zod';
 import { logger } from 'movement-engine/public/log';
+import { isLegacyLanguageVersion } from 'legacy-lang';
 import { correlatedAwaitsLane, type CarriedBodyOutcome, type CarriedBodyRun, type ResumingLane } from '@listen-fire/language-versions';
 
 import type { WorkHandler } from '../work/kinds';
@@ -70,7 +71,10 @@ export type CallbackFireOutcome =
    *  already fired (single-use). The closed-request-wins ack. */
   | { kind: 'closed'; callback: CallbackRecord }
   | { kind: 'expired'; callback: CallbackRecord }
-  | { kind: 'mismatch'; callback: CallbackRecord; message: string };
+  | { kind: 'mismatch'; callback: CallbackRecord; message: string }
+  /** Its run is on a legacy id, which no engine here can step: the call is not
+   *  spent, so the run can still take it on the release that can. */
+  | { kind: 'held'; callback: CallbackRecord };
 
 /**
  * A callback by id as the platform's doors see it: null for an unknown id, and
@@ -105,6 +109,7 @@ export async function fireCallback(input: {
 }): Promise<CallbackFireOutcome> {
   const existing = await getDoorCallback(input.id);
   if (existing === null) return { kind: 'not_found' };
+  if (await runIsOnLegacyPin(existing.runId)) return { kind: 'held', callback: existing };
 
   const bound = bindSuppliedValue(existing.params, input.values, input.suppliedValue);
   if (!bound.ok) return { kind: 'mismatch', callback: existing, message: bound.message };
@@ -160,6 +165,16 @@ export async function fireCallback(input: {
       return { kind: 'recorded', callback: claim.callback };
     }
   }
+}
+
+async function runIsOnLegacyPin(runId: string): Promise<boolean> {
+  const version = await getAutomationsQb(['trigger_run', 'movement_version'])
+    .selectFrom('trigger_run')
+    .innerJoin('movement_version', 'movement_version.id', 'trigger_run.movement_version_id')
+    .where('trigger_run.id', '=', triggerRunIdOf(runId))
+    .select('movement_version.language_version')
+    .executeTakeFirst();
+  return version !== undefined && isLegacyLanguageVersion(version.language_version);
 }
 
 /** The run's lease for the body to run under now, or null when the body
@@ -342,6 +357,8 @@ export function callbackAckText(outcome: CallbackFireOutcome): string {
     case 'mismatch':
       // LOUD, never a silent default: the refusal says exactly what was wrong.
       return `That could not be recorded: ${outcome.message}`;
+    case 'held':
+      return 'That could not be recorded: the automation behind it was written for an earlier release, and its run cannot continue on this release. Ask its owner to cancel the run and upgrade the automation.';
     case 'closed':
     case 'not_found':
       // A callback this store never minted reads exactly like a settled one:

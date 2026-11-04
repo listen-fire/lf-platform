@@ -16,6 +16,7 @@ import type { CorrelatedPark } from '@listen-fire/language-versions';
 import { getAsksQb, getAutomationsQb } from '../../lib/kysely';
 import { postgresCorrelations } from '../movement_engine/carried_correlations';
 import { ASK_ADAPTER_TYPE } from '@listen-fire/ask';
+import { PLATFORM_SUPPORTED_LANGUAGE_VERSIONS } from 'legacy-lang';
 import { cancelAskAndWake } from './doors';
 import { askIdSchema } from './store';
 
@@ -111,6 +112,26 @@ export async function loadResolvableAskAwaits(
     .map((r) => ({ runId: r.run_id, teamId: r.team_id, address: r.address }));
 }
 
+/** The ask await parks a wake can do anything for. The platform's runs on a
+ *  legacy id are left out: this release carries no engine that can step an await
+ *  under those pins, so their park stands until someone cancels the run, and a
+ *  wake would only log that again and again. */
+function wakeableAskAwaits() {
+  return getAutomationsQb(['adapter_await', 'trigger_run', 'movement_version'])
+    .selectFrom('adapter_await')
+    .innerJoin('trigger_run', 'trigger_run.id', 'adapter_await.run_id')
+    .innerJoin('movement_version', 'movement_version.id', 'trigger_run.movement_version_id')
+    .where('trigger_run.host', '=', 'platform')
+    .where('adapter_await.adapter_type', '=', ASK_ADAPTER_TYPE)
+    .where('movement_version.language_version', 'not in', [...PLATFORM_SUPPORTED_LANGUAGE_VERSIONS]);
+}
+
+/** Whether a settled ask has a park a wake can do anything for. */
+export async function askHasWakeableAwait(askId: string): Promise<boolean> {
+  const found = await wakeableAskAwaits().where('adapter_await.correlation_key', '=', askId).select('adapter_await.id').executeTakeFirst();
+  return found !== undefined;
+}
+
 /** One page of the closed sweep: the wakes it found, and where the next page
  *  starts (absent on the last page). */
 export interface ClosedAskAwaitPage {
@@ -133,11 +154,7 @@ export async function loadClosedAskAwaitPage(
   opts: { after?: string; limit: number },
 ): Promise<ClosedAskAwaitPage> {
   // The platform's runs only: an lf run's awaits are woken by lf.
-  let corr = getAutomationsQb(['adapter_await', 'trigger_run'])
-    .selectFrom('adapter_await')
-    .innerJoin('trigger_run', 'trigger_run.id', 'adapter_await.run_id')
-    .where('trigger_run.host', '=', 'platform')
-    .where('adapter_await.adapter_type', '=', ASK_ADAPTER_TYPE);
+  let corr = wakeableAskAwaits();
   if (opts.after !== undefined) corr = corr.where('adapter_await.correlation_key', '>', opts.after);
   const rows = await corr
     .select(['adapter_await.team_id', 'adapter_await.correlation_key'])
