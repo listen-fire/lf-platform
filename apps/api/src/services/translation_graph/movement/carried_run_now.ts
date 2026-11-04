@@ -39,12 +39,12 @@ export const CARRIED_RUN_WORK_KIND = 'run_carried';
 export const CARRIED_RUN_NOW_NAME = 'Run now';
 
 const carriedRunRowSchema = z.object({
-  teamId: z.string().uuid(),
-  movementId: z.string().uuid(),
+  teamId: z.string().min(1),
+  movementId: z.string().min(1),
   movementName: z.string(),
   /** The press, as the version's own manual event (JSON). */
   event: z.record(z.string(), z.unknown()),
-  runId: z.string().uuid(),
+  runId: z.string().min(1),
 });
 
 type CarriedRunRow = z.infer<typeof carriedRunRowSchema>;

@@ -2,8 +2,16 @@
  * Dev-loop CLI for the movement language (M5).
  *
  *   pnpm dev:movement provision            # provision the built-in fixture
- *   pnpm dev:movement provision --file <path> [--movement <name>]
- *   pnpm dev:movement run <name> [--text "<body>"] [--file <path>]
+ *   pnpm dev:movement provision --file <path> [--movement <name>] [--pin <version>]
+ *                                          # --pin: a NEW automation pinned to an
+ *                                          # older release the platform carries
+ *                                          # (0.12.13), as production's saves left
+ *                                          # one; its save is acknowledged
+ *   pnpm dev:movement run <name> [--text "<body>"] [--file <path>] [--queue]
+ *                                          # --queue: queue the run and follow it
+ *                                          # while the dev-loop server's own
+ *                                          # drain runs it (this process drains
+ *                                          # nothing)
  *   pnpm dev:movement upgrade <name> [--all]
  *                                          # move a saved movement's pin to the
  *                                          # installed language, as the product's
@@ -49,7 +57,8 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { getQb } from '../../lib/kysely';
+import { getAutomationsQb, getQb } from '../../lib/kysely';
+import type { MovementId } from '../../generated/kysely/automations/Movement';
 import { encryptToken } from '../../lib/credentials';
 
 import type { TeamId } from '../../generated/kysely/core/Team';
@@ -64,7 +73,7 @@ import {
 } from './_lib';
 import { saveMovement } from '../../services/translation_graph/movement/provision';
 import { upgradeMovement } from '../../services/translation_graph/movement/language_upgrade';
-import { runMovementNow } from '../../services/translation_graph/movement/run_now';
+import { getMovementRunStatus, runMovementAsync, runMovementNow } from '../../services/translation_graph/movement/run_now';
 import { registerCoreWork } from '../../services/work/register';
 import { registerListenResolveWork } from '../../services/inbound/listen_resolve';
 import { getMovementRowByName } from '../../services/translation_graph/movement/store';
@@ -460,16 +469,33 @@ async function main() {
     // never as whatever Context is in scope.
     // Run now drains its queued run in this process, through the core's
     // handlers, as the deployment's drain does.
+    const press = {
+      teamId: seed.teamId,
+      movementId: row.id,
+      ...(text !== undefined ? { text } : {}),
+      ...(files !== undefined ? { files } : {}),
+      actor: { email: 'dev-loop@example.com', name: 'Dev Loop' },
+    };
+    if (args.includes('--queue')) {
+      // The server's drain runs it: follow it by its id until it settles.
+      const queued = await buildAgentContext(seed.teamId, seed.userId).runAsync(() => runMovementAsync(press));
+      if (!queued.ok) {
+        console.log(JSON.stringify(queued, null, 2));
+        process.exit(1);
+      }
+      const deadline = Date.now() + 120_000;
+      for (;;) {
+        const status = await getMovementRunStatus({ teamId: seed.teamId, runId: queued.runId });
+        if ('error' in status || status.status !== 'running' || Date.now() > deadline) {
+          console.log(JSON.stringify({ queued, status }, null, 2));
+          if ('error' in status || status.status !== 'success') process.exit(1);
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
     registerCoreWork();
-    const result = await buildAgentContext(seed.teamId, seed.userId).runAsync(() =>
-      runMovementNow({
-        teamId: seed.teamId,
-        movementId: row.id,
-        ...(text !== undefined ? { text } : {}),
-        ...(files !== undefined ? { files } : {}),
-        actor: { email: 'dev-loop@example.com', name: 'Dev Loop' },
-      }),
-    );
+    const result = await buildAgentContext(seed.teamId, seed.userId).runAsync(() => runMovementNow(press));
     console.log(JSON.stringify(result, null, 2));
     if (!result.ok) process.exit(1);
     return;
@@ -529,10 +555,30 @@ async function main() {
   // saveMovement: the canonical `automations.movement` row is written first,
   // then gated + the file's listeners reconciled — same path the editor
   // uses. The inbound key now lives in the file's `listen` config.
+  // A new automation pinned to an older release the platform carries: its row
+  // is written with that pin first, as production's saves left it, and the
+  // save keeps the pin (an edit never moves it).
+  const pin = argValue(args, '--pin');
+  let existingId: string | undefined;
+  if (pin !== undefined) {
+    if (movementName === undefined) {
+      console.error('--pin needs --movement <name>');
+      process.exit(1);
+    }
+    const existing = await getMovementRowByName({ teamId: seed.teamId, name: movementName });
+    existingId = existing?.id ?? randomUUID();
+    if (existing === null) {
+      await getAutomationsQb(['movement'])
+        .insertInto('movement')
+        .values({ id: existingId as MovementId, team_id: seed.teamId as TeamId, name: movementName, source, description: '', language_version: pin })
+        .execute();
+    }
+  }
   const result = await saveMovement({
     teamId: seed.teamId,
     source,
     ...(movementName !== undefined ? { name: movementName } : {}),
+    ...(existingId !== undefined ? { id: existingId, acknowledgeErrors: true } : {}),
   });
 
   console.log(JSON.stringify(result, null, 2));
