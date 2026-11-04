@@ -45,7 +45,7 @@ import {
   type LanguageVersion,
 } from 'movement-lang';
 
-import type { ModulePlatform, ResumingLane, RunningLane } from './running';
+import type { ListeningLane, ModulePlatform, ResumingLane, RunningLane } from './running';
 
 export * from './running';
 
@@ -174,8 +174,10 @@ export type RunCapability = { kind: 'current' } | { kind: 'carried'; lane: () =>
 export type ResumeCapability = { kind: 'current' } | { kind: 'carried'; lane: () => Promise<ResumingLane> } | { kind: 'held' };
 
 /** Whether a carried version's listens fire: inbound deliveries, polls and
- *  schedules start its runs. `held` keeps its automations unprovisioned. */
-export type ListenCapability = { kind: 'current' } | { kind: 'held' };
+ *  schedules start its runs. `carried`: the version's own modules read each
+ *  kept delivery and its own rules judge the automations pinned to it. `held`
+ *  keeps its automations unprovisioned. */
+export type ListenCapability = { kind: 'current' } | { kind: 'carried'; lane: () => Promise<ListeningLane> } | { kind: 'held' };
 
 /** What a carried version provides its pins, one capability each. */
 export interface Provided {
@@ -204,6 +206,9 @@ export interface CarriedVersion {
    *  are instantiated only when something asks for them). */
   load(): Promise<VersionPackages>;
   readonly provides: Provided;
+  /** The version whose rows a trigger row on this key is: kept across a deploy
+   *  whether or not its listens fire yet, and read only by it. */
+  readonly listenRows?: () => Promise<ListeningLane>;
 }
 
 const HELD = { kind: 'held' } as const;
@@ -222,6 +227,13 @@ const CURRENT_VERSION: CarriedVersion = {
   provides: { check: CURRENT, run: CURRENT, resume: CURRENT, listen: CURRENT },
 };
 
+/** 0.12's listens fire only with the switch on, until its schedules, polls and
+ *  subscriptions are back too: a release with listens half on would stop those
+ *  silently. Only tests and the dev loop set it. */
+function carriedListens(lane: () => Promise<ListeningLane>): ListenCapability {
+  return process.env.LF_CARRIED_LISTENS === 'on' ? { kind: 'carried', lane } : HELD;
+}
+
 const CARRIED: readonly CarriedVersion[] = [
   CURRENT_VERSION,
   // Carried for the automations pinned to 0.12 and the runs 0.12 parked, so
@@ -235,8 +247,11 @@ const CARRIED: readonly CarriedVersion[] = [
       check: { kind: 'carried', lane: () => import('@listen-fire/lang-0.12') },
       run: { kind: 'carried', lane: () => import('@listen-fire/lang-0.12') },
       resume: { kind: 'carried', lane: () => import('@listen-fire/lang-0.12') },
-      listen: HELD,
+      get listen() {
+        return carriedListens(() => import('@listen-fire/lang-0.12'));
+      },
     },
+    listenRows: () => import('@listen-fire/lang-0.12'),
   },
 ];
 
@@ -334,6 +349,16 @@ export function correlatedAwaitsLane(): (() => Promise<ResumingLane>) | undefine
     if (version.provides.resume.kind === 'carried') return version.provides.resume.lane;
   }
   return undefined;
+}
+
+/** The versions whose listens fire through their own lane, with it. */
+export function carriedListeners(): ReadonlyArray<{ version: CarriedVersion; lane: () => Promise<ListeningLane> }> {
+  return CARRIED.flatMap((version) => (version.provides.listen.kind === 'carried' ? [{ version, lane: version.provides.listen.lane }] : []));
+}
+
+/** Whether a trigger row on `pin` stays across a deploy as its version's listen. */
+export function keepsListenRows(pin: LanguageVersion): boolean {
+  return versionOf(pin)?.listenRows !== undefined;
 }
 
 /** Whether `pin`'s listens fire. */

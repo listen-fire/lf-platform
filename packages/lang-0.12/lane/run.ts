@@ -364,7 +364,7 @@ export function manualInvocationEvent(input: { key: string; invocation: ManualIn
 export function readEvent(event: Readonly<Record<string, unknown>>): EventReading {
   const parsed = triggerEventSchema.safeParse(event);
   if (!parsed.success) return { ok: false, reason: parsed.error.issues.map((issue) => `${issue.path.join('.') || 'event'}: ${issue.message}`).join('; ') };
-  const { pipelineInputId, adapterType, triggerType, payload, recordId, occurredAt, idempotencyKey } = parsed.data;
+  const { pipelineInputId, adapterType, triggerType, payload, recordId, occurredAt, idempotencyKey, actor } = parsed.data;
   return {
     ok: true,
     record: {
@@ -375,6 +375,7 @@ export function readEvent(event: Readonly<Record<string, unknown>>): EventReadin
       ...(recordId !== undefined ? { recordId } : {}),
       ...(occurredAt !== undefined ? { occurredAt: String(occurredAt) } : {}),
       ...(idempotencyKey !== undefined ? { idempotencyKey } : {}),
+      ...(actor !== undefined ? { actor: { type: actor.type, id: actor.id ?? null } } : {}),
     },
   };
 }

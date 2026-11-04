@@ -250,7 +250,16 @@ export interface SegmentRequest {
 export type EventReading =
   | {
       ok: true;
-      record: { pipelineInputId: string; adapterType: string; triggerType: TriggerEvent['triggerType']; payload?: unknown; recordId?: string; occurredAt?: string; idempotencyKey?: string };
+      record: {
+        pipelineInputId: string;
+        adapterType: string;
+        triggerType: TriggerEvent['triggerType'];
+        payload?: unknown;
+        recordId?: string;
+        occurredAt?: string;
+        idempotencyKey?: string;
+        actor?: { type: 'user' | 'system' | 'api-token'; id: string | null };
+      };
     }
   | { ok: false; reason: string };
 

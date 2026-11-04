@@ -361,6 +361,8 @@ export interface CarriedEventRecord {
   recordId?: string;
   occurredAt?: string;
   idempotencyKey?: string;
+  /** Who made the change, when its source says. */
+  actor?: { type: 'user' | 'system' | 'api-token'; id: string | null };
 }
 
 /** A carried event read by its own version, or why that version cannot read
@@ -410,6 +412,65 @@ export interface RunningLane {
   /** Every adapter type a run reaches through a module the platform hosts:
    *  each needs a module line on the platform. */
   hostedModuleTypes: () => string[];
+}
+
+// ── A carried version's half of a delivery ─────────────────────────────────
+
+/** A trigger row as the platform keeps it, with the text its automation
+ *  shipped, which only the version reads. */
+export interface ListenRow {
+  id: string;
+  kind: string;
+  credentialsId: string | null;
+  config: unknown;
+  firedMovementName: string | null;
+  source: string;
+  pin: string;
+}
+
+/** What the door kept of a request (no signature: the door verified it). */
+export interface CarriedKeptDelivery {
+  body: string;
+  /** The cursor the door read it against: every version reads from there. */
+  checkpoint?: unknown;
+}
+
+export interface ReadDeliveryRequest {
+  teamId: string;
+  adapterType: string;
+  credentialsId: string | null;
+  matchAnyCredential?: boolean;
+  delivery: CarriedKeptDelivery;
+  listens: readonly ListenRow[];
+  now: string;
+}
+
+export interface ReadDeliveryOutcome {
+  receipts: { triggerId: string; event: Record<string, unknown> }[];
+  wakeKeys: string[];
+  lines: string[];
+}
+
+export type GateAnswer = { kind: 'suppress'; reason: string } | { kind: 'proceed' } | { kind: 'needs-actor'; candidates: unknown };
+
+/** A carried version's own reading and judging of a kept delivery. */
+export interface ListeningLane {
+  readDelivery(request: ReadDeliveryRequest, modules: ModulePlatform): Promise<ReadDeliveryOutcome>;
+  gateFiring(request: { teamId: string; adapterType: string; credentialsId: string | null; config: unknown; event: CarriedEvent }, modules: ModulePlatform): Promise<GateAnswer>;
+  /** Whether a kept row is a listen under this version. */
+  isListenRow(row: Pick<ListenRow, 'config' | 'firedMovementName' | 'source' | 'pin'>): boolean;
+  /** The listens a text states, as the version collects them. */
+  listenersOf(request: { source: string; pin: string }): readonly CarriedFileListener[];
+  readEvent(event: CarriedEvent): CarriedEventReading;
+}
+
+export interface CarriedFileListener {
+  adapter: string;
+  credentialName?: string;
+  constructionArgs?: Record<string, string>;
+  config: Record<string, unknown>;
+  movementName: string;
+  alias?: string;
 }
 
 /** What a remote adapter of this release stores fetched files in, and the
