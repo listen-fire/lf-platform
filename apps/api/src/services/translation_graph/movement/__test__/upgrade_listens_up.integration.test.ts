@@ -315,6 +315,27 @@ describe('an upgraded automation whose listens could not be brought up', () => {
     expect(await issues(failing)).toEqual([expect.objectContaining({ state: 'resolved', failure_class: 'MOV_LISTENS_NOT_UP' })]);
     expect(await issues(healthy)).toEqual([expect.objectContaining({ state: 'open', failure_class: 'MOV_UNRELATED' })]);
   });
+  it('an error that stops the bring up raises the issue from the third attempt, as a failed listen does, and coming up closes it', async () => {
+    plan.resolved = true;
+    credential.usable = true;
+    const id = await seedShipped('stamp');
+    await upgradeMovement({ teamId, id, acknowledge: true, validate: clean });
+    jest.mocked(resolveAndArm).mockRejectedValue(new Error('the database dropped the connection'));
+
+    // Thrown, not answered: the row fails and is retried, and the pulse is told.
+    for (let attempt = 0; attempt < 2; attempt++) expect(await pass()).toEqual(expect.objectContaining({ failed: 1 }));
+    expect(await issues(id)).toEqual([]);
+    expect(await pass()).toEqual(expect.objectContaining({ failed: 1 }));
+
+    expect(await issues(id)).toEqual([
+      expect.objectContaining({ state: 'open', failure_class: 'MOV_LISTENS_NOT_UP', message: expect.stringContaining('the database dropped the connection') }),
+    ]);
+
+    jest.mocked(resolveAndArm).mockResolvedValue(null);
+    expect((await pass()).failed).toBe(0);
+    expect(await issues(id)).toEqual([expect.objectContaining({ state: 'resolved' })]);
+  });
+
   it('two groups that share a member each keep their own row and member list, and the same group asked twice keeps one', async () => {
     const [a, b] = [randomUUID(), randomUUID()];
     const members = async () =>

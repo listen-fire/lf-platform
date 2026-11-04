@@ -102,10 +102,39 @@ async function bringUp(input: { teamId: TeamId; movementIds: readonly string[] }
   return notUp;
 }
 
+/** The issue for a bring up that stopped on an error rather than answering: the
+ *  people it concerns hear of it as they would of a listen that stayed down. */
+async function raiseForError(input: { teamId: TeamId; movementIds: readonly string[]; error: unknown }): Promise<void> {
+  const why = input.error instanceof Error ? input.error.message : String(input.error);
+  for (const movementId of input.movementIds) {
+    const [first] = await savedListens({ teamId: input.teamId, movementId: movementId as MovementId });
+    if (first === undefined) continue;
+    await recordMovementFailureIssue({
+      teamId: input.teamId,
+      movementId,
+      movementName: first.file,
+      triggerName: 'its listens',
+      message: `${NOT_UP_CLASS}: this automation receives no events on these listens until they are brought up at their providers, which keeps being tried: it stopped on an error (${why})`,
+    });
+  }
+}
+
 async function runBringUp(payload: unknown, ctx: WorkContext): Promise<void> {
   const { teamId, movementIds } = payloadSchema.parse(payload);
   await withTeamContext(teamId as TeamId, async () => {
-    const notUp = await bringUp({ teamId: teamId as TeamId, movementIds });
+    let notUp: Awaited<ReturnType<typeof bringUp>>;
+    try {
+      notUp = await bringUp({ teamId: teamId as TeamId, movementIds });
+    } catch (error) {
+      // The retry the drain gives a thrown row is the same one; only saying so
+      // is added. Saying so must not hide the error it is about.
+      if (ctx.attempts >= ISSUE_FROM_ATTEMPT) {
+        await raiseForError({ teamId: teamId as TeamId, movementIds, error }).catch((raising: unknown) =>
+          logger.error('[ListensUp] the issue for a failed bring up could not be raised', { teamId, error: raising instanceof Error ? raising.message : String(raising) }),
+        );
+      }
+      throw error;
+    }
     const stillDown = new Set(notUp.map(({ movementId }) => movementId));
     for (const movementId of movementIds) {
       if (!stillDown.has(movementId)) await resolveMovementIssuesOfClass({ movementId, failureClass: NOT_UP_CLASS });
