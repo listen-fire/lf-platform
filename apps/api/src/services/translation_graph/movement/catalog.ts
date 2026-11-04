@@ -740,7 +740,7 @@ async function assembleTeamCatalog(
             return file.source;
           },
         })
-      : await allTeamMovementSources(teamId, rootPin, filePins);
+      : await allTeamMovementSources(teamId, { pin: rootPin, pins: filePins });
   const resolveFile = resolverOverSources(fileSources);
 
   const schemaByAdapterAndCred = new Map<string, AdapterSchemaProjection>();
@@ -1290,8 +1290,7 @@ async function assembleTeamCatalog(
  *  file a program pinned to `pin` may import. */
 async function allTeamMovementSources(
   teamId: TeamId,
-  pin: LanguageVersion,
-  pins: Map<string, LanguageVersion>,
+  { pin, pins }: { pin: LanguageVersion; pins: Map<string, LanguageVersion> },
 ): Promise<Map<string, string>> {
   const rows = (await listMovementRows(teamId as unknown as string)).filter((row) => !onOtherVersions(pin, row.languageVersion));
   for (const row of rows) pins.set(row.name, row.languageVersion);
