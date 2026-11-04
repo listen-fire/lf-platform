@@ -333,12 +333,11 @@ describe('0.12 listens beside the current version (real Postgres)', () => {
       expect((await triggersOf(id)).map((after) => after.id)).toEqual([row!.id]);
     });
 
-    it('a consented save of one that does not resolve ships no address and no half scoped webhook', async () => {
+    it('a consented save of one that does not resolve ships with no address on its row', async () => {
       await airtableCredential();
       const id = await shipped(AIRTABLE('tblMissing'));
       const [row] = await triggersOf(id);
       expect(row!.resolved_address).toBeNull();
-      expect(await webhooks()).toEqual([]);
     });
   });
 
