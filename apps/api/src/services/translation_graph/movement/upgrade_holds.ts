@@ -9,9 +9,12 @@ import type { MovementId } from '../../../generated/kysely/automations/Movement'
 import type { LanguageVersion } from 'movement-lang';
 import type { MovementRow } from './store';
 
+import { sql } from 'kysely';
+
 import { isLegacyLanguageVersion } from 'legacy-lang';
 
 import { getAutomationsQb } from '../../../lib/kysely';
+import { resolveAdapterSlug } from '../adapters/registry';
 import { loadPinnedVersion } from './version_store';
 
 /** Why a member of an upgrading group cannot move yet, whatever its diagnostics:
@@ -48,6 +51,36 @@ export async function holdsOnMoving(group: readonly MovementRow[]): Promise<stri
     }
   }
   return holds;
+}
+
+/**
+ * What is still on its way to a member under its current version, read with the
+ * team's doors held: a delivery its version has not read, and an event judged for
+ * it whose run has not started. Each is that version's to finish, so the move
+ * waits for it rather than losing it. Later deliveries see the move, and a run
+ * already going finishes where it started.
+ */
+export async function eventsInFlight(group: readonly MovementRow[], teamId: string): Promise<string[]> {
+  const triggers = await getAutomationsQb(['trigger'])
+    .selectFrom('trigger')
+    .where('movement_id', 'in', group.map((member) => member.id) as MovementId[])
+    .select(['id', 'kind'])
+    .execute();
+  if (triggers.length === 0) return [];
+  const exec = getAutomationsQb(['work', 'trigger_run']);
+  const { rows: reading } = await sql<{ count: string }>`
+    select count(*)::text as count from automations.work
+    where kind = 'read_delivery' and team_id = ${teamId}::uuid and payload->>'adapterType' = any(${[...new Set(triggers.map((row) => resolveAdapterSlug(row.kind)))]}::text[])`.execute(exec);
+  const { rows: starting } = await sql<{ count: string }>`
+    select count(*)::text as count from automations.work w
+    where w.kind = 'dispatch_event' and w.team_id = ${teamId}::uuid and w.payload->>'triggerId' = any(${triggers.map((row) => row.id as string)}::text[])
+      and not exists (select 1 from automations.trigger_run r where r.trigger_event_id = (w.payload->>'storedEventId')::uuid)`.execute(exec);
+  const unread = Number(reading[0]?.count ?? 0);
+  const unstarted = Number(starting[0]?.count ?? 0);
+  return [
+    ...(unread > 0 ? [`${unread} ${unread === 1 ? 'delivery is' : 'deliveries are'} still being read under its current language version`] : []),
+    ...(unstarted > 0 ? [`${unstarted} ${unstarted === 1 ? 'event is' : 'events are'} still waiting to start under its current language version`] : []),
+  ];
 }
 
 /** The runs of each movement parked on a key: an await correlated to an adapter

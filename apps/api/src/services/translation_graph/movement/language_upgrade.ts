@@ -85,7 +85,7 @@ import { movementCatalogForTeam, type ImportedFile } from './catalog';
 import { getAutomationsQb } from '../../../lib/kysely';
 import { listenPauses } from '../../inbound/listen_pause';
 import { settleRunsParkedOnTriggers } from '../../interaction/run_failure';
-import { holdsOnMoving, runsWaitingOnKeys } from './upgrade_holds';
+import { eventsInFlight, holdsOnMoving, runsWaitingOnKeys } from './upgrade_holds';
 import {
   automationUrl,
   automationsUrl,
@@ -103,6 +103,8 @@ import { teamFactsOncePerTeam } from './carried_check';
 import { withTeamContext } from './firing_context';
 import { currentContext } from '../../context';
 import { importGroupOf } from './imports_across_versions';
+import { holdDoorsAlone } from '../../movement_engine/run_host_deliveries';
+import { notifyWork } from '../../work/drain';
 import { bringUpListensLater } from './listens_up';
 import { moveNeverShippedPin, saveMovement } from './provision';
 import {
@@ -170,7 +172,7 @@ export type AdvanceOutcome = { ok: true; warnings?: string[] } | { ok: false; de
 
 /** One member's move, ready to run inside the group's transaction: database
  *  writes only. */
-export type MoveMember = () => Promise<AdvanceOutcome>;
+export type MoveMember = (moving: { movedAt: Date }) => Promise<AdvanceOutcome>;
 
 /** Prepares moving `movement` to `to`, saved as `source` (the rewrite, or its
  *  own text when the rewrite changed nothing). The preparing runs before the
@@ -998,14 +1000,14 @@ export const advanceLive: Advance = async ({ movement, to, source, movingWith })
       ...(movingWith.size > 0 ? { movingWith } : {}),
     }),
   );
-  return async () => {
+  return async ({ movedAt }) => {
     const stale = staleSinceChecked(movement, await lockMovementRow({ teamId: movement.teamId, id: movement.id }));
     if (stale !== null) return { ok: false, detail: stale };
     const saved = await saveMovement({
       teamId: movement.teamId,
       id: movement.id,
       source,
-      languageUpgrade: { to },
+      languageUpgrade: { to, movedAt },
       inTransaction: { teamCatalog },
     });
     if (saved.ok) return { ok: true, ...(saved.leftPaused !== undefined ? { warnings: saved.leftPaused } : {}) };
@@ -1119,6 +1121,8 @@ export async function upgradeMovement(input: {
   advance?: Advance;
   /** How the group's moves are made together; absent, one transaction. */
   together?: MoveTogether;
+  /** How long it waits for what is on its way before saying so. */
+  inFlightWaitMs?: number;
 }): Promise<UpgradeMovementResult> {
   const movement = await getMovementRow({ teamId: input.teamId, id: input.id });
   if (!movement) return { status: 'not_found' };
@@ -1210,14 +1214,19 @@ export async function upgradeMovement(input: {
     moved.set(member.movement.name, { source: member.rewrite.source, languageVersion: to });
   }
   const warnings: string[] = [];
-  try {
-    await together(movement.teamId, async () => {
+  const moveTheGroup = () =>
+    together(movement.teamId, async () => {
       // Looked at again here: rewriting and validating takes a while, and a run
       // may have parked on a key meanwhile.
       const late = await holdsOnMoving(group);
       if (late.length > 0) throw new GroupHeldMeanwhile(late);
+      // A delivery is on one side of this: its keep sees the move, or what it
+      // queued is seen here and the move waits for it (`eventsInFlight`).
+      const movedAt = await holdDoorsAlone(getAutomationsQb(['work']), movement.teamId);
+      const flying = await eventsInFlight(group, movement.teamId);
+      if (flying.length > 0) throw new EventsInFlight(flying);
       for (const { member, move } of moves) {
-        const advanced = await move();
+        const advanced = await move({ movedAt });
         if (!advanced.ok) throw new GroupMoveStopped(member.movement.name, advanced.detail);
         warnings.push(...(advanced.warnings ?? []));
         const assessment = assessMovementValidity({ diagnostics: member.rewrite.validation.diagnostics, gaps: [] });
@@ -1232,7 +1241,12 @@ export async function upgradeMovement(input: {
       const shipped = checked.filter((member) => member.movement.currentVersionId !== null).map((member) => member.movement.id);
       if (shipped.length > 0) await bringUpListensLater({ teamId: movement.teamId, movementIds: shipped });
     });
+  try {
+    await untilNothingInFlight(moveTheGroup, input.inFlightWaitMs ?? IN_FLIGHT_WAIT_MS);
   } catch (err) {
+    if (err instanceof EventsInFlight) {
+      return { status: 'blocked', ...shown, diagnostics, detail: `${err.flying.join('; ')}: nothing moved, so nothing is lost; try again in a moment` };
+    }
     if (err instanceof GroupHeldMeanwhile) return { status: 'blocked', ...shown, diagnostics, detail: holdsDetail(err.holds) };
     if (!(err instanceof GroupMoveStopped)) throw err;
     const who = others.length > 0 ? `${err.member}: ` : '';
@@ -1240,6 +1254,34 @@ export async function upgradeMovement(input: {
     return { status: 'unverified', ...shown, diagnostics, detail: `${who}${err.detail}${nothing}` };
   }
   return { status: 'upgraded', ...shown, diagnostics, ...(warnings.length > 0 ? { warnings } : {}) };
+}
+
+/** How long an upgrade waits for what is on its way to finish. Each is a read or
+ *  a run's start, seconds at most while a drain runs. */
+const IN_FLIGHT_WAIT_MS = 30_000;
+const IN_FLIGHT_LOOK_MS = 250;
+
+/** The move, tried again while something is still on its way: it holds the doors
+ *  only for each look, so the deliveries it waits for are never held up. */
+async function untilNothingInFlight(move: () => Promise<void>, waitMs: number): Promise<void> {
+  const giveUpAt = Date.now() + waitMs;
+  for (;;) {
+    try {
+      await move();
+      return;
+    } catch (err) {
+      if (!(err instanceof EventsInFlight) || Date.now() >= giveUpAt) throw err;
+      notifyWork();
+      await new Promise((resolve) => setTimeout(resolve, IN_FLIGHT_LOOK_MS));
+    }
+  }
+}
+
+/** What is still on its way to the group: its transaction rolls back. */
+class EventsInFlight extends Error {
+  constructor(readonly flying: readonly string[]) {
+    super(flying.join('; '));
+  }
 }
 
 /** A hold that appeared after the first look: the group's transaction rolls back. */

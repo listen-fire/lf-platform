@@ -40,7 +40,8 @@ jest.mock('../store', () => ({
 }));
 jest.mock('../version_store', () => ({ movementSourceHash: () => 'hash' }));
 jest.mock('../provision', () => ({ saveMovement: jest.fn() }));
-jest.mock('../upgrade_holds', () => ({ holdsOnMoving: jest.fn(async () => []) }));
+jest.mock('../upgrade_holds', () => ({ holdsOnMoving: jest.fn(async () => []), eventsInFlight: jest.fn(async () => []) }));
+jest.mock('../../../movement_engine/run_host_deliveries', () => ({ holdDoorsAlone: jest.fn(async () => new Date(0)) }));
 jest.mock('../listens_up', () => ({ bringUpListensLater: jest.fn(async () => undefined) }));
 // The real authoring core is loaded by one case below; its team wrapper's
 // catalog assembly is never reached.
@@ -817,7 +818,7 @@ describe('an explicit upgrade: errors block, meaning-changed warnings hold the p
     // The text did not change: the move is still a save, joining the group's
     // transaction, so the listens are provisioned under the new pin.
     expect(saveMovement).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'old', source: 'source of old', languageUpgrade: { to: CUR }, inTransaction: expect.anything() }),
+      expect.objectContaining({ id: 'old', source: 'source of old', languageUpgrade: expect.objectContaining({ to: CUR }), inTransaction: expect.anything() }),
     );
   });
 

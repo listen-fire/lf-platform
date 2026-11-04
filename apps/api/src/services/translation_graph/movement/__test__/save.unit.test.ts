@@ -149,7 +149,8 @@ jest.mock('../../../../lib/kysely', () => {
 // A REAL movement-lang catalog (the parse/check in provisionListeners is
 // not mocked), with the email vocabulary the listen fixtures exercise and
 // a file resolver for the library-import save case.
-jest.mock('../upgrade_holds', () => ({ holdsOnMoving: jest.fn(async () => []) }));
+jest.mock('../upgrade_holds', () => ({ holdsOnMoving: jest.fn(async () => []), eventsInFlight: jest.fn(async () => []) }));
+jest.mock('../../../movement_engine/run_host_deliveries', () => ({ ...jest.requireActual('../../../movement_engine/run_host_deliveries'), holdDoorsAlone: jest.fn(async () => new Date(0)) }));
 jest.mock('../catalog', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { mockCatalog, mockCatalogSnapshot } = require('movement-lang');

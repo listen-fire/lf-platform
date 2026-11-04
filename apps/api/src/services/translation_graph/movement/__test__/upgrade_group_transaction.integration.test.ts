@@ -170,8 +170,8 @@ ${LISTENS}`);
       sources[input.movement.name] = input.source;
       if (input.movement.name === 'app_b') return async () => ({ ok: false, detail: 'the rewritten text did not ship' });
       const move = await advanceLive(input);
-      return async () => {
-        const result = await move();
+      return async (moving) => {
+        const result = await move(moving);
         if (result.ok) saved.push(input.movement.name);
         // Inside the transaction, the listening member's listen row exists.
         if (input.movement.name === 'app_a') expect(await triggersOf(listens)).toHaveLength(1);
@@ -439,8 +439,8 @@ ${LISTENS}`);
     const runId = await parkRunOn(leftover);
     const advance: Advance = async (input) => {
       const move = await advanceLive(input);
-      return async () => {
-        await move();
+      return async (moving) => {
+        await move(moving);
         return { ok: false, detail: 'a later member refused' };
       };
     };

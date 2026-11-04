@@ -82,6 +82,7 @@ import { inboxAddressesOf } from '../adapters/email/listen_keys';
 import { enqueueWork } from '../../work/store';
 import type { WorkKind } from '../../work/kinds';
 import { syncListenSubscriptions } from './listen_subscriptions';
+import { pollSubscriptionId } from '../../poll_source/worker';
 import { movementWriteRunMode } from './dry_run';
 import { loopBreakerPauses, pauseListenConfig, pipelineOfConfig } from '../../inbound/listen_pause';
 import {
@@ -120,6 +121,8 @@ import {
 } from './authoring';
 import { checkInstalled, routeOf } from './language_route';
 import { notListenedDiagnostic, teamFactsOf, validateUnderCarried } from './carried_check';
+import { carriedListen, carryingFromShipped, heardSoFarOf, keepCarriedCursors, keepingCarriedFrom, predecessorsOf, type CarriedListen, type CarryingFrom, type HeardRow } from './carried_cursors';
+import { modulePlatform } from './carried_run';
 import { listeningOf, type ListeningLane } from '@listen-fire/language-versions';
 import { runningOf } from '@listen-fire/language-versions';
 import { plannedListensOfSource } from './listen_plans';
@@ -223,6 +226,8 @@ interface DesiredListener {
    *  construction parameter). */
   textRunMode: Extract<TriggerRunMode, 'live' | 'dry_run'>;
   credentialsId: string | null;
+  /** A carried version's listen: its full address, names to ids. */
+  resolvedAddress?: Record<string, string>;
 }
 
 /** The routing discriminator inside a (kind, credentials) channel:
@@ -420,6 +425,11 @@ function keepWhatWaitingRunsFired(input: {
   return { matches, retired };
 }
 
+/** The cell a row keeps its resolved address in. */
+function resolvedAddressCell(listener: Pick<DesiredListener, 'resolvedAddress'>): never {
+  return (listener.resolvedAddress !== undefined && Object.keys(listener.resolvedAddress).length > 0 ? JSON.stringify(listener.resolvedAddress) : null) as never;
+}
+
 /** The periodic reconcile that arms a listener's poll: any listen's last
  *  edge may be polled (a schedule's `Ticks` is), so every new, changed or
  *  retired listener asks for it; it is idempotent. */
@@ -437,8 +447,14 @@ async function reconcileDerivedTriggers(input: {
   /** A language upgrade: it never changes whether anything is live, so every
    *  pause outlasts it, even where the new plan cannot be matched to its row. */
   keepPauses?: boolean;
+  /** A language upgrade from a carried version: each listen takes how far its
+   *  predecessor heard (./carried_cursors.ts). */
+  carrying?: CarryingFrom;
 }): Promise<{ listeners: ProvisionedListener[]; reconciles: Set<WorkKind>; leftPaused: string[] }> {
   const qb = getAutomationsQb(['trigger']);
+  // Read before the rows are touched, with each held: a tick or a pull under its
+  // old version committed first, or finds its row moved.
+  const heard = input.carrying !== undefined ? await heardSoFarOf(input.movementRow.id) : new Map<string, HeardRow>();
   // The schedule reconciles whose rows this save made stale: a new, changed or
   // retired cron or poll. An unchanged listener is armed already.
   const reconciles = new Set<WorkKind>();
@@ -452,7 +468,7 @@ async function reconcileDerivedTriggers(input: {
       movementName: d.movementName,
       kind: d.adapter,
       credentialsId: d.credentialsId,
-      configKey: configKeyOf(d.config),
+      configKey: configKeyOf(d.config, d.resolvedAddress),
     })),
     existing,
   });
@@ -486,6 +502,15 @@ async function reconcileDerivedTriggers(input: {
         return { identity: listenIdentityOf({ movementName: row.firedMovementName, kind: row.kind, credentialsId: row.credentialsId }), pause };
       })
     : [];
+  const predecessors =
+    input.carrying !== undefined
+      ? predecessorsOf({
+          desired: input.desired.map(({ movementName, adapter, credentialsId }) => ({ movementName, adapter, credentialsId })),
+          rows: existing,
+          statements: input.carrying.statements,
+        })
+      : [];
+  const carriedCursors: CarriedListen['cursors'] = [];
   const freshIndexes = input.desired.flatMap((_, i) => (plan.matches[i] === undefined ? [i] : []));
   const carried = new Map(
     carriedPauses({
@@ -533,8 +558,23 @@ async function reconcileDerivedTriggers(input: {
 
   const listeners: ProvisionedListener[] = [];
   for (let i = 0; i < input.desired.length; i++) {
-    const desired = input.desired[i];
     const kept = plan.matches[i];
+    const rowId = kept?.id ?? randomUUID();
+    const moved =
+      input.carrying !== undefined
+        ? carriedListen({
+            carrying: input.carrying,
+            config: input.desired[i].config,
+            listen: { triggerId: rowId as TriggerId, teamId: input.teamId, file: input.movementRow.name, credentialsId: input.desired[i].credentialsId },
+            heard: predecessors[i] !== null && predecessors[i] !== undefined ? heard.get(predecessors[i]!.id) : undefined,
+            pollSubscriptionId,
+          })
+        : undefined;
+    if (moved !== undefined) carriedCursors.push(...moved.cursors);
+    const desired: DesiredListener = {
+      ...input.desired[i],
+      config: moved?.config ?? (kept !== undefined ? keepingCarriedFrom(input.desired[i].config, kept.config) : input.desired[i].config),
+    };
     const name = desired.alias ?? `movement/${input.movementRow.name}/${desired.movementName}`;
 
     // run_mode semantics: the dry_run⇄live axis is TEXT-DERIVED — a listener
@@ -571,7 +611,7 @@ async function reconcileDerivedTriggers(input: {
           kind: desired.adapter,
           credentials_id: (desired.credentialsId ?? null) as never,
           config: desired.config as never,
-          resolved_address: null,
+          resolved_address: resolvedAddressCell(desired),
           movement_id: input.movementRow.id as MovementId,
           fired_movement_name: desired.movementName,
           run_mode: runMode,
@@ -582,7 +622,7 @@ async function reconcileDerivedTriggers(input: {
       const held = breakerPauseOf(kept);
       if (held !== undefined) await pauseListenConfig({ teamId: input.teamId, config: desired.config, reason: held });
     } else {
-      triggerId = randomUUID();
+      triggerId = rowId;
       const carry = carried.get(i);
       const carriedGuard = carry?.pause?.guard;
       const carriedBreaker = carry?.pause?.breaker;
@@ -597,7 +637,7 @@ async function reconcileDerivedTriggers(input: {
           name,
           kind: desired.adapter,
           config: desired.config as never,
-          resolved_address: null,
+          resolved_address: resolvedAddressCell(desired),
           credentials_id: (desired.credentialsId ?? null) as never,
           movement_id: input.movementRow.id as MovementId,
           fired_movement_name: desired.movementName,
@@ -627,44 +667,87 @@ async function reconcileDerivedTriggers(input: {
       reused: kept !== undefined,
     });
   }
+  await keepCarriedCursors(input.teamId, carriedCursors);
   return { listeners, reconciles, leftPaused };
 }
 
 // ── Provision: check the program, then reconcile the listeners ──────────────
 
 /** A carried version's listens: its own collection of them, kept as production's
- *  rows kept them, read and judged only by that version (carried_delivery.ts).
- *  Reaching providers for them comes with its subscriptions. */
+ *  rows kept them, read and judged only by that version (carried_delivery.ts). As
+ *  production's save did: each listen's address is resolved before any row is
+ *  touched, and a listen that does not resolve refuses the save, or ships without
+ *  an address on a consented one; its run mode is what the text says; its schedule
+ *  or poll is armed, and its webhook is reached for through the version's own
+ *  module. */
 async function provisionCarriedListeners(input: {
   teamId: TeamId;
   movementRow: MovementRow;
   source: string;
   lane: ListeningLane;
   keepPauses?: boolean;
+  provisionDespiteErrors?: boolean;
+  providersLater?: boolean;
+  timer?: StepTimer;
   notes: string[];
 }): Promise<ProvisionMovementResult> {
   const pin = input.movementRow.languageVersion;
+  const { lane } = input;
+  const within = <T>(name: string, run: () => Promise<T>): Promise<T> => (input.timer ? input.timer.within(name, run) : run());
   const team = await teamFactsOf(input.teamId, { imports: 'live' });
   const credentialOf = (name: string): string | null => team.credentials.find((row) => row.name === name)?.id ?? null;
-  const { listeners, leftPaused } = await reconcileDerivedTriggers({
-    teamId: input.teamId,
-    movementRow: input.movementRow,
-    desired: input.lane.listenersOf({ source: input.source, pin }).map((statement) => ({
-      movementName: statement.movementName,
-      adapter: statement.adapter,
-      ...(statement.alias !== undefined ? { alias: statement.alias } : {}),
-      config: statement.config,
-      textRunMode: 'live',
-      credentialsId: statement.credentialName !== undefined ? credentialOf(statement.credentialName) : null,
-    })),
-    ...(input.keepPauses === true ? { keepPauses: true } : {}),
+  const statements = lane.listenersOf({ source: input.source, pin });
+  const desired: DesiredListener[] = statements.map((statement) => ({
+    movementName: statement.movementName,
+    adapter: statement.adapter,
+    ...(statement.alias !== undefined ? { alias: statement.alias } : {}),
+    config: statement.config,
+    textRunMode: lane.writeRunModeOf({ source: input.source, pin, movementName: statement.movementName }),
+    credentialsId: statement.credentialName !== undefined ? credentialOf(statement.credentialName) : null,
+  }));
+  const addressFailures: string[] = [];
+  await within('listenAddress', async () => {
+    for (const [index, listener] of desired.entries()) {
+      const statement = statements[index];
+      try {
+        const resolution = await lane.resolveListenAddress(
+          {
+            teamId: input.teamId,
+            adapter: listener.adapter,
+            credentialsId: listener.credentialsId,
+            ...(statement.constructionArgs !== undefined ? { constructionArgs: statement.constructionArgs } : {}),
+            config: statement.config,
+          },
+          modulePlatform(),
+        );
+        if (resolution.ok) listener.resolvedAddress = resolution.address;
+        else addressFailures.push(`the '${listener.adapter}' listener firing '${listener.movementName}': ${resolution.reason}`);
+      } catch (err) {
+        addressFailures.push(`the '${listener.adapter}' listener firing '${listener.movementName}': address resolution failed (${err instanceof Error ? err.message : String(err)})`);
+      }
+    }
   });
+  if (addressFailures.length > 0 && input.provisionDespiteErrors !== true) {
+    return { ok: false, errors: addressFailures, catalogNotes: input.notes };
+  }
+  const { listeners, reconciles, leftPaused } = await within('reconcile', () =>
+    reconcileDerivedTriggers({
+      teamId: input.teamId,
+      movementRow: input.movementRow,
+      desired,
+      ...(input.keepPauses === true ? { keepPauses: true } : {}),
+    }),
+  );
+  // A carried version's schedule is armed by its own reconcile; it too is idempotent.
+  for (const kind of reconciles.size > 0 ? ([...reconciles, 'cron_reconcile'] as const) : []) await enqueueWork({ kind, key: `${kind}:shipped` });
+  // Inside a caller's transaction the providers are left to its work row.
+  const subscriptionNotes = input.providersLater === true ? [] : (await within('subscriptionSync', () => syncListenSubscriptions({ teamId: input.teamId }))).notes;
   return {
     ok: true,
     movementName: input.movementRow.name,
     listeners,
     infos: [],
-    catalogNotes: input.notes,
+    catalogNotes: [...input.notes, ...subscriptionNotes],
     warnings: [],
     ...(leftPaused.length > 0 ? { leftPaused } : {}),
   };
@@ -690,6 +773,9 @@ async function provisionListeners(input: {
   providersLater?: boolean;
   /** A language upgrade: see `reconcileDerivedTriggers`. */
   keepPauses?: boolean;
+  /** An upgrade moving from a carried version: its doors lock is held, as of this
+   *  instant. */
+  movedAt?: Date;
 }): Promise<ProvisionMovementResult> {
   const { teamCatalog } = input;
   const within = <T>(name: string, run: () => Promise<T>): Promise<T> =>
@@ -764,12 +850,14 @@ async function provisionListeners(input: {
         : null,
   }));
 
+  const carrying = input.movedAt !== undefined ? await carryingFromShipped(input.movementRow, input.movedAt) : undefined;
   const { listeners, reconciles, leftPaused } = await within('reconcile', () =>
     reconcileDerivedTriggers({
       teamId: input.teamId,
       movementRow: input.movementRow,
       desired,
       ...(input.keepPauses === true ? { keepPauses: true } : {}),
+      ...(carrying !== undefined ? { carrying } : {}),
     }),
   );
 
@@ -873,7 +961,12 @@ export interface SaveMovementInput {
    *  movement rewritten into version `to`, and it saves under that version —
    *  the pin and the text it is written in move in the one row update. An
    *  ordinary save never moves the pin. */
-  languageUpgrade?: { to: LanguageVersion };
+  languageUpgrade?: {
+    to: LanguageVersion;
+    /** The upgrade's instant, with the team's doors held: a move from a carried
+     *  version takes how far its listens heard as of then. */
+    movedAt?: Date;
+  };
   /** Set only by the language upgrade: the save joins its open transaction. */
   inTransaction?: SaveInTransaction;
 }
@@ -1293,6 +1386,9 @@ async function runSave(
           source: input.source,
           lane: await carriedListening.lane(),
           ...(input.languageUpgrade !== undefined ? { keepPauses: true } : {}),
+          ...(consented ? { provisionDespiteErrors: true } : {}),
+          ...(input.inTransaction !== undefined ? { providersLater: true } : {}),
+          timer,
           notes,
         })
       : teamCatalog === undefined
@@ -1305,6 +1401,7 @@ async function runSave(
           timer,
           ...(input.inTransaction !== undefined ? { providersLater: true } : {}),
           ...(input.languageUpgrade !== undefined ? { keepPauses: true } : {}),
+          ...(input.languageUpgrade?.movedAt !== undefined ? { movedAt: input.languageUpgrade.movedAt } : {}),
           // A consented non-valid save ships: derive its declared listens despite
           // check errors so it genuinely fires-and-fails (decision 3b).
           ...(consented ? { provisionDespiteErrors: true } : {}),

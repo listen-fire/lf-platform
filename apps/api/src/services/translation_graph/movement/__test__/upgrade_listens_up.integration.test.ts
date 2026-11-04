@@ -238,8 +238,8 @@ describe('an upgraded automation whose listens could not be brought up', () => {
     const id = await seedShipped('stamp');
     const stopsAfterSaving: Advance = async (input) => {
       const move = await advanceLive(input);
-      return async () => {
-        expect(await move()).toEqual({ ok: true });
+      return async (moving) => {
+        expect(await move(moving)).toEqual({ ok: true });
         return { ok: false, detail: 'a later member refused' };
       };
     };
