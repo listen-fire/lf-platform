@@ -39,7 +39,8 @@ import { answerDelivery } from 'movement-engine/public/inbound';
 import { runMovementFiring } from '../../translation_graph/movement/execute';
 import { mintMovementVersionIfChanged } from '../../translation_graph/movement/version_store';
 import { findTriggerByInboundKey } from '../../translation_graph/storage/tg_table';
-import { readDeliveryHandler } from '../carried_delivery';
+import { carriedVersions } from '@listen-fire/language-versions';
+import { readDeliveryHandler, receiveJudgedEvent } from '../carried_delivery';
 import { testWorkContext } from '../../../test/harness/work';
 import { WorkDeferred } from '../../work/drain';
 import { carriedRunHandler } from '../../translation_graph/movement/carried_run_now';
@@ -198,17 +199,17 @@ describe('one door, two versions (real Postgres)', () => {
   });
 
   describe('a dispatch_event row', () => {
-    const event = (triggerId: string) => ({ pipelineInputId: `trigger:${triggerId}`, adapterType: 'attio', triggerType: 'webhook', payload: { a: 1 }, occurredAt: new Date().toISOString() });
+    const event = (triggerId: string, occurredAt = new Date().toISOString()) => ({ pipelineInputId: `trigger:${triggerId}`, adapterType: 'attio', triggerType: 'webhook', payload: { a: 1 }, occurredAt });
 
-    async function queueOldRow(triggerId: string) {
+    async function queueOldRow(triggerId: string, occurredAt?: string) {
       const stored = await getAutomationsQb(['trigger_event'])
         .insertInto('trigger_event')
-        .values({ team_id: teamId, trigger_id: triggerId, adapter_type: 'attio', trigger_type: 'webhook', payload: JSON.stringify(event(triggerId)) as never })
+        .values({ team_id: teamId, trigger_id: triggerId, adapter_type: 'attio', trigger_type: 'webhook', payload: JSON.stringify(event(triggerId, occurredAt)) as never })
         .returning('id')
         .executeTakeFirstOrThrow();
       await getAutomationsQb(['work'])
         .insertInto('work')
-        .values({ team_id: teamId, kind: 'dispatch_event', key: `dispatch_event:${stored.id}`, host: 'platform', due_at: new Date(), payload: JSON.stringify({ triggerId, teamId, triggerEvent: event(triggerId), storedEventId: stored.id, duplicate: false }) as never })
+        .values({ team_id: teamId, kind: 'dispatch_event', key: `dispatch_event:${stored.id}`, host: 'platform', due_at: new Date(), payload: JSON.stringify({ triggerId, teamId, triggerEvent: event(triggerId, occurredAt), storedEventId: stored.id, duplicate: false }) as never })
         .execute();
       return stored.id;
     }
@@ -223,6 +224,23 @@ describe('one door, two versions (real Postgres)', () => {
       expect(firing).toHaveBeenCalledTimes(1);
       expect((await receiptOf(receipt)).status).toBe('dispatched');
       expect(await workOf('dispatch_event')).toEqual([]);
+    });
+
+    it('a row whose event carries a timezone offset runs, as production ran it', async () => {
+      const triggerId = await listenRow({ movementId: await movementOn('0.12.13', ATTIO_012) });
+      const receipt = await queueOldRow(triggerId, '2026-11-04T10:00:00+01:00');
+      await drainUntilIdle({ teamId });
+      expect(firing).toHaveBeenCalledTimes(1);
+      expect((await receiptOf(receipt)).status).toBe('dispatched');
+    });
+
+    it('a new reading of an event with a timezone offset keeps its receipt and runs it', async () => {
+      const triggerId = await listenRow({ movementId: await movementOn('0.12.13', ATTIO_012) });
+      const lane = await carriedVersions().find((version) => version.key === '0.12')!.listenRows!();
+      await receiveJudgedEvent({ teamId, triggerId, event: event(triggerId, '2026-11-04T10:00:00+01:00'), lane });
+      await drainUntilIdle({ teamId });
+      expect(firing).toHaveBeenCalledTimes(1);
+      expect((await receipts()).map((receipt) => receipt.status)).toEqual(['dispatched']);
     });
 
     it('run mode off keeps the receipt, suppressed, and fires nothing', async () => {

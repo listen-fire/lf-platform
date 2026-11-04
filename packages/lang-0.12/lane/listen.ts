@@ -9,9 +9,9 @@
 
 import type { Adapter, DiscriminableEvent, EventType } from '@listen-fire/engine/public/adapter';
 import { channelScopeMatches, collectFileListeners, eventConfigList, eventMatchesTriggerScope, triggerEventOf } from '@listen-fire/engine/public/inbound';
-import { triggerEventSchema } from '@listen-fire/engine-contracts';
 import { MovementParseError, parseProgram } from '@listen-fire/movement-lang';
 
+import { lane012EventSchema } from './trigger_event';
 import { manifestOf } from './listen_manifests';
 import { moduleTable } from './modules';
 import { filterByRecordScope } from './record_scope';
@@ -167,7 +167,7 @@ export type GateAnswer =
   | { kind: 'needs-actor'; candidates: unknown };
 
 export async function gateFiring(request: GateRequest, modules: ModulePlatform): Promise<GateAnswer> {
-  const event = triggerEventSchema.parse(request.event);
+  const event = lane012EventSchema.parse(request.event);
   const adapter = await moduleTable(modules).resolve(request.adapterType, {
     teamId: request.teamId,
     ...(request.credentialsId !== null ? { credentialsId: request.credentialsId } : {}),

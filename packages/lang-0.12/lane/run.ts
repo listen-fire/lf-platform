@@ -30,7 +30,7 @@ import {
   type HostAdapters,
 } from '@listen-fire/engine/public/host';
 import { WRITE_METHODS } from '@listen-fire/engine/public/adapter';
-import { refuseUnsupportedParkStateVersion, tenantIdOf, triggerEventSchema, type AnyParkedScopeState } from '@listen-fire/engine-contracts';
+import { refuseUnsupportedParkStateVersion, tenantIdOf, type AnyParkedScopeState } from '@listen-fire/engine-contracts';
 import {
   MovementEngineError,
   MovementRunFailed,
@@ -43,6 +43,7 @@ import { segmentWriteLocks } from '@listen-fire/engine/public/write-locks';
 import { MovementParseError, RUN_HOST_UNITS, parseProgram, type Program } from '@listen-fire/movement-lang';
 import type { TriggerEvent } from '@listen-fire/engine/public/inbound';
 
+import { lane012EventSchema } from './trigger_event';
 import { parkFamiliesOf } from './resume';
 import { MANUAL_ADAPTER_TYPE, type ManualInvocationPayload } from '../units/manual';
 
@@ -243,7 +244,7 @@ export async function runSegment(request: SegmentRequest, platform: RunPlatform)
       source: request.source,
       languageVersion: request.pin,
       ...(request.movementName !== undefined ? { movementName: request.movementName } : {}),
-      event: triggerEventSchema.parse(request.event),
+      event: lane012EventSchema.parse(request.event),
       teamId: tenantIdOf(request.teamId),
       firedAt: request.firedAt,
       ...(request.costCapMicrodollars !== undefined ? { costCapMicrodollars: request.costCapMicrodollars } : {}),
@@ -282,7 +283,7 @@ export async function resumeSegment(request: ResumeRequest, platform: RunPlatfor
       source: request.source,
       languageVersion: request.pin,
       ...(request.movementName !== undefined ? { movementName: request.movementName } : {}),
-      event: triggerEventSchema.parse(request.event),
+      event: lane012EventSchema.parse(request.event),
       teamId: tenantIdOf(request.teamId),
       firedAt: request.firedAt,
       ...(request.costCapMicrodollars !== undefined ? { costCapMicrodollars: request.costCapMicrodollars } : {}),
@@ -362,7 +363,7 @@ export function manualInvocationEvent(input: { key: string; invocation: ManualIn
 /** An event in 0.12's shape, read with 0.12's own schema: what the platform
  *  records of it (its run row), or why 0.12 cannot read it. */
 export function readEvent(event: Readonly<Record<string, unknown>>): EventReading {
-  const parsed = triggerEventSchema.safeParse(event);
+  const parsed = lane012EventSchema.safeParse(event);
   if (!parsed.success) return { ok: false, reason: parsed.error.issues.map((issue) => `${issue.path.join('.') || 'event'}: ${issue.message}`).join('; ') };
   const { pipelineInputId, adapterType, triggerType, payload, recordId, occurredAt, idempotencyKey, actor } = parsed.data;
   return {
