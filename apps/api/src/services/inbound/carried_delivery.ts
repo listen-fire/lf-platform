@@ -27,6 +27,7 @@ import { getAutomationsQb } from '../../lib/kysely';
 import { teamIdSchema } from '../../lib/team_id';
 import { queueAwaitWakesOf } from '../movement_engine/carried_correlations';
 import { WAITING_KEY_PREFIX, deliveryRowStore, withDoorsHeld } from '../movement_engine/run_host_deliveries';
+import type { StoreDb } from '../movement_engine/run_host_queue';
 import { WorkGivesUp, notifyWork, registerWorkHandler } from '../work/drain';
 import { enqueueWork } from '../work/store';
 import { modulePlatform } from '../translation_graph/movement/carried_run';
@@ -83,9 +84,9 @@ function kindsOf(origin: Pick<DeliveryOrigin, 'adapterType' | 'providerKey'>): s
  *  a current listen holds carries what it filtered for, and a version without a
  *  webhook here (a module with no subscriptions, or one a source refused) reads it
  *  as the door's one delivery. */
-async function arrivedWhereCarriedHears(origin: DeliveryOrigin, subscriptionId: string): Promise<boolean> {
+async function arrivedWhereCarriedHears(db: StoreDb, origin: DeliveryOrigin, subscriptionId: string): Promise<boolean> {
   if (origin.providerKey === undefined) return true;
-  const rows = await getAutomationsQb(['webhook_subscription'])
+  const rows = await db
     .selectFrom('webhook_subscription')
     .where('team_id', '=', origin.teamId)
     .where('provider', '=', origin.providerKey)
@@ -99,12 +100,13 @@ async function arrivedWhereCarriedHears(origin: DeliveryOrigin, subscriptionId: 
   return !rows.some((row) => edgeSubscriptionOf(row.subscriptions) === null && ((row.credentials_id as string | null) ?? null) === origin.credentialsId);
 }
 
-/** The keys of the carried versions something rides on this delivery for. */
-async function versionsConcerned(origin: DeliveryOrigin, subscriptionId: string): Promise<string[]> {
+/** The keys of the carried versions something rides on this delivery for, read
+ *  on the keep's own transaction. */
+async function versionsConcerned(db: StoreDb, origin: DeliveryOrigin, subscriptionId: string): Promise<string[]> {
   const carried = carriedVersions().filter((version) => version.provides.listen.kind === 'carried' || version.provides.resume.kind === 'carried');
   if (carried.length === 0) return [];
-  if (!(await arrivedWhereCarriedHears(origin, subscriptionId))) return [];
-  const pins = await getAutomationsQb(['trigger', 'movement'])
+  if (!(await arrivedWhereCarriedHears(db, origin, subscriptionId))) return [];
+  const pins = await db
     .selectFrom('trigger')
     .innerJoin('movement', 'movement.id', 'trigger.movement_id')
     .where('trigger.team_id', '=', origin.teamId)
@@ -119,7 +121,7 @@ async function versionsConcerned(origin: DeliveryOrigin, subscriptionId: string)
       return version !== undefined && version.provides.listen.kind === 'carried' ? [version.key] : [];
     }),
   );
-  const parked = await getAutomationsQb(['adapter_await'])
+  const parked = await db
     .selectFrom('adapter_await')
     .where('team_id', '=', origin.teamId)
     .where('adapter_type', '=', origin.adapterType)
@@ -178,7 +180,7 @@ export async function keepForEveryVersion(input: {
       source: input.source,
       request: input.request,
     },
-    work: async () => readingRows(origin, id, await versionsConcerned(origin, input.subscriptionId)),
+    work: async (trx) => readingRows(origin, id, await versionsConcerned(trx, origin, input.subscriptionId)),
   });
   if (kept.alreadyKept && kept.judged) return { kind: 'duplicate' };
   return { kind: 'read', deliveryId: kept.id, keptAt: kept.keptAt };

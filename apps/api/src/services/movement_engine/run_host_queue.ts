@@ -33,17 +33,23 @@ export type Exec = QueryExecutorProvider;
 /** Whose drain claims a row. */
 export type Host = 'platform' | 'lf';
 
-/** The tables the store's typed statements touch; raw statements name theirs. */
-const TABLES = ['trigger_run', 'parked_run', 'join_pending', 'join_branch_export', 'work'] as const;
+/** The tables the store's typed statements touch, and those a door reads inside
+ *  its keep; raw statements name theirs. */
+const TABLES = ['trigger_run', 'parked_run', 'join_pending', 'join_branch_export', 'work', 'webhook_subscription', 'trigger', 'movement', 'adapter_await'] as const;
 
 export function storeDb() {
   return getAutomationsQb(TABLES);
 }
 
+/** The pool, or one open transaction. Whatever runs inside a transaction reads
+ *  through it: a second connection from the pool, wanted while this one is held,
+ *  hangs for good once every connection is held by someone wanting another. */
+export type StoreDb = ReturnType<typeof storeDb>;
+
 /** One write that is all of it or none. Inside a request's context transaction
  *  (an upgrade's group settling a run parked on a listen it retires) the write
  *  joins it, since a transaction cannot open another. */
-export function inStoreTransaction<T>(body: (trx: ReturnType<typeof storeDb>) => Promise<T>): Promise<T> {
+export function inStoreTransaction<T>(body: (trx: StoreDb) => Promise<T>): Promise<T> {
   const db = storeDb();
   if (db.isTransaction) return body(db);
   return db.transaction().execute((trx) => body(trx));

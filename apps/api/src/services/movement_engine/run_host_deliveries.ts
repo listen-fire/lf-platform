@@ -21,6 +21,7 @@ import {
   type Exec,
   type Host,
   type Queued,
+  type StoreDb,
 } from './run_host_queue';
 import { arrivalMark, dropUnstartedWaits, logArrivalsIn, openDeliveryWaits } from './run_host_waits';
 import { keepUnjudgedIn, type UnjudgedArrival } from '../lf_store/records_door';
@@ -47,12 +48,13 @@ export interface RawDelivery {
 export interface PlatformDeliveryRowStore extends DeliveryRowStore {
   keepDelivery(input: PlatformKeepDelivery): ReturnType<DeliveryRowStore['keepDelivery']>;
   /** The delivery as it arrived, and the rows owed by it in the same write,
-   *  under the team's doors lock (`work` is asked inside it, so what it reads is
-   *  settled against any upgrade): `alreadyKept` when its external id was kept
+   *  under the team's doors lock (`work` is asked inside it, and reads through the
+   *  transaction it is given, so what it reads is settled against any upgrade and
+   *  needs no second connection): `alreadyKept` when its external id was kept
    *  before. Then its id is that delivery's, `judged` says whether the platform's
    *  version read it, and nothing is written. `keptAt` is the database's clock
    *  at the keep. */
-  keepRawDelivery(input: { delivery: RawDelivery; work: () => Promise<readonly NewWorkRow[]> }): Promise<{ id: string; alreadyKept: boolean; judged: boolean; keptAt: Date }>;
+  keepRawDelivery(input: { delivery: RawDelivery; work: (trx: StoreDb) => Promise<readonly NewWorkRow[]> }): Promise<{ id: string; alreadyKept: boolean; judged: boolean; keptAt: Date }>;
   /** A kept delivery the platform's version read and found nothing in. */
   judgedEmpty(input: { id: string }): Promise<void>;
 }
@@ -197,7 +199,7 @@ export function deliveryRowStore(owner: { host: Host; teamId: string }): Platfor
           return { id: kept.id, alreadyKept: true, judged: kept.judged, keptAt: kept.received_at, queued: [] };
         }
         const queued: Queued[] = [];
-        for (const row of await work()) queued.push(await queueRow(trx, { host: owner.host }, { ...row, teamId: row.teamId ?? owner.teamId }));
+        for (const row of await work(trx)) queued.push(await queueRow(trx, { host: owner.host }, { ...row, teamId: row.teamId ?? owner.teamId }));
         return { id: delivery.id, alreadyKept: false, judged: false, keptAt: first.received_at, queued };
       });
       await announceQueued(written.queued);
