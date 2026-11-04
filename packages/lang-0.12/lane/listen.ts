@@ -31,6 +31,8 @@ export interface ListenRow {
 export interface KeptDelivery {
   /** The request's body as base64, as the door kept it. */
   body: string;
+  /** The request's `content-type`, which says how the body is read. */
+  contentType?: string;
   /** The cursor the door read it against: every version reads from there. */
   checkpoint?: unknown;
 }
@@ -77,8 +79,17 @@ export function isListenRow(row: Pick<ListenRow, 'config' | 'firedMovementName' 
 
 const isLegacyId = (pin: string): boolean => /^[1-4]$/.test(pin);
 
+/** The body as the door read it: a form's fields (a field sent more than once is
+ *  the list of its values), else JSON. */
 function bodyOf(delivery: KeptDelivery): unknown {
-  return JSON.parse(Buffer.from(delivery.body, 'base64').toString('utf-8'));
+  const text = Buffer.from(delivery.body, 'base64').toString('utf-8');
+  if (delivery.contentType?.split(';')[0]?.trim().toLowerCase() !== 'application/x-www-form-urlencoded') return JSON.parse(text);
+  const fields: Record<string, string | string[]> = {};
+  for (const [name, value] of new URLSearchParams(text)) {
+    const held = fields[name];
+    fields[name] = held === undefined ? value : Array.isArray(held) ? [...held, value] : [held, value];
+  }
+  return fields;
 }
 
 async function channelNameOf(adapter: Adapter, event: DiscriminableEvent): Promise<string | null> {

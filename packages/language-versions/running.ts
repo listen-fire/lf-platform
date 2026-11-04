@@ -433,6 +433,8 @@ export interface ListenRow {
 /** What the door kept of a request (no signature: the door verified it). */
 export interface CarriedKeptDelivery {
   body: string;
+  /** The request's `content-type`, which says how the body is read. */
+  contentType?: string;
   /** The cursor the door read it against: every version reads from there. */
   checkpoint?: unknown;
 }

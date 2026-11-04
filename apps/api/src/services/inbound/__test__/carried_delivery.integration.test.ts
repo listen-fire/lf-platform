@@ -400,6 +400,24 @@ describe('one door, two versions (real Postgres)', () => {
     expect(wakes.map((wake) => wake.payload)).toEqual([{ adapterType: 'slack', teamId, correlationKey: expect.stringContaining('1700000000.000100') }]);
   });
 
+  it('a form encoded delivery is read as the door read it, not as JSON', async () => {
+    delete process.env.LF_CARRIED_LISTENS;
+    const runId = randomUUID();
+    const movement = await movementOn('0.12.13', ATTIO_012);
+    const version = await getAutomationsQb(['movement']).selectFrom('movement').where('id', '=', movement as MovementId).select('current_version_id').executeTakeFirstOrThrow();
+    await getAutomationsQb(['trigger_run'])
+      .insertInto('trigger_run')
+      .values({ id: runId as never, team_id: teamId, trigger_id: movement, trigger_type: 'webhook', status: 'parked', movement_version_id: version.current_version_id as never })
+      .execute();
+    await getAutomationsQb(['adapter_await']).insertInto('adapter_await').values({ adapter_type: 'slack', correlation_key: 'C1:1700000000.000100', run_id: runId as never, team_id: teamId, address: 'a' }).execute();
+    const deliveryId = randomUUID();
+    await sql`insert into automations.delivery (id, team_id, subscription_id, received_at, source, inline, events, event_count, request)
+      values (${deliveryId}::uuid, ${teamId}::uuid, 'SLACK', now(), 'webhook', false, '[]'::jsonb, 0,
+              ${JSON.stringify({ method: 'POST', path: '', query: '', headers: { 'content-type': 'application/x-www-form-urlencoded; charset=utf-8' }, body: Buffer.from('team_id=T1&text=hello').toString('base64') })}::text::jsonb)`.execute(getAutomationsQb(['delivery']));
+
+    await expect(readDeliveryHandler.run({ teamId, version: '0.12', adapterType: 'slack', credentialsId: null, deliveryId }, testWorkContext())).resolves.toBeUndefined();
+  });
+
   it('a public inbox key under 0.12 finds its claimant from the config, only while its listens fire', async () => {
     const movement = await movementOn('0.12.13', 'email = Email()\nfunction f(e: <email>) {\n  return 1\n}\nlisten to email { key: "Inbox" } fire f\n');
     const id = await listenRow({ movementId: movement, kind: 'email', config: { key: 'Inbox' }, firedMovementName: 'f' });

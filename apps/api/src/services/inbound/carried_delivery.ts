@@ -240,8 +240,9 @@ async function keptDeliveryOf(row: ReadDeliveryRow): Promise<CarriedKeptDelivery
     select request from automations.delivery where team_id = ${row.teamId}::uuid and id = ${row.deliveryId}::uuid`.execute(getAutomationsQb(['delivery']));
   const kept = rows[0] === undefined ? null : readKeptRequest(rows[0].request);
   if (kept === null || !('request' in kept)) return null;
-  const { body, checkpoint } = kept.request;
-  return { body, ...(checkpoint !== undefined ? { checkpoint } : {}) };
+  const { body, checkpoint, headers } = kept.request;
+  const contentType = headers['content-type'];
+  return { body, ...(contentType !== undefined ? { contentType } : {}), ...(checkpoint !== undefined ? { checkpoint } : {}) };
 }
 
 /** A receipt and its row, for one listen the version judged: a redelivery of a
