@@ -38,4 +38,19 @@ describe('renderSummary', () => {
     expect(text).not.toContain('Digest');
     expect(text).toContain('- Intake (4) — line 3: changed meaning');
   });
+
+  it('says of a paused run only what can still be done after the deploy', () => {
+    const text = renderSummary({
+      release: 'v0.8.0',
+      languageRelease: 'current=0.12.0;legacy=1,2,3,4',
+      current: INSTALLED,
+      ranAt: '2026-09-29T12:00:00.000Z',
+      counts: { upgradable: 0, current: 0, carried: 0, warned: 0, stopped: 0, refused: 0, unverified: 0 },
+      automations: [],
+      legacyStopped: [{ name: 'Intake', pin: '4', movementId: 'm', waitingRuns: ['run-1'], remedy: 'upgrade it' }],
+    });
+
+    expect(text).toContain('run-1. Cancel them, then upgrade the automation');
+    expect(text).not.toMatch(/before deploying|on 0\.12\.13/);
+  });
 });

@@ -103,11 +103,33 @@ Anything that happened between the upgrade and the rollback is in the newer data
 
 This release starts no new run on language versions 1 to 4, and carries no engine for what those runs were paused on. Upgrading such an automation straight to the current language stays supported.
 
-**Before you deploy, on 0.12.13:**
+**Before you deploy, on 0.12.13,** run these two queries, read only, against the database. The deploy check cannot be run first: it runs in the new release's `migrate` step, once.
 
-- Answer or cancel every run on those versions paused on a question, a callback or a reply. Those runs cannot continue after the deploy.
+```sql
+-- the automations on language versions 1 to 4
+select m.team_id, m.name as automation, m.language_version as version
+from automations.movement m
+where m.language_version in ('1', '2', '3', '4')
+order by m.team_id, m.name;
 
-**What the deploy check tells you.** It prints every automation on those versions, with the remedy, and every run of theirs it found paused on a question, a callback or a reply.
+-- the runs of those automations paused on a question, a callback or a reply
+select m.team_id, m.name as automation, m.language_version as version, r.id as run, r.status
+from automations.trigger_run r
+join automations.movement_version v on v.id = r.movement_version_id
+join automations.movement m on m.id = v.movement_id
+where m.language_version in ('1', '2', '3', '4')
+  and r.host = 'platform'
+  and r.status in ('running', 'parked')
+  and (
+    exists (select 1 from automations.adapter_await a where a.run_id = r.id)
+    or exists (select 1 from automations.callback c where c.run_id = r.id and c.status = 'live')
+  )
+order by m.team_id, m.name, r.id;
+```
+
+- Answer or cancel each run the second query lists. After the deploy it cannot continue, and going back to 0.12.13 means restoring the snapshot.
+
+**What the deploy check tells you, after the deploy.** It prints every automation on those versions, with the remedy, and every run of theirs it found paused on a question, a callback or a reply. For those runs it can only say what is still possible: cancel the run, then upgrade the automation.
 
 **After the deploy, for an automation on those versions:**
 

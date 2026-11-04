@@ -46,7 +46,7 @@ export async function holdsOnMoving(group: readonly MovementRow[]): Promise<stri
     if (legacy.length > 0) {
       const [them, it] = legacy.length === 1 ? ['a run', 'it'] : [`${legacy.length} runs`, 'them'];
       holds.push(
-        `${member.name} has ${them} waiting on a question, a callback or a reply under a legacy language version (${legacy.join(', ')}), which this release cannot resume: answer ${it} on 0.12.13 before deploying, or cancel ${it}`,
+        `${member.name} has ${them} waiting on a question, a callback or a reply under a legacy language version (${legacy.join(', ')}), which this release cannot resume: cancel ${it}, then upgrade the automation`,
       );
     }
   }
