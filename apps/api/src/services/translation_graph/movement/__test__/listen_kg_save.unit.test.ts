@@ -60,6 +60,8 @@ jest.mock('../../../../lib/kysely', () => {
         return api;
       },
       select: () => api,
+      innerJoin: () => api,
+      distinct: () => api,
       selectAll: () => api,
       orderBy: () => api,
       set: (p: Row) => {
