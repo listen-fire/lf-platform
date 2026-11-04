@@ -98,3 +98,20 @@ With your own database, the middle three commands are your provider's restore in
 Anything that happened between the upgrade and the rollback is in the newer database and not in the snapshot; it is lost. That window is the reason to upgrade a copy first and to keep the production window short.
 
 **Do not `down -v`.** It destroys `listen-fire-config` along with the data, and every stored third-party credential in the database you just restored becomes permanently unreadable.
+
+## Before moving off 0.12.13: automations on language versions 1 to 4
+
+This release starts no new run on language versions 1 to 4, and carries no engine for what those runs were paused on. Upgrading such an automation straight to the current language stays supported.
+
+**Before you deploy, on 0.12.13:**
+
+- Answer or cancel every run on those versions paused on a question, a callback or a reply. Those runs cannot continue after the deploy.
+
+**What the deploy check tells you.** It prints every automation on those versions, with the remedy, and every run of theirs it found paused on a question, a callback or a reply.
+
+**After the deploy, for an automation on those versions:**
+
+- **Run now and a listen are refused.** The refusal says why and gives the remedy: upgrade it.
+- **A question answered on a paused run is refused at the door.** The page says the run can't continue, and that its owner can cancel it. Nothing is recorded.
+- **A run paused on a timer resumes.** If it then reaches a question or a callback, it fails at that statement, with the reason on the run.
+- **Such a run holds its automation at its version.** Cancel the run to upgrade the automation.
