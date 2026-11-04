@@ -191,8 +191,8 @@ describe('AFFINITY_MAX_CALLS_PER_RUN, read by each version\'s Affinity module in
     server = http.createServer((req, res) => {
       requests += 1;
       res.writeHead(200, { 'content-type': 'application/json' });
-      // A run of this release reads organizations as Affinity answers them; a 0.12 run's reads fail on `[]`.
-      res.end(answersOrganizations && req.url?.startsWith('/organizations') === true ? JSON.stringify({ organizations: [], next_page_token: null }) : '[]');
+      // A read of an organization of this release is answered as Affinity does; a 0.12 run's reads fail on `[]`.
+      res.end(answersOrganizations && req.url?.startsWith('/organizations/') === true ? JSON.stringify({ id: 1 }) : '[]');
     });
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
     baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -221,9 +221,9 @@ describe('AFFINITY_MAX_CALLS_PER_RUN, read by each version\'s Affinity module in
     answersOrganizations = true;
     const client = new AffinityAPIClient({ apiKey: 'k', baseUrl });
     const failure = await withSegment({ teamId: TEAM }, async () => {
-      await client.organisationSearchPage('one', 50);
-      await client.organisationSearchPage('two', 50);
-      return client.organisationSearchPage('three', 50).catch((error: unknown) => error);
+      await client.getOrganisationById(1);
+      await client.getOrganisationById(2);
+      return client.getOrganisationById(3).catch((error: unknown) => error);
     }).finally(() => {
       answersOrganizations = false;
     });
