@@ -34,6 +34,7 @@ jest.mock('../../translation_graph/adapters/system/carried_records', () => {
 });
 
 import { sql } from 'kysely';
+import { versionOf, type ListeningLane } from '@listen-fire/language-versions';
 import { LANGUAGE_VERSION } from 'movement-lang';
 import { answerDelivery } from 'movement-engine/public/inbound';
 
@@ -55,7 +56,7 @@ import { runMovementFiring } from '../../translation_graph/movement/execute';
 import { upgradeMovement } from '../../translation_graph/movement/language_upgrade';
 import { retryListenSubscriptions, syncListenSubscriptions } from '../../translation_graph/movement/listen_subscriptions';
 import { saveMovement } from '../../translation_graph/movement/provision';
-import { getMovementRow } from '../../translation_graph/movement/store';
+import { getMovementRow, listenersFiringMovementNames, notLeftover, removeFinishedLeftovers, runsKeepingLeftover } from '../../translation_graph/movement/store';
 import { mintMovementVersionIfChanged } from '../../translation_graph/movement/version_store';
 import { platformInboundStoreFor } from '../../webhook_sync/handler';
 import { holdDoorsAlone } from '../../movement_engine/run_host_deliveries';
@@ -65,8 +66,14 @@ import { enqueueWork, removeWork } from '../../work/store';
 import { registerCoreWork } from '../../work/register';
 
 const firing = runMovementFiring as jest.Mock;
+const carriedLane = async (): Promise<ListeningLane> => {
+  const version = versionOf(PIN_012);
+  if (version?.listenRows === undefined) throw new Error('this build carries no 0.12');
+  return version.listenRows();
+};
 const currentRead = resolveAdapter as jest.Mock;
-const PIN = '0.12.13';
+const PIN_012 = '0.12.13';
+const PIN = PIN_012;
 
 const ATTIO_012 = 'import { attio } from adapters\nimport { attio_conn } from credentials\ncrm = connect attio using attio_conn\nfunction onChange(e: <crm>) {\n  return 1\n}\nlisten to crm fire onChange\n';
 const CRON_012 = 'import { `@lf/cron` as cron } from adapters\ntimer = connect cron\nfunction digest(t: <timer-[:Tick]->>) {\n  return t.`Fired at`\n}\n';
@@ -179,6 +186,9 @@ describe('0.12 listens beside the current version (real Postgres)', () => {
       if (method === 'PATCH' && url.includes('/v2/webhooks/')) {
         return json({ data: { id: { workspace_id: 'ws', webhook_id: 'patched' }, target_url: 'x', subscriptions: [], status: 'active', created_at: new Date().toISOString() } });
       }
+      if (url.endsWith('/v0/meta/bases')) return json({ bases: [{ id: 'app1', name: 'CRM', permissionLevel: 'create' }] });
+      if (url.endsWith('/v0/meta/bases/app1/tables')) return json({ tables: [{ id: 'tbl1', name: 'Companies', primaryFieldId: 'f', fields: [], views: [] }] });
+      if (method === 'POST' && url.endsWith('/bases/app1/webhooks')) return json({ id: 'ach1', macSecretBase64: 'c2VjcmV0', expirationTime: new Date(Date.now() + 86_400_000).toISOString() });
       if (method === 'POST' && url.endsWith('/v2/webhooks')) {
         return json({ data: { id: { workspace_id: 'ws', webhook_id: `issued-${calls.length}` }, target_url: 'x', subscriptions: [], status: 'active', created_at: new Date().toISOString(), secret: 'issued-secret' } });
       }
@@ -301,6 +311,110 @@ describe('0.12 listens beside the current version (real Postgres)', () => {
     });
   });
 
+  describe('a listen with an address under 0.12', () => {
+    const AIRTABLE = (table: string) =>
+      `air = airtable(credentials: air_conn)\nfunction onChange(e: <air>) {\n  return 1\n}\nlisten to air { base: "app1", table: "${table}" } fire onChange\n`;
+    async function airtableCredential(): Promise<void> {
+      const id = randomUUID();
+      await getAutomationsQb(['external_service_credentials'])
+        .insertInto('external_service_credentials')
+        .values({ id: id as never, team_id: teamId, type: ExternalServiceType.AIRTABLE, name: 'air_conn', identifier: id, credentials: await encryptToken(JSON.stringify({ accessToken: 'k', access_token: 'k' }), id) } as never)
+        .execute();
+    }
+
+    it('a save resolves it, keeps it on the row, and a re-save keeps the row', async () => {
+      await airtableCredential();
+      const id = await shipped(AIRTABLE('tbl1'));
+      const [row] = await triggersOf(id);
+      expect(row!.resolved_address).toEqual({ base: 'app1', table: 'tbl1' });
+      expect(await webhooks()).toEqual([expect.objectContaining({ provider: 'AIRTABLE', scope: { base: 'app1', table: 'tbl1' } })]);
+      const again = await saveMovement({ teamId, id, source: AIRTABLE('tbl1'), acknowledgeErrors: true });
+      expect(again.ok).toBe(true);
+      expect((await triggersOf(id)).map((after) => after.id)).toEqual([row!.id]);
+    });
+
+    it('one that does not resolve refuses the save, naming it', async () => {
+      await airtableCredential();
+      const source = AIRTABLE('tblMissing');
+      const id = await draft(source);
+      const saved = await saveMovement({ teamId, id, source, acknowledgeErrors: false });
+      expect(saved.ok).toBe(false);
+      expect(await triggersOf(id)).toEqual([]);
+    });
+  });
+
+  describe('the gates on a 0.12 firing', () => {
+    async function received(triggerId: string, more: Record<string, unknown>, adapterType = 'attio'): Promise<void> {
+      const { receiveJudgedEvent } = jest.requireActual('../carried_delivery');
+      const lane = await carriedLane();
+      await receiveJudgedEvent({ teamId, triggerId, lane, event: { pipelineInputId: `trigger:${triggerId}`, adapterType, triggerType: 'webhook', payload: {}, ...more } });
+    }
+
+    it('a change made with a token the platform writes with is its own echo: kept, and not fired', async () => {
+      const { triggerId } = await kept({ source: ATTIO_012, pin: PIN, kind: 'attio', firedMovementName: 'onChange' });
+      await getAutomationsQb(['platform_owned_token']).insertInto('platform_owned_token').values({ team_id: teamId, adapter_type: 'attio', external_token_id: 'tok1' } as never).execute();
+      await received(triggerId, { actor: { type: 'api-token', id: 'tok1' } });
+      await drain();
+      expect(firing).not.toHaveBeenCalled();
+      expect((await receipts()).map((receipt) => receipt.status)).toEqual(['suppressed']);
+      // Another token's change is news.
+      await received(triggerId, { actor: { type: 'api-token', id: 'tok2' } });
+      await drain();
+      expect(firing).toHaveBeenCalledTimes(1);
+    });
+
+    it('`suppress_self` on a module that cannot tell its own writes fires as normal', async () => {
+      const { triggerId } = await kept({ source: ATTIO_012, pin: PIN, kind: 'attio', config: { suppress_self: true }, firedMovementName: 'onChange' });
+      await received(triggerId, {});
+      await drain();
+      expect(firing).toHaveBeenCalledTimes(1);
+    });
+
+    it('a Slack message from no one the team can name does not fire: the ownership gate fails closed', async () => {
+      const credentialsId = randomUUID();
+      await getAutomationsQb(['external_service_credentials'])
+        .insertInto('external_service_credentials')
+        .values({ id: credentialsId as never, team_id: teamId, type: ExternalServiceType.SLACK, name: 'slack_conn', identifier: credentialsId, credentials: await encryptToken(JSON.stringify({ accessToken: 'k', access_token: 'k', botToken: 'k', bot_token: 'k' }), credentialsId) } as never)
+        .execute();
+      const { triggerId } = await kept({ source: 'function m() {\n  return 1\n}\n', pin: PIN, kind: 'slack', firedMovementName: 'm', credentialsId });
+      await received(triggerId, { payload: { type: 'message', text: 'hi', channel: 'C1', ts: '1.0' } }, 'slack');
+      await drain();
+      expect(firing).not.toHaveBeenCalled();
+      const [dropped] = await receipts();
+      expect(dropped).toMatchObject({ status: 'suppressed', failure_reason: expect.stringMatching(/registered team user/) });
+    });
+
+    it('a leftover row kept for a run stays until the run finishes, is no automation, and then goes', async () => {
+      const { movementId, triggerId } = await kept({ source: DAILY_012, pin: PIN, kind: 'cron', config: { leftoverForUnfinishedRuns: true }, firedMovementName: 'digest' });
+      const runId = randomUUID();
+      await getAutomationsQb(['trigger_run']).insertInto('trigger_run').values({ id: runId, team_id: teamId, trigger_id: triggerId, trigger_type: 'manual', status: 'parked', trigger_payload: {} } as never).execute();
+      expect(await runsKeepingLeftover(triggerId)).toEqual([runId]);
+      expect(await getAutomationsQb(['trigger']).selectFrom('trigger').where('team_id', '=', teamId).where(notLeftover).select('id').execute()).toEqual([]);
+      expect(await listenersFiringMovementNames({ teamId, movementNames: ['digest'] })).toEqual([]);
+      await removeFinishedLeftovers();
+      expect(await triggersOf(movementId)).toHaveLength(1);
+      await getAutomationsQb(['trigger_run']).updateTable('trigger_run').set({ status: 'success' } as never).where('id', '=', runId as never).execute();
+      await removeFinishedLeftovers();
+      expect(await triggersOf(movementId)).toEqual([]);
+    });
+  });
+
+  describe('rows a 0.12.13 service reads', () => {
+    it('this release writes a schedule\'s and a judged event\'s rows in production\'s shape', async () => {
+      const id = await shipped(EVERY_MINUTE_012);
+      const [row] = await triggersOf(id);
+      await cronReconcileHandler.run({}, ctx(new Date()));
+      const [armed] = await workOf('fire_cron');
+      expect(armed).toMatchObject({ key: `fire_cron:${row!.id}`, payload: { triggerId: row!.id } });
+      await setRow(row!.id, { cron_last_fired_at: new Date(Date.now() - 5 * 60_000) });
+      await fireCronHandler.run({ triggerId: row!.id }, ctx(new Date()));
+      const [queued] = await workOf('dispatch_event');
+      // Production's `capturedSchema` at 0.12.13: these keys, nothing a drain there refuses.
+      expect(Object.keys(queued!.payload as object).sort()).toEqual(['duplicate', 'storedEventId', 'teamId', 'triggerEvent', 'triggerId']);
+      expect(queued!.key).toBe(`dispatch_event:${(queued!.payload as { storedEventId: string }).storedEventId}`);
+    });
+  });
+
   describe('a retried delivery, when the current version\'s read failed', () => {
     it('runs a 0.12 event once though it has no idempotency key', async () => {
       const credentialsId = await attioCredential();
@@ -344,7 +458,7 @@ describe('0.12 listens beside the current version (real Postgres)', () => {
       const { receiveJudgedEvent } = jest.requireActual('../carried_delivery');
       const { triggerId } = await kept({ source: DAILY_012, pin: PIN, kind: 'cron', config: { schedule: '0 9 * * *' }, firedMovementName: 'digest' });
       const event = { pipelineInputId: `trigger:${triggerId}`, adapterType: 'cron', triggerType: 'webhook', payload: { firedAt: new Date().toISOString(), schedule: '0 9 * * *' } };
-      const lane = await jest.requireActual('@listen-fire/lang-0.12');
+      const lane = await carriedLane();
       for (let attempt = 0; attempt < 2; attempt++) await receiveJudgedEvent({ teamId, triggerId, event, lane, stableKey: 'delivery:d:0' });
       expect(await receipts()).toHaveLength(1);
     });

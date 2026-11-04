@@ -48,6 +48,13 @@ describe('a tapped callback button on WhatsApp', () => {
     expect(sendTextMessage).toHaveBeenCalledWith('15551234567', 'Something went wrong recording that.', { replyToMessageId: 'wamid.TAP' });
   });
 
+  it('a row that gives up on its delivery\'s first message still tells ops', async () => {
+    answerCallbackTap.mockRejectedValue(new Error('the database dropped the connection'));
+    const { sendSlackNotification } = jest.requireMock('../../../lib/slack') as { sendSlackNotification: jest.Mock };
+    await expect(whatsappMessageHandler.run({ ...row, announce: true }, { attempts: 10, now: new Date() } as never)).resolves.toBeUndefined();
+    expect(sendSlackNotification).toHaveBeenCalledTimes(1);
+  });
+
   it('a fire that lands is told as it came out; a failed reply does not run it again', async () => {
     answerCallbackTap.mockResolvedValue({ text: 'Thanks — that has been recorded.', served: true, outcome: 'recorded' });
     sendTextMessage.mockRejectedValue(new Error('Meta is down'));

@@ -219,6 +219,41 @@ describe('listener retirement on re-save (real Postgres + live adapter socket)',
     expect(stillParked).toEqual([]);
   }, 120_000);
 
+  it('a row a run on another version needs stays, and a run on this version still ends with its listen', async () => {
+    const name = `${NAME}-shared`;
+    const first = await save({ name, source: WITH_ONE_LISTEN });
+    const triggerId = first.listeners[0].triggerId;
+    const versionOther = randomUUID();
+    await getAutomationsQb(['movement_version'])
+      .insertInto('movement_version')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .values({ id: versionOther, team_id: teamId, movement_id: first.movementId, source: WITH_ONE_LISTEN, content_hash: `other-${versionOther}`, version_number: 900, language_version: '0.12.13' } as any)
+      .execute();
+    const current = await getAutomationsQb(['movement']).selectFrom('movement').where('id', '=', first.movementId as never).select(['current_version_id']).executeTakeFirstOrThrow();
+    const parkedRun = async (versionId: unknown): Promise<string> => {
+      const runId = randomUUID();
+      await getAutomationsQb(['trigger_run'])
+        .insertInto('trigger_run')
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .values({ id: runId, team_id: teamId, trigger_id: triggerId, trigger_type: 'manual', status: 'parked', trigger_payload: {}, movement_version_id: versionId } as any)
+        .execute();
+      await getAutomationsQb(['parked_run'])
+        .insertInto('parked_run')
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .values({ id: randomUUID(), run_id: runId, address: 'root', status: 'parked', park_reason: 'ask' } as any)
+        .execute();
+      return runId;
+    };
+    const own = await parkedRun(current.current_version_id);
+    const other = await parkedRun(versionOther);
+
+    await save({ name, id: first.movementId, source: WITH_NO_LISTEN });
+
+    const status = async (id: string) => (await getAutomationsQb(['trigger_run']).selectFrom('trigger_run').where('id', '=', id).select('status').executeTakeFirstOrThrow()).status;
+    expect(await status(own)).toBe('failed');
+    expect(await status(other)).toBe('parked');
+  });
+
   it('re-adding a listen after removing it restores the dispatch route', async () => {
     const name = `${NAME}-readd`;
     const first = await save({ name, source: WITH_ONE_LISTEN });

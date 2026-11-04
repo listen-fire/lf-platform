@@ -318,6 +318,20 @@ describe('a run production parked', () => {
       expect(await correlationsOf(runId)).toHaveLength(1);
     });
 
+    it('a tap on a callback that is over answers as over, not as held', async () => {
+      const { runId } = await load('legacy-4-ask');
+      const minted = (JSON.parse(readFileSync(join(FIXTURES, 'callback.json'), 'utf8')) as Fixture).rows.callback?.[0];
+      await insertRow('callback', { ...minted, run_id: runId, status: 'revoked' });
+      expect(await fireCallback({ id: minted?.id as CallbackId, values: {} })).toMatchObject({ kind: 'closed' });
+    });
+
+    it('a tap on an expired callback answers as expired, not as held', async () => {
+      const { runId } = await load('legacy-4-ask');
+      const minted = (JSON.parse(readFileSync(join(FIXTURES, 'callback.json'), 'utf8')) as Fixture).rows.callback?.[0];
+      await insertRow('callback', { ...minted, run_id: runId, expires_at: new Date(Date.now() - 60_000).toISOString() });
+      expect(await fireCallback({ id: minted?.id as CallbackId, values: {} })).toMatchObject({ kind: 'expired' });
+    });
+
     it('a tap on its callback is refused and says why: the call is not spent and nothing is queued', async () => {
       const { runId } = await load('legacy-4-ask');
       const minted = (JSON.parse(readFileSync(join(FIXTURES, 'callback.json'), 'utf8')) as Fixture).rows.callback?.[0];
