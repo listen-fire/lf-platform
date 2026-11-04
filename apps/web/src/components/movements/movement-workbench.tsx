@@ -74,6 +74,7 @@ import {
   runnableFromOutline,
   type ServerListenOutline,
   commentListenLines,
+  editServerReadLines,
   uncommentListenLines,
   type ListenerSummary,
 } from "@/components/movements/listeners-panel";
@@ -591,7 +592,11 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
   // panel asks its own version about the text it shows, a beat after typing.
   const readsListensOnServer = props.languageRoute?.kind === "carried" && movementId !== undefined;
   const [serverOutline, setServerOutline] = useState<ServerListenOutline | null>(null);
+  // The text last asked about, and the text the shown outline was read from:
+  // its line numbers hold for that text alone.
   const outlineSource = useRef<string | null>(null);
+  const outlineReadFrom = useRef<string | null>(null);
+  const [linesMoved, setLinesMoved] = useState(false);
 
   // The server's lint for a release pin: the movement's own pin when it has a
   // row, else the installed release.
@@ -772,28 +777,37 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
   // listener), so the workbench tracks the editor's content as state.
   const [currentSource, setCurrentSource] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!readsListensOnServer || movementId === undefined || currentSource === null) return;
-    if (outlineSource.current === currentSource) return;
-    const source = currentSource;
-    const timer = setTimeout(() => {
+  const readOutline = useCallback(
+    (source: string) => {
+      if (movementId === undefined) return;
       outlineSource.current = source;
       utils.client.views.movement.outline
         .mutate({ source, id: movementId })
         .then((outline) => {
           // Ignore an answer the author has already typed past.
-          if (outlineSource.current === source) setServerOutline(outline);
+          if (outlineSource.current !== source) return;
+          outlineReadFrom.current = source;
+          setServerOutline(outline);
         })
         .catch(() => {
           // Transient: let the next edit ask again.
           if (outlineSource.current === source) outlineSource.current = null;
         });
-    }, 300);
+    },
+    [movementId, utils],
+  );
+
+  useEffect(() => {
+    if (!readsListensOnServer || currentSource === null) return;
+    if (outlineSource.current === currentSource) return;
+    const source = currentSource;
+    const timer = setTimeout(() => readOutline(source), 300);
     return () => clearTimeout(timer);
-  }, [readsListensOnServer, movementId, currentSource, utils]);
+  }, [readsListensOnServer, currentSource, readOutline]);
   const handleEditorChange = useCallback(
     (source: string) => {
       setCurrentSource(source);
+      setLinesMoved(false);
       currentSourceRef.current = source;
       ensureSchemasFor(source);
     },
@@ -1140,22 +1154,34 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
     [ensureSchemasFor, movementId, save, baseUpdatedAt],
   );
 
-  const pauseListener = useCallback(
-    (span: { startLine: number; endLine: number }) => {
+  const editListenLines = useCallback(
+    (span: { startLine: number; endLine: number }, edit: (source: string, span: { startLine: number; endLine: number }) => string) => {
       const source = editorRef.current?.getSource();
       if (source === undefined) return;
-      applyScriptEdit(commentListenLines(source, span), { save: true });
+      if (!readsListensOnServer) {
+        applyScriptEdit(edit(source, span), { save: true });
+        return;
+      }
+      const next = editServerReadLines({ source, readFrom: outlineReadFrom.current, span, edit });
+      if (next === null) {
+        setLinesMoved(true);
+        readOutline(source);
+        return;
+      }
+      setLinesMoved(false);
+      applyScriptEdit(next, { save: true });
     },
-    [applyScriptEdit],
+    [applyScriptEdit, readsListensOnServer, readOutline],
+  );
+
+  const pauseListener = useCallback(
+    (span: { startLine: number; endLine: number }) => editListenLines(span, commentListenLines),
+    [editListenLines],
   );
 
   const resumeListener = useCallback(
-    (span: { startLine: number; endLine: number }) => {
-      const source = editorRef.current?.getSource();
-      if (source === undefined) return;
-      applyScriptEdit(uncommentListenLines(source, span), { save: true });
-    },
-    [applyScriptEdit],
+    (span: { startLine: number; endLine: number }) => editListenLines(span, uncommentListenLines),
+    [editListenLines],
   );
 
   const addListener = useCallback(
@@ -1730,7 +1756,7 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
           {/* Listeners — the file's listen lines, with pause/resume. */}
           <ListenersPanel
             source={currentSource}
-            {...(readsListensOnServer ? { serverOutline } : {})}
+            {...(readsListensOnServer ? { serverOutline, linesMoved } : {})}
             {...(languageRoute !== undefined ? { savedListensFire: saveGoesLive(languageRoute) } : {})}
             serverListeners={serverListeners}
             suggestionMessages={listenSuggestions}

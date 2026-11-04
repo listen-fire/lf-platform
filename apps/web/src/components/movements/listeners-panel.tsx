@@ -242,6 +242,18 @@ export function uncommentListenLines(
   return lines.join("\n");
 }
 
+/** Pause or resume on a text its own version's parser read on the server. A
+ *  listen's line numbers hold only for the text they were read from: on any
+ *  other, the edit would land on a line nobody meant, and save. Null refuses. */
+export function editServerReadLines(input: {
+  source: string;
+  readFrom: string | null;
+  span: { startLine: number; endLine: number };
+  edit: (source: string, span: { startLine: number; endLine: number }) => string;
+}): string | null {
+  return input.source === input.readFrom ? input.edit(input.source, input.span) : null;
+}
+
 /** The ready-to-paste listen line inside a MOV_LISTEN_MISSING message. */
 export function suggestedListenLine(message: string): string | null {
   const match = /e\.g\.\s+(listen\s+.+)$/.exec(message);
@@ -286,6 +298,9 @@ export interface ListenersPanelProps {
   /** False when a save does not make this version's listens fire: a listen
    *  with no server row is then not about to start. Absent, it is. */
   savedListensFire?: boolean;
+  /** A pause or resume was refused because the text moved after its lines were
+   *  read: nothing changed, and the panel is being read again. */
+  linesMoved?: boolean;
   /** Listeners the server derived from the last save. */
   serverListeners: ListenerSummary[];
   /** MOV_LISTEN_MISSING info messages from the live checker. */
@@ -363,6 +378,11 @@ export function ListenersPanel(props: ListenersPanelProps) {
       </h2>
 
       <div className="space-y-3">
+        {props.linesMoved === true && (
+          <p data-testid="listener-lines-moved" className="text-[12px] leading-relaxed text-amber-700">
+            The text changed after these lines were read, so nothing was paused, resumed or saved. Check the listener below and press again.
+          </p>
+        )}
         {matched.map(({ listen, server }, i) => {
           const lane = server?.name ?? null;
           const stopped = server?.paused ?? null;

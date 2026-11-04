@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { ListenersPanel, runnableFromOutline, type ListenerSummary, type ListenersPanelProps } from "../listeners-panel";
+import { ListenersPanel, commentListenLines, editServerReadLines, runnableFromOutline, uncommentListenLines, type ListenerSummary, type ListenersPanelProps } from "../listeners-panel";
 
 const SOURCE = `import { email } from adapters
 
@@ -215,5 +215,48 @@ describe("the browser and a carried version's parser", () => {
     const path = jest.requireActual<typeof import("node:path")>("node:path");
     const types = fs.readFileSync(path.resolve(__dirname, "../../../../../../packages/trpc/types.ts"), "utf8");
     expect(types).not.toMatch(/@listen-fire\/(lang-|language-versions)/);
+  });
+});
+
+describe("pause and resume on lines a carried version read", () => {
+  const READ = "connect x\nlisten to manual fire f\n";
+  const span = { startLine: 2, endLine: 2 };
+
+  it("edits the line it read when the text is the one it read", () => {
+    expect(editServerReadLines({ source: READ, readFrom: READ, span, edit: commentListenLines })).toBe("connect x\n# listen to manual fire f\n");
+    const paused = "connect x\n# listen to manual fire f\n";
+    expect(editServerReadLines({ source: paused, readFrom: paused, span, edit: uncommentListenLines })).toBe(READ);
+  });
+
+  it("refuses once a line was added above the listen, so the line now under that number is not touched", () => {
+    const typedAbove = `write y\n${READ}`;
+    expect(editServerReadLines({ source: typedAbove, readFrom: READ, span, edit: commentListenLines })).toBeNull();
+    expect(editServerReadLines({ source: typedAbove, readFrom: READ, span, edit: uncommentListenLines })).toBeNull();
+  });
+
+  it("refuses before any read has answered", () => {
+    expect(editServerReadLines({ source: READ, readFrom: null, span, edit: commentListenLines })).toBeNull();
+  });
+
+  it("says nothing changed when it refused, and only then", () => {
+    const render = (linesMoved: boolean) =>
+      renderToStaticMarkup(
+        createElement(ListenersPanel, {
+          source: READ,
+          serverOutline: { active: [], paused: [], adapters: {} },
+          linesMoved,
+          serverListeners: [],
+          suggestionMessages: [],
+          saving: false,
+          onPause: () => {},
+          onResume: () => {},
+          onAddListener: () => {},
+          onResumeStopped: () => {},
+          resuming: false,
+          onOpenActivity: () => {},
+        }),
+      );
+    expect(render(true)).toContain("nothing was paused, resumed or saved");
+    expect(render(false)).not.toContain("nothing was paused");
   });
 });
