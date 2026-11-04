@@ -15,6 +15,9 @@ export { checkSource, completionsAt, definitionAt, hoverAt } from './lane/check'
 export { hostedModuleTypes } from './lane/modules';
 export { manualInvocationEvent, manualListens, readEvent, resumeSegment, runSegment } from './lane/run';
 export { gateFiring, isListenRow, listenersOf, readDelivery } from './lane/listen';
+export { writeRunModeOf } from './lane/dry_run';
+export { resolveListenAddress } from './lane/listen_address';
+export { channelsOf, cursorOnCurrent, ensureChannel, pollListen, pollSecondsOf, polledKinds, refreshChannel, removeChannel, tickEvent } from './lane/listen_upkeep';
 export {
   coerceCallbackValues,
   drainDueTimers,

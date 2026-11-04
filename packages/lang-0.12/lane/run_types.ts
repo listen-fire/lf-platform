@@ -26,6 +26,7 @@ import type {
   ModuleModels,
 } from '@listen-fire/module-kit';
 import type { KgStore } from '../modules/kg/store';
+import type { SystemRecords } from '../modules/system';
 import type { SlackHosted } from '@listen-fire/slack';
 
 import type { TeamFacts } from './types';
@@ -85,6 +86,8 @@ export interface PlatformModuleParts {
   /** A stored document read back for a team, through the store's ownership
    *  check. */
   readDocument(ref: FileRef, options: { teamId: string }): Promise<ResolveFileRefResult>;
+  /** What the system module reads of the platform's own events. */
+  systemRecords: SystemRecords;
   /** A team's install of a remote adapter: its stored manifest file (JSON,
    *  read by the version in its own terms), its server secret, the document
    *  store a fetched file lands in, and the connection's provider credential

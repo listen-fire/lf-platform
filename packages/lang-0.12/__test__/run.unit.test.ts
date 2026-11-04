@@ -43,6 +43,7 @@ function platform(overrides: Partial<RunPlatform> = {}): RunPlatform {
         readFile: refused('readFile'),
         whatsappNumber: null,
         isExposedFileUrl: () => false,
+      systemRecords: { failedRuns: async () => [], storedEvents: async () => [], webBaseUrl: () => '' },
       remoteInstall: refused('remote installs'),
         readDocument: refused('readDocument'),
       },

@@ -12,7 +12,7 @@ import { channelScopeMatches, collectFileListeners, eventConfigList, eventMatche
 import { triggerEventSchema } from '@listen-fire/engine-contracts';
 import { MovementParseError, parseProgram } from '@listen-fire/movement-lang';
 
-import { manifestsOf } from './manifests';
+import { manifestOf } from './listen_manifests';
 import { moduleTable } from './modules';
 import { filterByRecordScope } from './record_scope';
 import type { ModulePlatform } from './run_types';
@@ -63,6 +63,9 @@ export interface ReadDeliveryOutcome {
 export function isListenRow(row: Pick<ListenRow, 'config' | 'firedMovementName' | 'source' | 'pin'>): boolean {
   const { config, firedMovementName } = row;
   if (typeof config !== 'object' || config === null || Array.isArray(config) || 'listen' in config) return false;
+  // 0.12's parser does not read a legacy id's text. Nothing runs it: such a row's
+  // match is refused by name where it would fire, so its listens must be heard.
+  if (isLegacyId(row.pin)) return !('leftoverForUnfinishedRuns' in config) && firedMovementName !== null;
   try {
     const listeners = collectFileListeners(parseProgram(row.source, { languageVersion: row.pin }), { languageVersion: row.pin });
     return listeners.some((listener) => listener.movementName === firedMovementName);
@@ -71,6 +74,8 @@ export function isListenRow(row: Pick<ListenRow, 'config' | 'firedMovementName' 
     throw error;
   }
 }
+
+const isLegacyId = (pin: string): boolean => /^[1-4]$/.test(pin);
 
 function bodyOf(delivery: KeptDelivery): unknown {
   return JSON.parse(Buffer.from(delivery.body, 'base64').toString('utf-8'));
@@ -136,11 +141,6 @@ export async function readDelivery(request: ReadDeliveryRequest, modules: Module
     }
   }
   return { receipts, wakeKeys, lines };
-}
-
-function manifestOf(adapterType: string, modules: ModulePlatform) {
-  const { kgChangeWebhooks, whatsappNumber } = modules.parts;
-  return manifestsOf({ kgChangeWebhooks, whatsappNumber, mcpEnabled: true }).find((manifest) => manifest.adapterType === adapterType);
 }
 
 /** A source whose events are changes to records the host keeps. */

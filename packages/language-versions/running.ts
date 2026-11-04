@@ -66,6 +66,8 @@ export interface PlatformModuleParts {
   whatsappNumber: string | null;
   isExposedFileUrl(url: string): boolean;
   readDocument(ref: FileRef, options: { teamId: string }): Promise<ResolveFileRefResult>;
+  /** What a carried version's system module reads of the platform's own events. */
+  systemRecords: CarriedSystemRecords;
   /** A team's install of a remote adapter: its stored manifest file (JSON,
    *  read by the version in its own terms), its server secret, the document
    *  store a fetched file lands in, and the connection's provider credential
@@ -453,8 +455,111 @@ export interface ReadDeliveryOutcome {
 
 export type GateAnswer = { kind: 'suppress'; reason: string } | { kind: 'proceed' } | { kind: 'needs-actor'; candidates: unknown };
 
+/** The platform's own events, as a carried version's system module reads them. */
+export interface CarriedSystemRecords {
+  failedRuns(input: { tenant: string; after: { failedAt: string; runId: string }; until: Date; limit: number }): Promise<
+    Array<{ runId: string; automation: { id: string; name: string } | null; firedMovement?: string; url?: string; reason: string; failedAt: Date }>
+  >;
+  storedEvents(input: { tenant: string; kinds: readonly string[]; after: { occurredAt: string; id: string }; until: Date; limit: number }): Promise<
+    Array<{ id: string; kind: string; payload: CarriedSystemEventPayload; occurredAt: Date }>
+  >;
+  webBaseUrl(): string;
+}
+
+/** A stored platform event's payload, as its version's module reads it. */
+export interface CarriedSystemEventPayload {
+  automation: string;
+  automationId: string;
+  runId: string;
+  version: string;
+  reason: string;
+  url: string;
+  at: string;
+}
+
+export interface AddressRequest {
+  teamId: string;
+  adapter: string;
+  credentialsId: string | null;
+  constructionArgs?: Record<string, string>;
+  config: Record<string, unknown>;
+}
+
+export type AddressResolution = { ok: true; address: Record<string, string> } | { ok: false; reason: string };
+
+export interface ChannelRow {
+  name: string;
+  kind: string;
+  credentialsId: string | null;
+  config: unknown;
+  resolvedAddress: unknown;
+}
+
+export interface RemoteChannelFacts {
+  adapterType: string;
+  methods: readonly string[];
+  requiredCredentialType?: string;
+}
+
+/** One webhook a carried version's listens want. */
+export interface Channel {
+  slug: string;
+  providerKey: string;
+  credentialsId: string | null;
+  events: string[];
+  scope: Record<string, string>;
+}
+
+export interface ChannelRegistration {
+  externalId?: string;
+  secret?: string;
+}
+
+/** Where a carried listen stood, as its row keeps it, for the current version's
+ *  edge the cursor is asked for. */
+export interface HeardSoFar {
+  adapterType: string;
+  edge: string;
+  pollCheckpoint: unknown;
+  cronLastFiredAt: string | null;
+}
+
 /** A carried version's own reading and judging of a kept delivery. */
 export interface ListeningLane {
+  /** What a text's listen on `movementName` rehearses, off its own parse. */
+  writeRunModeOf(request: { source: string; pin: string; movementName: string }): 'live' | 'dry_run';
+  resolveListenAddress(request: AddressRequest, modules: ModulePlatform): Promise<AddressResolution>;
+  channelsOf(
+    request: { rows: readonly ChannelRow[]; slugOf: (kind: string) => string; remote: readonly RemoteChannelFacts[] },
+    modules: ModulePlatform,
+  ): { channels: Channel[]; notes: string[] };
+  ensureChannel(
+    request: {
+      teamId: string;
+      slug: string;
+      credentialsId: string | null;
+      events: readonly string[];
+      callbackUrl: string;
+      current?: { externalId?: string; events: readonly string[] };
+      scope: Record<string, string>;
+    },
+    modules: ModulePlatform,
+  ): Promise<ChannelRegistration | null>;
+  removeChannel(
+    request: { teamId: string; slug: string; credentialsId: string | null; callbackUrl: string; externalId: string | null; scope: Record<string, string> },
+    modules: ModulePlatform,
+  ): Promise<void>;
+  refreshChannel(request: { teamId: string; slug: string; credentialsId: string | null; externalId: string; scope: Record<string, string> }, modules: ModulePlatform): Promise<void>;
+  polledKinds(modules: ModulePlatform): string[];
+  pollSecondsOf(adapterType: string, modules: ModulePlatform): number | undefined;
+  pollListen(
+    request: { teamId: string; triggerId: string; adapterType: string; credentialsId: string | null; movementId: string; config: unknown; checkpoint: unknown; now: string },
+    modules: ModulePlatform,
+  ): Promise<{ events: Record<string, unknown>[]; checkpoint: unknown }>;
+  /** One tick of a schedule, in the version's shape. */
+  tickEvent(request: { triggerId: string; due: string; schedule: string }): CarriedEvent;
+  /** The one-off map from a carried listen's cursor to the current version's. */
+  cursorOnCurrent(heard: HeardSoFar): { cursor: unknown } | undefined;
   readDelivery(request: ReadDeliveryRequest, modules: ModulePlatform): Promise<ReadDeliveryOutcome>;
   gateFiring(request: { teamId: string; adapterType: string; credentialsId: string | null; config: unknown; event: CarriedEvent }, modules: ModulePlatform): Promise<GateAnswer>;
   /** Whether a kept row is a listen under this version. */

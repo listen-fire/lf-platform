@@ -51,6 +51,7 @@ import { mutationDelivery } from '../../knowledge/mutation_outbox/delivery_mode'
 import { moduleHostFor } from '../adapters/builtin_modules';
 import { remoteInstallPieces } from '../adapters/resolve';
 import { platformKgStore } from '../adapters/kg_store';
+import { carriedSystemRecords } from '../adapters/system/carried_records';
 import { platformSlackChat, platformSlackFile } from '../adapters/slack/platform';
 import { WHATSAPP_MOVEMENTS_NUMBER } from '../adapters/whatsapp/shared_app';
 import { resolveActingUser } from '../adapters/acting_user/resolve';
@@ -86,6 +87,7 @@ export function modulePlatform(): ModulePlatform {
       whatsappNumber: WHATSAPP_MOVEMENTS_NUMBER,
       isExposedFileUrl,
       readDocument: (ref, { teamId }) => streamFileRef(ref, { teamId: teamIdSchema.parse(teamId) }),
+      systemRecords: carriedSystemRecords,
       remoteInstall: ({ adapterType, teamId, credentialsId }) =>
         remoteInstallPieces({ adapterType, teamId: teamIdSchema.parse(teamId), ...(credentialsId !== undefined ? { credentialsId } : {}) }),
     },

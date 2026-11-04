@@ -20,6 +20,8 @@ import {
   noCredential,
   type AdapterModuleDefinition,
   type InProcessAdapterModule,
+  type PollAnswer,
+  type PollInput,
 } from '@listen-fire/module-kit';
 import { randomUUID } from 'node:crypto';
 
@@ -28,30 +30,13 @@ import { createRemoteAdapter, ownedFilesAdapter } from '@listen-fire/engine/publ
 import { askModuleWith } from '../modules/ask';
 import { kgModuleWith } from '../modules/kg';
 import { nativeValuationsModule } from '../modules/native-valuations';
-import { systemModuleWith, type SystemRecords } from '../modules/system';
+import { systemModuleWith } from '../modules/system';
 import { CRON_ADAPTER_TYPE, createCronAdapter } from '../units/cron';
 import { MANUAL_ADAPTER_TYPE, createManualAdapter } from '../units/manual';
 import { RemoteAdapterManifestFile } from './remote';
 import type { ModuleDeclaration, ModuleInstall, ModulePlatform, PlatformModuleParts } from './run_types';
 
 type ModuleLoader = (parts: PlatformModuleParts) => AdapterModuleDefinition;
-
-const NOT_POLLED = "the system module's poll reads no records for a language 0.12 automation: this platform does not fire 0.12's listens";
-
-/** The platform's events reach a 0.12 automation only through its listens,
- *  which this platform does not fire for 0.12, so the system module's poll is
- *  handed no records. */
-const NO_SYSTEM_RECORDS: SystemRecords = {
-  failedRuns: async () => {
-    throw new Error(NOT_POLLED);
-  },
-  storedEvents: async () => {
-    throw new Error(NOT_POLLED);
-  },
-  webBaseUrl: () => {
-    throw new Error(NOT_POLLED);
-  },
-};
 
 /** Production's module lines at 0.12.13, by adapter type: each loads its
  *  module on first use. */
@@ -109,7 +94,7 @@ const MODULES: Readonly<Record<string, ModuleLoader>> = {
     const { whatsappModuleWith }: typeof import('@listen-fire/whatsapp') = require('@listen-fire/whatsapp');
     return whatsappModuleWith({ movementsNumber: parts.whatsappNumber, exposedFileUrl: (url) => parts.isExposedFileUrl(url) });
   },
-  system: () => systemModuleWith(NO_SYSTEM_RECORDS),
+  system: (parts) => systemModuleWith(parts.systemRecords),
   'native-valuations': () => nativeValuationsModule,
   mcp: () => {
     const { mcpModule }: typeof import('@listen-fire/mcp') = require('@listen-fire/mcp');
@@ -182,6 +167,24 @@ export function moduleTable(platform: ModulePlatform): {
       // Anything else is a team's install of a remote adapter, or nothing.
       if (definition === undefined) return remoteAdapterOf(adapterType, install, platform.parts);
       return loadInProcess(definition, adapterType, install, platform).adapter;
+    },
+  };
+}
+
+/** The polls of 0.12's module lines: a module's declared poll and its cadence.
+ *  A remote adapter that needs to poll does so itself, and delivers by webhook. */
+export function pollerOf(platform: ModulePlatform): {
+  intervalSeconds(adapterType: string): number | undefined;
+  poll(adapterType: string, install: ModuleInstall, input: PollInput): Promise<PollAnswer>;
+} {
+  const definitionOf = (adapterType: string): AdapterModuleDefinition | undefined => MODULES[adapterType]?.(platform.parts);
+  return {
+    intervalSeconds: (adapterType) => definitionOf(adapterType)?.poll?.intervalSeconds,
+    async poll(adapterType, install, input) {
+      const definition = definitionOf(adapterType);
+      const poll = definition === undefined ? undefined : loadInProcess(definition, adapterType, install, platform).poll;
+      if (poll === undefined) throw new Error(`${adapterType} under 0.12 declares no poll`);
+      return poll(input);
     },
   };
 }
