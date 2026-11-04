@@ -13,6 +13,7 @@ import {
   startDrainLoop,
   type StopDrainLoop,
   WorkDeferred,
+  WorkKeepsTrying,
 } from '../drain';
 import { claimDueWork, completeWork, deferWork, heartbeatWork, releaseWork } from '../store';
 import { maybePrincipal } from 'principal';
@@ -128,6 +129,23 @@ describe('drainWork', () => {
       }),
     );
     expect(result).toEqual({ claimed: 1, ran: 0, recovered: 0, failed: 1, deferred: 0, claimFailed: false });
+  });
+
+  it('a handler whose failure is expected retries as a failure does, attempts counted, without marking the pass failing', async () => {
+    registerWorkHandler('wake_await', {
+      run: async () => {
+        throw new WorkKeepsTrying('a credential stays unusable');
+      },
+    });
+    const now = new Date('2026-10-07T12:00:00.000Z');
+    pending = [row({ kind: 'wake_await', attempts: 3 })];
+
+    const result = await drainWork({ owner: 'me', now: () => now });
+
+    expect(complete).not.toHaveBeenCalled();
+    expect(defer).not.toHaveBeenCalled();
+    expect(release).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({ claimed: 1, ran: 0, recovered: 0, failed: 0, deferred: 1, claimFailed: false });
   });
 
   it('a handler that defers is deferred, not released: uncompleted, no failure, on the deferral schedule', async () => {
