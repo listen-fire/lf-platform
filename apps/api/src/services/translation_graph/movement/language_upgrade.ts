@@ -79,6 +79,7 @@ import {
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
+import type { TeamFacts } from '@listen-fire/language-versions';
 import type { ImportedFile } from './catalog';
 
 import { getAutomationsQb } from '../../../lib/kysely';
@@ -96,6 +97,7 @@ import {
   type AuthoringDiagnostic,
   type TeamMovementValidation,
 } from './authoring';
+import { teamFactsOncePerTeam } from './carried_check';
 import { withTeamContext } from './firing_context';
 import { importGroupOf } from './imports_across_versions';
 import { saveMovement } from './provision';
@@ -804,19 +806,25 @@ function releaseAppliedReason(
 
 // ── The real dependencies ───────────────────────────────────────────────────
 
-/** Validate against the team's live catalog, inside the team. */
-export const validateUnderLiveCatalog: ValidateUnder = ({ movement, languageVersion, upgradingFrom, source, movingWith }) =>
-  withTeamContext(movement.teamId as TeamId, () =>
-    validateMovementForTeam({
-      teamId: movement.teamId,
-      source: source ?? movement.source,
-      languageVersion,
-      // Reaches imported library files too: the checker checks them under the
-      // importer's version and move, and surfaces their warnings.
-      ...(upgradingFrom !== undefined ? { upgradingFrom } : {}),
-      ...(movingWith !== undefined ? { movingWith } : {}),
-    }),
-  );
+/** Validate against the team's live catalog, inside the team. `teamFacts`
+ *  is how a carried pin's check reads the team; absent reads it each time. */
+export function liveValidation(teamFacts?: (teamId: string) => Promise<TeamFacts>): ValidateUnder {
+  return ({ movement, languageVersion, upgradingFrom, source, movingWith }) =>
+    withTeamContext(movement.teamId as TeamId, () =>
+      validateMovementForTeam({
+        teamId: movement.teamId,
+        source: source ?? movement.source,
+        languageVersion,
+        // Reaches imported library files too: the checker checks them under the
+        // importer's version and move, and surfaces their warnings.
+        ...(upgradingFrom !== undefined ? { upgradingFrom } : {}),
+        ...(movingWith !== undefined ? { movingWith } : {}),
+        ...(teamFacts !== undefined ? { teamFacts } : {}),
+      }),
+    );
+}
+
+export const validateUnderLiveCatalog: ValidateUnder = liveValidation();
 
 export function liveDeployCheckDeps(release: DeployCheckRelease): DeployCheckDeps {
   return {
@@ -831,7 +839,9 @@ export function liveDeployCheckDeps(release: DeployCheckRelease): DeployCheckDep
       return row !== undefined;
     },
     listMovements: listAllMovementRows,
-    validate: validateUnderLiveCatalog,
+    // One read of each team's facts for the whole sweep, however many of its
+    // automations a carried version checks.
+    validate: liveValidation(teamFactsOncePerTeam()),
     sourceHash: movementSourceHash,
     recordValidity: async ({ movement, validation, checkedAgainst }) => {
       const assessment = assessMovementValidity({

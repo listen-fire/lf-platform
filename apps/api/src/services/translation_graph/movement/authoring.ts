@@ -15,7 +15,7 @@
 // per-team catalog the save path uses (referenced-construction scoped)
 // and runs the core against it.
 
-import { BridgeError, LANGUAGE_VERSION, diagnosticSeverity, neverAsAny, parseProgram as parseInstalled } from 'movement-lang';
+import { BridgeError, LANGUAGE_VERSION, neverAsAny, parseProgram as parseInstalled } from 'movement-lang';
 import { checkProgram } from 'legacy-lang';
 import { MovementParseError } from 'movement-lang';
 import { parseProgram } from 'legacy-lang';
@@ -27,9 +27,9 @@ import type {
   LanguageVersion,
   Program,
   ResolveFile,
-  Span,
 } from 'movement-lang';
 import type { TeamId } from '../../../generated/kysely/core/Team';
+import type { TeamFacts } from '@listen-fire/language-versions';
 import type { CatalogGap, ImportedFile } from './catalog';
 import type { MovementValidityStatus } from './store';
 
@@ -40,6 +40,9 @@ import { validateUnderCarried } from './carried_check';
 import { importsAcrossVersions } from './imports_across_versions';
 import { editorPinOf } from './language_service';
 import { stepTimer, type StepTimer } from './timing';
+import { dedupeDiagnostics, toAuthoringDiagnostic } from './authoring_diagnostic';
+
+export { toAuthoringDiagnostic };
 
 
 export interface AuthoringDiagnostic {
@@ -80,38 +83,6 @@ export interface MovementValidation {
   firedMovements: string[];
 }
 
-export function toAuthoringDiagnostic(
-  diagnostic: Diagnostic,
-  lines: string[],
-): AuthoringDiagnostic {
-  const span: Span = diagnostic.span;
-  return {
-    code: diagnostic.code,
-    message: diagnostic.message,
-    severity: diagnosticSeverity(diagnostic),
-    line: span.start.line,
-    col: span.start.col,
-    endLine: span.end.line,
-    endCol: span.end.col,
-    sourceLine: lines[span.start.line - 1] ?? '',
-    ...(diagnostic.upgrade === true ? { upgrade: true } : {}),
-    ...(diagnostic.fix !== undefined
-      ? {
-          fix: {
-            edits: diagnostic.fix.edits.map((edit) => ({
-              line: edit.span.start.line,
-              col: edit.span.start.col,
-              endLine: edit.span.end.line,
-              endCol: edit.span.end.col,
-              text: edit.text,
-            })),
-            ...(diagnostic.fix.safe === true ? { safe: true as const } : {}),
-          },
-        }
-      : {}),
-  };
-}
-
 /** Raw checker/compile diagnostics → the authoring shape, against the
  *  source they were produced from (the save path returns raw ones). */
 export function formatMovementDiagnostics(
@@ -120,16 +91,6 @@ export function formatMovementDiagnostics(
 ): AuthoringDiagnostic[] {
   const lines = source.split('\n');
   return diagnostics.map((d) => toAuthoringDiagnostic(d, lines));
-}
-
-function dedupe(diagnostics: Diagnostic[]): Diagnostic[] {
-  const seen = new Set<string>();
-  return diagnostics.filter((d) => {
-    const key = `${d.code}@${d.span.start.line}:${d.span.start.col}:${d.message}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
 }
 
 /**
@@ -207,7 +168,7 @@ function validationOf(program: Program, collected: Diagnostic[], lines: string[]
   for (const statement of program.statements) {
     if (statement.kind === 'listen') firedMovements.push(statement.movement);
   }
-  const diagnostics = dedupe(collected).map((d) => toAuthoringDiagnostic(d, lines));
+  const diagnostics = dedupeDiagnostics(collected).map((d) => toAuthoringDiagnostic(d, lines));
   return {
     ok: diagnostics.every((d) => d.severity !== 'error'),
     diagnostics,
@@ -338,6 +299,9 @@ export async function validateMovementForTeam(input: {
   /** The import group's members already checked for the move, as they will
    *  be once moved (./language_upgrade.ts). */
   movingWith?: ReadonlyMap<string, ImportedFile>;
+  /** How a carried pin's check reads the team's facts; absent reads them now.
+   *  A deploy sweep shares one read per team (`teamFactsOncePerTeam`). */
+  teamFacts?: (teamId: string) => Promise<TeamFacts>;
 }): Promise<TeamMovementValidation> {
   // Catalog assembly scopes itself to the source by scanning its constructions
   // and expression slots. A malformed expression can make one of those scans
@@ -347,7 +311,13 @@ export async function validateMovementForTeam(input: {
   // (infra) failures propagate unchanged.
   const route = routeOf(input.languageVersion ?? LANGUAGE_VERSION);
   if (route.kind === 'carried') {
-    return validateUnderCarried({ teamId: input.teamId, source: input.source, pin: route.pin, lane: route.lane });
+    return validateUnderCarried({
+      teamId: input.teamId,
+      source: input.source,
+      pin: route.pin,
+      lane: route.lane,
+      ...(input.teamFacts !== undefined ? { team: input.teamFacts(input.teamId) } : {}),
+    });
   }
   const timer = stepTimer('authoring: validate', { teamId: input.teamId });
   try {

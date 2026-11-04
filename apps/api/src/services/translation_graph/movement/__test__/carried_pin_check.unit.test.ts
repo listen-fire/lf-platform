@@ -17,6 +17,7 @@ jest.mock('../store', () => ({
 import { LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalogSnapshot } from 'movement-lang';
 
 import { diagnoseMovementSource, validateMovementForTeam } from '../authoring';
+import { teamFactsOncePerTeam } from '../carried_check';
 import { movementCatalogForTeam } from '../catalog';
 import { completeAt } from '../language_service';
 import { projectStoryView } from '../story_view';
@@ -115,6 +116,23 @@ describe("a 0.12 pin's check", () => {
     expect(across).toMatchObject({ severity: 'error', line: 1, sourceLine: 'import { shout } from "lib"' });
     expect(across?.message).toContain('0.12.13');
     expect(across?.message).toContain('0.15.1');
+  });
+});
+
+describe("a deploy sweep's team facts", () => {
+  it('are read once per team, however many automations it checks', async () => {
+    const facts = teamFactsOncePerTeam();
+    await Promise.all([facts('team-a'), facts('team-a'), facts('team-b')]);
+    await facts('team-a');
+    expect(jest.mocked(listMovementRows).mock.calls.map(([team]) => team)).toEqual(['team-a', 'team-b']);
+  });
+
+  it('do not keep a failed read', async () => {
+    jest.mocked(listMovementRows).mockRejectedValueOnce(new Error('database away'));
+    const facts = teamFactsOncePerTeam();
+    await expect(facts('team-a')).rejects.toThrow('database away');
+    await facts('team-a');
+    expect(listMovementRows).toHaveBeenCalledTimes(2);
   });
 });
 
