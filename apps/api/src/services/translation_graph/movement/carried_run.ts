@@ -143,26 +143,33 @@ async function withoutLeaseThrow(ask: () => Promise<boolean>): Promise<boolean> 
   }
 }
 
+/** Every error code this release has: a `Record` over the code type, so a
+ *  code added to this release must be listed here before it compiles. */
+const CURRENT_CODES: Record<MovementEngineErrorCode, true> = {
+  MOVENG_PARSE: true,
+  MOVENG_CHECK: true,
+  MOVENG_LANGUAGE_VERSION: true,
+  MOVENG_NOT_FOUND: true,
+  MOVENG_UNSUPPORTED: true,
+  MOVENG_RUNTIME: true,
+  MOVENG_CALL_DEPTH: true,
+  MOVENG_PARK_NONSERIALIZABLE: true,
+  MOVENG_ERROR: true,
+  MOVENG_LIMIT_STEPS: true,
+  MOVENG_LIMIT_TEXT_SIZE: true,
+  MOVENG_LIMIT_COLLECTION_SIZE: true,
+  MOVENG_LIMIT_RESULT_SIZE: true,
+  MOVENG_LIMIT_WALL_CLOCK: true,
+};
+
+function isCurrentCode(code: string): code is MovementEngineErrorCode {
+  return Object.hasOwn(CURRENT_CODES, code);
+}
+
 /** This release's error code for a carried version's code, when this release
  *  has the same one: a code is compared, never parsed. */
 function currentCodeOf(code: string | undefined): MovementEngineErrorCode | undefined {
-  const known: readonly MovementEngineErrorCode[] = [
-    'MOVENG_PARSE',
-    'MOVENG_CHECK',
-    'MOVENG_LANGUAGE_VERSION',
-    'MOVENG_NOT_FOUND',
-    'MOVENG_UNSUPPORTED',
-    'MOVENG_RUNTIME',
-    'MOVENG_CALL_DEPTH',
-    'MOVENG_PARK_NONSERIALIZABLE',
-    'MOVENG_ERROR',
-    'MOVENG_LIMIT_STEPS',
-    'MOVENG_LIMIT_TEXT_SIZE',
-    'MOVENG_LIMIT_COLLECTION_SIZE',
-    'MOVENG_LIMIT_RESULT_SIZE',
-    'MOVENG_LIMIT_WALL_CLOCK',
-  ];
-  return known.find((candidate) => candidate === code);
+  return code !== undefined && isCurrentCode(code) ? code : undefined;
 }
 
 const EMPTY_RESULT: (movementName: string) => MovementRunResult = (movementName) => ({
