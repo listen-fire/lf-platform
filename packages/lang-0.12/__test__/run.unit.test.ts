@@ -28,6 +28,7 @@ const refused = (what: string) => async (): Promise<never> => {
 
 function platform(overrides: Partial<RunPlatform> = {}): RunPlatform {
   return {
+    recordEngine: () => {},
     modules: {
       hostFor: () => {
         throw new Error('no module is hosted in this test');

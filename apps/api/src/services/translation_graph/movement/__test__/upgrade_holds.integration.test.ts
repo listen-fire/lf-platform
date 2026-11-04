@@ -205,7 +205,7 @@ describe('an upgrade held where it is', () => {
     const parksMeanwhile: ValidateUnder = async () => {
       const [ask] = (JSON.parse(readFileSync(join(FIXTURES, 'ask.json'), 'utf8')) as { rows: Record<string, Record<string, unknown>[]> }).rows.adapter_await ?? [];
       await getAutomationsQb(['adapter_await']).insertInto('adapter_await').values({ run_id: runId, address: 's9', team_id: TEAM, adapter_type: 'ask', correlation_key: String(ask?.correlation_key) } as never).execute();
-      return (await clean(undefined as never, undefined as never)) as never;
+      return { diagnostics: [], gaps: [] } as never;
     };
     const result = await upgradeMovement({ teamId: TEAM, id: movementId, acknowledge: true, validate: parksMeanwhile, advance: moved, together });
     expect(result).toMatchObject({ status: 'blocked' });

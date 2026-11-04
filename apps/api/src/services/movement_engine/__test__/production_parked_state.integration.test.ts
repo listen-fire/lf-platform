@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { sql } from 'kysely';
 
 import type { AskId } from '../../../generated/kysely/asks/Ask';
+import type { CallbackId } from '../../../generated/kysely/automations/Callback';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
 
@@ -153,7 +154,7 @@ describe('a run production parked', () => {
 
   it("on a repeatable callback closes it when the run finishes: the finish revokes what the run left standing", async () => {
     const { runId, rows } = await load('callback');
-    const id = rows.callback?.[0]?.id as string;
+    const id = rows.callback?.[0]?.id as CallbackId;
     await getAutomationsQb(['callback']).updateTable('callback').set({ single_use: false }).where('id', '=', id).execute();
     expect(await fireCallback({ id, values: {} })).toMatchObject({ kind: 'recorded', queued: true });
     await drain();
@@ -321,7 +322,7 @@ describe('a run production parked', () => {
       const { runId } = await load('legacy-4-ask');
       const minted = (JSON.parse(readFileSync(join(FIXTURES, 'callback.json'), 'utf8')) as Fixture).rows.callback?.[0];
       await insertRow('callback', { ...minted, run_id: runId });
-      const id = String(minted?.id);
+      const id = minted?.id as CallbackId;
       const outcome = await fireCallback({ id, values: {} });
       expect(outcome).toMatchObject({ kind: 'held' });
       expect(callbackAckText(outcome)).toContain('its run cannot continue on this release');

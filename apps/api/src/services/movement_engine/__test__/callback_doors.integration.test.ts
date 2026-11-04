@@ -10,6 +10,7 @@ import { createServer, type Server } from 'node:http';
 import express, { type Router } from 'express';
 
 import type { AddressInfo } from 'node:net';
+import type { CallbackId } from '../../../generated/kysely/automations/Callback';
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
@@ -78,7 +79,7 @@ describe('a tap on a 0.12 callback through the Slack door', () => {
     return rows.map((row) => row.payload);
   };
 
-  async function parkedOnCallback(name: string, param: string): Promise<{ runId: TriggerRunId; callbackId: string }> {
+  async function parkedOnCallback(name: string, param: string): Promise<{ runId: TriggerRunId; callbackId: CallbackId }> {
     const movementId = randomUUID();
     const source = programWith(param);
     await getAutomationsQb(['movement'])

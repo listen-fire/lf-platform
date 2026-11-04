@@ -31,6 +31,7 @@ function team(credentials: TeamFacts['credentials'] = []): TeamFacts {
 function platform(input: { renderMs?: number; fields?: Record<string, string> } = {}): RunPlatform {
   const log = { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
   return {
+    recordEngine: () => {},
     modules: {
       hostFor: () => ({
         credential: { name: 'api_key', fields: async () => input.fields ?? {}, update: async () => {} },
