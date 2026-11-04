@@ -41,6 +41,24 @@ describe.each(others.map((version) => [version.key, version] as const))('carried
     expect(await version.load()).toEqual(expect.objectContaining(required));
   });
 
+  it('is what its carried checker loads, when it checks', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const required: object = require(name);
+    const { check } = version;
+    switch (check.kind) {
+      case 'carried':
+        expect(await check.lane()).toEqual(expect.objectContaining(required));
+        break;
+      case 'current':
+      case 'held':
+        break;
+      default: {
+        const unknown: never = check;
+        throw new Error(`unknown check capability ${JSON.stringify(unknown)}`);
+      }
+    }
+  });
+
   it('is a dependency of the registry and of the api', () => {
     expect(manifest('packages/language-versions/package.json').dependencies?.[name]).toBe('workspace:*');
     expect(manifest('apps/api/package.json').dependencies?.[name]).toBe('workspace:*');

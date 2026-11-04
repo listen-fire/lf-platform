@@ -7,7 +7,6 @@ import {
   MovementParseError,
   RustCheckRefused,
   checkSourceInRust,
-  compatibilityKey,
   completionsAt as completionsInWasm,
   definitionAt as definitionInWasm,
   diagnosticSeverity,
@@ -21,7 +20,7 @@ import {
 } from '@listen-fire/movement-lang';
 
 import { gapsOf, teamSnapshot } from './catalog';
-import { importClosure } from './imports';
+import { importClosure, importKeyOf, readingPin } from './imports';
 import type { CheckRequest, CheckedDiagnostic, CheckedSource, EditorRequest } from './types';
 
 const AT_START = { start: { line: 1, col: 1 }, end: { line: 1, col: 1 } };
@@ -54,32 +53,32 @@ export async function checkSource(request: CheckRequest): Promise<CheckedSource>
   const program = parsed(source, pin);
   if (!('statements' in program)) return { diagnostics: [program], firedMovements: [], gaps: [], notes: [] };
   const closure = importClosure(program, pin, team.files);
-  const { snapshot, notes, typed } = await teamSnapshot(team, closure.files);
+  const teamCatalog = await teamSnapshot(team, closure.files);
   let diagnostics: CheckedDiagnostic[];
   try {
-    diagnostics = checkSourceInRust(source, snapshot, { languageVersion: pin }).map(checked);
+    diagnostics = checkSourceInRust(source, teamCatalog.snapshot, { languageVersion: pin }).map(checked);
   } catch (error) {
     if (!(error instanceof RustCheckRefused)) throw error;
     diagnostics = [{ code: 'MOV_PARSE', message: error.message, severity: 'error', span: AT_START }];
   }
   const libraries = Object.entries(closure.files).flatMap(([name, file]) => {
-    const pinOf = team.files.find((f) => f.name === name)?.languageVersion ?? pin;
-    const library = parsed(file.source, pinOf);
+    const own = team.files.find((f) => f.name === name)?.languageVersion ?? pin;
+    const library = parsed(file.source, readingPin(own, pin));
     return 'statements' in library ? [library] : [];
   });
   return {
     diagnostics: [...closure.diagnostics, ...diagnostics],
     firedMovements: program.statements.flatMap((statement) => (statement.kind === 'listen' ? [statement.movement] : [])),
-    gaps: gapsOf([program, ...libraries], { snapshot, notes, typed }),
-    notes,
+    gaps: gapsOf([program, ...libraries], teamCatalog),
+    notes: teamCatalog.notes,
   };
 }
 
-/** The editor's snapshot: every file on the program's own version, so an
- *  import completes, as production's editor snapshot listed every saved file. */
+/** The editor's snapshot: every file the program may import, so an import
+ *  completes, as production's editor snapshot listed every saved file. */
 async function editorSnapshot(request: EditorRequest) {
-  const key = compatibilityKey(request.pin);
-  const own = request.team.files.filter((file) => compatibilityKey(file.languageVersion) === key);
+  const key = importKeyOf(request.pin);
+  const own = request.team.files.filter((file) => importKeyOf(file.languageVersion) === key);
   return (await teamSnapshot(request.team, Object.fromEntries(own.map((file) => [file.name, { source: file.source }])))).snapshot;
 }
 

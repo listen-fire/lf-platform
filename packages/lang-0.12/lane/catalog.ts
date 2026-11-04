@@ -11,16 +11,27 @@
 // here exactly as their adapters described themselves. Every other instance a
 // program names is a gap, said out loud: its reads and writes were not checked,
 // so the program is unverified, never clean.
+//
+// Ask is static too, but production typed an ask's answer by the ask's own
+// literals (an `Answer Type`, a form's `Fields`, a choice's `Options`), inside
+// the connected projection this package does not carry. Its base surface types
+// those answers wrongly in both directions, so ask is a gap until that
+// projection is carried.
 
 import type { Adapter, AdapterManifest } from '@listen-fire/engine/public/adapter';
 import { buildCatalogSnapshot, credentialImportNames, type CatalogAdapterInput } from '@listen-fire/engine/public/catalog';
 import { introspectAdapter } from '@listen-fire/engine/public/embed';
 import { availableChatModels } from '@listen-fire/engine/public/models';
 import { bundledPluginSpecs } from '@listen-fire/engine/public/plugins';
-import { instanceSchemaKey, type CatalogSnapshot, type CredentialSpec, type InstanceSchema, type Program } from '@listen-fire/movement-lang';
+import {
+  instanceSchemaKey,
+  type CatalogSnapshot,
+  type ConstructionCall,
+  type CredentialSpec,
+  type InstanceSchema,
+  type Program,
+} from '@listen-fire/movement-lang';
 
-import { AskSurface } from '../modules/ask/surface';
-import { ASK_MANIFEST } from '../modules/ask/manifest';
 import { SystemAdapter } from '../modules/system/surface';
 import { SYSTEM_MANIFEST } from '../modules/system/manifest';
 import { CRON_MANIFEST, CronSurface } from '../units/cron';
@@ -34,34 +45,60 @@ const DESCRIBED: readonly { manifest: AdapterManifest; adapter: Adapter }[] = [
   { manifest: CRON_MANIFEST, adapter: new CronSurface() },
   { manifest: MANUAL_MANIFEST, adapter: new ManualSurface() },
   { manifest: SYSTEM_MANIFEST, adapter: new SystemAdapter() },
-  { manifest: ASK_MANIFEST, adapter: new AskSurface() },
 ];
 
 let described: Promise<ReadonlyMap<string, { schema: InstanceSchema; notes: string[] }>> | undefined;
 
 /** The static surfaces' schemas, read once per process: they are the same for
- *  every team. */
+ *  every team. A failed read is not kept, so the next check reads again. */
 function describedSchemas(): Promise<ReadonlyMap<string, { schema: InstanceSchema; notes: string[] }>> {
-  described ??= Promise.all(
-    DESCRIBED.map(async ({ manifest, adapter }) => [manifest.adapterType, await introspectAdapter(adapter, manifest)] as const),
-  ).then((entries) => new Map(entries));
+  if (described === undefined) {
+    const reading = Promise.all(
+      DESCRIBED.map(async ({ manifest, adapter }) => [manifest.adapterType, await introspectAdapter(adapter, manifest)] as const),
+    ).then((entries) => new Map(entries));
+    described = reading;
+    reading.catch(() => {
+      if (described === reading) described = undefined;
+    });
+  }
   return described;
 }
 
-/** What `program` connects, by adapter key: its constructions, through the
- *  names its `adapters` import binds. */
-export function constructedAdapters(program: Program): string[] {
+/** Every construction anywhere in `node`: at the top level, in a function
+ *  body, a block or a branch. The walk is over the tree's shape, so a
+ *  construction in a statement kind added later is found too. */
+function constructionsIn(node: unknown, found: ConstructionCall[]): void {
+  if (Array.isArray(node)) {
+    for (const item of node) constructionsIn(item, found);
+    return;
+  }
+  if (typeof node !== 'object' || node === null) return;
+  if ('kind' in node && node.kind === 'construct' && 'construct' in node && isConstruction(node.construct)) {
+    found.push(node.construct);
+  }
+  for (const value of Object.values(node)) constructionsIn(value, found);
+}
+
+function isConstruction(value: unknown): value is ConstructionCall {
+  return typeof value === 'object' && value !== null && 'callee' in value && typeof value.callee === 'string';
+}
+
+/** What `program` connects, by adapter key: its constructions anywhere,
+ *  through the names its `adapters` import binds. A construction whose callee
+ *  is no adapter in `adapters` (a call to a movement reads the same) is not a
+ *  connection. */
+export function constructedAdapters(program: Program, adapters: ReadonlySet<string>): string[] {
   const imported = new Map<string, string>();
   for (const statement of program.statements) {
     if (statement.kind !== 'import' || statement.source.kind !== 'builtin' || statement.source.namespace !== 'adapters') continue;
     for (const name of statement.names) imported.set(name.alias ?? name.name, name.name.replace(/^@lf\//, ''));
   }
+  const constructions: ConstructionCall[] = [];
+  constructionsIn(program.statements, constructions);
   const constructed = new Set<string>();
-  for (const statement of program.statements) {
-    if (statement.kind === 'assign' && statement.value.kind === 'construct') {
-      const callee = statement.value.construct.callee;
-      constructed.add(imported.get(callee) ?? callee);
-    }
+  for (const { callee } of constructions) {
+    const adapter = imported.get(callee) ?? callee;
+    if (adapters.has(adapter)) constructed.add(adapter);
   }
   return [...constructed];
 }
@@ -71,6 +108,8 @@ export interface TeamSnapshot {
   notes: string[];
   /** The adapter keys whose instances this snapshot types. */
   typed: ReadonlySet<string>;
+  /** Every adapter key the snapshot names. */
+  adapters: ReadonlySet<string>;
 }
 
 /** The team's 0.12 snapshot, with `files` as the import namespace. */
@@ -110,12 +149,15 @@ export async function teamSnapshot(team: TeamFacts, files: Record<string, { sour
     }),
     notes,
     typed: new Set(schemas.keys()),
+    adapters: new Set(manifests.map((manifest) => manifest.adapterType)),
   };
 }
 
 /** Each adapter `programs` connect that `snapshot` does not type. */
 export function gapsOf(programs: readonly Program[], snapshot: TeamSnapshot): CheckGap[] {
-  const untyped = new Set(programs.flatMap(constructedAdapters).filter((adapter) => !snapshot.typed.has(adapter)));
+  const untyped = new Set(
+    programs.flatMap((program) => constructedAdapters(program, snapshot.adapters)).filter((adapter) => !snapshot.typed.has(adapter)),
+  );
   return [...untyped].map((adapter) => ({
     adapter,
     detail:

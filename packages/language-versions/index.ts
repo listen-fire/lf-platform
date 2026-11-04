@@ -25,6 +25,10 @@
 // The image finds the package by its name (`deploy/Dockerfile`). A test holds
 // every entry to this list (`__test__/wiring.unit.test.ts`).
 //
+// Each carried version has its own copy of the lane and of the platform's own
+// modules as they stood at that release, by design: a shared file would
+// resolve the wrong release's packages.
+//
 // Each entry says how its pins are checked and how they run: by the current
 // core, by the version's own packages through its package's façade, or held. A
 // held capability refuses its pins exactly as if the version were not carried,

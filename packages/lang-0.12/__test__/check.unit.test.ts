@@ -54,6 +54,83 @@ describe("a 0.12 program, by 0.12's checker", () => {
   });
 });
 
+describe('a connection made anywhere is a gap', () => {
+  const PRELUDE = 'import { attio } from adapters\nimport { acme_main } from credentials\n';
+  const WRITE = '  write crm-[:Companies]-> {\n    unique by (Name)\n    Nme: go.Text\n  }\n';
+  const ATTIO_GAP = [{ adapter: 'attio', detail: expect.stringContaining('nothing this automation reads from or writes to attio was checked') }];
+
+  it('inside a function body', async () => {
+    const source = `${PRELUDE}function f(go: <manual-[:Invocation]->>) {\n  crm = connect attio using acme_main\n${WRITE}}\nlisten to manual fire f\n`;
+    const checked = await check(source);
+    expect(checked.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+    expect(checked.gaps).toEqual(ATTIO_GAP);
+  });
+
+  it('inside a nested block, and a call to a movement is no connection', async () => {
+    const source =
+      `${PRELUDE}function g(go: <manual-[:Invocation]->>) {\n  return go.Text\n}\n` +
+      `function f(go: <manual-[:Invocation]->>) {\n  t = g(go: go)\n  if (go.Text == "x") {\n    crm = connect attio using acme_main\n  ${WRITE}  }\n}\nlisten to manual fire f\n`;
+    const checked = await check(source);
+    expect(checked.gaps).toEqual(ATTIO_GAP);
+  });
+
+  it('inside a library the program imports', async () => {
+    const library = `${PRELUDE}export function store(go: <manual-[:Invocation]->>) {\n  crm = connect attio using acme_main\n${WRITE}}\n`;
+    const source = 'import { store } from "crm_lib"\nfunction f(go: <manual-[:Invocation]->>) {\n  store(go)\n}\nlisten to manual fire f\n';
+    const checked = await check(source, [{ name: 'crm_lib', source: library, languageVersion: '0.12.4' }]);
+    expect(checked.diagnostics.filter((d) => d.code === 'MOV_IMPORT_LANGUAGE_VERSION')).toEqual([]);
+    expect(checked.gaps).toEqual(ATTIO_GAP);
+  });
+});
+
+describe('the static surfaces 0.12 described', () => {
+  it("a cron tick's fields and a cron listen's config", async () => {
+    const source =
+      'import { `@lf/cron` as cron } from adapters\ntimer = connect cron\nfunction d(t: <timer-[:Tick]->>) {\n  return t.`Fired att`\n}\n' +
+      'listen to timer { schedule: "0 9 * * 1", scheduel: "x" } fire d\n';
+    const checked = await check(source);
+    expect(checked.diagnostics.map((d) => d.code)).toEqual(['MOV_UNKNOWN_PROPERTY', 'MOV_LISTEN_BAD_CONFIG']);
+    expect(checked.gaps).toEqual([]);
+  });
+
+  it("a system event's fields", async () => {
+    const source =
+      'import { `@lf/system` as system } from adapters\nsys = connect system\nfunction r(failed: <sys-[:`Run Failed`]->>) {\n  return failed.Reasonn\n}\n' +
+      'listen to sys { events: ["Run Failed"] } fire r\n';
+    const checked = await check(source);
+    expect(checked.diagnostics).toEqual([expect.objectContaining({ code: 'MOV_UNKNOWN_PROPERTY', message: expect.stringContaining("no field 'Reasonn'") })]);
+    expect(checked.gaps).toEqual([]);
+  });
+});
+
+// Production typed an ask's answer by the ask's own literals; 0.12's base
+// surface would type these wrongly in both directions, so ask is a gap, and
+// none of these is an error.
+describe('an ask is a gap, never typed at its base', () => {
+  const ASK = 'import { `@lf/ask` as ask } from adapters\nqa = connect ask\n';
+  const asked = (body: string) => `${ASK}function m(go: <manual-[:Invocation]->>) {\n${body}}\nlisten to manual fire m\n`;
+  const ASK_GAP = [{ adapter: 'ask', detail: expect.stringContaining('ask was checked') }];
+
+  it.each([
+    [
+      'a number Provide compared and added to',
+      '  p = write qa-[:Provide]-> { Prompt: "How much?", `Answer Type`: "number" }\n  a = await first(p-[:Response]->)\n  if (a.Answer > 5) { return a.Answer + 1 }\n  return 0\n',
+    ],
+    [
+      "a Form's own fields read",
+      '  q = write qa-[:Form]-> { Prompt: "Deal?", Fields: ["Budget", "Timeline"] }\n  a = await first(q-[:Response]->)\n  return a.Budget\n',
+    ],
+    [
+      'a Choose compared with an option it never offers',
+      '  c = write qa-[:Choose]-> { Prompt: "Which?", Options: ["Seed", "Series A"] }\n  a = await first(c-[:Response]->)\n  if (a.Answer == "Series B") { return 1 }\n  return 0\n',
+    ],
+  ])('%s', async (_, body) => {
+    const checked = await check(asked(body));
+    expect(checked.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+    expect(checked.gaps).toEqual(ASK_GAP);
+  });
+});
+
 describe('a library import across versions', () => {
   const LIBRARY = 'export function shout(t: <text>) {\n  return t\n}\n';
   const IMPORTER = 'import { shout } from "lib"\nfunction echo(run: <manual-[:Invocation]->>) {\n  return shout(run.Text)\n}\nlisten to manual fire echo\n';
@@ -70,6 +147,11 @@ describe('a library import across versions', () => {
     expect(across?.message).toContain('0.12.13');
     expect(across?.message).toContain("'lib'");
     expect(across?.message).toContain('0.15.1');
+  });
+
+  it('a library on a legacy id is on 0.12, so it resolves', async () => {
+    const checked = await check(IMPORTER, [{ name: 'lib', source: LIBRARY, languageVersion: '4' }]);
+    expect(checked.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
   });
 
   it('a library reached through another names the way it was reached', async () => {

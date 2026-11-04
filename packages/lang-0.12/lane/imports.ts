@@ -1,10 +1,11 @@
-// The files a 0.12 program imports, and the rule that a library is imported
-// only by programs on its own language version. A file on another version is
-// not offered to this release's checker at all: reading it under 0.12 would
+// The files a 0.12 program imports, and the rule that an import is allowed
+// only between files on the same compatibility key. A file on another version
+// is not offered to this release's checker at all: reading it under 0.12 would
 // report problems that are not its own, and running it would run it under a
-// meaning it was not written in.
+// meaning it was not written in. The platform holds the current version's
+// programs to the same rule, with the same answer for legacy ids.
 
-import { compatibilityKey, parseProgram, type Program, type Span } from '@listen-fire/movement-lang';
+import { LANGUAGE_VERSION, compatibilityKey, parseProgram, type Program, type Span } from '@listen-fire/movement-lang';
 
 import type { CheckedDiagnostic, TeamFile } from './types';
 
@@ -27,10 +28,27 @@ function sourceImports(source: string, pin: string): string[] {
   }
 }
 
-/** The key two pins are compared by: a release's compatibility key, a legacy
- *  id itself. */
-function keyOf(pin: string): string {
+/** The pins from before the language was versioned by its release. They ran
+ *  beside 0.12 and join its line, so 0.12's parser does not name them. */
+const LEGACY_IDS: ReadonlySet<string> = new Set(['1', '2', '3', '4']);
+
+/** The key two pins are compared by: a release's compatibility key, and this
+ *  line's key for a legacy id. */
+export function importKeyOf(pin: string): string {
+  if (LEGACY_IDS.has(pin)) return ownKey();
   return compatibilityKey(pin) ?? pin;
+}
+
+function ownKey(): string {
+  const key = compatibilityKey(LANGUAGE_VERSION);
+  if (key === undefined) throw new Error(`language ${LANGUAGE_VERSION} has no compatibility key`);
+  return key;
+}
+
+/** The pin a file on this line is read under: its own, or the importer's
+ *  for a legacy id. */
+export function readingPin(file: string, importer: string): string {
+  return LEGACY_IDS.has(file) ? importer : file;
 }
 
 export interface ImportClosure {
@@ -48,7 +66,7 @@ export interface ImportClosure {
  */
 export function importClosure(program: Program, pin: string, files: readonly TeamFile[]): ImportClosure {
   const byName = new Map(files.map((file) => [file.name, file]));
-  const own = keyOf(pin);
+  const own = importKeyOf(pin);
   const resolved: Record<string, { source: string }> = {};
   const diagnostics: CheckedDiagnostic[] = [];
   const seen = new Set<string>();
@@ -60,7 +78,7 @@ export function importClosure(program: Program, pin: string, files: readonly Tea
       seen.add(next.path);
       const file = byName.get(next.path);
       if (file === undefined) continue;
-      if (keyOf(file.languageVersion) !== own) {
+      if (importKeyOf(file.languageVersion) !== own) {
         const through = next.via.length > 0 ? ` (through ${next.via.map((p) => `'${p}'`).join(', ')})` : '';
         diagnostics.push({
           code: IMPORT_ACROSS_VERSIONS,
@@ -73,7 +91,7 @@ export function importClosure(program: Program, pin: string, files: readonly Tea
         continue;
       }
       resolved[next.path] = { source: file.source };
-      for (const nested of sourceImports(file.source, file.languageVersion)) {
+      for (const nested of sourceImports(file.source, readingPin(file.languageVersion, pin))) {
         frontier.push({ path: nested, via: [...next.via, next.path] });
       }
     }
