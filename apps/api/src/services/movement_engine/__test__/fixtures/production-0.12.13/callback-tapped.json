@@ -1,0 +1,382 @@
+{
+  "writtenBy": "c388d81d (0.12.13)",
+  "scenario": "callback-tapped",
+  "generated": {
+    "by": "generate.integration.test.ts.txt in this folder, in a worktree at c388d81d, on a database that commit migrated",
+    "seededByHand": "the movement and trigger rows (the generator's own inserts, not production's save: kind manual, config {}, so a listen's real shape is not evidence here)",
+    "writtenByProduction": "movement_version by production's mintMovementVersionIfChanged; every other row by production's dispatchTriggerByIdEvent, through its run host and the 0.12.13 engine, then production's fireCallback for the tap (the fire_callback and wake_await rows)",
+    "notEvidence": "trigger_run.engine: the generator's process never installed production's engine recorder"
+  },
+  "runId": "6ffbcdf2-3133-4f69-bf89-c2ff63eed816",
+  "rows": {
+    "movement": [
+      {
+        "id": "cb2951b9-dad4-4170-b290-f54d340d3dd5",
+        "name": "fixture_callback_cb2951b9",
+        "source": "import { `@lf/ask` as ask } from adapters\nqa = connect ask\nfunction tap(run: <manual-[:Invocation]->>) {\n  t = run.Text\n  cb = callback({\n    write qa-[:Form]-> { Prompt: \"body\", Fields: [\"body\"] }\n  })\n  c = await first(cb-[:Called]->)\n  n = write qa-[:Form]-> { Prompt: t, Fields: [\"after\"] }\n  return n\n}\nlisten to manual fire tap\n",
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "created_at": "2026-11-04T10:57:55.086516+00:00",
+        "trigger_id": null,
+        "updated_at": "2026-11-04T10:57:55.086516+00:00",
+        "description": "",
+        "validity_reason": null,
+        "validity_status": null,
+        "language_version": "0.12.8",
+        "created_by_user_id": null,
+        "current_version_id": "af2b52a9-0e37-4ec3-8fc6-cc0f21bd4905",
+        "upgrade_diagnostics": null,
+        "validity_checked_at": null,
+        "validity_source_hash": null,
+        "validity_consented_at": null,
+        "upgrade_checked_against": null,
+        "validity_checked_against": null
+      }
+    ],
+    "movement_version": [
+      {
+        "id": "af2b52a9-0e37-4ec3-8fc6-cc0f21bd4905",
+        "source": "import { `@lf/ask` as ask } from adapters\nqa = connect ask\nfunction tap(run: <manual-[:Invocation]->>) {\n  t = run.Text\n  cb = callback({\n    write qa-[:Form]-> { Prompt: \"body\", Fields: [\"body\"] }\n  })\n  c = await first(cb-[:Called]->)\n  n = write qa-[:Form]-> { Prompt: t, Fields: [\"after\"] }\n  return n\n}\nlisten to manual fire tap\n",
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "created_at": "2026-11-04T10:57:55.088321+00:00",
+        "movement_id": "cb2951b9-dad4-4170-b290-f54d340d3dd5",
+        "content_hash": "19eb712b8501e96b0e968cf639f01402bc260f375aff9b6469c38e38be9741f9",
+        "version_number": 1,
+        "language_version": "0.12.8"
+      }
+    ],
+    "trigger": [
+      {
+        "id": "dfe950f0-3dbe-42cc-839c-e09dca308c69",
+        "kind": "manual",
+        "name": "movement/fixture/tap",
+        "notes": "",
+        "config": {},
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "run_mode": "live",
+        "created_at": "2026-11-04T10:57:55.089951+00:00",
+        "updated_at": "2026-11-04T10:57:55.089951+00:00",
+        "movement_id": "cb2951b9-dad4-4170-b290-f54d340d3dd5",
+        "poll_last_at": null,
+        "credentials_id": null,
+        "guard_paused_at": null,
+        "poll_checkpoint": null,
+        "resolved_address": null,
+        "created_by_user_id": null,
+        "cron_last_fired_at": null,
+        "fired_movement_name": "tap",
+        "guard_paused_reason": null,
+        "guard_paused_signal": null,
+        "provisioned_by_setup_agent": false
+      }
+    ],
+    "trigger_run": [
+      {
+        "id": "6ffbcdf2-3133-4f69-bf89-c2ff63eed816",
+        "host": "platform",
+        "steps": [
+          {
+            "tgId": "movement:cb2951b9-dad4-4170-b290-f54d340d3dd5",
+            "engine": "interpreter",
+            "errors": [],
+            "status": "success",
+            "tgName": "tap",
+            "diagnostics": {
+              "trace": [
+                {
+                  "kind": "gate",
+                  "outcome": false
+                }
+              ],
+              "writes": 0
+            },
+            "sourceAdapterType": "manual",
+            "targetAdapterType": null,
+            "appliedActionPlans": []
+          }
+        ],
+        "engine": null,
+        "errors": [],
+        "status": "parked",
+        "dry_run": false,
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "returned": null,
+        "failed_at": null,
+        "record_id": null,
+        "created_at": "2026-11-04T10:57:55.098",
+        "ops_run_id": "6a7228a2-4cf9-4cc0-b21a-b177a9a5127e",
+        "started_at": "2026-11-04T10:57:55.095+00:00",
+        "trigger_id": "dfe950f0-3dbe-42cc-839c-e09dca308c69",
+        "delivery_id": null,
+        "diagnostics": {
+          "writes": 0
+        },
+        "lease_owner": null,
+        "lease_token": null,
+        "lease_until": null,
+        "limit_pause": null,
+        "completed_at": null,
+        "trigger_type": "webhook",
+        "cancel_reason": null,
+        "nodes_written": 0,
+        "changed_fields": null,
+        "failure_reason": null,
+        "trigger_payload": {
+          "payload": {
+            "text": "written before the park: callback",
+            "firedAt": "2026-10-30T09:00:00.000Z"
+          },
+          "occurredAt": "2026-10-30T09:00:00.000Z",
+          "adapterType": "manual",
+          "triggerType": "webhook",
+          "pipelineInputId": "trigger:dfe950f0-3dbe-42cc-839c-e09dca308c69"
+        },
+        "trigger_event_id": null,
+        "last_heartbeat_at": "2026-11-04T10:57:55.096+00:00",
+        "cancel_requested_at": null,
+        "movement_version_id": "af2b52a9-0e37-4ec3-8fc6-cc0f21bd4905",
+        "cost_cap_baseline_microdollars": 0
+      }
+    ],
+    "parked_run": [
+      {
+        "id": "3e1c0530-d098-4183-9f2a-42e1e886f5b2",
+        "state": {
+          "address": "s2",
+          "version": 2,
+          "scopeChain": [
+            {
+              "bindings": {
+                "qa": {
+                  "kind": "instance",
+                  "instance": {
+                    "name": "qa",
+                    "adapterSlug": "ask"
+                  }
+                },
+                "ask": {
+                  "kind": "opaque",
+                  "name": "ask",
+                  "what": "import"
+                },
+                "tap": {
+                  "kind": "movement",
+                  "name": "tap"
+                },
+                "cron": {
+                  "kind": "instance",
+                  "instance": {
+                    "name": "cron",
+                    "adapterSlug": "cron"
+                  }
+                },
+                "manual": {
+                  "kind": "instance",
+                  "instance": {
+                    "name": "manual",
+                    "adapterSlug": "manual"
+                  }
+                }
+              }
+            },
+            {
+              "bindings": {
+                "t": {
+                  "kind": "value",
+                  "value": "written before the park: callback",
+                  "provenance": {
+                    "direct": {
+                      "kind": "source_field",
+                      "field": "Text",
+                      "instance": "manual",
+                      "adapterType": "manual"
+                    },
+                    "origins": [
+                      {
+                        "kind": "source_field",
+                        "field": "Text",
+                        "instance": "manual",
+                        "adapterType": "manual"
+                      }
+                    ]
+                  }
+                },
+                "cb": {
+                  "url": "http://localhost:3000/api/cb/cb_xx3YhrnQetakHJj8rzi8k9N2wcgYCalA",
+                  "kind": "callback",
+                  "params": [],
+                  "callbackId": "cb_xx3YhrnQetakHJj8rzi8k9N2wcgYCalA"
+                },
+                "run": {
+                  "kind": "event"
+                }
+              }
+            }
+          ],
+          "bindingName": null
+        },
+        "result": null,
+        "run_id": "6ffbcdf2-3133-4f69-bf89-c2ff63eed816",
+        "status": "parked",
+        "address": "s2",
+        "wake_at": null,
+        "created_at": "2026-11-04T10:57:55.115962+00:00",
+        "updated_at": "2026-11-04T10:57:55.115962+00:00",
+        "park_reason": "await"
+      }
+    ],
+    "join_pending": [],
+    "join_branch_export": [],
+    "adapter_await": [
+      {
+        "id": "7891aac9-c7ab-4daf-b523-7bb9fe6379fd",
+        "run_id": "6ffbcdf2-3133-4f69-bf89-c2ff63eed816",
+        "address": "s2",
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "created_at": "2026-11-04T10:57:55.117205+00:00",
+        "updated_at": "2026-11-04T10:57:55.117205+00:00",
+        "adapter_type": "callback",
+        "correlation_key": "cb_xx3YhrnQetakHJj8rzi8k9N2wcgYCalA"
+      }
+    ],
+    "callback": [
+      {
+        "id": "cb_xx3YhrnQetakHJj8rzi8k9N2wcgYCalA",
+        "calls": [
+          {
+            "at": "2026-11-04T10:57:55.130Z",
+            "values": {}
+          }
+        ],
+        "state": {
+          "address": "s1",
+          "version": 2,
+          "scopeChain": [
+            {
+              "bindings": {
+                "qa": {
+                  "kind": "instance",
+                  "instance": {
+                    "name": "qa",
+                    "adapterSlug": "ask"
+                  }
+                },
+                "ask": {
+                  "kind": "opaque",
+                  "name": "ask",
+                  "what": "import"
+                },
+                "tap": {
+                  "kind": "movement",
+                  "name": "tap"
+                },
+                "cron": {
+                  "kind": "instance",
+                  "instance": {
+                    "name": "cron",
+                    "adapterSlug": "cron"
+                  }
+                },
+                "manual": {
+                  "kind": "instance",
+                  "instance": {
+                    "name": "manual",
+                    "adapterSlug": "manual"
+                  }
+                }
+              }
+            },
+            {
+              "bindings": {
+                "t": {
+                  "kind": "value",
+                  "value": "written before the park: callback",
+                  "provenance": {
+                    "direct": {
+                      "kind": "source_field",
+                      "field": "Text",
+                      "instance": "manual",
+                      "adapterType": "manual"
+                    },
+                    "origins": [
+                      {
+                        "kind": "source_field",
+                        "field": "Text",
+                        "instance": "manual",
+                        "adapterType": "manual"
+                      }
+                    ]
+                  }
+                },
+                "run": {
+                  "kind": "event"
+                }
+              }
+            }
+          ],
+          "bindingName": null
+        },
+        "params": [],
+        "run_id": "6ffbcdf2-3133-4f69-bf89-c2ff63eed816",
+        "status": "fired",
+        "address": "s1",
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "fired_at": "2026-11-04T10:57:55.130138+00:00",
+        "created_at": "2026-11-04T10:57:55.113099+00:00",
+        "expires_at": null,
+        "revoked_at": null,
+        "single_use": true,
+        "updated_at": "2026-11-04T10:57:55.130138+00:00"
+      }
+    ],
+    "park_library_source": [],
+    "work": [
+      {
+        "id": "25fecc46-29af-4ef1-b4e8-832d90b867cb",
+        "key": "fire_callback:cb_xx3YhrnQetakHJj8rzi8k9N2wcgYCalA:0",
+        "host": "platform",
+        "kind": "fire_callback",
+        "due_at": "2026-11-04T10:57:55.129+00:00",
+        "dead_at": null,
+        "payload": {
+          "teamId": "00000000-0000-4000-8000-0000000012a1",
+          "callIndex": 0,
+          "callbackId": "cb_xx3YhrnQetakHJj8rzi8k9N2wcgYCalA"
+        },
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "attempts": 0,
+        "deferrals": 0,
+        "created_at": "2026-11-04T10:57:55.130138+00:00",
+        "updated_at": "2026-11-04T10:57:55.132+00:00",
+        "dead_reason": null,
+        "interval_ms": null,
+        "lease_owner": null,
+        "lease_token": null,
+        "lease_until": null
+      },
+      {
+        "id": "c77ec09c-ae8e-4129-8bc8-e2911dbafe1e",
+        "key": "wake_await:callback_backstop:cb_xx3YhrnQetakHJj8rzi8k9N2wcgYCalA",
+        "host": "platform",
+        "kind": "wake_await",
+        "due_at": "2026-11-04T10:58:25.132+00:00",
+        "dead_at": null,
+        "payload": {
+          "teamId": "00000000-0000-4000-8000-0000000012a1",
+          "adapterType": "callback",
+          "correlationKey": "cb_xx3YhrnQetakHJj8rzi8k9N2wcgYCalA"
+        },
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "attempts": 0,
+        "deferrals": 0,
+        "created_at": "2026-11-04T10:57:55.133954+00:00",
+        "updated_at": "2026-11-04T10:57:55.134+00:00",
+        "dead_reason": null,
+        "interval_ms": null,
+        "lease_owner": null,
+        "lease_token": null,
+        "lease_until": null
+      }
+    ],
+    "ask": []
+  }
+}

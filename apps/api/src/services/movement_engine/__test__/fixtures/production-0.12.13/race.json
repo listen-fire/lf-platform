@@ -1,0 +1,585 @@
+{
+  "writtenBy": "c388d81d (0.12.13)",
+  "scenario": "race",
+  "generated": {
+    "by": "generate.integration.test.ts.txt in this folder, in a worktree at c388d81d, on a database that commit migrated",
+    "seededByHand": "the movement and trigger rows (the generator's own inserts, not production's save: kind manual, config {}, so a listen's real shape is not evidence here)",
+    "writtenByProduction": "movement_version by production's mintMovementVersionIfChanged; every other row by production's dispatchTriggerByIdEvent, through its run host and the 0.12.13 engine",
+    "notEvidence": "trigger_run.engine: the generator's process never installed production's engine recorder"
+  },
+  "runId": "cbf91c22-a201-402c-8b62-1a8ae1d59f3c",
+  "rows": {
+    "movement": [
+      {
+        "id": "7c6d5499-5dea-4229-bede-2535a62ceb5d",
+        "name": "fixture_race_7c6d5499",
+        "source": "import { `@lf/ask` as ask } from adapters\nqa = connect ask\nfunction races(run: <manual-[:Invocation]->>) {\n  t = run.Text\n  q = write qa-[:Form]-> { Prompt: \"Deal?\", Fields: [\"Budget\"] }\n  r = race(\n    () => { answered = await first(q-[:Response]->) },\n    () => { expired = await sleep(1h) },\n  )\n  n = write qa-[:Form]-> { Prompt: t, Fields: [\"after\"] }\n  return n\n}\nlisten to manual fire races\n",
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "created_at": "2026-11-04T10:57:54.905829+00:00",
+        "trigger_id": null,
+        "updated_at": "2026-11-04T10:57:54.905829+00:00",
+        "description": "",
+        "validity_reason": null,
+        "validity_status": null,
+        "language_version": "0.12.8",
+        "created_by_user_id": null,
+        "current_version_id": "587176fa-59e4-44eb-9ec4-7ea96dd35a8c",
+        "upgrade_diagnostics": null,
+        "validity_checked_at": null,
+        "validity_source_hash": null,
+        "validity_consented_at": null,
+        "upgrade_checked_against": null,
+        "validity_checked_against": null
+      }
+    ],
+    "movement_version": [
+      {
+        "id": "587176fa-59e4-44eb-9ec4-7ea96dd35a8c",
+        "source": "import { `@lf/ask` as ask } from adapters\nqa = connect ask\nfunction races(run: <manual-[:Invocation]->>) {\n  t = run.Text\n  q = write qa-[:Form]-> { Prompt: \"Deal?\", Fields: [\"Budget\"] }\n  r = race(\n    () => { answered = await first(q-[:Response]->) },\n    () => { expired = await sleep(1h) },\n  )\n  n = write qa-[:Form]-> { Prompt: t, Fields: [\"after\"] }\n  return n\n}\nlisten to manual fire races\n",
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "created_at": "2026-11-04T10:57:54.910834+00:00",
+        "movement_id": "7c6d5499-5dea-4229-bede-2535a62ceb5d",
+        "content_hash": "29e31aab75314500392bfe8712fa8c18a2d511f5a8b305b601b4d22427603c7e",
+        "version_number": 1,
+        "language_version": "0.12.8"
+      }
+    ],
+    "trigger": [
+      {
+        "id": "55776025-f63c-4d3b-b591-dcf48c2528e9",
+        "kind": "manual",
+        "name": "movement/fixture/races",
+        "notes": "",
+        "config": {},
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "run_mode": "live",
+        "created_at": "2026-11-04T10:57:54.913269+00:00",
+        "updated_at": "2026-11-04T10:57:54.913269+00:00",
+        "movement_id": "7c6d5499-5dea-4229-bede-2535a62ceb5d",
+        "poll_last_at": null,
+        "credentials_id": null,
+        "guard_paused_at": null,
+        "poll_checkpoint": null,
+        "resolved_address": null,
+        "created_by_user_id": null,
+        "cron_last_fired_at": null,
+        "fired_movement_name": "races",
+        "guard_paused_reason": null,
+        "guard_paused_signal": null,
+        "provisioned_by_setup_agent": false
+      }
+    ],
+    "trigger_run": [
+      {
+        "id": "cbf91c22-a201-402c-8b62-1a8ae1d59f3c",
+        "host": "platform",
+        "steps": [
+          {
+            "tgId": "movement:7c6d5499-5dea-4229-bede-2535a62ceb5d",
+            "engine": "interpreter",
+            "errors": [],
+            "status": "success",
+            "tgName": "races",
+            "diagnostics": {
+              "trace": [
+                {
+                  "kind": "block",
+                  "root": "race",
+                  "positions": 2
+                },
+                {
+                  "kind": "gate",
+                  "outcome": false
+                },
+                {
+                  "kind": "gate",
+                  "outcome": false
+                }
+              ],
+              "writes": 1
+            },
+            "sourceAdapterType": "manual",
+            "targetAdapterType": "ask",
+            "appliedActionPlans": [
+              {
+                "nodeId": "q",
+                "created": true,
+                "outcome": "create",
+                "committed": true,
+                "externalId": "b27f89f8-5e07-426f-ab09-15b6a9b71ac9",
+                "provenance": {
+                  "Fields": [
+                    {
+                      "kind": "literal",
+                      "span": {
+                        "end": {
+                          "col": 63,
+                          "line": 5
+                        },
+                        "start": {
+                          "col": 53,
+                          "line": 5
+                        }
+                      }
+                    }
+                  ],
+                  "Prompt": [
+                    {
+                      "kind": "literal",
+                      "span": {
+                        "end": {
+                          "col": 43,
+                          "line": 5
+                        },
+                        "start": {
+                          "col": 36,
+                          "line": 5
+                        }
+                      }
+                    }
+                  ]
+                },
+                "recordType": "Form",
+                "adapterType": "ask",
+                "writtenValues": {
+                  "Fields": [
+                    "Budget"
+                  ],
+                  "Prompt": "Deal?"
+                }
+              }
+            ]
+          }
+        ],
+        "engine": null,
+        "errors": [],
+        "status": "parked",
+        "dry_run": false,
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "returned": null,
+        "failed_at": null,
+        "record_id": null,
+        "created_at": "2026-11-04T10:57:54.922",
+        "ops_run_id": "b227879f-717f-45ea-b145-4532628f7a28",
+        "started_at": "2026-11-04T10:57:54.919+00:00",
+        "trigger_id": "55776025-f63c-4d3b-b591-dcf48c2528e9",
+        "delivery_id": null,
+        "diagnostics": {
+          "writes": 1
+        },
+        "lease_owner": null,
+        "lease_token": null,
+        "lease_until": null,
+        "limit_pause": null,
+        "completed_at": null,
+        "trigger_type": "webhook",
+        "cancel_reason": null,
+        "nodes_written": 1,
+        "changed_fields": null,
+        "failure_reason": null,
+        "trigger_payload": {
+          "payload": {
+            "text": "written before the park: race",
+            "firedAt": "2026-10-30T09:00:00.000Z"
+          },
+          "occurredAt": "2026-10-30T09:00:00.000Z",
+          "adapterType": "manual",
+          "triggerType": "webhook",
+          "pipelineInputId": "trigger:55776025-f63c-4d3b-b591-dcf48c2528e9"
+        },
+        "trigger_event_id": null,
+        "last_heartbeat_at": "2026-11-04T10:57:54.92+00:00",
+        "cancel_requested_at": null,
+        "movement_version_id": "587176fa-59e4-44eb-9ec4-7ea96dd35a8c",
+        "cost_cap_baseline_microdollars": 0
+      }
+    ],
+    "parked_run": [
+      {
+        "id": "f51ed7d4-1606-4e7d-bd5c-e31eface6a17",
+        "state": {
+          "address": "s2.b0.s0",
+          "version": 2,
+          "scopeChain": [
+            {
+              "bindings": {
+                "qa": {
+                  "kind": "instance",
+                  "instance": {
+                    "name": "qa",
+                    "adapterSlug": "ask"
+                  }
+                },
+                "ask": {
+                  "kind": "opaque",
+                  "name": "ask",
+                  "what": "import"
+                },
+                "cron": {
+                  "kind": "instance",
+                  "instance": {
+                    "name": "cron",
+                    "adapterSlug": "cron"
+                  }
+                },
+                "races": {
+                  "kind": "movement",
+                  "name": "races"
+                },
+                "manual": {
+                  "kind": "instance",
+                  "instance": {
+                    "name": "manual",
+                    "adapterSlug": "manual"
+                  }
+                }
+              }
+            },
+            {
+              "bindings": {
+                "q": {
+                  "kind": "handle",
+                  "graph": {
+                    "kind": "instance",
+                    "instance": {
+                      "name": "qa",
+                      "adapterSlug": "ask"
+                    }
+                  },
+                  "handle": {
+                    "origin": {
+                      "kind": "write",
+                      "externalId": "b27f89f8-5e07-426f-ab09-15b6a9b71ac9",
+                      "writeIndex": 0
+                    },
+                    "created": true,
+                    "outcome": "create",
+                    "committed": true,
+                    "externalId": "b27f89f8-5e07-426f-ab09-15b6a9b71ac9",
+                    "provenance": {
+                      "Fields": [
+                        {
+                          "kind": "literal",
+                          "span": {
+                            "end": {
+                              "col": 63,
+                              "line": 5
+                            },
+                            "start": {
+                              "col": 53,
+                              "line": 5
+                            }
+                          }
+                        }
+                      ],
+                      "Prompt": [
+                        {
+                          "kind": "literal",
+                          "span": {
+                            "end": {
+                              "col": 43,
+                              "line": 5
+                            },
+                            "start": {
+                              "col": 36,
+                              "line": 5
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "recordType": "Form",
+                    "resultData": {
+                      "Url": "http://localhost:3000/api/asks/ask_sS2_yuyHMFk32CXAvB4I7Xo5URd6pHV5",
+                      "url": "http://localhost:3000/api/asks/ask_sS2_yuyHMFk32CXAvB4I7Xo5URd6pHV5",
+                      "State": "open",
+                      "Detail": null,
+                      "Fields": [
+                        "Budget"
+                      ],
+                      "Prompt": "Deal?"
+                    },
+                    "adapterType": "ask",
+                    "bindingName": "q",
+                    "writtenValues": {
+                      "Fields": [
+                        "Budget"
+                      ],
+                      "Prompt": "Deal?"
+                    }
+                  },
+                  "targetType": "Form"
+                },
+                "t": {
+                  "kind": "value",
+                  "value": "written before the park: race",
+                  "provenance": {
+                    "direct": {
+                      "kind": "source_field",
+                      "field": "Text",
+                      "instance": "manual",
+                      "adapterType": "manual"
+                    },
+                    "origins": [
+                      {
+                        "kind": "source_field",
+                        "field": "Text",
+                        "instance": "manual",
+                        "adapterType": "manual"
+                      }
+                    ]
+                  }
+                },
+                "run": {
+                  "kind": "event"
+                }
+              }
+            },
+            {
+              "bindings": {}
+            }
+          ],
+          "bindingName": null
+        },
+        "result": null,
+        "run_id": "cbf91c22-a201-402c-8b62-1a8ae1d59f3c",
+        "status": "parked",
+        "address": "s2.b0.s0",
+        "wake_at": null,
+        "created_at": "2026-11-04T10:57:54.948089+00:00",
+        "updated_at": "2026-11-04T10:57:54.948089+00:00",
+        "park_reason": "await"
+      },
+      {
+        "id": "5fc5b362-1119-4874-8881-f8779b3da38a",
+        "state": {
+          "address": "s2.b1.s0",
+          "version": 2,
+          "scopeChain": [
+            {
+              "bindings": {
+                "qa": {
+                  "kind": "instance",
+                  "instance": {
+                    "name": "qa",
+                    "adapterSlug": "ask"
+                  }
+                },
+                "ask": {
+                  "kind": "opaque",
+                  "name": "ask",
+                  "what": "import"
+                },
+                "cron": {
+                  "kind": "instance",
+                  "instance": {
+                    "name": "cron",
+                    "adapterSlug": "cron"
+                  }
+                },
+                "races": {
+                  "kind": "movement",
+                  "name": "races"
+                },
+                "manual": {
+                  "kind": "instance",
+                  "instance": {
+                    "name": "manual",
+                    "adapterSlug": "manual"
+                  }
+                }
+              }
+            },
+            {
+              "bindings": {
+                "q": {
+                  "kind": "handle",
+                  "graph": {
+                    "kind": "instance",
+                    "instance": {
+                      "name": "qa",
+                      "adapterSlug": "ask"
+                    }
+                  },
+                  "handle": {
+                    "origin": {
+                      "kind": "write",
+                      "externalId": "b27f89f8-5e07-426f-ab09-15b6a9b71ac9",
+                      "writeIndex": 0
+                    },
+                    "created": true,
+                    "outcome": "create",
+                    "committed": true,
+                    "externalId": "b27f89f8-5e07-426f-ab09-15b6a9b71ac9",
+                    "provenance": {
+                      "Fields": [
+                        {
+                          "kind": "literal",
+                          "span": {
+                            "end": {
+                              "col": 63,
+                              "line": 5
+                            },
+                            "start": {
+                              "col": 53,
+                              "line": 5
+                            }
+                          }
+                        }
+                      ],
+                      "Prompt": [
+                        {
+                          "kind": "literal",
+                          "span": {
+                            "end": {
+                              "col": 43,
+                              "line": 5
+                            },
+                            "start": {
+                              "col": 36,
+                              "line": 5
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "recordType": "Form",
+                    "resultData": {
+                      "Url": "http://localhost:3000/api/asks/ask_sS2_yuyHMFk32CXAvB4I7Xo5URd6pHV5",
+                      "url": "http://localhost:3000/api/asks/ask_sS2_yuyHMFk32CXAvB4I7Xo5URd6pHV5",
+                      "State": "open",
+                      "Detail": null,
+                      "Fields": [
+                        "Budget"
+                      ],
+                      "Prompt": "Deal?"
+                    },
+                    "adapterType": "ask",
+                    "bindingName": "q",
+                    "writtenValues": {
+                      "Fields": [
+                        "Budget"
+                      ],
+                      "Prompt": "Deal?"
+                    }
+                  },
+                  "targetType": "Form"
+                },
+                "t": {
+                  "kind": "value",
+                  "value": "written before the park: race",
+                  "provenance": {
+                    "direct": {
+                      "kind": "source_field",
+                      "field": "Text",
+                      "instance": "manual",
+                      "adapterType": "manual"
+                    },
+                    "origins": [
+                      {
+                        "kind": "source_field",
+                        "field": "Text",
+                        "instance": "manual",
+                        "adapterType": "manual"
+                      }
+                    ]
+                  }
+                },
+                "run": {
+                  "kind": "event"
+                }
+              }
+            },
+            {
+              "bindings": {}
+            }
+          ],
+          "bindingName": "expired",
+          "presenceBind": true
+        },
+        "result": null,
+        "run_id": "cbf91c22-a201-402c-8b62-1a8ae1d59f3c",
+        "status": "parked",
+        "address": "s2.b1.s0",
+        "wake_at": "2026-11-04T11:57:54.944+00:00",
+        "created_at": "2026-11-04T10:57:54.946399+00:00",
+        "updated_at": "2026-11-04T10:57:54.946399+00:00",
+        "park_reason": "timer"
+      }
+    ],
+    "join_pending": [
+      {
+        "run_id": "cbf91c22-a201-402c-8b62-1a8ae1d59f3c",
+        "pending": 1,
+        "created_at": "2026-11-04T10:57:54.956578+00:00",
+        "updated_at": "2026-11-04T10:57:54.956578+00:00",
+        "frame_address": "s2",
+        "closed_by_address": null
+      }
+    ],
+    "join_branch_export": [],
+    "adapter_await": [
+      {
+        "id": "ae61c095-1920-413b-88d9-3f9c0ff09a71",
+        "run_id": "cbf91c22-a201-402c-8b62-1a8ae1d59f3c",
+        "address": "s2.b0.s0",
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "created_at": "2026-11-04T10:57:54.949379+00:00",
+        "updated_at": "2026-11-04T10:57:54.949379+00:00",
+        "adapter_type": "ask",
+        "correlation_key": "b27f89f8-5e07-426f-ab09-15b6a9b71ac9"
+      }
+    ],
+    "callback": [],
+    "park_library_source": [],
+    "work": [
+      {
+        "id": "4a320bb8-a049-42d8-97ca-209059a145d5",
+        "key": "resume_timer:cbf91c22-a201-402c-8b62-1a8ae1d59f3c",
+        "host": "platform",
+        "kind": "resume_timer",
+        "due_at": "2026-11-04T11:57:54.944+00:00",
+        "dead_at": null,
+        "payload": {
+          "runId": "cbf91c22-a201-402c-8b62-1a8ae1d59f3c"
+        },
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "attempts": 0,
+        "deferrals": 0,
+        "created_at": "2026-11-04T10:57:54.94837+00:00",
+        "updated_at": "2026-11-04T10:57:54.948+00:00",
+        "dead_reason": null,
+        "interval_ms": null,
+        "lease_owner": null,
+        "lease_token": null,
+        "lease_until": null
+      }
+    ],
+    "ask": [
+      {
+        "id": "b27f89f8-5e07-426f-ab09-15b6a9b71ac9",
+        "rows": null,
+        "state": "open",
+        "token": "ask_sS2_yuyHMFk32CXAvB4I7Xo5URd6pHV5",
+        "answer": null,
+        "detail": null,
+        "family": "Form",
+        "prompt": "Deal?",
+        "options": [
+          "Budget"
+        ],
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "created_at": "2026-11-04T10:57:54.941295+00:00",
+        "expired_at": null,
+        "provenance": {
+          "adapterType": "manual"
+        },
+        "updated_at": "2026-11-04T10:57:54.941295+00:00",
+        "answer_type": null,
+        "answered_at": null,
+        "callback_url": null,
+        "token_expires_at": "2027-02-02T10:57:54.938+00:00"
+      }
+    ]
+  }
+}

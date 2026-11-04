@@ -42,6 +42,10 @@ previewConfig.json
 
 # Test fixtures (pipeline recordings)
 fixtures/
+# Rows production wrote: the evidence for deploy day, so they are committed.
+!apps/api/src/services/movement_engine/__test__/fixtures/
+apps/api/src/services/movement_engine/__test__/fixtures/*
+!apps/api/src/services/movement_engine/__test__/fixtures/production-0.12.13/
 
 .slack-bridge
 .claude/worktrees/

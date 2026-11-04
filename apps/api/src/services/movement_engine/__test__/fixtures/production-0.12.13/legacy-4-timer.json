@@ -1,0 +1,237 @@
+{
+  "writtenBy": "c388d81d (0.12.13)",
+  "scenario": "legacy-4-timer",
+  "generated": {
+    "by": "generate.integration.test.ts.txt in this folder, in a worktree at c388d81d, on a database that commit migrated",
+    "seededByHand": "the movement and trigger rows (the generator's own inserts, not production's save: kind manual, config {}, so a listen's real shape is not evidence here)",
+    "writtenByProduction": "movement_version by production's mintMovementVersionIfChanged; every other row by production's dispatchTriggerByIdEvent, through its run host and its TypeScript engine for legacy pins",
+    "notEvidence": "trigger_run.engine: the generator's process never installed production's engine recorder"
+  },
+  "runId": "d5afb747-302e-41cd-9835-e1cb0993c10b",
+  "rows": {
+    "movement": [
+      {
+        "id": "883cb78f-0825-4759-a8af-173cec98b3fb",
+        "name": "fixture_legacy_4_timer_883cb78f",
+        "source": "import { manual } from adapters\ngo = manual()\nfunction nap(run: <go-[:Invocation]->>) {\n  t = run.Text\n  await sleep(1h)\n  return t\n}\nlisten to go fire nap\n",
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "created_at": "2026-11-04T10:57:54.972705+00:00",
+        "trigger_id": null,
+        "updated_at": "2026-11-04T10:57:54.972705+00:00",
+        "description": "",
+        "validity_reason": null,
+        "validity_status": null,
+        "language_version": "4",
+        "created_by_user_id": null,
+        "current_version_id": "7885f71f-9a1d-4839-a42d-d5703d03d7ee",
+        "upgrade_diagnostics": null,
+        "validity_checked_at": null,
+        "validity_source_hash": null,
+        "validity_consented_at": null,
+        "upgrade_checked_against": null,
+        "validity_checked_against": null
+      }
+    ],
+    "movement_version": [
+      {
+        "id": "7885f71f-9a1d-4839-a42d-d5703d03d7ee",
+        "source": "import { manual } from adapters\ngo = manual()\nfunction nap(run: <go-[:Invocation]->>) {\n  t = run.Text\n  await sleep(1h)\n  return t\n}\nlisten to go fire nap\n",
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "created_at": "2026-11-04T10:57:54.974749+00:00",
+        "movement_id": "883cb78f-0825-4759-a8af-173cec98b3fb",
+        "content_hash": "590dccf11a7d363594b1f643eaaff92f588890a4218620371ee17d2f8963add7",
+        "version_number": 1,
+        "language_version": "4"
+      }
+    ],
+    "trigger": [
+      {
+        "id": "950a31e6-1ec8-442f-b449-ac391e3cdc81",
+        "kind": "manual",
+        "name": "movement/fixture/nap",
+        "notes": "",
+        "config": {},
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "run_mode": "live",
+        "created_at": "2026-11-04T10:57:54.976325+00:00",
+        "updated_at": "2026-11-04T10:57:54.976325+00:00",
+        "movement_id": "883cb78f-0825-4759-a8af-173cec98b3fb",
+        "poll_last_at": null,
+        "credentials_id": null,
+        "guard_paused_at": null,
+        "poll_checkpoint": null,
+        "resolved_address": null,
+        "created_by_user_id": null,
+        "cron_last_fired_at": null,
+        "fired_movement_name": "nap",
+        "guard_paused_reason": null,
+        "guard_paused_signal": null,
+        "provisioned_by_setup_agent": false
+      }
+    ],
+    "trigger_run": [
+      {
+        "id": "d5afb747-302e-41cd-9835-e1cb0993c10b",
+        "host": "platform",
+        "steps": [
+          {
+            "tgId": "movement:883cb78f-0825-4759-a8af-173cec98b3fb",
+            "engine": "interpreter",
+            "errors": [],
+            "status": "success",
+            "tgName": "nap",
+            "diagnostics": {
+              "trace": [
+                {
+                  "kind": "gate",
+                  "outcome": false
+                }
+              ],
+              "writes": 0
+            },
+            "sourceAdapterType": "manual",
+            "targetAdapterType": null,
+            "appliedActionPlans": []
+          }
+        ],
+        "engine": null,
+        "errors": [],
+        "status": "parked",
+        "dry_run": false,
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "returned": null,
+        "failed_at": null,
+        "record_id": null,
+        "created_at": "2026-11-04T10:57:54.985",
+        "ops_run_id": "a0eca3c0-6d78-43e4-bc65-dc446d47618d",
+        "started_at": "2026-11-04T10:57:54.982+00:00",
+        "trigger_id": "950a31e6-1ec8-442f-b449-ac391e3cdc81",
+        "delivery_id": null,
+        "diagnostics": {
+          "writes": 0
+        },
+        "lease_owner": null,
+        "lease_token": null,
+        "lease_until": null,
+        "limit_pause": null,
+        "completed_at": null,
+        "trigger_type": "webhook",
+        "cancel_reason": null,
+        "nodes_written": 0,
+        "changed_fields": null,
+        "failure_reason": null,
+        "trigger_payload": {
+          "payload": {
+            "text": "written before the park: legacy-4-timer",
+            "firedAt": "2026-10-30T09:00:00.000Z"
+          },
+          "occurredAt": "2026-10-30T09:00:00.000Z",
+          "adapterType": "manual",
+          "triggerType": "webhook",
+          "pipelineInputId": "trigger:950a31e6-1ec8-442f-b449-ac391e3cdc81"
+        },
+        "trigger_event_id": null,
+        "last_heartbeat_at": "2026-11-04T10:57:54.983+00:00",
+        "cancel_requested_at": null,
+        "movement_version_id": "7885f71f-9a1d-4839-a42d-d5703d03d7ee",
+        "cost_cap_baseline_microdollars": 0
+      }
+    ],
+    "parked_run": [
+      {
+        "id": "65ead8e6-c0db-431a-a842-56b87f9efc2a",
+        "state": {
+          "address": "s1",
+          "version": 1,
+          "scopeChain": [
+            {
+              "bindings": {
+                "go": {
+                  "kind": "instance",
+                  "instance": {
+                    "name": "go",
+                    "adapterSlug": "manual"
+                  }
+                },
+                "nap": {
+                  "kind": "movement",
+                  "name": "nap"
+                },
+                "manual": {
+                  "kind": "opaque",
+                  "name": "manual",
+                  "what": "import"
+                }
+              }
+            },
+            {
+              "bindings": {
+                "t": {
+                  "kind": "value",
+                  "value": "written before the park: legacy-4-timer",
+                  "provenance": {
+                    "direct": {
+                      "kind": "source_field",
+                      "field": "Text",
+                      "instance": "go",
+                      "adapterType": "manual"
+                    },
+                    "origins": [
+                      {
+                        "kind": "source_field",
+                        "field": "Text",
+                        "instance": "go",
+                        "adapterType": "manual"
+                      }
+                    ]
+                  }
+                },
+                "run": {
+                  "kind": "event"
+                }
+              }
+            }
+          ],
+          "bindingName": null
+        },
+        "result": null,
+        "run_id": "d5afb747-302e-41cd-9835-e1cb0993c10b",
+        "status": "parked",
+        "address": "s1",
+        "wake_at": "2026-11-04T11:57:55.01+00:00",
+        "created_at": "2026-11-04T10:57:55.011691+00:00",
+        "updated_at": "2026-11-04T10:57:55.011691+00:00",
+        "park_reason": "timer"
+      }
+    ],
+    "join_pending": [],
+    "join_branch_export": [],
+    "adapter_await": [],
+    "callback": [],
+    "park_library_source": [],
+    "work": [
+      {
+        "id": "b79490f1-1246-41ee-bd99-9f72d9a8fa5c",
+        "key": "resume_timer:d5afb747-302e-41cd-9835-e1cb0993c10b",
+        "host": "platform",
+        "kind": "resume_timer",
+        "due_at": "2026-11-04T11:57:55.01+00:00",
+        "dead_at": null,
+        "payload": {
+          "runId": "d5afb747-302e-41cd-9835-e1cb0993c10b"
+        },
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "attempts": 0,
+        "deferrals": 0,
+        "created_at": "2026-11-04T10:57:55.013101+00:00",
+        "updated_at": "2026-11-04T10:57:55.013+00:00",
+        "dead_reason": null,
+        "interval_ms": null,
+        "lease_owner": null,
+        "lease_token": null,
+        "lease_until": null
+      }
+    ],
+    "ask": []
+  }
+}

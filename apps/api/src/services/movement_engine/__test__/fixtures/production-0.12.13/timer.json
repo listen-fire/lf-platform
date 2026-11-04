@@ -1,0 +1,251 @@
+{
+  "writtenBy": "c388d81d (0.12.13)",
+  "scenario": "timer",
+  "generated": {
+    "by": "generate.integration.test.ts.txt in this folder, in a worktree at c388d81d, on a database that commit migrated",
+    "seededByHand": "the movement and trigger rows (the generator's own inserts, not production's save: kind manual, config {}, so a listen's real shape is not evidence here)",
+    "writtenByProduction": "movement_version by production's mintMovementVersionIfChanged; every other row by production's dispatchTriggerByIdEvent, through its run host and the 0.12.13 engine",
+    "notEvidence": "trigger_run.engine: the generator's process never installed production's engine recorder"
+  },
+  "runId": "afbb317a-26ac-4e1b-bd83-1fb709d493e6",
+  "rows": {
+    "movement": [
+      {
+        "id": "173ad345-f32c-43a2-9dd5-592c68bee06f",
+        "name": "fixture_timer_173ad345",
+        "source": "import { `@lf/ask` as ask } from adapters\nqa = connect ask\nfunction nap(run: <manual-[:Invocation]->>) {\n  t = run.Text\n  await sleep(1h)\n  q = write qa-[:Form]-> { Prompt: t, Fields: [\"after\"] }\n  return q\n}\nlisten to manual fire nap\n",
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "created_at": "2026-11-04T10:57:54.63621+00:00",
+        "trigger_id": null,
+        "updated_at": "2026-11-04T10:57:54.63621+00:00",
+        "description": "",
+        "validity_reason": null,
+        "validity_status": null,
+        "language_version": "0.12.8",
+        "created_by_user_id": null,
+        "current_version_id": "ae4fc18c-5c92-4c4d-ae0f-85f5171a3f50",
+        "upgrade_diagnostics": null,
+        "validity_checked_at": null,
+        "validity_source_hash": null,
+        "validity_consented_at": null,
+        "upgrade_checked_against": null,
+        "validity_checked_against": null
+      }
+    ],
+    "movement_version": [
+      {
+        "id": "ae4fc18c-5c92-4c4d-ae0f-85f5171a3f50",
+        "source": "import { `@lf/ask` as ask } from adapters\nqa = connect ask\nfunction nap(run: <manual-[:Invocation]->>) {\n  t = run.Text\n  await sleep(1h)\n  q = write qa-[:Form]-> { Prompt: t, Fields: [\"after\"] }\n  return q\n}\nlisten to manual fire nap\n",
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "created_at": "2026-11-04T10:57:54.640913+00:00",
+        "movement_id": "173ad345-f32c-43a2-9dd5-592c68bee06f",
+        "content_hash": "e7fa0f86038dbe740b8bc1e1a27823805104fbe0e97e8ab83296676bbc7a6754",
+        "version_number": 1,
+        "language_version": "0.12.8"
+      }
+    ],
+    "trigger": [
+      {
+        "id": "c4e20f33-3fdd-45b2-b9fe-beb752e7cbd5",
+        "kind": "manual",
+        "name": "movement/fixture/nap",
+        "notes": "",
+        "config": {},
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "run_mode": "live",
+        "created_at": "2026-11-04T10:57:54.643929+00:00",
+        "updated_at": "2026-11-04T10:57:54.643929+00:00",
+        "movement_id": "173ad345-f32c-43a2-9dd5-592c68bee06f",
+        "poll_last_at": null,
+        "credentials_id": null,
+        "guard_paused_at": null,
+        "poll_checkpoint": null,
+        "resolved_address": null,
+        "created_by_user_id": null,
+        "cron_last_fired_at": null,
+        "fired_movement_name": "nap",
+        "guard_paused_reason": null,
+        "guard_paused_signal": null,
+        "provisioned_by_setup_agent": false
+      }
+    ],
+    "trigger_run": [
+      {
+        "id": "afbb317a-26ac-4e1b-bd83-1fb709d493e6",
+        "host": "platform",
+        "steps": [
+          {
+            "tgId": "movement:173ad345-f32c-43a2-9dd5-592c68bee06f",
+            "engine": "interpreter",
+            "errors": [],
+            "status": "success",
+            "tgName": "nap",
+            "diagnostics": {
+              "trace": [
+                {
+                  "kind": "gate",
+                  "outcome": false
+                }
+              ],
+              "writes": 0
+            },
+            "sourceAdapterType": "manual",
+            "targetAdapterType": null,
+            "appliedActionPlans": []
+          }
+        ],
+        "engine": null,
+        "errors": [],
+        "status": "parked",
+        "dry_run": false,
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "returned": null,
+        "failed_at": null,
+        "record_id": null,
+        "created_at": "2026-11-04T10:57:54.674",
+        "ops_run_id": "4e581e59-963a-40cf-af67-160a3567ecea",
+        "started_at": "2026-11-04T10:57:54.669+00:00",
+        "trigger_id": "c4e20f33-3fdd-45b2-b9fe-beb752e7cbd5",
+        "delivery_id": null,
+        "diagnostics": {
+          "writes": 0
+        },
+        "lease_owner": null,
+        "lease_token": null,
+        "lease_until": null,
+        "limit_pause": null,
+        "completed_at": null,
+        "trigger_type": "webhook",
+        "cancel_reason": null,
+        "nodes_written": 0,
+        "changed_fields": null,
+        "failure_reason": null,
+        "trigger_payload": {
+          "payload": {
+            "text": "written before the park: timer",
+            "firedAt": "2026-10-30T09:00:00.000Z"
+          },
+          "occurredAt": "2026-10-30T09:00:00.000Z",
+          "adapterType": "manual",
+          "triggerType": "webhook",
+          "pipelineInputId": "trigger:c4e20f33-3fdd-45b2-b9fe-beb752e7cbd5"
+        },
+        "trigger_event_id": null,
+        "last_heartbeat_at": "2026-11-04T10:57:54.672+00:00",
+        "cancel_requested_at": null,
+        "movement_version_id": "ae4fc18c-5c92-4c4d-ae0f-85f5171a3f50",
+        "cost_cap_baseline_microdollars": 0
+      }
+    ],
+    "parked_run": [
+      {
+        "id": "7fe8d78d-eaeb-4c99-a9d7-d9dbf10709be",
+        "state": {
+          "address": "s1",
+          "version": 2,
+          "scopeChain": [
+            {
+              "bindings": {
+                "qa": {
+                  "kind": "instance",
+                  "instance": {
+                    "name": "qa",
+                    "adapterSlug": "ask"
+                  }
+                },
+                "ask": {
+                  "kind": "opaque",
+                  "name": "ask",
+                  "what": "import"
+                },
+                "nap": {
+                  "kind": "movement",
+                  "name": "nap"
+                },
+                "cron": {
+                  "kind": "instance",
+                  "instance": {
+                    "name": "cron",
+                    "adapterSlug": "cron"
+                  }
+                },
+                "manual": {
+                  "kind": "instance",
+                  "instance": {
+                    "name": "manual",
+                    "adapterSlug": "manual"
+                  }
+                }
+              }
+            },
+            {
+              "bindings": {
+                "t": {
+                  "kind": "value",
+                  "value": "written before the park: timer",
+                  "provenance": {
+                    "direct": {
+                      "kind": "source_field",
+                      "field": "Text",
+                      "instance": "manual",
+                      "adapterType": "manual"
+                    },
+                    "origins": [
+                      {
+                        "kind": "source_field",
+                        "field": "Text",
+                        "instance": "manual",
+                        "adapterType": "manual"
+                      }
+                    ]
+                  }
+                },
+                "run": {
+                  "kind": "event"
+                }
+              }
+            }
+          ],
+          "bindingName": null
+        },
+        "result": null,
+        "run_id": "afbb317a-26ac-4e1b-bd83-1fb709d493e6",
+        "status": "parked",
+        "address": "s1",
+        "wake_at": "2026-11-04T11:57:54.742+00:00",
+        "created_at": "2026-11-04T10:57:54.746016+00:00",
+        "updated_at": "2026-11-04T10:57:54.746016+00:00",
+        "park_reason": "timer"
+      }
+    ],
+    "join_pending": [],
+    "join_branch_export": [],
+    "adapter_await": [],
+    "callback": [],
+    "park_library_source": [],
+    "work": [
+      {
+        "id": "29f9b0a3-be95-406c-a405-0d625ff128d4",
+        "key": "resume_timer:afbb317a-26ac-4e1b-bd83-1fb709d493e6",
+        "host": "platform",
+        "kind": "resume_timer",
+        "due_at": "2026-11-04T11:57:54.742+00:00",
+        "dead_at": null,
+        "payload": {
+          "runId": "afbb317a-26ac-4e1b-bd83-1fb709d493e6"
+        },
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "attempts": 0,
+        "deferrals": 0,
+        "created_at": "2026-11-04T10:57:54.748263+00:00",
+        "updated_at": "2026-11-04T10:57:54.748+00:00",
+        "dead_reason": null,
+        "interval_ms": null,
+        "lease_owner": null,
+        "lease_token": null,
+        "lease_until": null
+      }
+    ],
+    "ask": []
+  }
+}

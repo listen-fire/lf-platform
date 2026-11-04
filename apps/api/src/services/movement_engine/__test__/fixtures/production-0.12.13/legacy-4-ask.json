@@ -1,0 +1,364 @@
+{
+  "writtenBy": "c388d81d (0.12.13)",
+  "scenario": "legacy-4-ask",
+  "generated": {
+    "by": "generate.integration.test.ts.txt in this folder, in a worktree at c388d81d, on a database that commit migrated",
+    "seededByHand": "the movement and trigger rows (the generator's own inserts, not production's save: kind manual, config {}, so a listen's real shape is not evidence here)",
+    "writtenByProduction": "movement_version by production's mintMovementVersionIfChanged; every other row by production's dispatchTriggerByIdEvent, through its run host and its TypeScript engine for legacy pins",
+    "notEvidence": "trigger_run.engine: the generator's process never installed production's engine recorder"
+  },
+  "runId": "e08299b0-bf22-4fc2-9ebf-f85ab3ff9f8b",
+  "rows": {
+    "movement": [
+      {
+        "id": "00eefc98-95d6-4bd8-95f7-b007b36eea8a",
+        "name": "fixture_legacy_4_ask_00eefc98",
+        "source": "import { manual, ask } from adapters\ngo = manual()\nqa = ask()\nfunction asks(run: <go-[:Invocation]->>) {\n  q = write qa-[:Form]-> { Prompt: \"Deal?\", Fields: [\"Budget\"] }\n  a = await FIRST(q-[:Response]->)\n  return a\n}\nlisten to go fire asks\n",
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "created_at": "2026-11-04T10:57:55.030254+00:00",
+        "trigger_id": null,
+        "updated_at": "2026-11-04T10:57:55.030254+00:00",
+        "description": "",
+        "validity_reason": null,
+        "validity_status": null,
+        "language_version": "4",
+        "created_by_user_id": null,
+        "current_version_id": "e9b4502e-8017-4c3a-b5e6-d8e7d4ea1055",
+        "upgrade_diagnostics": null,
+        "validity_checked_at": null,
+        "validity_source_hash": null,
+        "validity_consented_at": null,
+        "upgrade_checked_against": null,
+        "validity_checked_against": null
+      }
+    ],
+    "movement_version": [
+      {
+        "id": "e9b4502e-8017-4c3a-b5e6-d8e7d4ea1055",
+        "source": "import { manual, ask } from adapters\ngo = manual()\nqa = ask()\nfunction asks(run: <go-[:Invocation]->>) {\n  q = write qa-[:Form]-> { Prompt: \"Deal?\", Fields: [\"Budget\"] }\n  a = await FIRST(q-[:Response]->)\n  return a\n}\nlisten to go fire asks\n",
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "created_at": "2026-11-04T10:57:55.032114+00:00",
+        "movement_id": "00eefc98-95d6-4bd8-95f7-b007b36eea8a",
+        "content_hash": "092aa5550cf60f01df9a5741a8111b1cec4ef31c2346a4ddd0163168aa0ba919",
+        "version_number": 1,
+        "language_version": "4"
+      }
+    ],
+    "trigger": [
+      {
+        "id": "44e5ef27-4de0-430e-b6f1-84866d615932",
+        "kind": "manual",
+        "name": "movement/fixture/asks",
+        "notes": "",
+        "config": {},
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "run_mode": "live",
+        "created_at": "2026-11-04T10:57:55.033739+00:00",
+        "updated_at": "2026-11-04T10:57:55.033739+00:00",
+        "movement_id": "00eefc98-95d6-4bd8-95f7-b007b36eea8a",
+        "poll_last_at": null,
+        "credentials_id": null,
+        "guard_paused_at": null,
+        "poll_checkpoint": null,
+        "resolved_address": null,
+        "created_by_user_id": null,
+        "cron_last_fired_at": null,
+        "fired_movement_name": "asks",
+        "guard_paused_reason": null,
+        "guard_paused_signal": null,
+        "provisioned_by_setup_agent": false
+      }
+    ],
+    "trigger_run": [
+      {
+        "id": "e08299b0-bf22-4fc2-9ebf-f85ab3ff9f8b",
+        "host": "platform",
+        "steps": [
+          {
+            "tgId": "movement:00eefc98-95d6-4bd8-95f7-b007b36eea8a",
+            "engine": "interpreter",
+            "errors": [],
+            "status": "success",
+            "tgName": "asks",
+            "diagnostics": {
+              "trace": [
+                {
+                  "kind": "gate",
+                  "outcome": false
+                }
+              ],
+              "writes": 1
+            },
+            "sourceAdapterType": "manual",
+            "targetAdapterType": "ask",
+            "appliedActionPlans": [
+              {
+                "nodeId": "q",
+                "created": true,
+                "outcome": "create",
+                "committed": true,
+                "externalId": "7a3a30d2-324c-42cb-99de-2df020fee189",
+                "provenance": {
+                  "Fields": [
+                    {
+                      "kind": "literal",
+                      "span": {
+                        "end": {
+                          "col": 63,
+                          "line": 5
+                        },
+                        "start": {
+                          "col": 53,
+                          "line": 5
+                        }
+                      }
+                    }
+                  ],
+                  "Prompt": [
+                    {
+                      "kind": "literal",
+                      "span": {
+                        "end": {
+                          "col": 43,
+                          "line": 5
+                        },
+                        "start": {
+                          "col": 36,
+                          "line": 5
+                        }
+                      }
+                    }
+                  ]
+                },
+                "recordType": "Form",
+                "adapterType": "ask",
+                "writtenValues": {
+                  "Fields": [
+                    "Budget"
+                  ],
+                  "Prompt": "Deal?"
+                }
+              }
+            ]
+          }
+        ],
+        "engine": null,
+        "errors": [],
+        "status": "parked",
+        "dry_run": false,
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "returned": null,
+        "failed_at": null,
+        "record_id": null,
+        "created_at": "2026-11-04T10:57:55.044",
+        "ops_run_id": "5fa6cac3-91c5-4206-a73e-a65884c55d5a",
+        "started_at": "2026-11-04T10:57:55.04+00:00",
+        "trigger_id": "44e5ef27-4de0-430e-b6f1-84866d615932",
+        "delivery_id": null,
+        "diagnostics": {
+          "writes": 1
+        },
+        "lease_owner": null,
+        "lease_token": null,
+        "lease_until": null,
+        "limit_pause": null,
+        "completed_at": null,
+        "trigger_type": "webhook",
+        "cancel_reason": null,
+        "nodes_written": 1,
+        "changed_fields": null,
+        "failure_reason": null,
+        "trigger_payload": {
+          "payload": {
+            "text": "written before the park: legacy-4-ask",
+            "firedAt": "2026-10-30T09:00:00.000Z"
+          },
+          "occurredAt": "2026-10-30T09:00:00.000Z",
+          "adapterType": "manual",
+          "triggerType": "webhook",
+          "pipelineInputId": "trigger:44e5ef27-4de0-430e-b6f1-84866d615932"
+        },
+        "trigger_event_id": null,
+        "last_heartbeat_at": "2026-11-04T10:57:55.042+00:00",
+        "cancel_requested_at": null,
+        "movement_version_id": "e9b4502e-8017-4c3a-b5e6-d8e7d4ea1055",
+        "cost_cap_baseline_microdollars": 0
+      }
+    ],
+    "parked_run": [
+      {
+        "id": "3f16312d-9240-4e1d-9c25-e08cf013b695",
+        "state": {
+          "address": "s1",
+          "version": 1,
+          "scopeChain": [
+            {
+              "bindings": {
+                "go": {
+                  "kind": "instance",
+                  "instance": {
+                    "name": "go",
+                    "adapterSlug": "manual"
+                  }
+                },
+                "qa": {
+                  "kind": "instance",
+                  "instance": {
+                    "name": "qa",
+                    "adapterSlug": "ask"
+                  }
+                },
+                "ask": {
+                  "kind": "opaque",
+                  "name": "ask",
+                  "what": "import"
+                },
+                "asks": {
+                  "kind": "movement",
+                  "name": "asks"
+                },
+                "manual": {
+                  "kind": "opaque",
+                  "name": "manual",
+                  "what": "import"
+                }
+              }
+            },
+            {
+              "bindings": {
+                "q": {
+                  "kind": "handle",
+                  "graph": {
+                    "kind": "instance",
+                    "instance": {
+                      "name": "qa",
+                      "adapterSlug": "ask"
+                    }
+                  },
+                  "handle": {
+                    "origin": {
+                      "kind": "write",
+                      "externalId": "7a3a30d2-324c-42cb-99de-2df020fee189",
+                      "writeIndex": 0
+                    },
+                    "created": true,
+                    "outcome": "create",
+                    "committed": true,
+                    "externalId": "7a3a30d2-324c-42cb-99de-2df020fee189",
+                    "provenance": {
+                      "Fields": [
+                        {
+                          "kind": "literal",
+                          "span": {
+                            "end": {
+                              "col": 63,
+                              "line": 5
+                            },
+                            "start": {
+                              "col": 53,
+                              "line": 5
+                            }
+                          }
+                        }
+                      ],
+                      "Prompt": [
+                        {
+                          "kind": "literal",
+                          "span": {
+                            "end": {
+                              "col": 43,
+                              "line": 5
+                            },
+                            "start": {
+                              "col": 36,
+                              "line": 5
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    "recordType": "Form",
+                    "resultData": {
+                      "Url": "http://localhost:3000/api/asks/ask_kEqgcL4wBe5ndi_NxXyFaRrcKzsVWpnM",
+                      "url": "http://localhost:3000/api/asks/ask_kEqgcL4wBe5ndi_NxXyFaRrcKzsVWpnM",
+                      "State": "open",
+                      "Detail": null,
+                      "Fields": [
+                        "Budget"
+                      ],
+                      "Prompt": "Deal?"
+                    },
+                    "adapterType": "ask",
+                    "bindingName": "q",
+                    "writtenValues": {
+                      "Fields": [
+                        "Budget"
+                      ],
+                      "Prompt": "Deal?"
+                    }
+                  },
+                  "targetType": "Form"
+                },
+                "run": {
+                  "kind": "event"
+                }
+              }
+            }
+          ],
+          "bindingName": null
+        },
+        "result": null,
+        "run_id": "e08299b0-bf22-4fc2-9ebf-f85ab3ff9f8b",
+        "status": "parked",
+        "address": "s1",
+        "wake_at": null,
+        "created_at": "2026-11-04T10:57:55.066595+00:00",
+        "updated_at": "2026-11-04T10:57:55.066595+00:00",
+        "park_reason": "await"
+      }
+    ],
+    "join_pending": [],
+    "join_branch_export": [],
+    "adapter_await": [
+      {
+        "id": "e1ff728a-70b4-472d-8bc7-c1b6a10e896f",
+        "run_id": "e08299b0-bf22-4fc2-9ebf-f85ab3ff9f8b",
+        "address": "s1",
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "created_at": "2026-11-04T10:57:55.067663+00:00",
+        "updated_at": "2026-11-04T10:57:55.067663+00:00",
+        "adapter_type": "ask",
+        "correlation_key": "7a3a30d2-324c-42cb-99de-2df020fee189"
+      }
+    ],
+    "callback": [],
+    "park_library_source": [],
+    "work": [],
+    "ask": [
+      {
+        "id": "7a3a30d2-324c-42cb-99de-2df020fee189",
+        "rows": null,
+        "state": "open",
+        "token": "ask_kEqgcL4wBe5ndi_NxXyFaRrcKzsVWpnM",
+        "answer": null,
+        "detail": null,
+        "family": "Form",
+        "prompt": "Deal?",
+        "options": [
+          "Budget"
+        ],
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "created_at": "2026-11-04T10:57:55.062576+00:00",
+        "expired_at": null,
+        "provenance": {
+          "adapterType": "manual"
+        },
+        "updated_at": "2026-11-04T10:57:55.062576+00:00",
+        "answer_type": null,
+        "answered_at": null,
+        "callback_url": null,
+        "token_expires_at": "2027-02-02T10:57:55.059+00:00"
+      }
+    ]
+  }
+}

@@ -1,0 +1,214 @@
+{
+  "writtenBy": "c388d81d (0.12.13)",
+  "scenario": "limit",
+  "generated": {
+    "by": "generate.integration.test.ts.txt in this folder, in a worktree at c388d81d, on a database that commit migrated",
+    "seededByHand": "the movement and trigger rows (the generator's own inserts, not production's save: kind manual, config {}, so a listen's real shape is not evidence here)",
+    "writtenByProduction": "movement_version by production's mintMovementVersionIfChanged; every other row by production's TriggerRunRecorder, runMovement with the engine's suspendAt input standing in for the cost meter, its park sink, and markRunLimitPaused; no dispatch",
+    "notEvidence": "trigger_run.engine: the generator's process never installed production's engine recorder"
+  },
+  "runId": "1d567f88-648c-4677-9596-ababce1ebe9b",
+  "rows": {
+    "movement": [
+      {
+        "id": "efb82325-db45-4ebb-bbdf-244f1c5a13f8",
+        "name": "fixture_limit_efb82325",
+        "source": "import { `@lf/ask` as ask } from adapters\nqa = connect ask\nfunction capped(run: <manual-[:Invocation]->>) {\n  t = run.Text\n  n = write qa-[:Form]-> { Prompt: t, Fields: [\"after\"] }\n  return n\n}\nlisten to manual fire capped\n",
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "created_at": "2026-11-04T10:57:55.212349+00:00",
+        "trigger_id": null,
+        "updated_at": "2026-11-04T10:57:55.212349+00:00",
+        "description": "",
+        "validity_reason": null,
+        "validity_status": null,
+        "language_version": "0.12.8",
+        "created_by_user_id": null,
+        "current_version_id": "3cadd1a3-7155-4866-bbae-5adda1d92ac5",
+        "upgrade_diagnostics": null,
+        "validity_checked_at": null,
+        "validity_source_hash": null,
+        "validity_consented_at": null,
+        "upgrade_checked_against": null,
+        "validity_checked_against": null
+      }
+    ],
+    "movement_version": [
+      {
+        "id": "3cadd1a3-7155-4866-bbae-5adda1d92ac5",
+        "source": "import { `@lf/ask` as ask } from adapters\nqa = connect ask\nfunction capped(run: <manual-[:Invocation]->>) {\n  t = run.Text\n  n = write qa-[:Form]-> { Prompt: t, Fields: [\"after\"] }\n  return n\n}\nlisten to manual fire capped\n",
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "created_at": "2026-11-04T10:57:55.214137+00:00",
+        "movement_id": "efb82325-db45-4ebb-bbdf-244f1c5a13f8",
+        "content_hash": "ced2c2807e2de3c4f865616063d1f8c4de2ee5b40f466a837d90b614cee73b9f",
+        "version_number": 1,
+        "language_version": "0.12.8"
+      }
+    ],
+    "trigger": [
+      {
+        "id": "7cb15f65-b3f1-4cf2-9cbc-8807c44d72cd",
+        "kind": "manual",
+        "name": "movement/fixture/capped",
+        "notes": "",
+        "config": {},
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "run_mode": "live",
+        "created_at": "2026-11-04T10:57:55.216523+00:00",
+        "updated_at": "2026-11-04T10:57:55.216523+00:00",
+        "movement_id": "efb82325-db45-4ebb-bbdf-244f1c5a13f8",
+        "poll_last_at": null,
+        "credentials_id": null,
+        "guard_paused_at": null,
+        "poll_checkpoint": null,
+        "resolved_address": null,
+        "created_by_user_id": null,
+        "cron_last_fired_at": null,
+        "fired_movement_name": "capped",
+        "guard_paused_reason": null,
+        "guard_paused_signal": null,
+        "provisioned_by_setup_agent": false
+      }
+    ],
+    "trigger_run": [
+      {
+        "id": "1d567f88-648c-4677-9596-ababce1ebe9b",
+        "host": "platform",
+        "steps": [],
+        "engine": null,
+        "errors": [],
+        "status": "parked",
+        "dry_run": false,
+        "team_id": "00000000-0000-4000-8000-0000000012a1",
+        "returned": null,
+        "failed_at": null,
+        "record_id": null,
+        "created_at": "2026-11-04T10:57:55.218",
+        "ops_run_id": null,
+        "started_at": "2026-11-04T10:57:55.216+00:00",
+        "trigger_id": "7cb15f65-b3f1-4cf2-9cbc-8807c44d72cd",
+        "delivery_id": null,
+        "diagnostics": {},
+        "lease_owner": null,
+        "lease_token": null,
+        "lease_until": null,
+        "limit_pause": {
+          "limit": "cost",
+          "pausedAt": "2026-11-04T10:57:55.232Z",
+          "capMicrodollars": 1000,
+          "spentMicrodollars": 2000
+        },
+        "completed_at": null,
+        "trigger_type": "webhook",
+        "cancel_reason": null,
+        "nodes_written": 0,
+        "changed_fields": null,
+        "failure_reason": null,
+        "trigger_payload": {
+          "payload": {
+            "text": "written before the park: limit",
+            "firedAt": "2026-10-30T09:00:00.000Z"
+          },
+          "occurredAt": "2026-10-30T09:00:00.000Z",
+          "adapterType": "manual",
+          "triggerType": "webhook",
+          "pipelineInputId": "trigger:7cb15f65-b3f1-4cf2-9cbc-8807c44d72cd"
+        },
+        "trigger_event_id": null,
+        "last_heartbeat_at": "2026-11-04T10:57:55.216+00:00",
+        "cancel_requested_at": null,
+        "movement_version_id": "3cadd1a3-7155-4866-bbae-5adda1d92ac5",
+        "cost_cap_baseline_microdollars": 0
+      }
+    ],
+    "parked_run": [
+      {
+        "id": "1cee72b2-7bd1-46f8-9e6f-79c4d612e63f",
+        "state": {
+          "address": "s1",
+          "journal": [],
+          "version": 2,
+          "suspended": true,
+          "scopeChain": [
+            {
+              "bindings": {
+                "qa": {
+                  "kind": "instance",
+                  "instance": {
+                    "name": "qa",
+                    "adapterSlug": "ask"
+                  }
+                },
+                "ask": {
+                  "kind": "opaque",
+                  "name": "ask",
+                  "what": "import"
+                },
+                "cron": {
+                  "kind": "instance",
+                  "instance": {
+                    "name": "cron",
+                    "adapterSlug": "cron"
+                  }
+                },
+                "capped": {
+                  "kind": "movement",
+                  "name": "capped"
+                },
+                "manual": {
+                  "kind": "instance",
+                  "instance": {
+                    "name": "manual",
+                    "adapterSlug": "manual"
+                  }
+                }
+              }
+            },
+            {
+              "bindings": {
+                "t": {
+                  "kind": "value",
+                  "value": "written before the park: limit",
+                  "provenance": {
+                    "direct": {
+                      "kind": "source_field",
+                      "field": "Text",
+                      "instance": "manual",
+                      "adapterType": "manual"
+                    },
+                    "origins": [
+                      {
+                        "kind": "source_field",
+                        "field": "Text",
+                        "instance": "manual",
+                        "adapterType": "manual"
+                      }
+                    ]
+                  }
+                },
+                "run": {
+                  "kind": "event"
+                }
+              }
+            }
+          ],
+          "bindingName": null
+        },
+        "result": null,
+        "run_id": "1d567f88-648c-4677-9596-ababce1ebe9b",
+        "status": "parked",
+        "address": "s1",
+        "wake_at": null,
+        "created_at": "2026-11-04T10:57:55.229107+00:00",
+        "updated_at": "2026-11-04T10:57:55.229107+00:00",
+        "park_reason": "limit"
+      }
+    ],
+    "join_pending": [],
+    "join_branch_export": [],
+    "adapter_await": [],
+    "callback": [],
+    "park_library_source": [],
+    "work": [],
+    "ask": []
+  }
+}
