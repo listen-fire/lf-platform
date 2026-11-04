@@ -40,11 +40,13 @@ export function storeDb() {
   return getAutomationsQb(TABLES);
 }
 
-/** One write that is all of it or none. */
+/** One write that is all of it or none. Inside a request's context transaction
+ *  (an upgrade's group settling a run parked on a listen it retires) the write
+ *  joins it, since a transaction cannot open another. */
 export function inStoreTransaction<T>(body: (trx: ReturnType<typeof storeDb>) => Promise<T>): Promise<T> {
-  return storeDb()
-    .transaction()
-    .execute((trx) => body(trx));
+  const db = storeDb();
+  if (db.isTransaction) return body(db);
+  return db.transaction().execute((trx) => body(trx));
 }
 
 export interface QueuedRow {

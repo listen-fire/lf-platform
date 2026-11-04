@@ -13,6 +13,8 @@ import { LANGUAGE_VERSION } from 'movement-lang';
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { MovementId } from '../../../../generated/kysely/automations/Movement';
+import type { TriggerId } from '../../../../generated/kysely/automations/Trigger';
+import type { TriggerRunId } from '../../../../generated/kysely/automations/TriggerRun';
 
 import { getAutomationsQb, getCoreQb } from '../../../../lib/kysely';
 import { cleanupTeam } from '../../../../test/harness/cleanup';
@@ -117,6 +119,21 @@ describe('an upgrading import group moves in one transaction (real Postgres, the
       .executeTakeFirstOrThrow();
   }
 
+  async function parkRunOn(triggerId: TriggerId): Promise<TriggerRunId> {
+    const runId = randomUUID() as TriggerRunId;
+    await getAutomationsQb(['trigger_run'])
+      .insertInto('trigger_run')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .values({ id: runId, team_id: teamId, trigger_id: triggerId, trigger_type: 'manual', status: 'parked', trigger_payload: {} } as any)
+      .execute();
+    await getAutomationsQb(['parked_run'])
+      .insertInto('parked_run')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .values({ id: randomUUID(), run_id: runId, address: 'root', status: 'parked', park_reason: 'ask' } as any)
+      .execute();
+    return runId;
+  }
+
   async function bringUpRowsOf(id: string) {
     return getAutomationsQb(['work']).selectFrom('work').where('kind', '=', 'bring_up_listens').where('key', '=', `bring_up_listens:${id}`).select('id').execute();
   }
@@ -197,6 +214,51 @@ describe('an upgrading import group moves in one transaction (real Postgres, the
       .select(['language_version', 'source'])
       .executeTakeFirstOrThrow();
     expect(version).toEqual({ language_version: LANGUAGE_VERSION, source: LISTENS });
+  });
+
+  it('a member whose save retires a listen settles the run parked on it, in the open transaction', async () => {
+    const id = await seed('stamp_parked', LISTENS);
+    // A listen left from before the upgrade, on a channel the new text does not
+    // listen on, so the save retires it.
+    const leftover = randomUUID() as TriggerId;
+    await getAutomationsQb(['trigger'])
+      .insertInto('trigger')
+      .values({ id: leftover, team_id: teamId, name: 'leftover', kind: 'attio', config: JSON.stringify({}), movement_id: id as MovementId })
+      .execute();
+    const runId = await parkRunOn(leftover);
+
+    const result = await upgradeMovement({ teamId, id, acknowledge: true, validate: rewrites });
+
+    expect(result.status).toBe('upgraded');
+    expect(await triggersOf(id)).toEqual([expect.objectContaining({ kind: 'manual' })]);
+    const run = await getAutomationsQb(['trigger_run']).selectFrom('trigger_run').where('id', '=', runId).select(['status', 'failure_reason']).executeTakeFirstOrThrow();
+    expect(run).toEqual({ status: 'failed', failure_reason: expect.stringContaining('its listener was removed') });
+    expect(await getAutomationsQb(['parked_run']).selectFrom('parked_run').where('run_id', '=', runId).select('run_id').execute()).toEqual([]);
+  });
+
+  it('when the group rolls back, the run parked on a listen a member retired is still parked', async () => {
+    const id = await seed('stamp_parked_back', LISTENS);
+    const leftover = randomUUID() as TriggerId;
+    await getAutomationsQb(['trigger'])
+      .insertInto('trigger')
+      .values({ id: leftover, team_id: teamId, name: 'leftover', kind: 'attio', config: JSON.stringify({}), movement_id: id as MovementId })
+      .execute();
+    const runId = await parkRunOn(leftover);
+    const advance: Advance = async (input) => {
+      const move = await advanceLive(input);
+      return async () => {
+        await move();
+        return { ok: false, detail: 'a later member refused' };
+      };
+    };
+
+    const result = await upgradeMovement({ teamId, id, acknowledge: true, validate: rewrites, advance });
+
+    expect(result).toEqual(expect.objectContaining({ status: 'unverified' }));
+    expect(await triggersOf(id)).toEqual([expect.objectContaining({ id: leftover })]);
+    const run = await getAutomationsQb(['trigger_run']).selectFrom('trigger_run').where('id', '=', runId).select(['status']).executeTakeFirstOrThrow();
+    expect(run.status).toBe('parked');
+    expect(await getAutomationsQb(['parked_run']).selectFrom('parked_run').where('run_id', '=', runId).select('run_id').execute()).toHaveLength(1);
   });
 
   it('nothing reaches a provider while the transaction is open: the catalog before it, the subscriptions by the work row after', async () => {
