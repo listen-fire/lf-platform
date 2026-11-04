@@ -35,6 +35,14 @@ function jsFiles(dir: string, found: string[] = []): string[] {
   return found;
 }
 
+/** Whether `text` names the package `name` as a module specifier: quoted
+ *  whole, or with a subpath (`'@listen-fire/engine/public/x'`), never as the
+ *  prefix of another name (`@listen-fire/engine-contracts`). */
+function namedIn(text: string, name: string): boolean {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+  return new RegExp(`["'\`]${escaped}(?:/[^"'\`]*)?["'\`]`).test(text);
+}
+
 /**
  * The core packages a package declares or actually requires. An undeclared
  * require resolves through pnpm's hoisted fallback, which holds the current
@@ -45,7 +53,7 @@ function coreUsedBy(dir: string): string[] {
   const used = new Set(CORE.filter((c) => c in (dependencies ?? {}) || c in (peerDependencies ?? {})));
   for (const file of jsFiles(dir)) {
     const text = fs.readFileSync(file, 'utf8');
-    for (const core of CORE) if (text.includes(`"${core}"`) || text.includes(`"${core}/`) || text.includes(`'${core}`)) used.add(core);
+    for (const core of CORE) if (namedIn(text, core)) used.add(core);
   }
   return [...used];
 }

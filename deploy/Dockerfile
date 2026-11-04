@@ -35,6 +35,16 @@ RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 
 WORKDIR /srv/listen-fire
 
+# A language version's package set ships whole (its façade is plain
+# JavaScript): `pnpm deploy` installs it with that release's packages beside it,
+# which a copy vendored into the api's build could not resolve. Docker's COPY
+# cannot keep a glob's directories, so this stage gathers them; its output is
+# compared by content, so an edit elsewhere under packages/ re-runs nothing
+# after it.
+FROM base AS language-version-packages
+COPY packages /tmp/packages
+RUN mkdir -p /out/packages && cp -R /tmp/packages/lang-* /out/packages/
+
 # Manifests first, so editing source does not re-run the install. The frontends
 # are deployed separately (they are Next apps); this image is the API and its
 # workers, so only the api's own workspace closure is installed. One list,
@@ -54,10 +64,9 @@ COPY modules/native-valuations/package.json modules/native-valuations/
 COPY packages/legacy-engine/package.json packages/legacy-engine/
 COPY packages/legacy-lang/package.json packages/legacy-lang/
 COPY packages/language-versions/package.json packages/language-versions/
-# A language version's package set ships whole (its façade is plain JavaScript):
-# `pnpm deploy` installs it with that release's packages beside it, which a copy
-# vendored into the api's build could not resolve.
-COPY packages/lang-0.12/package.json packages/lang-0.12/index.js packages/lang-0.12/index.d.ts packages/lang-0.12/
+# Every language version package (`packages/lang-<version>`), found by name, so
+# carrying another version needs no line here.
+COPY --from=language-version-packages /out/ ./
 COPY packages/platform-constants/package.json packages/platform-constants/
 COPY packages/story-view/package.json packages/story-view/
 

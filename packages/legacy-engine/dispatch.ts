@@ -7,8 +7,8 @@
 //
 // The engine is chosen BEFORE the park state is read: a park state's version is
 // the business of the version that wrote it, so a run parked under another
-// version is answered by its own version (today, refused by pin) and never by
-// this one's park-state reader.
+// version is answered by its own version (refused by pin while that version
+// does not run) and never by this one's park-state reader.
 
 import { LANGUAGE_VERSION } from 'movement-lang';
 import { refuseUnsupportedParkStateVersion, type SettleRaceInput } from 'engine-contracts';

@@ -4,7 +4,7 @@
 // compatibility key (`@listen-fire/language-versions`): the current version's
 // pin is the wasm's, against the run snapshot, the check its run on the Rust
 // engine enforces, so the verdict an author sees is the one the run holds. A
-// pin whose version this build carries but cannot yet check, and a pin whose
+// pin whose version this build carries without checking it, and a pin whose
 // key it does not carry, are refused alike with the language's own text, and
 // nothing reads them.
 //

@@ -2,8 +2,8 @@
 // on the TypeScript engine this package keeps; any other pin is a release's
 // semver, and its compatibility key chooses a carried version
 // (`@listen-fire/language-versions`). The current version runs on the Rust
-// engine (`@listen-fire/engine`); a version this build carries but cannot yet
-// run, and a key it does not carry, are refused alike, by the current
+// engine (`@listen-fire/engine`); a version this build carries without running
+// it, and a key it does not carry, are refused alike, by the current
 // language's text. No fallback between them.
 
 import { LANGUAGE_VERSION, languageVersionDiagnostic, neverAsAny, type LanguageVersion } from 'movement-lang';

@@ -12,11 +12,20 @@
 // values pass silently into another's functions, and each version's error
 // classes are its own.
 //
-// Adding a version is one entry below plus its package. A version is carried
-// before it can do anything, and gains a capability at a time: until its entry
-// provides checking, its pins are refused exactly as if it were not carried;
-// until it provides running, its runs are refused the same way. Never a
-// fallback to another version.
+// Carrying another version takes, and only takes:
+//   - its package, `packages/lang-<key>`, named `@listen-fire/lang-<key>` at
+//     the release's own version, naming that release's packages exactly;
+//   - its entry below;
+//   - a dependency on its package here, and one in `apps/api` (the api's build
+//     vendors this registry into its own output, where an import of the
+//     package resolves from the api's installed dependencies);
+//   - `pnpm install`, for the lockfile.
+// The image finds the package by its name (`deploy/Dockerfile`). A test holds
+// every entry to this list (`__test__/wiring.unit.test.ts`).
+//
+// A capability a version's entry does not provide is held: its pins are
+// refused exactly as if the version were not carried, never handed to another
+// version.
 
 import { LANGUAGE_VERSION, compatibilityKey, neverAsAny, type LanguageVersion } from 'movement-lang';
 
@@ -29,7 +38,7 @@ export interface VersionPackages {
  * One capability of a carried version.
  *
  * - `current`: the platform's own core provides it, imported directly.
- * - `held`: the version is carried but does not provide it yet. Its pins are
+ * - `held`: the version is carried but does not provide it. Its pins are
  *   refused here exactly as the current language refuses a key it does not
  *   read. Never a fallback to another version.
  */
@@ -68,9 +77,8 @@ const CURRENT_VERSION: CarriedVersion = {
 
 const CARRIED: readonly CarriedVersion[] = [
   CURRENT_VERSION,
-  // Kept for automations pinned to 0.12 and for runs it parked, while any
-  // remain (plans/post-0.13-2026-11-02/DEPRECATED-ENGINE-design.md). Its
-  // checker and run host come in later slices; until then its pins are held.
+  // Carried for the automations pinned to 0.12 and the runs 0.12 parked, so
+  // they keep their own release's meaning after the platform moved on.
   {
     key: '0.12',
     release: '0.12.13',

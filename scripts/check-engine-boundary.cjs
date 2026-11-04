@@ -27,26 +27,29 @@
 // walk from its directory), so a module whose peers resolved to 0.12 is 0.12's
 // however it is spelled. That rule has no baseline: any crossing fails.
 //
-//   node scripts/check-engine-boundary.cjs            report / gate
-//   node scripts/check-engine-boundary.cjs --update   rewrite the baseline
-//   node scripts/check-engine-boundary.cjs --list     also list every site
+//   node scripts/check-engine-boundary.cjs              report / gate
+//   node scripts/check-engine-boundary.cjs --update     rewrite the baseline
+//   node scripts/check-engine-boundary.cjs --list       also list every site
+//   node scripts/check-engine-boundary.cjs --root=DIR   check the tree at DIR
+//                                                       (default: this repo)
 
 const fs = require('node:fs');
 const path = require('node:path');
 const ts = require('typescript');
 
-const repoRoot = path.resolve(__dirname, '..');
+const rootArg = process.argv.slice(2).find((arg) => arg.startsWith('--root='));
+const repoRoot = path.resolve(rootArg !== undefined ? rootArg.slice('--root='.length) : path.join(__dirname, '..'));
 /** Every tree that consumes the engine, relative to the repo root. */
 const CONSUMER_ROOTS = [
   'apps/api/src',
-  ...['packages', 'modules'].flatMap((dir) =>
+  ...['packages', 'modules'].filter((dir) => fs.existsSync(path.join(repoRoot, dir))).flatMap((dir) =>
     fs
       .readdirSync(path.join(repoRoot, dir), { withFileTypes: true })
       .filter((e) => e.isDirectory())
       .map((e) => `${dir}/${e.name}`),
   ),
 ].filter((root) => fs.existsSync(path.join(repoRoot, root)));
-const baselineFile = path.join(__dirname, 'engine-boundary-baseline.json');
+const baselineFile = path.join(repoRoot, 'scripts', 'engine-boundary-baseline.json');
 
 const PACKAGE = 'movement-engine';
 const PUBLISHED = '@listen-fire/engine';
