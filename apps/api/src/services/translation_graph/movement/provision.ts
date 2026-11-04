@@ -119,6 +119,7 @@ import { checkInstalled, routeOf } from './language_route';
 import { notListenedDiagnostic, validateUnderCarried } from './carried_check';
 import { runningOf } from '@listen-fire/language-versions';
 import { plannedListensOfSource } from './listen_plans';
+import { carriedPauses, listenIdentityOf, type CarriedPause } from './carried_pauses';
 import { listenConfigSchema, type ListenConfig, type SavedListen } from '../../inbound/listen_door';
 import { resolveAndArm, resolvesListen } from '../../inbound/listen_resolve';
 import { listenPauses, type ListenPause } from '../../inbound/listen_pause';
@@ -183,6 +184,10 @@ export interface ProvisionedMovement {
    *  author — listeners retired by a consented unparseable save, a movement
    *  name another automation already fires. Never blocking; always shown. */
   warnings: string[];
+  /** A language upgrade's: the listens it left paused because it could not
+   *  tell which of the earlier listens a person had paused. Not a warning of
+   *  every save, so it is not among `warnings`. */
+  leftPaused?: string[];
 }
 
 export interface ProvisionMovementFailure {
@@ -407,7 +412,7 @@ async function reconcileDerivedTriggers(input: {
   /** A language upgrade: it never changes whether anything is live, so every
    *  pause outlasts it, even where the new plan cannot be matched to its row. */
   keepPauses?: boolean;
-}): Promise<{ listeners: ProvisionedListener[]; reconciles: Set<WorkKind> }> {
+}): Promise<{ listeners: ProvisionedListener[]; reconciles: Set<WorkKind>; leftPaused: string[] }> {
   const qb = getAutomationsQb(['trigger']);
   // The schedule reconciles whose rows this save made stale: a new, changed or
   // retired cron or poll. An unchanged listener is armed already.
@@ -430,13 +435,26 @@ async function reconcileDerivedTriggers(input: {
     const pipeline = pipelineOfConfig(row.config);
     return pipeline === null ? undefined : breakerPauses.get(pipeline);
   };
-  // A pause on a row this retires passes to every row this makes for the
-  // automation: it cannot be said which of them is that listen now, and running
-  // one a person stopped is the worse mistake.
-  const retiredPaused = input.keepPauses === true ? plan.retired : [];
-  const carriedOff = retiredPaused.some((row) => row.runMode === 'off');
-  const carriedGuard = retiredPaused.find((row) => row.guardPause !== undefined)?.guardPause;
-  const carriedBreaker = retiredPaused.map(breakerPauseOf).find((reason) => reason !== undefined);
+  // A pause on a row this retires passes to the rows this makes for it
+  // (`carriedPauses`).
+  const retiredPauses = input.keepPauses === true
+    ? plan.retired.map((row) => {
+        const off = row.runMode === 'off';
+        const breaker = breakerPauseOf(row);
+        const pause: CarriedPause | null = off || row.guardPause !== undefined || breaker !== undefined
+          ? { off, ...(row.guardPause !== undefined ? { guard: row.guardPause } : {}), ...(breaker !== undefined ? { breaker } : {}) }
+          : null;
+        return { identity: listenIdentityOf({ movementName: row.firedMovementName, kind: row.kind, credentialsId: row.credentialsId }), pause };
+      })
+    : [];
+  const freshIndexes = input.desired.flatMap((_, i) => (plan.matches[i] === undefined ? [i] : []));
+  const carried = new Map(
+    carriedPauses({
+      retired: retiredPauses,
+      fresh: freshIndexes.map((i) => ({ identity: listenIdentityOf({ movementName: input.desired[i].movementName, kind: input.desired[i].adapter, credentialsId: input.desired[i].credentialsId })! })),
+    }).map((carry, n) => [freshIndexes[n]!, carry] as const),
+  );
+  const leftPaused: string[] = [];
 
   // Retire rows whose listen disappeared: delete the trigger row itself.
   // `trigger_run` history rows reference the trigger id WITHOUT an FK, so
@@ -517,7 +535,11 @@ async function reconcileDerivedTriggers(input: {
       if (held !== undefined) await pauseListenConfig({ teamId: input.teamId, config: desired.config, reason: held });
     } else {
       triggerId = randomUUID();
-      runMode = carriedOff ? 'off' : textRunMode;
+      const carry = carried.get(i);
+      const carriedGuard = carry?.pause?.guard;
+      const carriedBreaker = carry?.pause?.breaker;
+      runMode = carry?.pause?.off === true ? 'off' : textRunMode;
+      if (carry?.unsure === true) leftPaused.push(`${input.movementRow.name}: the ${desired.adapter} listen that fires ${desired.movementName} was left paused: it could not be told which of the automation's earlier listens was the one paused, and a paused listen is never started by an upgrade. Resume it if it is the one you want running.`);
       noteSchedule(desired.adapter);
       await qb
         .insertInto('trigger')
@@ -557,7 +579,7 @@ async function reconcileDerivedTriggers(input: {
       reused: kept !== undefined,
     });
   }
-  return { listeners, reconciles };
+  return { listeners, reconciles, leftPaused };
 }
 
 // ── Provision: check the program, then reconcile the listeners ──────────────
@@ -656,7 +678,7 @@ async function provisionListeners(input: {
         : null,
   }));
 
-  const { listeners, reconciles } = await within('reconcile', () =>
+  const { listeners, reconciles, leftPaused } = await within('reconcile', () =>
     reconcileDerivedTriggers({
       teamId: input.teamId,
       movementRow: input.movementRow,
@@ -708,6 +730,7 @@ async function provisionListeners(input: {
     // Save-time warnings are assembled by `saveMovement` — provisioning
     // itself has no view of the rest of the team's automations.
     warnings: [],
+    ...(leftPaused.length > 0 ? { leftPaused } : {}),
   };
 }
 

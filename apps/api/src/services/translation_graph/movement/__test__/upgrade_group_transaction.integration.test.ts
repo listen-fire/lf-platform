@@ -240,8 +240,6 @@ ${LISTENS}`);
       expect(mockedCatalog).not.toHaveBeenCalled();
     });
 
-    const pausedRowOf = (id: string) =>
-      getAutomationsQb(['trigger'])
     it('an automation shipped while the upgrade ran is not moved as a draft: nothing moves, and the answer says so', async () => {
       const id = await seedNeverShipped('shipped_meanwhile', `${LISTENS}// before\n`);
       // Prepared as it was found, never shipped; shipped by the time the transaction runs.
@@ -258,13 +256,15 @@ ${LISTENS}`);
       expect(await bringUpRowsOf(id)).toEqual([]);
     });
 
+    const pausedRowOf = (id: string) =>
+      getAutomationsQb(['trigger'])
         .selectFrom('trigger')
         .where('movement_id', '=', id as MovementId)
         .select(['kind', 'run_mode', 'guard_paused_at', 'guard_paused_reason', 'guard_paused_signal'])
         .execute();
 
     /** A row 0.12 left: `config` is what the new plan matches it by, or fails to. */
-    async function leftRow(id: string, row: { kind: string; run_mode?: string; guard?: boolean; config?: unknown }): Promise<TriggerId> {
+    async function leftRow(id: string, row: { kind: string; run_mode?: string; guard?: boolean; config?: unknown; fires?: string }): Promise<TriggerId> {
       const triggerId = randomUUID() as TriggerId;
       await getAutomationsQb(['trigger'])
         .insertInto('trigger')
@@ -275,6 +275,7 @@ ${LISTENS}`);
           kind: row.kind,
           config: JSON.stringify(row.config ?? {}),
           movement_id: id as MovementId,
+          fired_movement_name: row.fires ?? null,
           run_mode: row.run_mode ?? 'live',
           ...(row.guard === true ? { guard_paused_at: new Date(), guard_paused_reason: 'a team budget breach', guard_paused_signal: 'team_budget' } : {}),
         })
@@ -318,6 +319,67 @@ ${LISTENS}`);
       const id = await seed('paused_breaker', LISTENS);
       const oldPipeline = `listen:paused_breaker:stamp:${randomUUID().slice(0, 8)}`;
       await leftRow(id, { kind: 'manual', config: { listen: { pipeline: oldPipeline } } });
+      await setPaused({ tenant: teamId }, { pipeline: oldPipeline, paused: 'LISTEN_LOOP: it echoes itself' });
+
+      expect((await upgradeMovement({ teamId, id, acknowledge: true, validate: rewrites })).status).toBe('upgraded');
+
+      const [row] = await triggersOf(id);
+      expect(await listenPauses({ teamId, triggerIds: [row!.id] })).toEqual(new Map([[row!.id, { reason: 'LISTEN_LOOP: it echoes itself', held: 0 }]]));
+    });
+
+    const TWO_LISTENS =
+      'function stamp(go: <manual-[:Invocations]->>) {\n}\n\nfunction other(go: <manual-[:Invocations]->>) {\n}\n\nlisten to manual-[:Invocations]-> fire stamp\nlisten to manual-[:Invocations]-> fire other\n';
+    const pausedByMovement = (id: string) =>
+      getAutomationsQb(['trigger'])
+        .selectFrom('trigger')
+        .where('movement_id', '=', id as MovementId)
+        .select(['fired_movement_name', 'run_mode'])
+        .orderBy('fired_movement_name')
+        .execute();
+
+    it('two listens of one channel, one paused: each new listen takes its own predecessor\'s state, found by the movement it fires', async () => {
+      const id = await seed('two_listens', TWO_LISTENS);
+      await leftRow(id, { kind: 'manual', fires: 'stamp' });
+      await leftRow(id, { kind: 'manual', fires: 'other', run_mode: 'off' });
+
+      const result = await upgradeMovement({ teamId, id, acknowledge: true, validate: rewrites });
+
+      expect(result.status).toBe('upgraded');
+      expect(await pausedByMovement(id)).toEqual([
+        { fired_movement_name: 'other', run_mode: 'off' },
+        { fired_movement_name: 'stamp', run_mode: 'live' },
+      ]);
+      expect(result).not.toHaveProperty('warnings');
+    });
+
+    it('listens that cannot be told apart, one paused: the pause is kept on the new listen, and the answer names it', async () => {
+      const id = await seed('told_apart', LISTENS);
+      await leftRow(id, { kind: 'manual', fires: 'stamp', config: { key: 'a' } });
+      await leftRow(id, { kind: 'manual', fires: 'stamp', config: { key: 'b' }, run_mode: 'off' });
+
+      const result = await upgradeMovement({ teamId, id, acknowledge: true, validate: rewrites });
+
+      expect(result.status).toBe('upgraded');
+      expect(await pausedByMovement(id)).toEqual([{ fired_movement_name: 'stamp', run_mode: 'off' }]);
+      if (result.status !== 'upgraded') throw new Error('unreachable');
+      expect(result.warnings).toEqual([expect.stringContaining('manual listen that fires stamp')]);
+    });
+
+    it('a listen whose predecessor is gone from the new plan keeps the pause, and the answer names it', async () => {
+      const id = await seed('predecessor_gone', LISTENS);
+      await leftRow(id, { kind: 'attio', fires: 'elsewhere', run_mode: 'off' });
+
+      const result = await upgradeMovement({ teamId, id, acknowledge: true, validate: rewrites });
+
+      expect(await pausedByMovement(id)).toEqual([{ fired_movement_name: 'stamp', run_mode: 'off' }]);
+      if (result.status !== 'upgraded') throw new Error('unreachable');
+      expect(result.warnings).toEqual([expect.stringContaining('manual listen that fires stamp')]);
+    });
+
+    it("the loop breaker's pause on a row the new plan cannot match follows the listen to its new pipeline", async () => {
+      const id = await seed('breaker_retired', LISTENS);
+      const oldPipeline = `listen:breaker_retired:stamp:${randomUUID().slice(0, 8)}`;
+      await leftRow(id, { kind: 'attio', config: { listen: { pipeline: oldPipeline } } });
       await setPaused({ tenant: teamId }, { pipeline: oldPipeline, paused: 'LISTEN_LOOP: it echoes itself' });
 
       expect((await upgradeMovement({ teamId, id, acknowledge: true, validate: rewrites })).status).toBe('upgraded');

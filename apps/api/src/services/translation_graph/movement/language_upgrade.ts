@@ -165,7 +165,7 @@ export type ValidateUnder = (input: {
 
 /** What moving a pin did. Moving it is a save, which can still land short of
  *  shipping. */
-export type AdvanceOutcome = { ok: true } | { ok: false; detail: string };
+export type AdvanceOutcome = { ok: true; warnings?: string[] } | { ok: false; detail: string };
 
 /** One member's move, ready to run inside the group's transaction: database
  *  writes only. */
@@ -964,7 +964,7 @@ export const advanceLive: Advance = async ({ movement, to, source, movingWith })
       languageUpgrade: { to },
       inTransaction: { teamCatalog },
     });
-    if (saved.ok) return { ok: true };
+    if (saved.ok) return { ok: true, ...(saved.leftPaused !== undefined ? { warnings: saved.leftPaused } : {}) };
     const what = source === movement.source ? `it did not ship under ${to}` : 'the rewritten text did not ship';
     return { ok: false, detail: `${what}: ${(saved.errors ?? []).join('; ') || 'the save stopped short of shipping'}` };
   };
@@ -1030,6 +1030,9 @@ export type UpgradeMovementResult =
       heldBy?: HeldMember[];
       /** Why a clean, acknowledged move still did not land. */
       detail?: string;
+      /** What an upgrade that landed wants known: the listens it left paused
+       *  because it could not tell which of them a person had paused. */
+      warnings?: string[];
     };
 
 /** The triggers of `triggerIds` a run parked on a leaf still names. */
@@ -1173,11 +1176,13 @@ export async function upgradeMovement(input: {
     moves.push({ member, move });
     moved.set(member.movement.name, { source: member.rewrite.source, languageVersion: to });
   }
+  const warnings: string[] = [];
   try {
     await together(movement.teamId, async () => {
       for (const { member, move } of moves) {
         const advanced = await move();
         if (!advanced.ok) throw new GroupMoveStopped(member.movement.name, advanced.detail);
+        warnings.push(...(advanced.warnings ?? []));
         const assessment = assessMovementValidity({ diagnostics: member.rewrite.validation.diagnostics, gaps: [] });
         await recordValidityOutcome({
           id: member.movement.id,
@@ -1196,7 +1201,7 @@ export async function upgradeMovement(input: {
     const nothing = others.length > 0 ? '; nothing moved' : '';
     return { status: 'unverified', ...shown, diagnostics, detail: `${who}${err.detail}${nothing}` };
   }
-  return { status: 'upgraded', ...shown, diagnostics };
+  return { status: 'upgraded', ...shown, diagnostics, ...(warnings.length > 0 ? { warnings } : {}) };
 }
 
 /** A member of an upgrading group that could not move: the group's

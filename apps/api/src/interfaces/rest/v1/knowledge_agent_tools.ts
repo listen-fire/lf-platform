@@ -983,7 +983,7 @@ function upgradeMessage(result: Exclude<UpgradeMovementResult, { status: 'not_fo
         ? `Clean under ${to} once its old spellings are rewritten (upgradedSource). Call again with acknowledge: true to save that text and move it there; ${meanwhile}.`
         : `Clean under ${to}. Call again with acknowledge: true to move it there; ${meanwhile}.`) + together;
     case 'upgraded':
-      return `Upgraded to ${to}${rewritten ? ', its text rewritten into that version\'s spelling (upgradedSource)' : ''}. New runs use it; runs already in progress finish under the version they started with.${together}`;
+      return `Upgraded to ${to}${rewritten ? ', its text rewritten into that version\'s spelling (upgradedSource)' : ''}. New runs use it; runs already in progress finish under the version they started with.${together}${result.warnings !== undefined ? ` Left paused (warnings): ${result.warnings.join(' ')}` : ''}`;
     default:
       return neverAsAny(result.status);
   }
