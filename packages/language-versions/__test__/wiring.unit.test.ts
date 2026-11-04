@@ -59,6 +59,24 @@ describe.each(others.map((version) => [version.key, version] as const))('carried
     }
   });
 
+  it('is what its carried run host loads, when it runs', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const required: object = require(name);
+    const { run } = version.provides;
+    switch (run.kind) {
+      case 'carried':
+        expect(await run.lane()).toEqual(expect.objectContaining(required));
+        break;
+      case 'current':
+      case 'held':
+        break;
+      default: {
+        const unknown: never = run;
+        throw new Error(`unknown run capability ${JSON.stringify(unknown)}`);
+      }
+    }
+  });
+
   it('is a dependency of the registry and of the api', () => {
     expect(manifest('packages/language-versions/package.json').dependencies?.[name]).toBe('workspace:*');
     expect(manifest('apps/api/package.json').dependencies?.[name]).toBe('workspace:*');

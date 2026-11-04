@@ -1,16 +1,63 @@
-// The manual unit as production described it at 0.12: its manifest, and the
-// describing half of its adapter (`listEntryPoints`, `describe`). A run-now
-// press, and the files it carries, are the running half, which this package
-// does not carry.
+// Manual adapter — the run-on-demand intrinsic, now the SINGLE on-demand
+// trigger. Manual runs collapse into an adapter (3_syntax_sketch.md
+// "Composition, time, queries, failure"): instead of a separate invocation
+// statement, a movement that should be runnable on demand listens to a manual
+// channel —
 //
-//   listen to manual fire backfill
+//   go = manual()
+//   listen to go {} fire backfill
+//
+// "Run now" (the workbench button, the dev CLI, MCP `runMovement`) injects an
+// invocation event on that channel and the firing flows through NORMAL trigger
+// dispatch — uniform run_mode gating, uniform trigger_run recording. The event
+// carries the initiating actor, so `@user_email` / `@actor_*` resolve to
+// whoever pressed the button (extractActor below).
+//
+// An invocation OPTIONALLY carries text and/or files — the input a person
+// types or drops straight into the movement when they run it. This folds in
+// what used to be the separate `web` adapter: the invocation's text
+// (`go.\`Text\``) and its `Files` edge both resolve off the same invocation
+// position. The retired input-side `#resources` bundle is gone — body and
+// files are accessed via explicit fields/edges only. Files' bytes are stored
+// by the invocation service via `services.document.upload`, whose `objectUri`
+// rides as the handle of the file's `FileRef` descriptor; the host redeems it
+// via `resolveFileRef`, streaming bytes back out of document storage — the
+// identical mechanism the email / whatsapp attachment uses.
+//
+// Source-only and credential-free; no external subscription (nothing is
+// registered anywhere — the event is injected in-process by the invocation
+// service).
+//
+// manual subsumes web
+// owner-resolvable FileRef handles
 
-import type { Adapter, AdapterManifest } from '@listen-fire/engine/public/adapter';
-import type { SchemaEntryPoint, SchemaTypeDescriptor } from '@listen-fire/engine/public/catalog';
+import type {
+  ActorCandidate,
+  ActorIdentity,
+  Adapter,
+  AdapterManifest,
+  FileRef,
+  GetRelatedInput,
+  RelatedResult,
+  ResolveFileRefResult,
+  EdgesFromResult,
+} from '@listen-fire/engine/public/adapter';
+import type {
+  SchemaEntryPoint,
+  SchemaTypeDescriptor,
+  SourcePosition,
+} from '@listen-fire/engine/public/catalog';
+import type { TriggerEvent } from '@listen-fire/engine/public/inbound';
 
-import { BaseAdapter } from '@listen-fire/module-kit/adapter/base';
-
+import { fileHandle, ownedFileSource } from '@listen-fire/engine/public/adapter';
+import { uniformWalk } from '@listen-fire/module-kit/adapter/hop';
 import { MANUAL_HANDBOOK_SECTION } from './handbook_section';
+import {
+  META_RECORD_TYPE,
+  makeUnstablePosition,
+  positionData,
+} from '@listen-fire/engine/public/catalog';
+import { BaseAdapter } from '@listen-fire/module-kit/adapter/base';
 
 /** Stable adapter identifier — the trigger `kind` of manual-derived rows. */
 export const MANUAL_ADAPTER_TYPE = 'manual';
@@ -35,6 +82,45 @@ export const MANUAL_FILE_DISPLAY_NAME = 'File';
 
 /** Edge id on the invocation that fans out one position per uploaded file. */
 export const MANUAL_FILES_FIELD = 'files';
+
+/**
+ * A file carried by a manual invocation. The invocation service streams the
+ * bytes into document storage (`services.document.upload`) and records the
+ * resulting internal `objectUri` here. The adapter surfaces `objectUri` as the
+ * file resource's owner-resolvable byte handle (its `FileRef`'s handle) — the
+ * same role the email attachment `key` plays.
+ */
+export interface ManualFile {
+  /** Internal storage handle (`services.document.upload` → `objectUri`).
+   *  The owner-resolvable byte handle — surfaces as the resource id. */
+  objectUri: string;
+  /** Display filename, including extension. */
+  filename: string;
+  /** MIME content-type, e.g. `application/pdf`. */
+  contentType: string;
+  /** Size in bytes when known. */
+  size?: number;
+}
+
+/** What a Run-now injection carries as the trigger event's payload. The
+ *  superset of the actor-only manual run and the former web submission: a run
+ *  may OPTIONALLY carry text and/or files. */
+export interface ManualInvocationPayload {
+  /** When the run was requested (ISO, UTC). */
+  firedAt: string;
+  /** Email of the workspace member who pressed Run now, when known —
+   *  drives `@actor_*` / `@user_*` resolution. */
+  actorEmail?: string;
+  /** Display name of the initiating member, when known. */
+  actorName?: string;
+  /** Free-form text typed when running the movement (optional). */
+  text?: string;
+  /** Files attached when running the movement — zero or more. */
+  files?: ManualFile[];
+  /** A stable id for this invocation, when the invocation service mints one
+   *  (carried so file/text resource ids stay stable across re-fetches). */
+  submissionId?: string;
+}
 
 /**
  * Static manifest. Source-only, credential-free, no subscribable events
@@ -84,9 +170,19 @@ export const MANUAL_MANIFEST: AdapterManifest = {
   },
 };
 
-export class ManualSurface extends BaseAdapter implements Adapter {
+export class ManualAdapter extends BaseAdapter implements Adapter {
   readonly adapterType = MANUAL_ADAPTER_TYPE;
   readonly supportedTriggers = MANUAL_MANIFEST.supportedTriggers;
+  /** Unstable invocation positions resolve to the invocation type. */
+  readonly webhookEventTypeId = MANUAL_INVOCATION_TYPE_ID;
+
+  // teamId: the team whose stored documents its files may be read from.
+  constructor(
+    private readonly teamId: string,
+    private readonly readDocument: ReadTeamDocument,
+  ) {
+    super();
+  }
 
   async listEntryPoints(): Promise<SchemaEntryPoint[]> {
     // The natural names (`Invocation` / `File`, TitleCase) are the currency
@@ -118,6 +214,43 @@ export class ManualSurface extends BaseAdapter implements Adapter {
         readable: false,
       },
     ];
+  }
+
+  /**
+   * The root: a way to be run, and the invocation that arrives when someone
+   * runs it. Note that `File` is NOT here — a supplied file is reached only
+   * along the invocation's `Files` edge, so the walk arrives at it one hop in
+   * and never advertises a root read that could not work.
+   */
+  private static readonly ROOT: SchemaTypeDescriptor = {
+    typeId: META_RECORD_TYPE,
+    displayName: 'Run',
+    description:
+      'Running this automation by hand. Nothing here can be listed — there is ' +
+      'no history to browse; the one way in is somebody pressing Run, which ' +
+      'delivers the invocation whole.',
+    fields: [],
+    references: [
+      {
+        fieldId: MANUAL_INVOCATION_TYPE_ID,
+        targetTypeId: MANUAL_INVOCATION_TYPE_ID,
+        cardinality: 'one',
+        direction: 'outgoing',
+        name: MANUAL_INVOCATION_DISPLAY_NAME,
+        fires: true,
+        readable: false,
+        description: 'Somebody running the automation — what a listen delivers.',
+      },
+    ],
+  };
+
+  async edgesFrom(position: SourcePosition): Promise<EdgesFromResult | null> {
+    return uniformWalk({
+      adapterType: MANUAL_ADAPTER_TYPE,
+      at: position,
+      root: ManualAdapter.ROOT,
+      describe: (typeId) => this.describe(typeId),
+    });
   }
 
   async describe(typeRef: string): Promise<SchemaTypeDescriptor | null> {
@@ -169,4 +302,148 @@ export class ManualSurface extends BaseAdapter implements Adapter {
     }
     return null;
   }
+
+  async getFieldValue(input: { position: SourcePosition; fieldId: string }): Promise<unknown> {
+    if (input.position.adapterType !== MANUAL_ADAPTER_TYPE) {
+      throw new Error(
+        `ManualAdapter.getFieldValue received a position from a different adapter ('${input.position.adapterType}').`,
+      );
+    }
+    // The program names the field by its NATURAL displayName ('Fired at',
+    // 'Run by (email)', 'Text', 'Content'); the payload is keyed by the internal
+    // field id. Resolve natural→internal against the position's natural type on
+    // the first line (Decision #3). The dispatch layer seeds a typeless
+    // invocation (`recordType: null`); treat that as the invocation type.
+    const typeId = await this.resolveTypeRef(input.position.recordType ?? MANUAL_INVOCATION_TYPE_ID);
+    const fieldId = await this.resolveFieldId(input.position, input.fieldId);
+
+    if (typeId === MANUAL_FILE_TYPE_ID) {
+      const file = (positionData(input.position) ?? {}) as Partial<ManualFile>;
+      // `name` is a friendly alias for `filename`.
+      if (fieldId === 'name') return file.filename ?? null;
+      // The `File` (`data`) field is the binary primitive — a `FileRef`
+      // descriptor, the same FileRef the retired input-side `_resources`
+      // bundle built. This is what
+      // `go-[:Files]->.\`File\`` evaluates so file bytes reach extraction /
+      // carry-forward; the owner redeems the handle in `resolveFileRef`.
+      if (fieldId === 'data') return manualFileRef(file);
+      return (file as Record<string, unknown>)[fieldId] ?? null;
+    }
+
+    const payload = (positionData(input.position) ?? {}) as Partial<ManualInvocationPayload>;
+    // `content` is a friendly alias for the supplied text.
+    if (fieldId === 'content') return payload.text ?? '';
+    return (payload as Record<string, unknown>)[fieldId] ?? null;
+  }
+
+  // ── Reference traversal (files) ──────────────────────────────────────────
+  // The `-[:Files]->` domain edge yields file-typed positions (the navigable
+  // file nodes). The source content that fed an extraction is reached
+  // explicitly off the extracted node (`extractedNode-[:_resources]->`), not
+  // off the input position — input is read by hand (`go.\`Text\``, the files
+  // edge).
+
+  async getRelated(input: GetRelatedInput): Promise<RelatedResult[]> {
+    if (input.position.adapterType !== MANUAL_ADAPTER_TYPE) {
+      throw new Error(
+        `ManualAdapter.getRelated received a position from a different adapter ('${input.position.adapterType}').`,
+      );
+    }
+    if (input.direction !== 'outgoing') return [];
+
+    // The `Files` edge — resolve the NATURAL edge name to this adapter's read
+    // currency. The invocation seeds typeless (`recordType: null`); treat that
+    // as the invocation type so a typeless seed still fans its files out.
+    const edgeId = await this.resolveEdgeReadId(
+      input.position.recordType ?? MANUAL_INVOCATION_TYPE_ID,
+      input.fieldId,
+    );
+    if (edgeId === MANUAL_FILES_FIELD) {
+      const payload = (positionData(input.position) ?? {}) as Partial<ManualInvocationPayload>;
+      return (payload.files ?? []).map((file) => ({
+        position: makeUnstablePosition({
+          adapterType: MANUAL_ADAPTER_TYPE,
+          // A fanned position carries the NATURAL type name (THE ONE RULE,
+          // base.ts) so its field reads resolve through the resolver.
+          recordType: MANUAL_FILE_DISPLAY_NAME,
+          data: file,
+        }),
+      }));
+    }
+
+    return [];
+  }
+
+  // ── Actor parsing — the initiating member feeds @user_* / @actor_* ──
+
+  async getActorCandidates(input: { event: TriggerEvent }): Promise<ActorCandidate[]> {
+    const payload = (input.event.payload ?? {}) as Partial<ManualInvocationPayload>;
+    const email = payload.actorEmail?.trim().toLowerCase();
+    if (!email || !email.includes('@')) return [];
+    return [
+      {
+        identity: { identifier: email, scheme: 'email', adapterType: this.adapterType, email },
+        source: 'originator',
+      },
+    ];
+  }
+
+  async extractActor(input: { event: TriggerEvent }): Promise<ActorIdentity | null> {
+    const payload = (input.event.payload ?? {}) as Partial<ManualInvocationPayload>;
+    const email = payload.actorEmail?.trim().toLowerCase();
+    if (!email || !email.includes('@')) return null;
+    return {
+      identifier: email,
+      scheme: 'email',
+      adapterType: this.adapterType,
+      email,
+      name: payload.actorName ?? undefined,
+      label: payload.actorName ?? email,
+    };
+  }
+
+  // ── Byte resolution (owner-side) ─────────────────────────────────────────
+  // Manual OWNS the FILE resources it emits: the host redeems their handle
+  // here. The handle is the file's storage `objectUri`
+  // — the value the invocation service got back from `services.document.upload`.
+  //
+  // owners serve bytes
+  async resolveFileRef(input: { ref: FileRef }): Promise<ResolveFileRefResult> {
+    const handle = fileHandle(input.ref);
+    if (!handle) {
+      throw new Error(
+        `${MANUAL_ADAPTER_TYPE}.resolveFileRef: FileRef has no source handle to resolve.`,
+      );
+    }
+    // The handle is a stored document's key: read through the store's own
+    // ownership check, as the team's or not at all.
+    return this.readDocument({ ...input.ref, source: { store: 'document', objectUri: handle } }, { teamId: this.teamId });
+  }
+}
+
+/**
+ * The `File` primitive for a manual upload — a `FileRef` descriptor whose
+ * handle is the file's storage `objectUri`, redeemed through the owner
+ * (`resolveFileRef`). Returns null when the file row carries no storage
+ * handle.
+ */
+function manualFileRef(file: Partial<ManualFile>): FileRef | null {
+  if (!file.objectUri || !file.filename) return null;
+  const objectUri = file.objectUri;
+  return {
+    __brand: 'FileRef',
+    name: file.filename,
+    contentType: file.contentType,
+    size: file.size,
+    source: ownedFileSource({ adapterType: MANUAL_ADAPTER_TYPE, handle: objectUri }),
+  };
+}
+
+/** How the host reads a stored document back for a team: through the
+ *  store's own ownership check, as the team's or not at all. */
+export type ReadTeamDocument = (ref: FileRef, options: { teamId: string }) => Promise<ResolveFileRefResult>;
+
+/** Factory matching the registry's AdapterFactory signature. */
+export function createManualAdapter(input: { teamId: string; readDocument: ReadTeamDocument }): ManualAdapter {
+  return new ManualAdapter(input.teamId, input.readDocument);
 }

@@ -95,6 +95,7 @@ import {
   type PinRoute,
 } from '../../../services/translation_graph/movement/language_route';
 import { providedFlagsFor } from '@listen-fire/language-versions';
+import { CARRIED_RUN_NOW_NAME } from '../../../services/translation_graph/movement/carried_run_now';
 import {
   LEGACY_PRESENTATION_MESSAGE,
   completeAt,
@@ -150,12 +151,13 @@ export async function movementRunsImpl(params: {
     .select(['id', 'name'])
     .execute();
 
-  if (triggerRows.length === 0) return [];
-
-  const triggerIds = triggerRows.map((r) => r.id as unknown as TriggerId);
-  const laneByTriggerId = new Map(
-    triggerRows.map((r) => [r.id as unknown as string, r.name]),
-  );
+  // A run someone started on a carried version is recorded under the
+  // movement's own id: there is no listen row for it.
+  const triggerIds = [...triggerRows.map((r) => r.id as unknown as TriggerId), movementId as unknown as TriggerId];
+  const laneByTriggerId = new Map<string, string>([
+    ...triggerRows.map((r) => [r.id as unknown as string, r.name] as const),
+    [movementId, CARRIED_RUN_NOW_NAME] as const,
+  ]);
 
   const runRows = await getAutomationsQb(['trigger_run'])
     .selectFrom('trigger_run')

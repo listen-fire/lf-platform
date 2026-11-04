@@ -32,7 +32,8 @@ import { describeError } from 'movement-engine/public/errors';
 import { logger } from 'movement-engine/public/log';
 import { refuseHeldRun, runMovement, resumeMovement, settleRaceFrame } from '@listen-fire/legacy-engine/dispatch';
 import { MovementRunFailed, runFailureCause, type CancelGate, type MovementRunResult } from 'movement-engine/public/movement-engine';
-import { makeDbCancelGate } from '../../movement_engine/cancel_gate';
+import { makeDbCancelGate, type DbCancelGate } from '../../movement_engine/cancel_gate';
+import { carriedRunLaneOf, runCarriedSegment } from './carried_run';
 import { failRunAndCancelRequests } from '../../interaction/run_failure';
 import { LlmUsageContext } from '../../../lib/llm_usage';
 import { runCostCapFromEnv } from 'movement-engine/public/models';
@@ -79,7 +80,7 @@ async function interpretMovementFiring(input: {
   parksInto?: TriggerRunRecorder;
   /** The cooperative cancel gate (runs-and-cancel spec §cancel) — stops the run
    *  at the next statement / LLM-call boundary on a user cancel. */
-  cancelGate: CancelGate;
+  cancelGate: DbCancelGate;
   /** The array the run appends its decision trace to — supplied so a caller can
    *  publish the trace WHILE the run is going, not only once it settles. */
   trace?: MovementTraceEntry[];
@@ -89,6 +90,27 @@ async function interpretMovementFiring(input: {
    *  the waits it opened on the trigger read from there. */
   triggerMark?: number;
 }): Promise<MovementRunResult> {
+  // A pin a carried version runs is run by that version's own engine and
+  // modules: this release's catalog and parser never read its text.
+  const carried = await carriedRunLaneOf(input.version.languageVersion);
+  if (carried !== undefined) {
+    return runCarriedSegment({
+      lane: carried,
+      teamId: input.teamId,
+      source: input.version.source,
+      pin: input.version.languageVersion,
+      ...(input.movementName !== undefined ? { movementName: input.movementName } : {}),
+      event: input.event,
+      firedAt: input.firedAt,
+      triggerRunId: input.triggerRunId,
+      imports: 'shipped',
+      cancel: input.cancelGate,
+      ...(input.lease !== undefined ? { lease: input.lease } : {}),
+      ...(input.trace !== undefined ? { trace: input.trace } : {}),
+      ...(input.dryRun !== undefined ? { dryRun: input.dryRun } : {}),
+      costCapMicrodollars: runCostCapFromEnv(),
+    });
+  }
   // A pin this build does not run is refused before its text reaches this
   // release's catalog.
   refuseHeldRun(input.version.languageVersion);

@@ -1,6 +1,5 @@
-// The system adapter as production ran it at 0.12 (`@lf/system`): the platform
-// itself as a system an automation can listen to. Its whole surface is static,
-// so this package describes it from here; its poll is the running half.
+// The system adapter's read surface: the platform itself as a system an
+// automation can listen to.
 //
 //   sys = system()
 //   listen to sys { events: ["Run Failed"] } fire `Report Failure`

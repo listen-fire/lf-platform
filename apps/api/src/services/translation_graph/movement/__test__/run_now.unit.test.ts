@@ -18,6 +18,7 @@
 require('engine-contracts/expression/schemas');
 
 jest.mock('../store', () => ({ getMovementRow: jest.fn() }));
+jest.mock('../carried_run_now', () => ({ CARRIED_RUN_NOW_NAME: 'Run now', queueCarriedRunNow: jest.fn() }));
 
 jest.mock('../../../../adapters/registry', () => ({
   services: { document: { upload: jest.fn() } },
@@ -268,10 +269,29 @@ describe('runMovementAsync', () => {
       teamId: TEAM,
       name: 'backfill',
       source: 'function echo(run: <manual-[:Invocation]->>) {\n  return run.Text\n}\nlisten to manual fire echo\n',
-      languageVersion: '0.12.13',
+      languageVersion: '0.13.0',
     });
     const result = await runMovementAsync({ teamId: TEAM, movementId: MOVEMENT_ID });
-    expect(result).toEqual({ ok: false, errors: [runRefusal('0.12.13')] });
+    expect(result).toEqual({ ok: false, errors: [runRefusal('0.13.0')] });
+    expect(savedListens).not.toHaveBeenCalled();
+  });
+
+  it("a movement pinned to 0.12 is queued on 0.12's run host, its manual listen read by 0.12's parser", async () => {
+    const row = {
+      id: MOVEMENT_ID,
+      teamId: TEAM,
+      name: 'backfill',
+      source: 'function echo(run: <manual-[:Invocation]->>) {\n  return run.Text\n}\nlisten to manual fire echo\n',
+      languageVersion: '0.12.13',
+    };
+    getMovementRow.mockResolvedValueOnce(row);
+    const { queueCarriedRunNow } = jest.requireMock('../carried_run_now') as { queueCarriedRunNow: jest.Mock };
+    queueCarriedRunNow.mockResolvedValueOnce({ ok: true, runId: 'run-012', status: 'running', movementName: 'echo' });
+    const result = await runMovementAsync({ teamId: TEAM, movementId: MOVEMENT_ID, text: 'hello', requestId: 'press-1' });
+    expect(result).toEqual({ ok: true, runId: 'run-012', status: 'running', movementName: 'echo' });
+    expect(queueCarriedRunNow).toHaveBeenCalledWith(
+      expect.objectContaining({ movementId: MOVEMENT_ID, pin: '0.12.13', requestId: 'press-1', invocation: expect.objectContaining({ text: 'hello' }) }),
+    );
     expect(savedListens).not.toHaveBeenCalled();
   });
 

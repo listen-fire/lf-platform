@@ -32,18 +32,27 @@ import {
   type Program,
 } from '@listen-fire/movement-lang';
 
-import { SystemAdapter } from '../modules/system/surface';
+import { SystemAdapter } from '../modules/system/adapter';
 import { SYSTEM_MANIFEST } from '../modules/system/manifest';
-import { CRON_MANIFEST, CronSurface } from '../units/cron';
-import { MANUAL_MANIFEST, ManualSurface } from '../units/manual';
+import { CRON_MANIFEST, createCronAdapter } from '../units/cron';
+import { MANUAL_MANIFEST, createManualAdapter } from '../units/manual';
 import { manifestsOf } from './manifests';
 import type { CheckGap, TeamFacts } from './types';
 
 /** The adapters whose whole surface is static, described as production's
  *  adapters described themselves. */
 const DESCRIBED: readonly { manifest: AdapterManifest; adapter: Adapter }[] = [
-  { manifest: CRON_MANIFEST, adapter: new CronSurface() },
-  { manifest: MANUAL_MANIFEST, adapter: new ManualSurface() },
+  // Describing reads no team's records: no team, and no document read.
+  { manifest: CRON_MANIFEST, adapter: createCronAdapter({ teamId: '' }) },
+  {
+    manifest: MANUAL_MANIFEST,
+    adapter: createManualAdapter({
+      teamId: '',
+      readDocument: async () => {
+        throw new Error('the manual unit reads no file while it is described');
+      },
+    }),
+  },
   { manifest: SYSTEM_MANIFEST, adapter: new SystemAdapter() },
 ];
 

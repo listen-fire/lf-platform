@@ -16,7 +16,7 @@ import type { MovementRunResult } from 'movement-engine/public/movement-engine';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
-import type { WorkHandler } from '../../work/kinds';
+import { QUEUED_RUN_WORK_KINDS, type WorkHandler } from '../../work/kinds';
 
 import { isWriteEffect, type MovementTraceEntry } from 'movement-engine/public/trace';
 import { SECOND } from '../../../constants';
@@ -1060,7 +1060,7 @@ export async function settleOrphanedRunningRuns(): Promise<void> {
     .where(
       sql<boolean>`NOT (trigger_run.last_heartbeat_at IS NULL AND EXISTS (
         SELECT 1 FROM automations.work
-        WHERE work.host = 'platform' AND work.kind = 'fire_event' AND work.payload->>'runId' = trigger_run.id::text))`,
+        WHERE work.host = 'platform' AND work.kind IN (${sql.join([...QUEUED_RUN_WORK_KINDS])}) AND work.payload->>'runId' = trigger_run.id::text))`,
     )
     .select(['id', 'failure_reason'])
     .execute();

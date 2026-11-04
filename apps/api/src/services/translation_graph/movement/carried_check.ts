@@ -21,18 +21,33 @@ import { WHATSAPP_MOVEMENTS_NUMBER } from '../adapters/whatsapp/shared_app';
 import { dedupeDiagnostics, toAuthoringDiagnostic } from './authoring_diagnostic';
 import { loadCredentialRows } from './catalog';
 import { listMovementRows } from './store';
+import { listShippedFiles } from './version_store';
+import { neverAsAny } from 'movement-engine/public/types';
 
-/** What the platform knows of the team, read now. */
-export async function teamFactsOf(teamId: string): Promise<TeamFacts> {
-  const [credentials, rows] = await Promise.all([loadCredentialRows(teamId as TeamId), listMovementRows(teamId)]);
+/** What the platform knows of the team, read now. Its files are their live
+ *  text (what an edit checks and a test run imports), or their shipped text
+ *  (what a firing imports: a file that never shipped is not there). */
+export async function teamFactsOf(teamId: string, options: { imports?: 'live' | 'shipped' } = {}): Promise<TeamFacts> {
+  const [credentials, files] = await Promise.all([loadCredentialRows(teamId as TeamId), teamFilesOf(teamId, options.imports ?? 'live')]);
   return {
     credentials,
-    files: rows.map((row) => ({ name: row.name, source: row.source, languageVersion: row.languageVersion })),
+    files,
     connectOf: (type) => (isCredentialType(type) ? connectMethodForType(type) : 'app-only'),
     kgChangeWebhooks: mutationDelivery() === 'webhook',
     mcpEnabled: MCP_CONNECTIONS_ENABLED,
     whatsappNumber: WHATSAPP_MOVEMENTS_NUMBER,
   };
+}
+
+async function teamFilesOf(teamId: string, imports: 'live' | 'shipped'): Promise<TeamFacts['files']> {
+  switch (imports) {
+    case 'live':
+      return (await listMovementRows(teamId)).map((row) => ({ name: row.name, source: row.source, languageVersion: row.languageVersion }));
+    case 'shipped':
+      return listShippedFiles(teamId);
+    default:
+      return neverAsAny(imports);
+  }
 }
 
 /** A reader of team facts that reads each team once for its own life: a

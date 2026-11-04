@@ -34,6 +34,9 @@ import { tenantOfTeam } from './tenant';
 import { inMemoryRawTextStore } from './raw_text_store';
 import { InMemoryWriteLocks } from 'movement-engine/public/write-locks';
 import { getMovementRow } from './store';
+import { carriedRunLaneOf, runCarriedSegment } from './carried_run';
+import { describeError } from 'movement-engine/public/errors';
+import { runFailureCause } from 'movement-engine/public/movement-engine';
 
 /** A source field the synthetic payload should be keyed by — pulled from the
  *  source adapter's `describe` so the inventor returns the adapter's own field
@@ -102,6 +105,11 @@ export async function runMovementTestRun(
     };
   }
 
+  // A pin a carried version runs is rehearsed by that version (its manual
+  // listen); this release's catalog and model never read its text.
+  if ((await carriedRunLaneOf(movementRow.languageVersion)) !== undefined) {
+    return runCarriedTestRun({ teamId: input.teamId, movementId: movementRow.id, ...(input.seed !== undefined ? { text: input.seed } : {}) });
+  }
   // A pin this build does not run is refused before anything reads the
   // program: no introspection of its source, no model inventing an event.
   const refusal = heldRunRefusal(movementRow.languageVersion);
@@ -297,4 +305,61 @@ function parseJsonObject(text: string): Record<string, unknown> | null {
   } catch {
     return null;
   }
+}
+
+// ── A carried version's test run ────────────────────────────────────────────
+
+/**
+ * A test run of an automation a carried version runs: its manual listen's run
+ * rehearsed on the version's own engine and modules, from the LIVE text and
+ * its imports' live text, every write captured rather than made. The press is
+ * the version's own manual event, carrying `text` when given; no model
+ * invents it, since a manual listen's event is what the person types. A
+ * carried version's other listens do not fire on this platform, so they have
+ * no test run here.
+ */
+export async function runCarriedTestRun(input: {
+  teamId: TeamId;
+  movementId: string;
+  text?: string;
+}): Promise<MovementTestRunResult> {
+  const row = await getMovementRow({ teamId: input.teamId as unknown as string, id: input.movementId });
+  if (!row) return { ok: false, error: `This automation (${input.movementId}) is missing.` };
+  const lane = await carriedRunLaneOf(row.languageVersion);
+  if (lane === undefined) {
+    return { ok: false, error: `This automation is on language ${row.languageVersion}, which no carried version runs; test it from its listens.` };
+  }
+  const [movementName] = lane.manualListens({ source: row.source, pin: row.languageVersion });
+  if (movementName === undefined) {
+    return {
+      ok: false,
+      error: `'${row.name}' has no manual listen under language ${row.languageVersion}: a test run rehearses its manual listen (\`listen to manual fire <movement>\`)`,
+    };
+  }
+  const invocation = {
+    firedAt: new Date().toISOString(),
+    submissionId: `test-run:${row.id}`,
+    ...(input.text !== undefined && input.text.trim() !== '' ? { text: input.text.trim() } : {}),
+  };
+  const writes: MovementTestRunWrite[] = [];
+  try {
+    await runCarriedSegment({
+      lane,
+      teamId: input.teamId,
+      source: row.source,
+      pin: row.languageVersion,
+      movementName,
+      event: lane.manualInvocationEvent({ key: `test-run:${row.id}`, invocation }),
+      firedAt: new Date(),
+      imports: 'live',
+      // A test run is nobody's to cancel and holds no lease.
+      cancel: { cancelled: async () => false, cancelledNow: async () => false, reason: () => null },
+      dryRun: true,
+      writeSink: (write) => writes.push(write),
+      costCapMicrodollars: runCostCapFromEnv(),
+    });
+  } catch (err) {
+    return { ok: false, error: describeError(runFailureCause(err)) };
+  }
+  return { ok: true, event: { ...invocation }, writes, notes: [] };
 }

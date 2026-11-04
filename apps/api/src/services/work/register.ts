@@ -10,6 +10,7 @@ import { registerPollWork } from '../poll_source/worker';
 import { registerListenSubscriptionWork } from '../translation_graph/movement/listen_subscriptions';
 import { registerRunOrphanSweepWork } from '../translation_graph/runs/trigger_run';
 import { registerFireEventWork } from '../inbound/fire_event';
+import { registerCarriedRunWork } from '../translation_graph/movement/carried_run_now';
 import { periodicUnitWorkKinds, type CoreWorkKind } from './kinds';
 import { ensurePeriodicWork, removeRetiredWork } from './store';
 
@@ -52,6 +53,7 @@ function registerCoreWork(): void {
   registerPollWork();
   registerListenSubscriptionWork();
   registerFireEventWork();
+  registerCarriedRunWork();
   registerAwaitWork();
   registerRunOrphanSweepWork();
 }

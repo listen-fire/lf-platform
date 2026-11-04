@@ -1,6 +1,8 @@
-// The ask vocabulary: the families, the answer types and the lattice states,
-// as production's `@lf/ask` declared them at 0.12. The record a host keeps for
-// an ask is the module's running half, which this package does not carry.
+// The ask vocabulary: the families, the answer types, the lattice states, and
+// the record every host keeps for an ask. Data only, so a host's own surfaces
+// (a link page, a list of open asks) can read it without the adapter.
+
+import { z } from 'zod';
 
 /** The adapter type the module answers to — the tag every saved movement's
  *  `ask()` resolves to. Never renamed. */
@@ -57,4 +59,42 @@ export interface AskProvenance {
 export interface AskRowSpec {
   ephemeralId: string;
   fields: Record<string, unknown>;
+}
+
+const askRowSpecSchema = z.object({
+  ephemeralId: z.string(),
+  fields: z.record(z.string(), z.unknown()),
+});
+
+/** An ask as the module keeps it in its host's kv (`ask:<id>`). Times are
+ *  ISO-8601, so the record is the same JSON on every host. */
+export const askRecordSchema = z.object({
+  id: z.string().uuid(),
+  family: z.enum(ASK_FAMILIES),
+  answerType: z.enum(ASK_ANSWER_TYPES).nullable(),
+  prompt: z.string(),
+  detail: z.string().nullable(),
+  /** Choose/Select: the offered options. Form: the named fields it collects.
+   *  Immutable once written. */
+  options: z.array(z.string()).nullable(),
+  /** Correct only — the records offered for review (immutable). */
+  rows: z.array(askRowSpecSchema).nullable(),
+  state: z.enum(ASK_STATES),
+  answer: z.unknown().optional(),
+  token: z.string(),
+  tokenExpiresAt: z.string(),
+  provenance: z.record(z.string(), z.unknown()),
+  createdAt: z.string(),
+  answeredAt: z.string().nullable(),
+  expiredAt: z.string().nullable(),
+});
+
+export type StoredAsk = z.infer<typeof askRecordSchema>;
+
+/** A stored ask with the link its host answers it at. */
+export interface AskRecord extends StoredAsk {
+  family: AskFamily;
+  /** The capability link the author delivers — the ONLY delivery affordance
+   *  (the module renders nothing, sends nothing). */
+  url: string;
 }

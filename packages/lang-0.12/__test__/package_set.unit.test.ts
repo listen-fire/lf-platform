@@ -58,7 +58,10 @@ function coreUsedBy(dir: string): string[] {
   return [...used];
 }
 
-const named = Object.keys(manifest(ROOT).dependencies ?? {});
+/** The packages of the set: everything it names but the libraries its own
+ *  copies of the platform's modules use, which carry no core of their own. */
+const LIBRARIES: readonly string[] = ['zod'];
+const named = Object.keys(manifest(ROOT).dependencies ?? {}).filter((n) => !LIBRARIES.includes(n));
 
 describe('the 0.12 package set', () => {
   it('names its release', () => {

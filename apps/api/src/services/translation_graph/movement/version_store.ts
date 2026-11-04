@@ -276,3 +276,15 @@ export async function listMovementVersions(input: {
     languageVersion: row.language_version,
   }));
 }
+
+/** Every file of the team that has shipped, at its shipped text and pin: what
+ *  a firing's imports resolve against. */
+export async function listShippedFiles(teamId: string): Promise<{ name: string; source: string; languageVersion: LanguageVersion }[]> {
+  const rows = await getAutomationsQb(['movement', 'movement_version'])
+    .selectFrom('movement')
+    .innerJoin('movement_version', 'movement_version.id', 'movement.current_version_id')
+    .where('movement.team_id', '=', teamId)
+    .select(['movement.name as name', 'movement_version.source as source', 'movement_version.language_version as language_version'])
+    .execute();
+  return rows.map((row) => ({ name: row.name, source: row.source, languageVersion: row.language_version }));
+}

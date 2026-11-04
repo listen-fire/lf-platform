@@ -116,6 +116,7 @@ import {
 } from './authoring';
 import { checkInstalled, routeOf } from './language_route';
 import { notListenedDiagnostic, validateUnderCarried } from './carried_check';
+import { carriedRunLaneOf } from './carried_run';
 import { plannedListensOfSource } from './listen_plans';
 import { listenConfigSchema, type ListenConfig, type SavedListen } from '../../inbound/listen_door';
 import { resolveAndArm, resolvesListen } from '../../inbound/listen_resolve';
@@ -1298,7 +1299,10 @@ export interface MovementListItem {
 /** Whether "Run now" has anything to invoke: a MANUAL-channel listener
  *  in the SOURCE — execution injects an invocation event on its derived
  *  trigger row (uniform dispatch). */
-function isRunnable(row: MovementRow): boolean {
+async function isRunnable(row: MovementRow): Promise<boolean> {
+  // A pin a carried version runs: its own parser reads its manual listens.
+  const carried = await carriedRunLaneOf(row.languageVersion);
+  if (carried !== undefined) return carried.manualListens({ source: row.source, pin: row.languageVersion }).length > 0;
   const route = routeOf(row.languageVersion);
   // A pin this platform does not run has nothing "Run now" can start.
   if (route.kind === 'refused' || route.kind === 'carried') return false;
@@ -1320,7 +1324,7 @@ export async function listMovements(teamId: string): Promise<MovementListItem[]>
     teamId: teamId as TeamId,
     triggerIds: [...listenersByMovement.values()].flat().map((l) => l.id),
   });
-  return rows.map((row) => {
+  return Promise.all(rows.map(async (row) => {
     const listeners = (listenersByMovement.get(row.id) ?? []).map((l) => toListenerInfo(l, pauses));
     return {
       id: row.id,
@@ -1332,12 +1336,12 @@ export async function listMovements(teamId: string): Promise<MovementListItem[]>
       upgradeDiagnostics: pendingUpgradeDiagnostics(row),
       kind: listeners[0]?.kind ?? null,
       listeners,
-      runnable: isRunnable(row),
+      runnable: await isRunnable(row),
       facets: movementFileFacets(row.source),
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
-  });
+  }));
 }
 
 export interface MovementDetail extends MovementRow {
@@ -1373,7 +1377,7 @@ export async function getMovement(input: {
     listeners,
     kind: listeners[0]?.kind ?? null,
     inboundAddress: listeners[0]?.inboundAddress ?? null,
-    runnable: isRunnable(row),
+    runnable: await isRunnable(row),
     revision: movementSourceHash(row.source),
   };
 }

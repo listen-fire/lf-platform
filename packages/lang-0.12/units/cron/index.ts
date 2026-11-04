@@ -1,16 +1,51 @@
-// The cron unit as production described it at 0.12: its manifest, and the
-// describing half of its adapter (`listEntryPoints`, `describe`). Ticks are
-// produced by the scheduler, the running half, which this package does not
-// carry.
+// Cron adapter — the time intrinsic. Time collapses into adapters
+// (3_syntax_sketch.md "Composition, time, queries, failure"): a movement
+// that should run on a schedule constructs a cron instance and listens to
+// it —
 //
-//   listen to cron { schedule: "0 9 * * 1" } fire digest
+//   timer = cron()
+//   listen to timer { schedule: "0 9 * * 1" } fire digest
+//
+// The schedule is ordinary listen routing config (validated like any
+// adapter's — five-field cron, see movement-lang/cron); the fired
+// movement's parameter is the Tick position (`t: <timer-[:Tick]->>`). An
+// optional `timezone` (IANA id, e.g. `Europe/London`) interprets the
+// schedule as local wall-clock time with DST handled automatically —
+//
+//   listen to timer { schedule: "0 9 * * 1", timezone: "Europe/London" }
+//
+// Absent ⇒ UTC.
+//
+// Source-only and credential-free: there is no external system. Events
+// are emitted by the platform's own movement scheduler
+// (services/movement_scheduler/worker.ts), which scans the cron-derived
+// trigger rows and dispatches a tick through the normal trigger path —
+// uniform dispatch, uniform trigger_run recording.
+//
+// `ensureEventSubscription` exists so cron provisioning rides the SAME
+// listen-reconciliation seam external webhooks ride (listen_subscriptions
+// diff-syncs a subscription row per channel). It is a documented
+// platform-internal registration: nothing external is called — the
+// subscription row simply records that the platform's scheduler is the
+// registered event source for this channel.
 
-import type { Adapter, AdapterManifest } from '@listen-fire/engine/public/adapter';
-import type { SchemaEntryPoint, SchemaTypeDescriptor } from '@listen-fire/engine/public/catalog';
+import type {
+  Adapter,
+  AdapterManifest,
+  EdgesFromResult,
+  EnsureEventSubscriptionInput,
+  EventSubscriptionRegistration,
+} from '@listen-fire/engine/public/adapter';
+import type {
+  SchemaEntryPoint,
+  SchemaTypeDescriptor,
+  SourcePosition,
+} from '@listen-fire/engine/public/catalog';
 
-import { BaseAdapter } from '@listen-fire/module-kit/adapter/base';
-
+import { uniformWalk } from '@listen-fire/module-kit/adapter/hop';
 import { CRON_HANDBOOK_SECTION } from './handbook_section';
+import { META_RECORD_TYPE, positionData } from '@listen-fire/engine/public/catalog';
+import { BaseAdapter } from '@listen-fire/module-kit/adapter/base';
 
 /** Stable adapter identifier — the trigger `kind` of cron-derived rows. */
 export const CRON_ADAPTER_TYPE = 'cron';
@@ -27,6 +62,14 @@ export const CRON_TICK_DISPLAY_NAME = 'Tick';
 
 /** The one subscribable event — what the platform scheduler emits. */
 export const CRON_TICK_EVENT = 'tick';
+
+/** What a scheduler firing carries as the trigger event's payload. */
+export interface CronTickPayload {
+  /** The scheduled occurrence this tick fired for (ISO, UTC). */
+  firedAt: string;
+  /** The listener's schedule, for display/debugging. */
+  schedule: string;
+}
 
 /**
  * Static manifest. Source-only, credential-free. `listenConfig` declares
@@ -72,9 +115,18 @@ export const CRON_MANIFEST: AdapterManifest = {
   },
 };
 
-export class CronSurface extends BaseAdapter implements Adapter {
+export class CronAdapter extends BaseAdapter implements Adapter {
   readonly adapterType = CRON_ADAPTER_TYPE;
   readonly supportedTriggers = CRON_MANIFEST.supportedTriggers;
+  /** Unstable tick positions resolve to the tick type. */
+  readonly webhookEventTypeId = CRON_TICK_TYPE_ID;
+
+  // teamId is accepted for parity with other adapters; cron has no
+  // per-team configuration.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  constructor(private readonly teamId: string) {
+    super();
+  }
 
   async listEntryPoints(): Promise<SchemaEntryPoint[]> {
     // The natural name (`Tick`, TitleCase) is the currency authors, the
@@ -99,6 +151,41 @@ export class CronSurface extends BaseAdapter implements Adapter {
     ];
   }
 
+  /**
+   * The smallest graph there is: a schedule, and the tick it delivers. Nothing
+   * enumerates ticks, so the single edge leaving the root is one you are fired
+   * along — which is the honest shape of a timer, not a gap in it.
+   */
+  private static readonly ROOT: SchemaTypeDescriptor = {
+    typeId: META_RECORD_TYPE,
+    displayName: 'Schedule',
+    description:
+      'A schedule. There is nothing here to list — a schedule holds no data; ' +
+      'it fires, and the tick it delivers is the only way in.',
+    fields: [],
+    references: [
+      {
+        fieldId: CRON_TICK_TYPE_ID,
+        targetTypeId: CRON_TICK_TYPE_ID,
+        cardinality: 'one',
+        direction: 'outgoing',
+        name: CRON_TICK_DISPLAY_NAME,
+        fires: true,
+        readable: false,
+        description: 'The schedule firing — what a listen delivers.',
+      },
+    ],
+  };
+
+  async edgesFrom(position: SourcePosition): Promise<EdgesFromResult | null> {
+    return uniformWalk({
+      adapterType: CRON_ADAPTER_TYPE,
+      at: position,
+      root: CronAdapter.ROOT,
+      describe: (typeId) => this.describe(typeId),
+    });
+  }
+
   async describe(typeRef: string): Promise<SchemaTypeDescriptor | null> {
     const typeId = await this.resolveTypeRef(typeRef);
     if (typeId !== CRON_TICK_TYPE_ID) return null;
@@ -113,4 +200,43 @@ export class CronSurface extends BaseAdapter implements Adapter {
       references: [],
     };
   }
+
+  async getFieldValue(input: { position: SourcePosition; fieldId: string }): Promise<unknown> {
+    if (input.position.adapterType !== CRON_ADAPTER_TYPE) {
+      throw new Error(
+        `CronAdapter.getFieldValue received a position from a different adapter ('${input.position.adapterType}').`,
+      );
+    }
+    // The program names the field by its NATURAL displayName ('Fired at',
+    // 'Schedule'); the payload is keyed by the internal field id (`firedAt`,
+    // `schedule`). Resolve natural→internal against the position's natural type
+    // on the first line (Decision #3).
+    const fieldId = await this.resolveFieldId(input.position, input.fieldId);
+    const payload = (positionData(input.position) ?? {}) as Partial<CronTickPayload>;
+    return (payload as Record<string, unknown>)[fieldId] ?? null;
+  }
+
+  /**
+   * Platform-internal registration — there is no external system to call.
+   * The platform's own movement scheduler is the event source for every
+   * cron channel; this method exists so cron listens ride the same
+   * reconciliation seam as external webhook subscriptions, and the
+   * returned marker lands on the subscription row to say so honestly.
+   */
+  async ensureEventSubscription(
+    _input: EnsureEventSubscriptionInput,
+  ): Promise<EventSubscriptionRegistration> {
+    return { externalId: 'platform:movement-scheduler' };
+  }
+
+  /** The scheduler stops firing when the trigger rows retire — nothing
+   *  external to deregister. */
+  async removeEventSubscription(): Promise<void> {
+    // Documented no-op (see ensureEventSubscription).
+  }
+}
+
+/** Factory matching the registry's AdapterFactory signature. */
+export function createCronAdapter(input: { teamId: string }): CronAdapter {
+  return new CronAdapter(input.teamId);
 }

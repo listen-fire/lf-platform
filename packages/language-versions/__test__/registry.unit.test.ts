@@ -41,6 +41,15 @@ describe('the language versions this build carries', () => {
     expect(isCurrent(LANGUAGE_VERSION)).toBe(true);
   });
 
+  it('0.12 is checked and run by its own packages', async () => {
+    const running = runningOf('0.12.0');
+    expect(running.kind).toBe('carried');
+    if (running.kind !== 'carried') return;
+    const lane = await running.lane();
+    expect(typeof lane.runSegment).toBe('function');
+    expect(runRefusal('0.12.0')).toBeUndefined();
+  });
+
   it('0.12 is checked by its own checker; its resumes and listens are held, each refused by what it is', async () => {
     const checking = checkingOf('0.12.0');
     expect(checking.kind).toBe('carried');
@@ -51,7 +60,8 @@ describe('the language versions this build carries', () => {
     expect(isCurrent('0.12.0')).toBe(false);
     expect(resumeRefusal('0.12.4')).toMatch(/^this automation pins language 0\.12\.4: this platform carries 0\.12\.13 to .*but not to resume its parked runs/);
     expect(refusalOf('0.12.4', 'listen')).toMatch(/but not to fire its listens/);
-    expect(providedFlagsFor('0.12.4')).toMatchObject({ check: true, resume: false, listen: false });
+    expect(providedFlagsFor('0.12.4')).toEqual({ check: true, run: true, resume: false, listen: false });
+    expect(resumeRefusal('0.12.4')).toContain('to check and run its automations');
   });
 
   it('a key no entry carries and a text that is no version belong to none, and are refused in the language\'s own text', () => {

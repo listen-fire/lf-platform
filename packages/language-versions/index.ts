@@ -45,6 +45,10 @@ import {
   type LanguageVersion,
 } from 'movement-lang';
 
+import type { RunningLane } from './running';
+
+export * from './running';
+
 /** What a version's package set says about itself once loaded. */
 export interface VersionPackages {
   readonly LANGUAGE_VERSION: string;
@@ -145,10 +149,12 @@ export type CheckCapability = { kind: 'current' } | { kind: 'carried'; lane: () 
  * run, a validate-then-run.
  *
  * - `current`: the platform's own engine runs it.
+ * - `carried`: the version's own engine and modules run it, through its
+ *   package (`running.ts` states what crosses).
  * - `held`: the version is carried but does not run. Its runs are refused
  *   with the registry's text before anything reads the program.
  */
-export type RunCapability = { kind: 'current' } | { kind: 'held' };
+export type RunCapability = { kind: 'current' } | { kind: 'carried'; lane: () => Promise<RunningLane> } | { kind: 'held' };
 
 /** Whether a carried version resumes a run it parked: a timer, an ask, an
  *  await, a limit pause, a race settling. `held` refuses the resume, and a
@@ -215,7 +221,7 @@ const CARRIED: readonly CarriedVersion[] = [
     load: () => import('@listen-fire/lang-0.12'),
     provides: {
       check: { kind: 'carried', lane: () => import('@listen-fire/lang-0.12') },
-      run: HELD,
+      run: { kind: 'carried', lane: () => import('@listen-fire/lang-0.12') },
       resume: HELD,
       listen: HELD,
     },
@@ -346,6 +352,7 @@ export function refusalOf(pin: LanguageVersion, needed: RunningCapability): stri
   const capability = capabilityOf(pin, needed);
   switch (capability.kind) {
     case 'current':
+    case 'carried':
       return undefined;
     case 'held': {
       const version = versionOf(pin);

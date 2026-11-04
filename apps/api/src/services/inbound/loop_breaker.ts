@@ -210,15 +210,7 @@ function sentRef(args: unknown): { recordType?: string; externalId?: string } {
  */
 export function ledgeredAdapters(adapters: HostAdapters, run: { teamId: TeamId; runId: string; settings?: LoopSettings }): HostAdapters {
   const instances = new Map<string, { adapterType: string; rehearsed: boolean }>();
-  let kept: Promise<{ depth: number; keptMs: number }> | undefined;
-  const ledger = () => {
-    kept ??= (async () => {
-      const settings = run.settings ?? loopSettings();
-      const [depth, keptMs] = await Promise.all([depthOf(run.teamId, run.runId), keptMsOf(run.teamId, settings.windowMs)]);
-      return { depth, keptMs };
-    })();
-    return kept;
-  };
+  const keep = writeKeeper(run);
   return {
     async resolve(resolution: Scoped<AdapterResolution>): Promise<ResolvedAdapter> {
       const resolved = await adapters.resolve(resolution);
@@ -236,19 +228,7 @@ export function ledgeredAdapters(adapters: HostAdapters, run: { teamId: TeamId; 
       const externalId = written.externalId ?? sent.externalId;
       if (sent.recordType === undefined || externalId === undefined) return answer;
       try {
-        const { depth, keptMs } = await ledger();
-        await recordWrite(
-          { tenant: run.teamId },
-          {
-            adapter: instance.adapterType,
-            recordType: sent.recordType,
-            externalId,
-            runId: run.runId,
-            depth,
-            at: sentAt.toISOString(),
-            forgetBefore: new Date(Date.now() - keptMs).toISOString(),
-          },
-        );
+        await keep({ adapterType: instance.adapterType, recordType: sent.recordType, externalId, at: sentAt.toISOString() });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return {
@@ -260,5 +240,43 @@ export function ledgeredAdapters(adapters: HostAdapters, run: { teamId: TeamId; 
       }
       return answer;
     },
+  };
+}
+
+/**
+ * Keeps one record write run `runId` sent in the write ledger, at the run's
+ * depth in its chain: the one place every version's writes enter the ledger.
+ * This release's adapters reach it through `ledgeredAdapters`; a carried
+ * version's run host calls it for each write its own modules answer, so an
+ * echo of a write made under any version is known to the loop breaker.
+ */
+export function writeKeeper(run: {
+  teamId: TeamId;
+  runId: string;
+  settings?: LoopSettings;
+}): (write: { adapterType: string; recordType: string; externalId: string; at: string }) => Promise<void> {
+  let kept: Promise<{ depth: number; keptMs: number }> | undefined;
+  const ledger = () => {
+    kept ??= (async () => {
+      const settings = run.settings ?? loopSettings();
+      const [depth, keptMs] = await Promise.all([depthOf(run.teamId, run.runId), keptMsOf(run.teamId, settings.windowMs)]);
+      return { depth, keptMs };
+    })();
+    return kept;
+  };
+  return async (write) => {
+    const { depth, keptMs } = await ledger();
+    await recordWrite(
+      { tenant: run.teamId },
+      {
+        adapter: write.adapterType,
+        recordType: write.recordType,
+        externalId: write.externalId,
+        runId: run.runId,
+        depth,
+        at: write.at,
+        forgetBefore: new Date(Date.now() - keptMs).toISOString(),
+      },
+    );
   };
 }

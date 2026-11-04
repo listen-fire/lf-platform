@@ -5,6 +5,7 @@
 // core names none of them.
 export const CORE_WORK_KINDS = [
   'fire_event', // payload: FireRow (inbound/listen_door.ts): one run a kept delivery queued
+  'run_carried', // payload: CarriedRunRow (movement/carried_run_now.ts): one run of a carried version someone started
   'resume_timer', // payload: { runId: string }
   'poll_edge', // payload: { teamId: string; digest: string } (poll_source/worker.ts): one shared poll of a listenable edge
   'wake_await', // payload: { adapterType: string; teamId: string; correlationKey: string }
@@ -109,3 +110,7 @@ export interface WorkHandler {
 }
 
 export type WorkHandlers = Partial<Record<WorkKind, WorkHandler>>;
+
+/** The kinds a run waits in before its segment starts: a run whose row is
+ *  queued under one of them has not died, whatever its age. */
+export const QUEUED_RUN_WORK_KINDS: readonly CoreWorkKind[] = ['fire_event', 'run_carried'];

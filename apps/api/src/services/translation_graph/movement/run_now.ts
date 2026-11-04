@@ -39,7 +39,7 @@ import {
   type ManualInvocationPayload,
 } from '../adapters/manual';
 import { manualListenerMovements } from './files';
-import { getMovementRow } from './store';
+import { getMovementRow, type MovementRow } from './store';
 import { heldRunRefusal } from '@listen-fire/legacy-engine/dispatch';
 import {
   describeRunAwaits,
@@ -58,6 +58,9 @@ import {
   type SavedListen,
 } from '../../inbound/listen_door';
 import { drainUntilIdle, notifyWork } from '../../work/drain';
+import { QUEUED_RUN_WORK_KINDS } from '../../work/kinds';
+import { carriedRunLaneOf } from './carried_run';
+import { CARRIED_RUN_NOW_NAME, queueCarriedRunNow } from './carried_run_now';
 
 export interface MovementRunNowSuccess {
   ok: true;
@@ -172,7 +175,13 @@ export async function runMovementNow(
 export async function runMovementAsync(
   input: RunMovementNowInput,
 ): Promise<MovementRunAsyncResult> {
-  const listen = await resolveManualListen(input);
+  // The movement is read once: its pin chooses the run host.
+  const row = input.triggerId === undefined && input.movementId !== undefined ? await getMovementRow({ teamId: input.teamId, id: input.movementId }) : undefined;
+  if (row) {
+    const carried = await carriedRunNowOf(input, row);
+    if (carried !== undefined) return carried;
+  }
+  const listen = await resolveManualListen(input, row);
   if (!('pipeline' in listen)) return listen;
 
   const invocation = await buildInvocation(input);
@@ -208,6 +217,22 @@ export async function runMovementAsync(
   });
   notifyWork();
   return { ok: true, runId: minted[0]!.runId, status: 'running', movementName: listen.file };
+}
+
+/** A Run now of a movement whose pin a carried version runs: queued on that
+ *  version's run host (./carried_run_now.ts). Undefined for any other. */
+async function carriedRunNowOf(input: RunMovementNowInput, row: MovementRow): Promise<MovementRunAsyncResult | undefined> {
+  const lane = await carriedRunLaneOf(row.languageVersion);
+  if (lane === undefined) return undefined;
+  return queueCarriedRunNow({
+    lane,
+    teamId: input.teamId,
+    movementId: row.id,
+    name: row.name,
+    pin: row.languageVersion,
+    invocation: await buildInvocation(input),
+    ...(input.requestId !== undefined ? { requestId: input.requestId } : {}),
+  });
 }
 
 /** A run id that is a function of the request: `(team, listen, request)`
@@ -323,7 +348,7 @@ async function queuedRunStatus(input: { teamId: string; runId: string }): Promis
   const row = await getAutomationsQb(['work'])
     .selectFrom('work')
     .where('host', '=', 'platform')
-    .where('kind', '=', 'fire_event')
+    .where('kind', 'in', [...QUEUED_RUN_WORK_KINDS])
     .where('team_id', '=', input.teamId)
     .where('dead_at', 'is', null)
     .where(sql<boolean>`payload->>'runId' = ${input.runId}`)
@@ -395,12 +420,13 @@ export async function listMovementRuns(input: {
     .where('movement_id', '=', input.movementId as MovementId)
     .select(['id', 'name'])
     .execute();
-  if (triggerRows.length === 0) return [];
-
-  const triggerIds = triggerRows.map((r) => r.id as unknown as TriggerId);
-  const laneByTriggerId = new Map(
-    triggerRows.map((r) => [r.id as unknown as string, r.name ?? '']),
-  );
+  // A run someone started on a carried version is recorded under the
+  // movement's own id: there is no listen row for it (./carried_run_now.ts).
+  const triggerIds = [...triggerRows.map((r) => r.id as unknown as TriggerId), input.movementId as unknown as TriggerId];
+  const laneByTriggerId = new Map([
+    ...triggerRows.map((r) => [r.id as unknown as string, r.name ?? ''] as const),
+    [input.movementId, CARRIED_RUN_NOW_NAME] as const,
+  ]);
 
   const runRows = await getAutomationsQb(['trigger_run'])
     .selectFrom('trigger_run')
@@ -707,6 +733,8 @@ async function buildInvocation(input: RunMovementNowInput): Promise<ManualInvoca
  */
 async function resolveManualListen(
   input: RunMovementNowInput,
+  /** The movement `movementId` names, when the caller read it already. */
+  read?: MovementRow | null,
 ): Promise<SavedListen | MovementRunNowFailure> {
   if (input.triggerId !== undefined) {
     const listen = await savedListenOf(input.triggerId as TriggerId);
@@ -719,7 +747,7 @@ async function resolveManualListen(
     return { ok: false, errors: ['runMovementNow needs exactly one of movementId / triggerId'] };
   }
 
-  const row = await getMovementRow({ teamId: input.teamId, id: input.movementId });
+  const row = read !== undefined ? read : await getMovementRow({ teamId: input.teamId, id: input.movementId });
   if (!row) {
     return { ok: false, errors: [`movement ${input.movementId} not found`] };
   }

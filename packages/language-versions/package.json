@@ -15,14 +15,17 @@
   "types": "index.ts",
   "type": "commonjs",
   "dependencies": {
+    "@listen-fire/kg": "workspace:*",
     "@listen-fire/lang-0.12": "workspace:*",
+    "@listen-fire/slack": "0.13.4",
+    "module-kit": "npm:@listen-fire/module-kit@0.14.0",
+    "movement-engine": "catalog:",
     "movement-lang": "catalog:"
   },
   "devDependencies": {
     "@types/jest": "29.5.14",
     "@types/node": "20.16.5",
     "jest": "29.7.0",
-    "movement-engine": "catalog:",
     "ts-jest": "29.2.5",
     "typescript": "5.5.4"
   }

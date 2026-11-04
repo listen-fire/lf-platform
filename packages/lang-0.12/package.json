@@ -43,7 +43,8 @@
     "@listen-fire/telegram": "0.12.6",
     "@listen-fire/wake-cloud-tasks": "0.12.7",
     "@listen-fire/web": "0.12.7",
-    "@listen-fire/whatsapp": "0.12.8"
+    "@listen-fire/whatsapp": "0.12.8",
+    "zod": "4.1.12"
   },
   "devDependencies": {
     "@listen-fire/fake-channels": "0.12.8",

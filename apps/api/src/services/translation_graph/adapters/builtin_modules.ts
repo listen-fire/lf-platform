@@ -98,6 +98,8 @@ import { teamIdSchema } from '../../../lib/team_id';
 import { askTableKv, askUrl } from '../../asks/store';
 import { apiBaseUrl } from '../../../lib/api_base_url';
 import { mutationDelivery } from '../../knowledge/mutation_outbox/delivery_mode';
+import { WireCredentialDeclaration, type WireCredentialDeclarationShape } from 'engine-contracts';
+import type { ModuleDeclaration, ModuleHostPieces } from '@listen-fire/language-versions';
 
 export type BuiltinLine = 'legacy' | 'module';
 
@@ -125,7 +127,7 @@ export interface ModuleLineHost {
   declaredCredential?: string;
   /** The fetch the module's provider requests go through, when its addresses
    *  come from the user rather than the module. Default: the global fetch. */
-  fetch?: (install: BuiltinInstall, definition: ModuleDefinition) => typeof fetch;
+  fetch?: (install: BuiltinInstall, definition: HostedModule) => typeof fetch;
   /** The install's kv. Default: refused, by name. */
   kv?: (install: BuiltinInstall) => ModuleKv;
   /** The install's files. Default: refused, by name. */
@@ -564,7 +566,7 @@ export const HOST_REFRESH_WINDOW_MS = 5 * 60_000;
  * lock and version keep two processes from spending one refresh token.
  */
 function storedCredential(
-  definition: ModuleDefinition,
+  definition: HostedModule,
   install: BuiltinInstall,
   options: {
     secrets: SecretsFamily;
@@ -575,7 +577,7 @@ function storedCredential(
 ): ModuleCredential {
   const { secrets, hostApp, shared } = options;
   const declared = storedDeclaration(definition, options.declaredCredential);
-  const displayName = definition.kind === 'adapter' ? definition.manifest.displayName : definition.name;
+  const { displayName } = definition;
   if (declared === undefined) {
     return noCredential(`module ${definition.name} declares no credential${options.declaredCredential !== undefined ? ` "${options.declaredCredential}"` : ''}`);
   }
@@ -631,7 +633,7 @@ function storedCredential(
 
 /** The declared credential a module line's stored credential fills: the one
  *  the line names, else the module's first. */
-export function storedDeclaration(definition: ModuleDefinition, named: string | undefined): ModuleDefinition['credentials'][number] | undefined {
+export function storedDeclaration(definition: Pick<HostedModule, 'credentials'>, named: string | undefined): WireCredentialDeclarationShape | undefined {
   return named === undefined ? definition.credentials[0] : definition.credentials.find((declared) => declared.name === named);
 }
 
@@ -645,8 +647,8 @@ function filledFrom(stored: CredentialFields, shared: CredentialFields | undefin
 
 /** The dev loop's fake for the test-harness team, by the service the line
  *  names (default the manifest's credential type); nothing for anyone else. */
-function harnessBaseUrl(entry: AdapterModuleLine, definition: AdapterModuleDefinition, teamId: TeamId): string | undefined {
-  const service = entry.harnessService ?? definition.manifest.requiredCredentialType;
+function harnessBaseUrl(entry: AdapterModuleLine, teamId: TeamId): string | undefined {
+  const service = entry.harnessService ?? entry.manifest.requiredCredentialType;
   if (!isTestHarnessTeam(teamId) || service === undefined) return undefined;
   const redirected = injectFakeBaseUrl({}, service).baseUrl;
   return typeof redirected === 'string' ? redirected : undefined;
@@ -658,7 +660,7 @@ function harnessBaseUrl(entry: AdapterModuleLine, definition: AdapterModuleDefin
  *  slot (Chromium on the api image, empty on api-slim), and the line's fetch. */
 function platformHost(
   entry: ModuleLineHost,
-  definition: ModuleDefinition,
+  definition: HostedModule,
   install: BuiltinInstall,
 ): { credential: ModuleCredential; kv: ModuleKv; files: ModuleFiles; identities?: ModuleIdentities; browser: BrowserSlot; fetch?: typeof fetch } {
   const secrets = createSecretsFamily({
@@ -683,13 +685,66 @@ function platformHost(
   };
 }
 
+/** What the platform hosts a module by, whichever release's module it is: its
+ *  name, how it is shown, the credentials it declares and its limits. */
+export interface HostedModule {
+  name: string;
+  displayName: string;
+  credentials: readonly WireCredentialDeclarationShape[];
+  limits?: ModuleDefinition['limits'];
+}
+
+function hostedModuleOf(definition: ModuleDefinition): HostedModule {
+  return {
+    name: definition.name,
+    displayName: definition.kind === 'adapter' ? definition.manifest.displayName : definition.name,
+    credentials: definition.credentials,
+    ...(definition.limits !== undefined ? { limits: definition.limits } : {}),
+  };
+}
+
+/**
+ * What the platform hosts one install of another release's module with, as it
+ * hosts its own release's module for the same adapter type: the line's stored
+ * credential (read the way the line says, refreshed under the same lock), its
+ * kv, files and identities, its fetch, the models it lends, and the dev loop's
+ * fake for the test-harness team. How a line is hosted is the platform's, the
+ * same for every release; what the module declares is the module's, checked
+ * here against this release's protocol shape rather than trusted.
+ */
+export function moduleHostFor(input: { adapterType: string; install: BuiltinInstall; declaration: ModuleDeclaration }): ModuleHostPieces {
+  const entry = moduleLineOf(input.adapterType);
+  if (entry === undefined) {
+    throw new Error(`the platform hosts no module for '${input.adapterType}': it has no module line for it`);
+  }
+  const credentials = input.declaration.credentials.map((declared) => {
+    const parsed = WireCredentialDeclaration.safeParse(declared);
+    if (!parsed.success) {
+      throw new Error(`module ${input.declaration.name} declares a credential "${declared.name}" this platform cannot read: ${parsed.error.message}`);
+    }
+    return parsed.data;
+  });
+  const hosted: HostedModule = { name: input.declaration.name, displayName: input.declaration.displayName, credentials };
+  const pieces = platformHost(entry, hosted, input.install);
+  const baseUrlOverride = harnessBaseUrl(entry, input.install.teamId);
+  return {
+    credential: pieces.credential,
+    kv: pieces.kv,
+    files: pieces.files,
+    ...(pieces.identities !== undefined ? { identities: pieces.identities } : {}),
+    ...(pieces.fetch !== undefined ? { fetch: pieces.fetch } : {}),
+    ...(baseUrlOverride !== undefined ? { baseUrlOverride } : {}),
+    models: hostedModels,
+  };
+}
+
 /** A module line's adapter module, loaded in process for one install. */
 export function loadBuiltinModule(entry: AdapterModuleLine, install: BuiltinInstall): InProcessAdapterModule {
   const definition = entry.load();
-  const baseUrlOverride = harnessBaseUrl(entry, definition, install.teamId);
+  const baseUrlOverride = harnessBaseUrl(entry, install.teamId);
   const loaded = adapterInProcess(definition, {
     tenant: install.teamId,
-    ...platformHost(entry, definition, install),
+    ...platformHost(entry, hostedModuleOf(definition), install),
     log: logger,
     models: hostedModels,
     ...(baseUrlOverride !== undefined ? { baseUrlOverride } : {}),
@@ -904,7 +959,7 @@ export function builtinPluginModule(
     if (loaded !== undefined) return loaded;
     const module = pluginsInProcess(definition, {
       tenant: install.teamId,
-      ...platformHost(entry, definition, { teamId: install.teamId }),
+      ...platformHost(entry, hostedModuleOf(definition), { teamId: install.teamId }),
       log: logger,
       validateResults: inProcessValidationDefault(process.env),
     });

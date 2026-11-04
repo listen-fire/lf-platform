@@ -108,6 +108,13 @@ jest.mock('../catalog', () => ({
   runCatalogSnapshotForTeam: jest.fn(),
 }));
 
+// A carried version's run host: which version runs a pin is the real
+// registry's answer; the segment it runs is stubbed (its own tests drive it).
+jest.mock('../carried_run', () => ({
+  carriedRunLaneOf: jest.requireActual('../carried_run').carriedRunLaneOf,
+  runCarriedSegment: jest.fn(),
+}));
+
 jest.mock('../store', () => ({
   getMovementRow: jest.fn(),
 }));
@@ -362,7 +369,7 @@ describe('runMovementFiring', () => {
       teamId: TEAM,
       triggerId: 't-1',
       triggerName: 'movement/intake_file/intake',
-      movement: shippedMovement({ languageVersion: '0.12.13' }) as never,
+      movement: shippedMovement({ languageVersion: '0.13.0' }) as never,
       event,
       recordingTriggerType: 'webhook',
     });
@@ -370,7 +377,27 @@ describe('runMovementFiring', () => {
     expect(runCatalogSnapshotForTeam).not.toHaveBeenCalled();
     expect(runMovement).not.toHaveBeenCalled();
     expect(outcome.result).toBeNull();
-    expect(outcome.error).toContain(runRefusal('0.12.13'));
+    expect(outcome.error).toContain(runRefusal('0.13.0'));
+  });
+
+  it("a firing pinned to 0.12 runs on 0.12's own run host, from its shipped text, and this release's catalog never reads it", async () => {
+    const { runCarriedSegment } = jest.requireMock('../carried_run') as { runCarriedSegment: jest.Mock };
+    runCarriedSegment.mockResolvedValueOnce({ movementName: 'intake', writes: [], extractionSites: {}, trace: [] });
+    const outcome = await runMovementFiring({
+      teamId: TEAM,
+      triggerId: 't-1',
+      triggerName: 'movement/intake_file/intake',
+      movement: shippedMovement({ languageVersion: '0.12.13' }) as never,
+      event,
+      recordingTriggerType: 'webhook',
+    });
+
+    expect(runCatalogSnapshotForTeam).not.toHaveBeenCalled();
+    expect(runMovement).not.toHaveBeenCalled();
+    expect(runCarriedSegment).toHaveBeenCalledWith(
+      expect.objectContaining({ pin: '0.12.13', imports: 'shipped', triggerRunId: 'run-1', event: expect.objectContaining({ adapterType: event.adapterType }) }),
+    );
+    expect(outcome.result?.movementName).toBe('intake');
   });
 
   it('contains a thrown engine error: failed step recorded, error returned as a value', async () => {

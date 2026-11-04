@@ -219,6 +219,53 @@ export function productionEngineHost(input: {
   };
 }
 
+// ── What every version's host shares ─────────────────────────────────────────
+
+/**
+ * The platform's own services a run reaches, whichever release's engine runs
+ * it: the model calls and file text billed to the run and metered against its
+ * budget, file rendering, the team's record bindings and the process's
+ * cross-run write locks. A carried version's run host is built from these
+ * (./carried_run.ts), so a run of any version is billed, metered, bound and
+ * locked exactly as a run of this one.
+ */
+export function sharedRunServices(input: {
+  teamId: TeamId;
+  triggerRunId?: TriggerRunId;
+  cancel: CancelGate;
+  rawText?: RawTextStore;
+  locks?: WriteLocks;
+}): {
+  llm: EngineHost['llm'];
+  resolveFileText: ResolveFileText;
+  render: EngineHost['files']['render'];
+  bindings: EngineHost['park']['bindings'];
+  locks: WriteLocks;
+} {
+  const usage = usageScope({ teamId: input.teamId, triggerRunId: input.triggerRunId, cancel: input.cancel });
+  return {
+    llm: {
+      client: billedLlmClient(makeAnthropicLlmClient({ cancel: input.cancel }), usage),
+      extractCall: billedExtractCallClient(makeAnthropicExtractCallClient({ cancel: input.cancel }), usage),
+      transforms: billedTransforms(transformInvokerFor(input.teamId), usage),
+      arbitrateEntities: (arbitration) => usage(() => refusingPastBudget(() => meteredArbitration(arbitration))),
+    },
+    resolveFileText: billedFileText(
+      makeFileTextResolver(input.rawText ?? postgresRawTextStore(input.teamId), { teamId: input.teamId }),
+      usage,
+    ),
+    render: renderFileArtifactFor(input.teamId),
+    // A run's team is its segments' team.
+    bindings: {
+      record: ({ from, to }) => recordBinding({ teamId: input.teamId, from, to }),
+      findBoundCounterpart: ({ endpoint, counterpart }) =>
+        findBoundCounterpart({ teamId: input.teamId, endpoint, ...(counterpart !== undefined ? { counterpart } : {}) }),
+      delete: ({ from, to }) => deleteBinding({ teamId: input.teamId, from, to }),
+    },
+    locks: input.locks ?? processWriteLocks(),
+  };
+}
+
 // ── Billing and budget, set around each call ────────────────────────────────
 //
 // Every model call below the host records its usage against the ambient
@@ -301,7 +348,7 @@ async function resolveTeamActingUser(input: ActingUserLookup & { event: TriggerE
   });
 }
 
-async function loadActingUserTrigger(triggerId: string): Promise<ActingUserTriggerContext | undefined> {
+export async function loadActingUserTrigger(triggerId: string): Promise<ActingUserTriggerContext | undefined> {
   const row = await getAutomationsQb(['trigger'])
     .selectFrom('trigger')
     // The event carries the trigger's id as a plain string.
