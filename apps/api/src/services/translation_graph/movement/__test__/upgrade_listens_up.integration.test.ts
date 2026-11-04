@@ -16,6 +16,8 @@ const VENDOR = 'acme_vendor';
 const credential = { usable: false };
 /** Whether the planned listen lists its members before it subscribes. */
 const plan = { resolved: false };
+/** The edge a file's planned listen watches; a file not named watches Things. */
+const edgeOf: Record<string, string> = {};
 
 const vendor = {
   ensureEventSubscription: jest.fn(async (_input: unknown) => ({ externalId: 'ext-1', secret: 'vendor-secret' })),
@@ -51,10 +53,10 @@ jest.mock('../listen_plans', () => {
   const actual = jest.requireActual('../listen_plans');
   return {
     ...actual,
-    plannedListensOfSource: () => {
+    plannedListensOfSource: (input: { file: string }) => {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { testListenConfig } = require('../../../../test/harness/listens');
-      const listen = testListenConfig({ adapterType: VENDOR, edge: 'Things', delivery: 'connection', movement: 'stamp' }, 'a1b2c3d4');
+      const listen = testListenConfig({ adapterType: VENDOR, edge: edgeOf[input.file] ?? 'Things', delivery: 'connection', movement: input.file }, `${input.file}0000`.padStart(8, '0'));
       return { listens: [plan.resolved ? { ...listen, resolvedHops: [{ hop: 0, membersChange: 'pushed' }] } : listen], refused: [] };
     },
   };
@@ -71,6 +73,7 @@ import { insertTestListen } from '../../../../test/harness/listens';
 import { deliverArrivals } from '../../../inbound/listen_door';
 import { resolveAndArm } from '../../../inbound/listen_resolve';
 import { claimDueWork } from '../../../work/store';
+import { recordMovementFailureIssue } from '../issues';
 import { drainWork, resetWorkHandlersForTests } from '../../../work/drain';
 import { advanceLive, upgradeMovement, type Advance, type ValidateUnder } from '../language_upgrade';
 import { listensOfSubscription, MOVEMENT_LISTEN_PROVISIONER } from '../listen_subscriptions';
@@ -91,18 +94,22 @@ const pass = async () => {
   return drainWork({ teamId, now: () => at });
 };
 
-async function seedShipped(name: string): Promise<string> {
+async function seedShipped(name: string, source = SOURCE): Promise<string> {
   const id = randomUUID();
   await getAutomationsQb(['movement'])
     .insertInto('movement')
-    .values({ id: id as MovementId, team_id: teamId, name, source: SOURCE, description: '', language_version: '0.12.13' })
+    .values({ id: id as MovementId, team_id: teamId, name, source, description: '', language_version: '0.12.13' })
     .execute();
-  await mintMovementVersionIfChanged({ teamId, movementId: id, source: SOURCE, languageVersion: '0.12.13' });
+  await mintMovementVersionIfChanged({ teamId, movementId: id, source, languageVersion: '0.12.13' });
   return id;
 }
 
-const workRows = (id: string) =>
-  getAutomationsQb(['work']).selectFrom('work').where('team_id', '=', teamId).where('key', '=', `bring_up_listens:${id}`).select(['id', 'attempts']).execute();
+const LIBRARY = 'export function shout(before: <text>) {\n  return before\n}\n';
+/** A listening member that imports the library, so the two members upgrade as one group. */
+const memberSource = (name: string) => `import { shout } from "lib"\nfunction ${name}(go: <manual-[:Invocations]->>) {\n}\n\nlisten to manual-[:Invocations]-> fire ${name}\n`;
+
+const workRows = (_id?: string) =>
+  getAutomationsQb(['work']).selectFrom('work').where('team_id', '=', teamId).where('kind', '=', 'bring_up_listens').select(['id', 'attempts', 'key']).execute();
 
 const issues = (id: string) =>
   getAutomationsQb(['movement_issue'])
@@ -128,6 +135,7 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   plan.resolved = false;
+  for (const file of Object.keys(edgeOf)) delete edgeOf[file];
   jest.mocked(resolveAndArm).mockResolvedValue(null);
   credential.usable = false;
   teamId = randomUUID() as TeamId;
@@ -275,5 +283,36 @@ describe('an upgraded automation whose listens could not be brought up', () => {
     expect(await workRows(id)).toEqual([]);
     expect(await issues(id)).toEqual([]);
     expect(await issues(other)).toEqual([]);
+  });
+  it('a group of two with one member failing: the healthy member comes up, the issue is on the failing one only, and clearing it closes that issue and no other', async () => {
+    credential.usable = true;
+    edgeOf['member_b'] = 'Others';
+    vendor.ensureEventSubscription.mockImplementation(async (input: unknown) => {
+      if ((input as { edge: string }).edge === 'Others') throw new Error('refused for the other edge');
+      return { externalId: 'ext-1', secret: 'vendor-secret' };
+    });
+    await seedShipped('lib', LIBRARY);
+    const healthy = await seedShipped('member_a', memberSource('member_a'));
+    const failing = await seedShipped('member_b', memberSource('member_b'));
+    // An issue of another class on the healthy member, which coming up must leave open.
+    await recordMovementFailureIssue({ teamId, movementId: healthy, movementName: 'member_a', triggerName: 'member_a', message: 'MOV_UNRELATED: something else is wrong here' });
+
+    expect((await upgradeMovement({ teamId, id: healthy, acknowledge: true, validate: clean })).status).toBe('upgraded');
+    expect(await workRows()).toHaveLength(1);
+
+    for (let attempt = 0; attempt < 3; attempt++) expect(await pass()).toEqual(expect.objectContaining({ failed: 0, deferred: 1 }));
+
+    expect(vendor.ensureEventSubscription).toHaveBeenCalledWith(expect.objectContaining({ edge: 'Things' }));
+    expect(await issues(healthy)).toEqual([expect.objectContaining({ state: 'open', failure_class: 'MOV_UNRELATED' })]);
+    expect(await issues(failing)).toEqual([
+      expect.objectContaining({ state: 'open', failure_class: 'MOV_LISTENS_NOT_UP', message: expect.stringContaining('subscribing for Others failed') }),
+    ]);
+
+    vendor.ensureEventSubscription.mockImplementation(async () => ({ externalId: 'ext-1', secret: 'vendor-secret' }));
+    expect((await pass()).failed).toBe(0);
+
+    expect(await workRows()).toEqual([]);
+    expect(await issues(failing)).toEqual([expect.objectContaining({ state: 'resolved', failure_class: 'MOV_LISTENS_NOT_UP' })]);
+    expect(await issues(healthy)).toEqual([expect.objectContaining({ state: 'open', failure_class: 'MOV_UNRELATED' })]);
   });
 });
