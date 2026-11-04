@@ -11,6 +11,7 @@ export const CORE_WORK_KINDS = [
   'wake_await', // payload: { adapterType: string; teamId: string; correlationKey: string }
   'poll_reconcile', // periodic, payload {}
   'listen_subscription_retry', // periodic, payload {} (movement/listen_subscriptions.ts): subscriptions a source refused, asked for again
+  'bring_up_listens', // payload: { teamId: string; movementIds: string[] } (movement/listens_up.ts): what an upgrade owes the providers
   'timer_sweep', // periodic, payload {}
   'run_orphan_sweep', // periodic, payload {}
 ] as const;

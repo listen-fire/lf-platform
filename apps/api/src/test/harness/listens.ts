@@ -34,11 +34,10 @@ export function takenEquals(field: string, value: string): NonNullable<PlanHop['
   return { type: 'compare', op: 'eq', left: { type: 'property', propertyTypeId: field }, right: { type: 'static', value } };
 }
 
-/** Write one listen's trigger row; its id. */
-export async function insertTestListen(input: TestListen): Promise<TriggerId> {
-  const id = randomUUID() as TriggerId;
+/** The listen as provisioning keeps it, named by `id`. */
+export function testListenConfig(input: Omit<TestListen, 'teamId' | 'movementId' | 'credentialsId'>, id: string): ListenConfig {
   const movement = input.movement ?? 'heard';
-  const listen: ListenConfig = {
+  return {
     pipeline: `listen:test:${movement}:${id.slice(0, 8)}`,
     plan: {
       movement,
@@ -50,6 +49,13 @@ export async function insertTestListen(input: TestListen): Promise<TriggerId> {
     fieldIds: {},
     delivery: { kind: input.delivery, ...(input.pollEverySeconds !== undefined ? { pollEverySeconds: input.pollEverySeconds } : {}) },
   };
+}
+
+/** Write one listen's trigger row; its id. */
+export async function insertTestListen(input: TestListen): Promise<TriggerId> {
+  const id = randomUUID() as TriggerId;
+  const movement = input.movement ?? 'heard';
+  const listen = testListenConfig(input, id);
   await getAutomationsQb(['trigger'])
     .insertInto('trigger')
     .values({

@@ -125,7 +125,7 @@ describe('listing a listen`s base members by its WHERE', () => {
     getRelated.mockResolvedValue([base('appHiring', 'Hiring')]);
     saveResolution.mockResolvedValue(false);
 
-    await expect(resolveListen(airtableListen())).resolves.toBeUndefined();
+    await expect(resolveListen(airtableListen())).resolves.toBeNull();
   });
 });
 

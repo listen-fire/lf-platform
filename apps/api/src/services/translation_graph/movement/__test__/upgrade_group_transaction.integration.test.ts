@@ -4,7 +4,8 @@
 // together, and no provider has been called. An upgrade is always a save, so a
 // 0.12 automation whose text the rewrite leaves alone still ends up with its
 // listens provisioned under the new pin. Nothing reaches a provider while the
-// transaction is open.
+// transaction is open: what they are owed is a work row, which commits and
+// rolls back with the move.
 
 import { randomUUID } from 'node:crypto';
 
@@ -19,6 +20,8 @@ import { unsafeCurrentContext } from '../../../context';
 import { advanceLive, upgradeMovement, type Advance, type ValidateUnder } from '../language_upgrade';
 import { movementCatalogForTeam } from '../catalog';
 import { syncListenSubscriptions } from '../listen_subscriptions';
+import { registerBringUpListensWork } from '../listens_up';
+import { drainUntilIdle, resetWorkHandlersForTests } from '../../../work/drain';
 
 jest.mock('../../../credentials/credential_lifecycle', () => ({
   credentialLifecycle: () => undefined,
@@ -78,6 +81,8 @@ describe('an upgrading import group moves in one transaction (real Postgres, the
   let teamId: TeamId;
 
   beforeAll(async () => {
+    resetWorkHandlersForTests();
+    registerBringUpListensWork();
     teamId = randomUUID() as TeamId;
     await getCoreQb(['team'])
       .insertInto('team')
@@ -112,6 +117,10 @@ describe('an upgrading import group moves in one transaction (real Postgres, the
       .executeTakeFirstOrThrow();
   }
 
+  async function bringUpRowsOf(id: string) {
+    return getAutomationsQb(['work']).selectFrom('work').where('kind', '=', 'bring_up_listens').where('key', '=', `bring_up_listens:${id}`).select('id').execute();
+  }
+
   async function triggersOf(id: string) {
     return getAutomationsQb(['trigger']).selectFrom('trigger').where('movement_id', '=', id as MovementId).select(['id', 'kind']).execute();
   }
@@ -133,8 +142,8 @@ describe('an upgrading import group moves in one transaction (real Postgres, the
       sources[input.movement.name] = input.source;
       if (input.movement.name === 'app_b') return async () => ({ ok: false, detail: 'the rewritten text did not ship' });
       const move = await advanceLive(input);
-      return async (afterCommit) => {
-        const result = await move(afterCommit);
+      return async () => {
+        const result = await move();
         if (result.ok) saved.push(input.movement.name);
         // Inside the transaction, the listening member's listen row exists.
         if (input.movement.name === 'app_a') expect(await triggersOf(listens)).toHaveLength(1);
@@ -155,6 +164,7 @@ describe('an upgrading import group moves in one transaction (real Postgres, the
     expect(await rowOf(app)).toEqual(expect.objectContaining({ language_version: '0.12.13' }));
     expect(await triggersOf(listens)).toEqual([]);
     expect(mockedSync).not.toHaveBeenCalled();
+    expect(await bringUpRowsOf(app)).toEqual([]);
   });
 
   it('when every member can move, all of them are on the current version, under their rewritten text', async () => {
@@ -189,7 +199,8 @@ describe('an upgrading import group moves in one transaction (real Postgres, the
     expect(version).toEqual({ language_version: LANGUAGE_VERSION, source: LISTENS });
   });
 
-  it('nothing reaches a provider while the transaction is open: the catalog before it, the subscriptions after', async () => {
+  it('nothing reaches a provider while the transaction is open: the catalog before it, the subscriptions by the work row after', async () => {
+    await drainUntilIdle({ teamId });
     const seen: { reached: string; inTransaction: boolean }[] = [];
     const actualCatalog = jest.requireActual('../catalog').movementCatalogForTeam;
     mockedCatalog.mockImplementation((...args: unknown[]) => {
@@ -206,9 +217,15 @@ describe('an upgrading import group moves in one transaction (real Postgres, the
     const result = await upgradeMovement({ teamId, id, acknowledge: true, validate: rewrites });
 
     expect(result.status).toBe('upgraded');
+    expect(seen).toEqual([{ reached: 'catalog', inTransaction: false }]);
+    expect(await bringUpRowsOf(id)).toHaveLength(1);
+
+    await drainUntilIdle({ teamId });
+
     expect(seen).toEqual([
       { reached: 'catalog', inTransaction: false },
       { reached: 'subscriptions', inTransaction: false },
     ]);
+    expect(await bringUpRowsOf(id)).toEqual([]);
   });
 });

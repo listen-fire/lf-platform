@@ -554,9 +554,10 @@ async function provisionListeners(input: {
    *  halves (address resolution, subscription sync) are reported inside the
    *  `listeners` step rather than hidden in it (./timing.ts). */
   timer?: StepTimer;
-  /** Inside a caller's open transaction: those two halves wait here until it
-   *  commits, so no provider is called while it is open or for a rollback. */
-  afterCommit?: AfterCommit;
+  /** Inside a caller's open transaction those two halves are left to the
+   *  caller's work row (./listens_up.ts): no provider is called while it is
+   *  open or for a rollback. */
+  providersLater?: boolean;
 }): Promise<ProvisionMovementResult> {
   const { teamCatalog } = input;
   const within = <T>(name: string, run: () => Promise<T>): Promise<T> =>
@@ -671,15 +672,7 @@ async function provisionListeners(input: {
     return subscriptionSync.notes;
   };
 
-  const { afterCommit } = input;
-  let subscriptionNotes: string[] = [];
-  if (afterCommit !== undefined) {
-    afterCommit(async () => {
-      await reachProviders();
-    });
-  } else {
-    subscriptionNotes = await reachProviders();
-  }
+  const subscriptionNotes = input.providersLater === true ? [] : await reachProviders();
 
   return {
     ok: true,
@@ -695,21 +688,16 @@ async function provisionListeners(input: {
 
 // ── Text-canonical persistence (saveMovement & friends) ────────────────────
 
-/** Hands over an effect to run once the caller's transaction has committed:
- *  never if it rolls back. */
-export type AfterCommit = (effect: () => Promise<void>) => void;
-
 /**
  * A save joining a caller's open database transaction (an upgrade's import
  * group). It writes only to the database, through that transaction. The caller
  * assembled its catalog before the transaction opened (the one provider read a
- * save needs up front), and runs everything else that reaches outside the
- * database once it commits: listen resolution, subscriptions, change hints,
- * milestones. A rollback leaves nothing at a provider and tells nobody.
+ * save needs up front), and owes the providers the rest as a work row in the
+ * same transaction (./listens_up.ts). A rollback leaves nothing at a provider
+ * and tells nobody.
  */
 export interface SaveInTransaction {
   teamCatalog: TeamMovementCatalog;
-  afterCommit: AfterCommit;
 }
 
 export interface SaveMovementInput {
@@ -983,11 +971,12 @@ async function runSave(
   if (input.inTransaction !== undefined && unsafeCurrentContext()?.kyselyTrx === undefined) {
     throw new Error('a save handed a transaction to join is running outside one');
   }
-  // What reaches outside the database: now, or once the caller's transaction
-  // has committed.
-  const outsideTheDatabase = (tell: () => void): void => {
-    if (input.inTransaction === undefined) tell();
-    else input.inTransaction.afterCommit(async () => tell());
+  // What tells anyone waits for the caller's transaction to commit, when there
+  // is one; a rollback told nobody.
+  const onceCommitted = (tell: () => void): void => {
+    const context = unsafeCurrentContext();
+    if (context?.kyselyTrx !== undefined) context.onChangesCommitted(tell);
+    else tell();
   };
   const declaredName = movementNameFromSource(input.source);
   const existing = input.id
@@ -1072,7 +1061,7 @@ async function runSave(
   // The source row is now saved — emit the resource-change hint here (the
   // shared service layer), so UI saves and agent saves both propagate
   // regardless of the save's eventual gate outcome below.
-  outsideTheDatabase(() =>
+  onceCommitted(() =>
     emitMovementChange({
       teamId: input.teamId,
       movementId: row.id,
@@ -1095,7 +1084,7 @@ async function runSave(
   // MCP? Stamped on the Context by the auth middleware from `x-mcp-domain`.
   const viaMcp = journeyContext?.mcpDomain === 'automation';
   const recordMilestones = (): void =>
-    outsideTheDatabase(() => recordAutomationSavedMilestones({ actingUserId, teamId: input.teamId, viaMcp }));
+    onceCommitted(() => recordAutomationSavedMilestones({ actingUserId, teamId: input.teamId, viaMcp }));
 
   // Record the validity axis once. Stamp consent when we're shipping a
   // non-`valid` movement on acknowledgement.
@@ -1156,7 +1145,7 @@ async function runSave(
           source: input.source,
           teamCatalog,
           timer,
-          ...(input.inTransaction !== undefined ? { afterCommit: input.inTransaction.afterCommit } : {}),
+          ...(input.inTransaction !== undefined ? { providersLater: true } : {}),
           // A consented non-valid save ships: derive its declared listens despite
           // check errors so it genuinely fires-and-fails (decision 3b).
           ...(consented ? { provisionDespiteErrors: true } : {}),

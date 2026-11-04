@@ -225,11 +225,11 @@ async function listMembers(listen: SavedListen): Promise<Resolution> {
 /** List the listen's members and keep what it comes to, under the store's
  *  hold: over the scope limit it is suspended, watched nowhere; a failed read
  *  keeps the records it had, with the new failure. Another process's live hold
- *  leaves it to that process. */
-export async function resolveListen(listen: SavedListen): Promise<void> {
+ *  leaves it to that process. Answers the failure this listing came to, if any. */
+export async function resolveListen(listen: SavedListen): Promise<string | null> {
   const scope = { tenant: listen.teamId };
   const held = await claimResolve(scope, { pipeline: listen.pipeline, ttlMs: RESOLVE_HOLD_MS });
-  if (held === null) return;
+  if (held === null) return null;
   const before = (await states(scope, { pipelines: [listen.pipeline] }))[listen.pipeline];
   let resolution: Resolution;
   try {
@@ -249,8 +249,9 @@ export async function resolveListen(listen: SavedListen): Promise<void> {
     }
   }
   const saved = await saveResolution(scope, { pipeline: listen.pipeline, token: held.token, resolution });
-  if (!saved) return;
+  if (!saved) return null;
   if (resolution.failure !== null) logger.warn('[ListenResolve] a listen could not be resolved', { pipeline: listen.pipeline, failure: resolution.failure });
+  return resolution.failure;
 }
 
 /** The shortest `relistEverySeconds` the listen's resolved hops declare, in
@@ -299,10 +300,11 @@ export async function armResolve(listen: SavedListen, inMs = 0): Promise<void> {
 
 /** List now, synchronously, and arm the next clock relist: run at save so the
  *  first subscription sync sees the records the listen is subscribed under. */
-export async function resolveAndArm(listen: SavedListen): Promise<void> {
-  await resolveListen(listen);
+export async function resolveAndArm(listen: SavedListen): Promise<string | null> {
+  const failure = await resolveListen(listen);
   const everyMs = relistIntervalMs(listen);
   if (everyMs !== undefined) await armResolve(listen, everyMs);
+  return failure;
 }
 
 /** Each of `listens` whose change was pushed on one of its resolved hops'

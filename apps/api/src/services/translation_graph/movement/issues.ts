@@ -72,7 +72,9 @@ export async function recordMovementFailureIssue(input: {
   movementId: string;
   movementName: string;
   triggerName: string;
-  runId: string;
+  /** The run that failed; absent for a failure no run saw (its listens could
+   *  not be brought up, say). */
+  runId?: string;
   message: string;
 }): Promise<'new' | 'regression' | 'threshold' | 'counted'> {
   const { failureClass, fingerprint } = fingerprintFailure(input.message);
@@ -87,6 +89,7 @@ export async function recordMovementFailureIssue(input: {
 
   const sampleRuns = (prev: unknown): string[] => {
     const list = Array.isArray(prev) ? (prev as string[]) : [];
+    if (input.runId === undefined) return list;
     return [input.runId, ...list.filter((r) => r !== input.runId)].slice(0, SAMPLE_RUN_CAP);
   };
 
@@ -101,7 +104,7 @@ export async function recordMovementFailureIssue(input: {
         message: input.message,
         count: 1,
         state: 'open',
-        sample_run_ids: JSON.stringify([input.runId]) as never,
+        sample_run_ids: JSON.stringify(sampleRuns([])) as never,
       } as never)
       .execute();
     await notify(
@@ -159,6 +162,22 @@ export async function resolveMovementIssues(input: { movementId: string }): Prom
       updated_at: new Date(),
     } as never)
     .where('movement_id', '=', input.movementId as MovementId)
+    .where('state', '=', 'open')
+    .execute();
+}
+
+/** Resolve a movement's open issues of one failure class: what closes when
+ *  that one failure stops, whatever else is still failing. */
+export async function resolveMovementIssuesOfClass(input: { movementId: string; failureClass: string }): Promise<void> {
+  await getAutomationsQb(['movement_issue'])
+    .updateTable('movement_issue')
+    .set({
+      state: 'resolved',
+      resolved_at: new Date(),
+      updated_at: new Date(),
+    } as never)
+    .where('movement_id', '=', input.movementId as MovementId)
+    .where('failure_class', '=', input.failureClass)
     .where('state', '=', 'open')
     .execute();
 }

@@ -27,7 +27,8 @@
 //
 // Called after a save or delete has reconciled the trigger rows, so the trigger
 // table IS the desired state; the sync is per team and idempotent. Failures
-// never block a save: they come back as notes.
+// never block a save: they come back as notes, and each subscription left
+// unregistered comes back by its digest, for whoever owes one (./listens_up.ts).
 
 import { randomUUID } from 'node:crypto';
 
@@ -96,6 +97,24 @@ export async function listensOfSubscription(input: {
   return listens.filter((listen) => listenEdgeKeysOf(listen, ['connection', 'scope']).some(({ digest }) => digest === held.digest));
 }
 
+/** A subscription a sync wanted and could not register, by the digest its
+ *  listens name it by, with the note that says why. */
+export interface UnregisteredSubscription {
+  digest: string;
+  note: string;
+}
+
+/** A sync's running account of what it could not do. */
+interface SyncAccount {
+  notes: string[];
+  unregistered: UnregisteredSubscription[];
+}
+
+function noteUnregistered(account: SyncAccount, digest: string, note: string): void {
+  account.notes.push(note);
+  account.unregistered.push({ digest, note });
+}
+
 /** One subscription the team's listens want. */
 interface DesiredSubscription {
   slug: string;
@@ -128,19 +147,27 @@ function legacyScopeOf(rawValue: unknown): Record<string, string> {
 
 /** The team's desired subscriptions, off its saved listens. Only a module
  *  that answers `ensureEventSubscription` is subscribed for. */
-async function desiredSubscriptions(
-  teamId: TeamId,
-  manifestBySlug: ReadonlyMap<string, AdapterManifest>,
-  notes: string[],
-): Promise<DesiredSubscription[]> {
+async function desiredSubscriptions(input: {
+  teamId: TeamId;
+  manifestBySlug: ReadonlyMap<string, AdapterManifest>;
+  remoteDegraded: boolean;
+  account: SyncAccount;
+}): Promise<DesiredSubscription[]> {
+  const { teamId, manifestBySlug, remoteDegraded, account } = input;
   const desired = new Map<string, DesiredSubscription>();
   for (const listen of await savedListens({ teamId })) {
     for (const { key, digest } of listenEdgeKeysOf(listen, ['connection', 'scope'])) {
       const slug = resolveAdapterSlug(key.adapterType);
       const manifest = manifestBySlug.get(slug);
+      // With the remote installs only partly read, an unknown module may be a
+      // remote one that wants this subscription: not known to be fine.
+      if (manifest === undefined && remoteDegraded) {
+        account.unregistered.push({ digest, note: `${slug}: its manifest could not be read, so ${key.edge} cannot be subscribed for yet` });
+        continue;
+      }
       if (manifest === undefined || !manifest.methods.includes('ensureEventSubscription')) continue;
       if (key.credentialsId === null && manifest.requiredCredentialType !== undefined) {
-        notes.push(`${slug}: ${listen.file}:${listen.plan.movement} has no credential, so ${key.edge} cannot be subscribed for`);
+        noteUnregistered(account, digest, `${slug}: ${listen.file}:${listen.plan.movement} has no credential, so ${key.edge} cannot be subscribed for`);
         continue;
       }
       if (desired.has(digest)) continue;
@@ -236,9 +263,9 @@ async function ensureSubscription(input: {
   subscription: DesiredSubscription;
   row: SubscriptionRow | undefined;
   remote: boolean;
-  notes: string[];
+  account: SyncAccount;
 }): Promise<void> {
-  const { teamId, subscription, remote, notes } = input;
+  const { teamId, subscription, remote, account } = input;
   const { slug, providerKey, key, held } = subscription;
   const settled = input.row !== undefined && input.row.status === 'active';
   // A remote is asked again on every sync even when nothing changed here: its
@@ -252,7 +279,7 @@ async function ensureSubscription(input: {
     ...(key.constructionArgs !== undefined ? { constructionArgs: key.constructionArgs } : {}),
   });
   if (typeof adapter.ensureEventSubscription !== 'function') {
-    notes.push(`${slug}: its manifest declares ensureEventSubscription but the adapter does not answer it, so ${key.edge} receives nothing`);
+    noteUnregistered(account, held.digest, `${slug}: its manifest declares ensureEventSubscription but the adapter does not answer it, so ${key.edge} receives nothing`);
     return;
   }
   let row = input.row;
@@ -292,7 +319,7 @@ async function ensureSubscription(input: {
     const externalWebhookId = registration?.externalId ?? row.externalWebhookId;
     await withdraw(adapter, removalOf({ ...row, externalWebhookId }, callbackUrl), callbackUrl);
     await setRow(row.id, { status: 'pending', secret: UNREGISTERED_SECRET, externalId: null });
-    notes.push(`${slug}: subscribing for ${key.edge} failed (${remote ? NO_SECRET_REFUSAL : NO_ISSUED_SECRET_REFUSAL})`);
+    noteUnregistered(account, held.digest, `${slug}: subscribing for ${key.edge} failed (${remote ? NO_SECRET_REFUSAL : NO_ISSUED_SECRET_REFUSAL})`);
     return;
   }
   // The source kept what this side already holds: nothing to write.
@@ -308,8 +335,9 @@ async function ensureSubscription(input: {
  * Bring the team's subscriptions in line with its listens. Idempotent; every
  * failure is contained per subscription and surfaced as a note.
  */
-export async function syncListenSubscriptions(input: { teamId: TeamId }): Promise<{ notes: string[] }> {
-  const notes: string[] = [];
+export async function syncListenSubscriptions(input: { teamId: TeamId }): Promise<SyncAccount> {
+  const account: SyncAccount = { notes: [], unregistered: [] };
+  const { notes } = account;
   const { manifests, remoteSlugs, remoteDegraded } = await teamAdapterManifestSet(input.teamId, notes);
   const manifestBySlug = new Map(manifests.map((m) => [m.adapterType, m]));
   // A remote install's provider key is not a registry alias, so teardown maps
@@ -317,18 +345,18 @@ export async function syncListenSubscriptions(input: { teamId: TeamId }): Promis
   const slugByProviderKey = new Map(manifests.map((m) => [webhookProviderKey(m), m.adapterType]));
   // Read fresh, not through dispatch's copy: this runs right after a switch.
   const lfEngined = (await readTeamEngine(input.teamId)).engine === 'lf';
-  const desired = lfEngined ? [] : await desiredSubscriptions(input.teamId, manifestBySlug, notes);
+  const desired = lfEngined ? [] : await desiredSubscriptions({ teamId: input.teamId, manifestBySlug, remoteDegraded, account });
   const existing = await provisionedRows(input.teamId);
   const rowOf = (subscription: DesiredSubscription) =>
     existing.find((row) => row.held?.digest === subscription.held.digest && row.provider === subscription.providerKey);
 
   for (const subscription of desired) {
     try {
-      await ensureSubscription({ teamId: input.teamId, subscription, row: rowOf(subscription), remote: remoteSlugs.has(subscription.slug), notes });
+      await ensureSubscription({ teamId: input.teamId, subscription, row: rowOf(subscription), remote: remoteSlugs.has(subscription.slug), account });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       logger.error('[ListenSubscriptions] ensure failed', { teamId: input.teamId, adapter: subscription.slug, edge: subscription.key.edge, error: message });
-      notes.push(`${subscription.slug}: subscribing for ${subscription.key.edge} failed (${message})`);
+      noteUnregistered(account, subscription.held.digest, `${subscription.slug}: subscribing for ${subscription.key.edge} failed (${message})`);
     }
   }
 
@@ -361,7 +389,7 @@ export async function syncListenSubscriptions(input: { teamId: TeamId }): Promis
       .execute();
   }
 
-  return { notes };
+  return account;
 }
 
 /** Each team with a provisioned row still pending, or still holding a 0.12

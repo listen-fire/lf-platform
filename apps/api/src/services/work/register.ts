@@ -8,6 +8,7 @@ import { registerAwaitWork } from '../movement_engine/await_resume';
 import { registerTimerWork } from '../movement_engine/timer_resume';
 import { registerPollWork } from '../poll_source/worker';
 import { registerListenSubscriptionWork } from '../translation_graph/movement/listen_subscriptions';
+import { registerBringUpListensWork } from '../translation_graph/movement/listens_up';
 import { registerRunOrphanSweepWork } from '../translation_graph/runs/trigger_run';
 import { registerFireEventWork } from '../inbound/fire_event';
 import { registerCarriedRunWork } from '../translation_graph/movement/carried_run_now';
@@ -52,6 +53,7 @@ function registerCoreWork(): void {
   registerTimerWork();
   registerPollWork();
   registerListenSubscriptionWork();
+  registerBringUpListensWork();
   registerFireEventWork();
   registerCarriedRunWork();
   registerAwaitWork();

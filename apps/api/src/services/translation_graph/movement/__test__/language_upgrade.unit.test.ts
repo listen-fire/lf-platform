@@ -39,6 +39,7 @@ jest.mock('../store', () => ({
 }));
 jest.mock('../version_store', () => ({ movementSourceHash: () => 'hash' }));
 jest.mock('../provision', () => ({ saveMovement: jest.fn() }));
+jest.mock('../listens_up', () => ({ bringUpListensLater: jest.fn(async () => undefined) }));
 // The real authoring core is loaded by one case below; its team wrapper's
 // catalog assembly is never reached.
 jest.mock('../catalog', () => ({ movementCatalogForTeam: jest.fn() }));
@@ -50,7 +51,8 @@ import { parseProgram } from 'legacy-lang';
 import { assessMovementValidity, type AuthoringDiagnostic } from '../authoring';
 
 import { getMovementRow, listMovementRows, recordUpgradeCheck, type MovementRow } from '../store';
-import { saveMovement, type AfterCommit } from '../provision';
+import { saveMovement } from '../provision';
+import { bringUpListensLater } from '../listens_up';
 import {
   runDeployCheck,
   upgradeMovement,
@@ -614,9 +616,9 @@ describe('an upgrade moves the whole import group, or nothing', () => {
     const { validate } = groupOf({});
     const moved: string[] = [];
     const outcomes: Array<'committed' | 'rolled back'> = [];
-    const together = async (_teamId: string, moves: (afterCommit: AfterCommit) => Promise<void>) => {
+    const together = async (_teamId: string, moves: () => Promise<void>) => {
       try {
-        await moves(() => undefined);
+        await moves();
         outcomes.push('committed');
       } catch (err) {
         outcomes.push('rolled back');
@@ -650,7 +652,7 @@ describe('an upgrade moves the whole import group, or nothing', () => {
     expect(advanced.map((a) => a.id)).toEqual(['lib', 'app', 'old-app']);
   });
 
-  it('each member is prepared before the transaction opens, and what reaches a provider waits for its commit', async () => {
+  it('each member is prepared before the transaction opens, and what is owed a provider is one work row inside it', async () => {
     jest.mocked(getMovementRow).mockResolvedValueOnce(rows[1]);
     jest.mocked(listMovementRows).mockResolvedValueOnce(rows);
     jest.mocked(assessMovementValidity).mockReturnValue({ status: 'valid', reason: null } as never);
@@ -660,13 +662,13 @@ describe('an upgrade moves the whole import group, or nothing', () => {
     enterTransaction.mockImplementationOnce(async () => {
       events.push('transaction opened');
     });
+    jest.mocked(bringUpListensLater).mockImplementationOnce(async ({ movementIds }) => {
+      events.push(`owed the providers: ${movementIds.join(', ')}`);
+    });
     const advance = async ({ movement: m }: { movement: { name: string } }) => {
       events.push(`prepared ${m.name}`);
-      return async (afterCommit: AfterCommit) => {
+      return async () => {
         events.push(`saved ${m.name}`);
-        afterCommit(async () => {
-          events.push(`provider called for ${m.name}`);
-        });
         return { ok: true as const };
       };
     };
@@ -682,30 +684,25 @@ describe('an upgrade moves the whole import group, or nothing', () => {
       'saved lib',
       'saved app',
       'saved old-app',
-      'provider called for lib',
-      'provider called for app',
-      'provider called for old-app',
+      'owed the providers: lib, app, old-app',
     ]);
   });
 
-  it('a group that rolls back calls no provider', async () => {
+  it('a group that stops owes the providers nothing', async () => {
     jest.mocked(getMovementRow).mockResolvedValueOnce(rows[1]);
     jest.mocked(listMovementRows).mockResolvedValueOnce(rows);
     jest.mocked(assessMovementValidity).mockReturnValue({ status: 'valid', reason: null } as never);
     const { validate } = groupOf({});
-    const called: string[] = [];
-    const advance = async ({ movement: m }: { movement: { name: string } }) => async (afterCommit: AfterCommit) => {
+    jest.mocked(bringUpListensLater).mockClear();
+    const advance = async ({ movement: m }: { movement: { name: string } }) => async () => {
       if (m.name === 'app') return { ok: false as const, detail: 'the rewritten text did not ship' };
-      afterCommit(async () => {
-        called.push(m.name);
-      });
       return { ok: true as const };
     };
 
     const result = await upgradeMovement({ teamId: 'team-1', id: 'app', acknowledge: true, validate, advance });
 
     expect(result).toEqual(expect.objectContaining({ status: 'unverified' }));
-    expect(called).toEqual([]);
+    expect(bringUpListensLater).not.toHaveBeenCalled();
   });
 
   it('without acknowledge, a clean group is reported and nothing moves', async () => {
