@@ -10,6 +10,7 @@
 //                        credential, fetches bytes → Readable)
 //     → OCR/text extractor  (the PDF's own text layer first, then
 //                            services.ocr.extractPdf for scanned PDFs;
+//                            services.ocr.read for images;
 //                            getPptxText / getXlsxContent for decks/sheets)
 //     → the host's raw-text store  (checksum dedup + store → stable id; in
 //       production the Context-free Kysely twin of RawTextService —
@@ -24,7 +25,12 @@
 // text — so spoken words flow into `extract from [ … ]` exactly where a
 // deck's slides do. The audio's duration is metered as its own ledger line.
 //
-// Unsupported types (anything past PDF/PPTX/XLSX/audio), unreachable bytes, a
+// An image is the fifth: it has no text of its own, so it always goes to OCR,
+// priced per page as its own line on the run (`google.document_ai`), which is
+// also how a run shows the file went that way. An image with none on it is
+// `no_text`, read and paid for like any other.
+//
+// Unsupported types (anything past PDF/PPTX/XLSX/audio/images), unreachable bytes, a
 // failed extractor and empty extractions all come back as an UNREADABLE reason:
 // the materialiser skips the file either way rather than emitting a garbage
 // FRAGMENT, but the run can then name the file it could not read and say why —
@@ -40,9 +46,10 @@ import {
   extractPdfText as extractPdfTextFrom,
   makeFileTextResolver as makeResolver,
   type FileTextReader as PackageFileTextReader,
+  type OcrImage,
   type SheetAnalyzer,
 } from 'file-text';
-import type { FileUnreadable } from 'movement-engine/public/models';
+import { assertRunBudget, isBudgetExhausted, reportRunCost, type FileUnreadable } from 'movement-engine/public/models';
 import type { FileTextResolution } from 'movement-engine/public/files';
 import type { FileRef } from 'movement-engine/public/adapter';
 import type { RawTextStore } from './raw_text_store';
@@ -59,6 +66,23 @@ import { streamFileRef, type StreamFileRefOptions } from '../engine/files/retrie
 // model call, byte store and logger.
 
 const ocrPdf = (stream: Readable, options: { size: number }) => services.ocr.extractPdf(stream, options);
+
+/** Document AI's Enterprise OCR list price: $1.50 per 1,000 pages. */
+const DOCUMENT_AI_MICRODOLLARS_PER_PAGE = 1500;
+
+// Asked and charged here, around the read, as the scraper does around a paid
+// fetch: a cap counts it, and the line is what says this file went through OCR.
+const ocrImage: OcrImage = async (stream, { size, mimeType }) => {
+  assertRunBudget();
+  // A page count sends a short file to the online endpoint; without one a read
+  // goes through the batch bucket. An image is one page, as the slot's is.
+  const { text, pages } = await services.ocr.read(stream, { numpages: 1, size, mimeType });
+  reportRunCost({
+    source: { kind: 'service', name: 'google.document_ai' },
+    microdollars: Math.max(pages, 1) * DOCUMENT_AI_MICRODOLLARS_PER_PAGE,
+  });
+  return text;
+};
 
 /** The model call that reads a spreadsheet's layout, metered under its own label. */
 export const analyzeSheet: SheetAnalyzer = ({ temperature, system, userMessage }) =>
@@ -88,13 +112,18 @@ export type FileTextReader = (input: { file: FileRef }) => Promise<FileTextResol
  * resolution (`streamFileRef`, for the run's team) → text extraction → the
  * raw-text store, which is a parameter so tests need no database.
  */
-export function makeFileTextResolver(rawText: RawTextStore, bytes: StreamFileRefOptions): FileTextReader {
+export function makeFileTextResolver(
+  rawText: RawTextStore,
+  { skipImages = false, ...bytes }: StreamFileRefOptions & { skipImages?: boolean },
+): FileTextReader {
   const read: PackageFileTextReader<FileRef> = makeResolver<FileRef>({
     // A file that is not the team's is refused by name, never read as one
-    // whose bytes were merely unavailable.
+    // whose bytes were merely unavailable, and a read past the run's budget
+    // reaches the host's refusal, never read as a file that failed.
     openBytes: (ref) => streamFileRef(ref, bytes),
-    isRefusal: (error) => error instanceof FileOutsideTeamError,
+    isRefusal: (error) => error instanceof FileOutsideTeamError || isBudgetExhausted(error),
     ocrPdf,
+    ...(skipImages ? {} : { ocrImage }),
     transcribe: (input) =>
       transcribe('whisper-1', { ...input, label: 'file_transcription' }),
     analyzeSheet,

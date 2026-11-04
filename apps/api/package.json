@@ -213,7 +213,7 @@
     "express": "4.20.0",
     "express-jwt": "8.4.1",
     "express-winston": "4.2.0",
-    "file-text": "npm:@listen-fire/file-text@0.12.6",
+    "file-text": "npm:@listen-fire/file-text@0.12.7",
     "form-data": "4.0.6",
     "generic-pool": "3.9.0",
     "google-auth-library": "10.3.0",

@@ -63,7 +63,7 @@ function resolvedAudio(bytes = 'fake-audio-bytes') {
 beforeEach(() => {
   jest.clearAllMocks();
   delete process.env.MAX_TRANSCRIPTION_BYTES;
-  services.ocr = { extractPdf: ocrMock };
+  services.ocr = { extractPdf: ocrMock, read: jest.fn() };
   streamFileRefMock.mockResolvedValue(resolvedAudio());
   transcribeMock.mockResolvedValue({ text: 'hello from the voice note', durationSeconds: 2.4 });
   getOrCreateRawTextIdMock.mockResolvedValue('rt-audio-1');

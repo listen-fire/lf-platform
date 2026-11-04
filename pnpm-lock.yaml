@@ -442,8 +442,8 @@ importers:
         specifier: 4.2.0
         version: 4.2.0(winston@3.14.2)
       file-text:
-        specifier: npm:@listen-fire/file-text@0.12.6
-        version: '@listen-fire/file-text@0.12.6'
+        specifier: npm:@listen-fire/file-text@0.12.7
+        version: '@listen-fire/file-text@0.12.7'
       form-data:
         specifier: 4.0.6
         version: 4.0.6
@@ -3350,6 +3350,10 @@ packages:
 
   '@listen-fire/file-text@0.12.6':
     resolution: {integrity: sha512-+ao8ucmpxs3wZWCwpan2IF2dEMEZHCMltp9bQx5nYbac1LPc0rpDQL3cez94zUknw14bE/BlDpcu8UoV9YtkEg==}
+    engines: {node: '>=22.23.4 <23'}
+
+  '@listen-fire/file-text@0.12.7':
+    resolution: {integrity: sha512-OZI2wy7SlNHHB7TVcSL7rKZ53k8DfAaQbeBVlWeZ6OsWWH3hmS34wqZdk6M4XU3bo/KmPvnP/m37e8vvX2Ha/g==}
     engines: {node: '>=22.23.4 <23'}
 
   '@listen-fire/files-s3@0.12.8':
@@ -14219,6 +14223,17 @@ snapshots:
       - supports-color
 
   '@listen-fire/file-text@0.12.6':
+    dependencies:
+      exceljs: 4.4.0
+      hot-formula-parser: 4.0.0
+      sax: 1.4.1
+      tmp: 0.2.7
+      unpdf: 1.8.1
+      yauzl-promise: 4.0.0
+    transitivePeerDependencies:
+      - '@napi-rs/canvas'
+
+  '@listen-fire/file-text@0.12.7':
     dependencies:
       exceljs: 4.4.0
       hot-formula-parser: 4.0.0

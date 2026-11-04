@@ -35,6 +35,8 @@ import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { FileRef } from 'movement-engine/public/adapter';
 
 import { FileOutsideTeamError } from 'movement-engine/public/files';
+import { metered, NO_BUDGET_LIMIT } from 'movement-engine/public/models';
+import { UnconfiguredOcrAdapter } from '../../../../adapters/ocr/unconfigured';
 import { makeFileTextResolver } from '../file_text';
 import { services } from '../../../../adapters/registry';
 import { LlmUsageContext } from '../../../../lib/llm_usage';
@@ -61,7 +63,7 @@ function resolvedAudio(bytes = 'fake-audio-bytes') {
 beforeEach(() => {
   jest.clearAllMocks();
   delete process.env.MAX_TRANSCRIPTION_BYTES;
-  services.ocr = { extractPdf: ocrMock };
+  services.ocr = { extractPdf: ocrMock, read: jest.fn() };
   streamFileRefMock.mockResolvedValue(resolvedAudio());
   transcribeMock.mockResolvedValue({ text: 'hello from the voice note', durationSeconds: 2.4 });
   getOrCreateRawTextIdMock.mockResolvedValue('rt-audio-1');
@@ -352,5 +354,99 @@ describe('NUL bytes in a font map with missing glyphs', () => {
         meta: expect.objectContaining({ name: 'onepager.pdf', message: expect.stringContaining('0x00') }),
       }),
     );
+  });
+});
+
+describe('an image is read by OCR, and the run pays for it', () => {
+  const readMock = jest.fn();
+  const png = Buffer.from('png bytes');
+  const image = (over: Partial<FileRef> = {}): FileRef => ({
+    __brand: 'FileRef',
+    name: 'shot.png',
+    contentType: 'image/png',
+    source: { adapterType: 'slack', handle: 'file-1' },
+    ...over,
+  });
+  /** The host's own wrapping (`billedFileText`), under a budget. */
+  const readUnder = (remainingMicrodollars: number | null, file: FileRef = image()) =>
+    metered({ file, budget: remainingMicrodollars === null ? NO_BUDGET_LIMIT : { remainingMicrodollars } }, (input) =>
+      makeFileTextResolver(rawText, FILE_BYTES)(input),
+    );
+
+  beforeEach(() => {
+    services.ocr = { extractPdf: ocrMock, read: readMock };
+    readMock.mockReset();
+    streamFileRefMock.mockImplementation(async () => ({ stream: Readable.from([png]), size: png.length }));
+    getOrCreateRawTextIdMock.mockResolvedValue('rt-image');
+  });
+
+  it('asks the reader for one page of the type it named, and charges the page as its own line', async () => {
+    readMock.mockResolvedValue({ text: 'the words on it', pages: 1 });
+    expect(await readUnder(null)).toEqual({
+      text: 'the words on it',
+      rawTextId: 'rt-image',
+      cost: [{ source: 'service:google.document_ai', microdollars: 1500 }],
+    });
+    expect(readMock).toHaveBeenCalledWith(expect.any(Readable), { numpages: 1, size: png.length, mimeType: 'image/png' });
+    expect(ocrMock).not.toHaveBeenCalled();
+  });
+
+  it('classifies by the extension where the content type says nothing', async () => {
+    readMock.mockResolvedValue({ text: 'text', pages: 1 });
+    await readUnder(null, image({ name: 'photo.JPEG', contentType: undefined }));
+    expect(readMock).toHaveBeenCalledWith(expect.any(Readable), expect.objectContaining({ mimeType: 'image/jpeg' }));
+  });
+
+  it('charges every page of a many-page TIFF', async () => {
+    readMock.mockResolvedValue({ text: 'text', pages: 3 });
+    expect(await readUnder(null, image({ name: 'a.tiff', contentType: 'image/tiff' }))).toMatchObject({
+      cost: [{ source: 'service:google.document_ai', microdollars: 4500 }],
+    });
+  });
+
+  it('leaves an image with no text unreadable, its read still paid for, and nothing thrown', async () => {
+    readMock.mockResolvedValue({ text: null, pages: 1 });
+    expect(await readUnder(null)).toEqual({
+      unreadable: 'no_text',
+      cost: [{ source: 'service:google.document_ai', microdollars: 1500 }],
+    });
+    expect(getOrCreateRawTextIdMock).not.toHaveBeenCalled();
+  });
+
+  it('says the slot is empty on a deployment with no OCR provider, and charges nothing', async () => {
+    services.ocr = new UnconfiguredOcrAdapter();
+    expect(await readUnder(null)).toEqual({
+      unreadable: 'extraction_failed',
+      detail: expect.stringMatching(/^an image is read by OCR; OCR is not configured, so text cannot be extracted from this file\./),
+      cost: [],
+    });
+  });
+
+  it('a backend failure is unreadable, naming it, and charges nothing', async () => {
+    readMock.mockRejectedValue(new Error('3 INVALID_ARGUMENT: unsupported input'));
+    expect(await readUnder(null)).toEqual({
+      unreadable: 'extraction_failed',
+      detail: 'an image is read by OCR; 3 INVALID_ARGUMENT: unsupported input',
+      cost: [],
+    });
+  });
+
+  it('is refused before the read once the budget is spent, reaching the host as a refusal rather than an unreadable file', async () => {
+    expect(await readUnder(0)).toEqual({ error: { kind: 'budget', message: expect.any(String) }, cost: [] });
+    expect(readMock).not.toHaveBeenCalled();
+  });
+
+  it('reads outside a run with no meter, charging nobody', async () => {
+    readMock.mockResolvedValue({ text: 'text', pages: 1 });
+    expect(await makeFileTextResolver(rawText, FILE_BYTES)({ file: image() })).toEqual({ text: 'text', rawTextId: 'rt-image' });
+  });
+
+  it('leaves SVG unsupported', async () => {
+    expect(await readUnder(null, image({ name: 'logo.svg', contentType: 'image/svg+xml' }))).toEqual({
+      unreadable: 'unsupported_type',
+      detail: 'image/svg+xml',
+      cost: [],
+    });
+    expect(readMock).not.toHaveBeenCalled();
   });
 });

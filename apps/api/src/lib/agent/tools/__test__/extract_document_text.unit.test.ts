@@ -53,7 +53,7 @@ function serveDocument() {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  services.ocr = { extractPdf: ocrMock };
+  services.ocr = { extractPdf: ocrMock, read: jest.fn() };
   mockFindFirstWithContentByChecksum.mockResolvedValue(null);
   mockGetOrCreateFromContent.mockImplementation(async (content: string) => ({
     id: 'rt-1',
