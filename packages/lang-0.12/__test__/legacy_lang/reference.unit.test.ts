@@ -28,7 +28,7 @@ const carriedErrors = (source: string, spec: Spec): string[] =>
     .map((d) => `${d.code}: ${d.message}`);
 
 const dialectErrors = (source: string, spec: Parameters<typeof mockCatalog>[0]): string[] =>
-  checkProgram(parseProgram(source, { languageVersion: 5 }), mockCatalog(spec), { languageVersion: 5 })
+  checkProgram(parseProgram(source, { languageVersion: '5' }), mockCatalog(spec), { languageVersion: '5' })
     .filter((d) => (d.severity ?? 'error') === 'error')
     .map((d) => `${d.code}: ${d.message}`);
 
@@ -47,7 +47,7 @@ const REGISTRY = {
     },
   },
   credentials: { public_registry: { adapter: 'registry' } },
-};
+} satisfies Spec;
 
 const ASKS = {
   adapters: {
@@ -72,7 +72,7 @@ const ASKS = {
     },
   },
   credentials: { ask_creds: { adapter: 'asksys' } },
-};
+} satisfies Spec;
 
 const CHAT = {
   adapters: {
@@ -84,10 +84,11 @@ const CHAT = {
           message: { properties: { Text: 'text', Tags: { kind: 'list' as const, of: 'text' as const } }, edges: {} },
         },
         collections: { Channels: { target: 'channel' } },
+        writableRoots: {},
       },
     },
   },
-};
+} satisfies Spec;
 
 const HOP_WHERE =
   'import { registry } from adapters\nimport { public_registry } from credentials\nreg = connect registry using public_registry\n' +
@@ -115,9 +116,9 @@ describe('the 0.12 surface, by the carried 0.12.13 checker', () => {
 
   it('a message spells a walk\'s own words as they are', () => {
     expect(spellCode(LOWER_IN_A_WALK)).toBe(LOWER_IN_A_WALK);
-    for (const [old, v5] of [
     // Up to 4 the text is canonical as it stands, so nothing is respelled either.
     expect(dialectSpellCode(LOWER_IN_A_WALK, '4')).toBe(LOWER_IN_A_WALK);
+    for (const [old, v5] of [
       ['EXISTS(channel)', 'channel != null'],
       ['AT(t, 0)', 't[0]'],
       ['IF … THEN "Yes" ELSE "No" END', '… ? "Yes" : "No"'],

@@ -49,7 +49,7 @@ function sourceOf(body: string, version: Version): string {
  *  is the one channel named "alerts", which may not be there. */
 function absent(body: string, version: Version): { ts: string[]; rust: string[] } {
   const source = sourceOf(body, version);
-  const ts = checkProgram(parseProgram(source, { languageVersion: version }), fromCatalogSnapshot(snapshot), { languageVersion: version });
+  const ts = checkProgram(parseProgram(source, { languageVersion: String(version) }), fromCatalogSnapshot(snapshot), { languageVersion: String(version) });
   // The Rust checker serves the versions the language release does (5);
   // below it the TypeScript checker alone answers (ruling A).
   const rust = version >= 5 ? checkSourceInRust(source, snapshot, { languageVersion: LANGUAGE_VERSION }) : ts;

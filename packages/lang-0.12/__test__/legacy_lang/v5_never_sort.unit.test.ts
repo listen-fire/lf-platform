@@ -27,7 +27,7 @@ const checked: Array<{ source: string; languageVersion: number }> = [];
 
 function check(source: string, languageVersion: number): Diagnostic[] {
   checked.push({ source, languageVersion });
-  return checkProgram(parseProgram(source, { languageVersion }), catalog, { languageVersion });
+  return checkProgram(parseProgram(source, { languageVersion: String(languageVersion) }), catalog, { languageVersion: String(languageVersion) });
 }
 
 const codes = (source: string, version: number): string[] => check(source, version).map((d) => d.code).sort();
@@ -160,7 +160,7 @@ describe('both checkers agree', () => {
       const key = `${languageVersion}\n${source}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      const ts = checkProgram(parseProgram(source, { languageVersion }), fromCatalogSnapshot(SNAPSHOT), { languageVersion });
+      const ts = checkProgram(parseProgram(source, { languageVersion: String(languageVersion) }), fromCatalogSnapshot(SNAPSHOT), { languageVersion: String(languageVersion) });
       // The Rust checker serves the versions the language release does (5);
       // below it the TypeScript checker alone answers (ruling A).
       const rust = languageVersion >= 5 ? checkSourceInRust(source, SNAPSHOT, { languageVersion: LANGUAGE_VERSION }) : ts;

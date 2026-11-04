@@ -13,7 +13,7 @@ import { parseProgram } from '../../../legacy-lang/parser/parse';
 import { mockCatalogSnapshot } from '@listen-fire/movement-lang/service/snapshot';
 import { checkSourceInRust } from '@listen-fire/movement-lang/checker/rust_checker';
 
-const spec: Parameters<typeof mockCatalog>[0] = {
+const spec = {
   adapters: {
     attio: {
       constructionArgs: [{ name: 'credentials', kind: 'credential', required: true }],
@@ -29,11 +29,11 @@ const spec: Parameters<typeof mockCatalog>[0] = {
   },
   credentials: { crm_cred: { adapter: 'attio' } },
   plugins: {
-    lookup: { args: ['q', 'limit'], argTypes: { q: 'text', limit: 'number' }, requiredArgs: ['q'], effects: { ai: true }, output: { kind: 'value', type: 'text' } },
+    lookup: { args: ['q', 'limit'], argTypes: { q: 'text', limit: 'number' }, requiredArgs: ['q'], effects: { ai: true }, output: { kind: 'value', type: 'text' }, priced: false },
     // A plugin that declares no output: before 5 it ran only as an extraction's stage.
-    enrich: { args: ['q'], argTypes: { q: 'text' }, requiredArgs: ['q'] },
+    enrich: { args: ['q'], argTypes: { q: 'text' }, requiredArgs: ['q'], priced: false },
   },
-};
+} satisfies Parameters<typeof mockCatalog>[0] & Parameters<typeof mockCatalogSnapshot>[0];
 const catalog = mockCatalog(spec);
 const snapshot = mockCatalogSnapshot(spec);
 
@@ -48,7 +48,7 @@ const said = (found: Diagnostic[]): Said[] =>
 
 /** What both checkers say of `source` under `version` — the same, or the test fails. */
 function check(source: string, version: number): Said[] {
-  const ts = said(checkProgram(parseProgram(source, { languageVersion: version }), catalog, { languageVersion: version }));
+  const ts = said(checkProgram(parseProgram(source, { languageVersion: String(version) }), catalog, { languageVersion: String(version) }));
   // The Rust checker serves the versions the language release does (5);
   // below it the TypeScript checker alone answers (ruling A).
   const rust = version >= 5 ? said(checkSourceInRust(source, snapshot, { languageVersion: LANGUAGE_VERSION })) : ts;
@@ -104,7 +104,7 @@ describe('version 5 checker leftovers, in both checkers', () => {
   // answer in either direction fails here.
   it('Text.lower inside walk brackets: the TypeScript dialect finds nothing', () => {
     const source = V5('  b = c-[n:notes WHERE Text.lower(n.title) == "x"]->');
-    expect(said(checkProgram(parseProgram(source, { languageVersion: 5 }), catalog, { languageVersion: 5 }))).toEqual([]);
+    expect(said(checkProgram(parseProgram(source, { languageVersion: '5' }), catalog, { languageVersion: '5' }))).toEqual([]);
   });
 
   it('a field read off text is refused from 5, and warned under 3 and 4', () => {
@@ -171,10 +171,10 @@ describe('a version 5 slot read again is read under 5', () => {
   ].join('\n');
 
   it('a program whose slots lost their cached parse checks as the parsed one does', () => {
-    const parsed = parseProgram(V5(body), { languageVersion: 5 });
+    const parsed = parseProgram(V5(body), { languageVersion: '5' });
     const rebuilt = structuredClone(parsed);
-    const found = said(checkProgram(rebuilt, catalog, { languageVersion: 5 }));
-    expect(found).toEqual(said(checkProgram(parsed, catalog, { languageVersion: 5 })));
+    const found = said(checkProgram(rebuilt, catalog, { languageVersion: '5' }));
+    expect(found).toEqual(said(checkProgram(parsed, catalog, { languageVersion: '5' })));
     expect(found.filter((d) => d.severity === 'error')).toEqual([]);
   });
 });
