@@ -25,7 +25,7 @@ import {
   setRunEngineRecorder,
   type RunEngineRecord,
 } from 'movement-engine/public/movement-engine';
-import { engineFor } from '../engine_choice';
+import { engineFor, heldRunRefusal } from '../engine_choice';
 import type { ParkedScopeState } from '../serialize';
 import { credentialIdsFor, makeTestHost } from 'movement-engine/public/testing';
 
@@ -158,9 +158,20 @@ describe('the engine a segment runs on', () => {
   });
 });
 
-describe('a version this build carries but does not resume (0.12)', () => {
+describe('a version this build runs on its own engine but does not resume (0.12)', () => {
   const OLDER = '0.12.13';
   const refusal = resumeRefusal(OLDER)!;
+
+  it("a run is refused by this release's dispatcher itself: 0.12 runs on its own lane, never on this engine", async () => {
+    const own = `this automation pins language ${OLDER}, which this platform runs on 0.12.13's own engine, never on this release's (${LANGUAGE_VERSION})`;
+    expect(heldRunRefusal(OLDER)).toBe(own);
+    expect(() => engineFor({ languageVersion: OLDER })).toThrow(`MOVENG_LANGUAGE_VERSION: ${own}`);
+    const failure = await runMovement({ ...inputOf(ADMITTED, LANGUAGE_VERSION, 'run-012-direct'), languageVersion: OLDER }).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(MovementEngineError);
+    expect(String(failure)).toContain(own);
+    expect(rustRunStats.segments).toBe(0);
+    expect(recorded).toEqual([]);
+  });
 
   it("a resume is refused by pin, in the registry's text naming what the version provides", () => {
     expect(refusal).toMatch(/^this automation pins language 0\.12\.13: this platform carries 0\.12\.13 to /);

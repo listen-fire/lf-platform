@@ -325,7 +325,7 @@ export function listeningOf(pin: LanguageVersion): ListenCapability {
 }
 
 /** What a door asks of `pin`'s version, by the capability it needs. */
-function capabilityOf(pin: LanguageVersion, needed: RunningCapability): RunCapability | ResumeCapability | ListenCapability {
+export function capabilityOf(pin: LanguageVersion, needed: RunningCapability): RunCapability | ResumeCapability | ListenCapability {
   switch (needed) {
     case 'run':
       return runningOf(pin);

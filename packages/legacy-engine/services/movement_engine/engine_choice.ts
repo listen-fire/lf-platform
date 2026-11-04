@@ -2,29 +2,49 @@
 // on the TypeScript engine this package keeps; any other pin is a release's
 // semver, and its compatibility key chooses a carried version
 // (`@listen-fire/language-versions`). The current version runs on the Rust
-// engine (`@listen-fire/engine`); a version this build carries without running
-// it, and a key it does not carry, are refused alike, by the registry's text
-// (the current language's). No fallback between them.
+// engine (`@listen-fire/engine`). Every other pin is refused here: a version
+// this build runs on its own engine (its lane) never reaches this one, and a
+// version it holds or does not carry is refused in the registry's text. The
+// refusal is this dispatcher's own, not a door's call order. No fallback
+// between engines.
 
-import type { LanguageVersion } from 'movement-lang';
+import { LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang';
 import { isLegacyLanguageVersion } from 'legacy-lang';
-import { refusalOf, type RunningCapability } from '@listen-fire/language-versions';
+import { capabilityOf, refusalOf, versionOf, type RunningCapability } from '@listen-fire/language-versions';
 import { MovementEngineError, PARKED_ON_TYPESCRIPT } from 'movement-engine/public/errors';
 
 /** An engine: the one a run's segment runs on. */
 export type EngineChoice = 'rust' | 'ts';
 
 /** Why a run pinned to `languageVersion` does not get `needed` (a segment
- *  someone starts, by default) on this build, in the registry's text;
- *  undefined when it does (a legacy id always does). */
+ *  someone starts, by default) from this release's engines; undefined when
+ *  it does (a legacy id always does). A version that provides `needed` on its
+ *  own engine is refused here too: its runs go to its lane, never to this
+ *  release's engine. */
 export function heldRunRefusal(languageVersion: LanguageVersion, needed: RunningCapability = 'run'): string | undefined {
-  return isLegacyLanguageVersion(languageVersion) ? undefined : refusalOf(languageVersion, needed);
+  if (isLegacyLanguageVersion(languageVersion)) return undefined;
+  const capability = capabilityOf(languageVersion, needed);
+  switch (capability.kind) {
+    case 'current':
+      return undefined;
+    case 'carried':
+      return (
+        `this automation pins language ${languageVersion}, which this platform runs on ${versionOf(languageVersion)?.release ?? languageVersion}'s own engine, ` +
+        `never on this release's (${LANGUAGE_VERSION})`
+      );
+    case 'held':
+      return refusalOf(languageVersion, needed);
+    default: {
+      const unknown: never = capability;
+      throw new Error(`unknown capability ${JSON.stringify(unknown)}`);
+    }
+  }
 }
 
-/** Refuses a run pinned to a version that does not provide `needed`. A door
- *  that would start, resume or fire a program calls it before it reads the
- *  program's text, assembles a catalog for it or asks a model anything about
- *  it. */
+/** Refuses a run pinned to a version this release's engines do not provide
+ *  `needed` for. A door that would start, resume or fire a program on them
+ *  calls it before it reads the program's text, assembles a catalog for it or
+ *  asks a model anything about it; the dispatcher calls it again itself. */
 export function refuseHeldRun(languageVersion: LanguageVersion, needed: RunningCapability = 'run'): void {
   const refusal = heldRunRefusal(languageVersion, needed);
   if (refusal !== undefined) throw new MovementEngineError('MOVENG_LANGUAGE_VERSION', refusal);
