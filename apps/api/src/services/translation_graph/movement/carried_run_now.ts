@@ -15,22 +15,23 @@
 import { createHash, randomUUID } from 'node:crypto';
 
 import { z } from 'zod';
-import { triggerEventSchema } from 'engine-contracts';
+import { compatibilityKey } from 'movement-lang';
 import { logger } from 'movement-engine/public/log';
 
-import type { RunningLane, ManualInvocation } from '@listen-fire/language-versions';
+import { runRefusal, type RunningLane, type ManualInvocation } from '@listen-fire/language-versions';
 import type { LanguageVersion } from 'movement-lang';
-import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
 import type { WorkHandler } from '../../work/kinds';
 
 import { getAutomationsQb } from '../../../lib/kysely';
+import { teamIdSchema } from '../../../lib/team_id';
 import { enqueueWork } from '../../work/store';
 import { notifyWork, registerWorkHandler } from '../../work/drain';
 import { isLfEngineTeam } from '../../lf_engine/team_engine';
 import { mapRecordingTriggerType } from '../triggers/router';
 import { describeDroppedReason } from '../triggers/dropped_reason';
 import { runMovementFiring, shippedMovementForTrigger } from './execute';
+import { carriedRunLaneOf } from './carried_run';
 
 /** The work kind a carried version's Run now is queued under. */
 export const CARRIED_RUN_WORK_KIND = 'run_carried';
@@ -38,10 +39,20 @@ export const CARRIED_RUN_WORK_KIND = 'run_carried';
 /** What a carried Run now's run is recorded as having fired through. */
 export const CARRIED_RUN_NOW_NAME = 'Run now';
 
+/** The trigger id a carried Run now's run is recorded under: the movement's
+ *  own id, since there is no trigger row for a listen this platform does not
+ *  fire. A runs list reads it beside the movement's listens. */
+export function carriedRunTriggerId(movementId: string): string {
+  return movementId;
+}
+
 const carriedRunRowSchema = z.object({
-  teamId: z.string().min(1),
+  teamId: teamIdSchema,
   movementId: z.string().min(1),
   movementName: z.string(),
+  /** The pin the press was queued under: the version whose shape `event` is
+   *  in, and the only one that reads it. */
+  pin: z.string().min(1),
   /** The press, as the version's own manual event (JSON). */
   event: z.record(z.string(), z.unknown()),
   runId: z.string().min(1),
@@ -75,7 +86,8 @@ export async function queueCarriedRunNow(input: {
   invocation: ManualInvocation;
   requestId?: string;
 }): Promise<CarriedRunNowAnswer> {
-  const shipped = await shippedMovementForTrigger({ teamId: input.teamId as TeamId, movementId: input.movementId });
+  const teamId = teamIdSchema.parse(input.teamId);
+  const shipped = await shippedMovementForTrigger({ teamId, movementId: input.movementId });
   if (shipped.kind !== 'shipped') {
     return { ok: false, errors: [`'${input.name}' has never been saved clean, so there is nothing to run: save it, then run it`] };
   }
@@ -91,9 +103,10 @@ export async function queueCarriedRunNow(input: {
   }
   const runId = input.requestId !== undefined ? requestRunId({ teamId: input.teamId, movementId: input.movementId, requestId: input.requestId }) : randomUUID();
   const row: CarriedRunRow = {
-    teamId: input.teamId,
+    teamId,
     movementId: input.movementId,
     movementName,
+    pin: version.languageVersion,
     event: input.lane.manualInvocationEvent({
       key: input.movementId,
       invocation: input.invocation,
@@ -123,8 +136,8 @@ async function failUnstarted(row: CarriedRunRow, reason: string): Promise<void> 
     .insertInto('trigger_run')
     .values({
       id: row.runId as TriggerRunId,
-      team_id: row.teamId as TeamId,
-      trigger_id: row.movementId,
+      team_id: row.teamId,
+      trigger_id: carriedRunTriggerId(row.movementId),
       trigger_type: 'webhook',
       status: 'failed',
       failed_at: new Date(),
@@ -139,20 +152,30 @@ async function runCarriedRow(payload: unknown): Promise<void> {
   // A row taken again after its run started was started then: its segment,
   // or the orphan sweep, settles it.
   if (await runRowExists(row.runId)) return;
-  const teamId = row.teamId as TeamId;
+  const { teamId } = row;
   // An lf-engined team's runs are lf's, as at every door.
   if (await isLfEngineTeam(teamId)) return failUnstarted(row, describeDroppedReason('engine_lf'));
   const shipped = await shippedMovementForTrigger({ teamId, movementId: row.movementId });
   if (shipped.kind !== 'shipped') return failUnstarted(row, `movement ${row.movementId} has no shipped version to run`);
-  const event = triggerEventSchema.parse(row.event);
+  // The press is in the shape of the version it was queued under, and only
+  // that version reads it: an automation upgraded since is not handed it.
+  const shippedPin = shipped.movement.version.languageVersion;
+  if (compatibilityKey(shippedPin) !== compatibilityKey(row.pin)) {
+    return failUnstarted(row, `this run was queued under language ${row.pin}, and the automation has moved to ${shippedPin} since: run it again`);
+  }
+  const lane = await carriedRunLaneOf(row.pin);
+  if (lane === undefined) return failUnstarted(row, runRefusal(row.pin) ?? `language ${row.pin} is not run by a carried version on this platform`);
+  const read = lane.readEvent(row.event);
+  if (!read.ok) return failUnstarted(row, `the queued press could not be read under language ${row.pin}: ${read.reason}`);
   await runMovementFiring({
     teamId,
-    triggerId: row.movementId,
+    door: { kind: 'manual', event: row.event },
+    triggerId: carriedRunTriggerId(row.movementId),
     triggerName: CARRIED_RUN_NOW_NAME,
     firedMovementName: row.movementName,
     movement: shipped.movement,
-    event,
-    recordingTriggerType: mapRecordingTriggerType(event.triggerType),
+    event: read.record,
+    recordingTriggerType: mapRecordingTriggerType(read.record.triggerType),
     existingRunId: row.runId as TriggerRunId,
   });
 }

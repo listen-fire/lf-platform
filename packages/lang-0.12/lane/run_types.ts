@@ -156,6 +156,15 @@ export interface SegmentRequest {
   trace?: MovementTraceEntry[];
 }
 
+/** What the platform records of a 0.12 event, read with 0.12's schema, or
+ *  why 0.12 cannot read it. */
+export type EventReading =
+  | {
+      ok: true;
+      record: { pipelineInputId: string; adapterType: string; triggerType: TriggerEvent['triggerType']; payload?: unknown; recordId?: string };
+    }
+  | { ok: false; reason: string };
+
 /** How a segment ended, as plain data. */
 export type SegmentOutcome =
   | { kind: 'ran'; result: MovementRunResult }

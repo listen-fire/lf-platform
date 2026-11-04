@@ -147,7 +147,7 @@ import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 
 import { LANGUAGE_VERSION } from 'movement-lang';
-import { resumeRefusal, runRefusal } from '@listen-fire/language-versions';
+import { refusalOf, resumeRefusal, runRefusal } from '@listen-fire/language-versions';
 
 import { RunLeaseLost } from '../../../movement_engine/run_lease';
 import { movementForTrigger, resumeMovementFiring, runMovementFiring, shippedMovementForTrigger } from '../execute';
@@ -249,6 +249,7 @@ describe('runMovementFiring', () => {
     runMovement.mockResolvedValue(runResult);
 
     const outcome = await runMovementFiring({
+      door: { kind: 'listen' },
       teamId: TEAM,
       triggerId: 't-1',
       triggerName: 'movement/intake_file/intake',
@@ -300,6 +301,7 @@ describe('runMovementFiring', () => {
     takeRunLease.mockResolvedValueOnce(null);
 
     const outcome = await runMovementFiring({
+      door: { kind: 'listen' },
       teamId: TEAM,
       triggerId: 't-1',
       triggerName: 'movement/intake_file/intake',
@@ -320,6 +322,7 @@ describe('runMovementFiring', () => {
     runMovement.mockRejectedValue(new RunLeaseLost('run-1' as never));
 
     const outcome = await runMovementFiring({
+      door: { kind: 'listen' },
       teamId: TEAM,
       triggerId: 't-1',
       triggerName: 'movement/intake_file/intake',
@@ -345,6 +348,7 @@ describe('runMovementFiring', () => {
     takeRunLease.mockResolvedValueOnce({ isLost: () => true, release: async () => {} });
 
     const outcome = await runMovementFiring({
+      door: { kind: 'listen' },
       teamId: TEAM,
       triggerId: 't-1',
       triggerName: 'movement/intake_file/intake',
@@ -366,6 +370,7 @@ describe('runMovementFiring', () => {
 
   it('a firing pinned to a version this build does not run is refused by the registry, before any catalog is assembled', async () => {
     const outcome = await runMovementFiring({
+      door: { kind: 'listen' },
       teamId: TEAM,
       triggerId: 't-1',
       triggerName: 'movement/intake_file/intake',
@@ -380,13 +385,15 @@ describe('runMovementFiring', () => {
     expect(outcome.error).toContain(runRefusal('0.13.0'));
   });
 
-  it("a firing pinned to 0.12 runs on 0.12's own run host, from its shipped text, and this release's catalog never reads it", async () => {
+  it("a press of a 0.12 automation runs on 0.12's own run host, on the event in 0.12's own shape, and this release's catalog never reads it", async () => {
     const { runCarriedSegment } = jest.requireMock('../carried_run') as { runCarriedSegment: jest.Mock };
     runCarriedSegment.mockResolvedValueOnce({ movementName: 'intake', writes: [], extractionSites: {}, trace: [] });
+    const pressed = { pipelineInputId: 'trigger:mov-1', adapterType: 'manual', triggerType: 'webhook', payload: { text: 'x' }, onlyZeroTwelveKnows: true };
     const outcome = await runMovementFiring({
       teamId: TEAM,
-      triggerId: 't-1',
-      triggerName: 'movement/intake_file/intake',
+      door: { kind: 'manual', event: pressed },
+      triggerId: 'mov-1',
+      triggerName: 'Run now',
       movement: shippedMovement({ languageVersion: '0.12.13' }) as never,
       event,
       recordingTriggerType: 'webhook',
@@ -394,10 +401,35 @@ describe('runMovementFiring', () => {
 
     expect(runCatalogSnapshotForTeam).not.toHaveBeenCalled();
     expect(runMovement).not.toHaveBeenCalled();
-    expect(runCarriedSegment).toHaveBeenCalledWith(
-      expect.objectContaining({ pin: '0.12.13', imports: 'shipped', triggerRunId: 'run-1', event: expect.objectContaining({ adapterType: event.adapterType }) }),
-    );
+    expect(runCarriedSegment).toHaveBeenCalledWith(expect.objectContaining({ pin: '0.12.13', imports: 'shipped', triggerRunId: 'run-1', event: pressed }));
     expect(outcome.result?.movementName).toBe('intake');
+  });
+
+  it("a listen's firing of a 0.12 automation (a leftover trigger row) asks for listen first: refused, recorded failed, run on no engine", async () => {
+    const { runCarriedSegment } = jest.requireMock('../carried_run') as { runCarriedSegment: jest.Mock };
+    const { recordMovementFailureIssue } = jest.requireMock('../issues') as { recordMovementFailureIssue: jest.Mock };
+    runCarriedSegment.mockResolvedValue({ movementName: 'intake', writes: [], extractionSites: {}, trace: [] });
+    const listenRefusal = refusalOf('0.12.13', 'listen');
+    expect(listenRefusal).toMatch(/but not to fire its listens/);
+
+    const outcome = await runMovementFiring({
+      teamId: TEAM,
+      door: { kind: 'listen' },
+      triggerId: 't-1',
+      triggerName: 'movement/intake_file/intake',
+      movement: shippedMovement({ languageVersion: '0.12.13' }) as never,
+      event,
+      recordingTriggerType: 'webhook',
+    });
+
+    expect(runCarriedSegment).not.toHaveBeenCalled();
+    expect(runMovement).not.toHaveBeenCalled();
+    expect(runCatalogSnapshotForTeam).not.toHaveBeenCalled();
+    expect(takeRunLease).not.toHaveBeenCalled();
+    expect(outcome).toEqual({ result: null, error: listenRefusal });
+    expect(recordStepFailure).toHaveBeenCalledWith(expect.objectContaining({ tgId: 'movement:mov-1', message: listenRefusal }));
+    expect(finish).toHaveBeenCalledTimes(1);
+    expect(recordMovementFailureIssue).toHaveBeenCalledWith(expect.objectContaining({ movementId: 'mov-1', message: listenRefusal }));
   });
 
   it('contains a thrown engine error: failed step recorded, error returned as a value', async () => {
@@ -406,6 +438,7 @@ describe('runMovementFiring', () => {
     );
 
     const outcome = await runMovementFiring({
+      door: { kind: 'listen' },
       teamId: TEAM,
       triggerId: 't-1',
       triggerName: 'movement/intake_file/intake',
@@ -440,6 +473,7 @@ describe('runMovementFiring', () => {
     runMovement.mockRejectedValue(new Error('MOVENG_RUNTIME: boom'));
 
     const outcome = await runMovementFiring({
+      door: { kind: 'listen' },
       teamId: TEAM,
       triggerId: 't-1',
       triggerName: 'movement/intake_file/intake',
@@ -482,6 +516,7 @@ describe('runMovementFiring', () => {
     runMovement.mockRejectedValue(new MovementRunFailed(cause, partial));
 
     const outcome = await runMovementFiring({
+      door: { kind: 'listen' },
       teamId: TEAM,
       triggerId: 't-1',
       triggerName: 'movement/intake_file/intake',
@@ -510,6 +545,7 @@ describe('runMovementFiring', () => {
       writes: [],
     });
     await runMovementFiring({
+      door: { kind: 'listen' },
       teamId: TEAM,
       triggerId: 't-1',
       triggerName: 'movement/intake_file/intake',
@@ -525,6 +561,7 @@ describe('a firing runs under the movement\'s language version pin', () => {
   it('hands the engine the shipped version\'s pin, not the current version', async () => {
     runMovement.mockResolvedValue({ movementName: 'intake', writes: [], extractionSites: {}, trace: [] });
     await runMovementFiring({
+      door: { kind: 'listen' },
       teamId: TEAM,
       triggerId: 't-1',
       triggerName: 'movement/intake_file/intake',

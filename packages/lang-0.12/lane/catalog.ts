@@ -143,13 +143,27 @@ const NOT_READ: ReadonlySet<string> = new Set(['ask']);
 const READ_TTL_MS = 60_000;
 const readSchemas = new Map<string, { at: number; reading: Promise<{ schema: InstanceSchema; notes: string[] }> }>();
 
-function readOnce(key: string, read: () => Promise<{ schema: InstanceSchema; notes: string[] }>) {
+let sweptAt = 0;
+
+export function readOnce(key: string, read: () => Promise<{ schema: InstanceSchema; notes: string[] }>) {
+  const now = Date.now();
   const cached = readSchemas.get(key);
-  if (cached !== undefined && Date.now() - cached.at < READ_TTL_MS) return cached.reading;
+  if (cached !== undefined && now - cached.at < READ_TTL_MS) return cached.reading;
+  // Every connection any team's check read stays only for the minute it is
+  // shared: the rest are let go, at most once a minute.
+  if (now - sweptAt >= READ_TTL_MS) {
+    sweptAt = now;
+    for (const [stale, entry] of readSchemas) if (now - entry.at >= READ_TTL_MS) readSchemas.delete(stale);
+  }
   const reading = read();
-  readSchemas.set(key, { at: Date.now(), reading });
+  readSchemas.set(key, { at: now, reading });
   reading.catch(() => readSchemas.delete(key));
   return reading;
+}
+
+/** How many connections' schemas are held. */
+export function heldSchemaCount(): number {
+  return readSchemas.size;
 }
 
 /** Each connection `reading.programs` make that can be read, read: its

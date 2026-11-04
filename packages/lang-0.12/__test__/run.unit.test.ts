@@ -5,7 +5,10 @@
 import { InMemoryWriteLocks } from '@listen-fire/engine/public/embed';
 import * as errors012 from '@listen-fire/engine/public/errors';
 
-import { manualInvocationEvent, manualListens, runSegment } from '..';
+import { manualInvocationEvent, manualListens, readEvent, runSegment } from '..';
+import { ledgered } from '../lane/run';
+import { heldSchemaCount, readOnce } from '../lane/catalog';
+import type { HostAdapters } from '@listen-fire/engine/public/host';
 import type { RunPlatform, SegmentRequest } from '../lane/run_types';
 import type { TeamFacts } from '../lane/types';
 
@@ -119,5 +122,112 @@ describe("a 0.12 segment on 0.12's own run host", () => {
 
   it("0.12's classes are its own: the run host throws none of the current release's", () => {
     expect(errors012.RunLeaseLost.name).toBe('RunLeaseLost');
+  });
+});
+
+describe('a program importing a library on another version', () => {
+  const IMPORTS = 'import { shout } from "lib"\nfunction echo(run: <manual-[:Invocation]->>) {\n  return shout(run.Text)\n}\nlisten to manual fire echo\n';
+  const LIBRARY = 'export function shout(t: <text>) {\n  return t\n}\n';
+
+  it('fails with the import diagnostic naming both versions, not a later unknown file', async () => {
+    const outcome = await runSegment(
+      request(IMPORTS, { team: { ...team(), files: [{ name: 'lib', source: LIBRARY, languageVersion: '0.15.1' }] } }),
+      platform(),
+    );
+    expect(outcome).toMatchObject({ kind: 'failed', code: 'MOVENG_CHECK' });
+    if (outcome.kind !== 'failed') return;
+    expect(outcome.message).toContain("the library 'lib' it imports is on language 0.15.1");
+    expect(outcome.message).toContain('this automation is on language 0.12.13');
+  });
+});
+
+describe('an event, read by 0.12', () => {
+  it("answers what the platform records, by 0.12's schema", () => {
+    const event = manualInvocationEvent({ key: 'movement-1', invocation: { firedAt: '2026-11-04T10:00:00.000Z', text: 'hello' } });
+    expect(readEvent(event)).toEqual({
+      ok: true,
+      record: { pipelineInputId: 'trigger:movement-1', adapterType: 'manual', triggerType: 'webhook', payload: { firedAt: '2026-11-04T10:00:00.000Z', text: 'hello' } },
+    });
+  });
+
+  it('names what it cannot read', () => {
+    const reading = readEvent({ pipelineInputId: 'p', adapterType: 'manual', triggerType: 'arrival' });
+    expect(reading.ok).toBe(false);
+    if (!reading.ok) expect(reading.reason).toContain('triggerType');
+  });
+});
+
+describe("the write ledger, from 0.12's modules", () => {
+  /** A module that answers every write as written, and `gone` as not found. */
+  const fakeModule = (): HostAdapters => ({
+    resolve: async (resolution) => ({
+      instance: resolution.dryRun === true ? 'rehearsed' : 'live',
+      adapterType: 'attio',
+      supportedTriggers: [],
+      capabilities: { traversal: { incoming: false, edgeProperties: false }, resources: false },
+      methods: ['createRecord', 'updateRecord', 'readRecord'],
+    }),
+    call: async (call) => {
+      const named = 'externalId' in call.args && typeof call.args.externalId === 'string' ? call.args.externalId : undefined;
+      if (named === 'gone') return { result: { notFound: true } } as never;
+      return { result: { adapterType: 'attio', externalId: named ?? 'company-new' } } as never;
+    },
+  });
+
+  const writes = async (keepWrite: NonNullable<RunPlatform['keepWrite']>) => {
+    const host = ledgered(fakeModule(), keepWrite);
+    const live = await host.resolve({ segmentId: 's1', adapterType: 'attio', role: 'target' });
+    const rehearsed = await host.resolve({ segmentId: 's1', adapterType: 'attio', role: 'target', dryRun: true });
+    return {
+      call: (instance: string, method: string, args: Record<string, unknown>) => host.call({ segmentId: 's1', instance, method, args } as never),
+      live: live.instance,
+      rehearsed: rehearsed.instance,
+    };
+  };
+
+  it("keeps each write its module answered, with its adapter, record type, id and sent time; nothing a rehearsal, a read or a not-found sends", async () => {
+    const kept: Parameters<NonNullable<RunPlatform['keepWrite']>>[0][] = [];
+    const { call, live, rehearsed } = await writes(async (write) => {
+      kept.push(write);
+    });
+    const before = Date.now();
+    await call(live, 'createRecord', { recordType: 'Companies', fields: {} });
+    await call(live, 'updateRecord', { recordType: 'Companies', externalId: 'company-1', fields: {} });
+    await call(live, 'updateRecord', { recordType: 'Companies', externalId: 'gone', fields: {} });
+    await call(live, 'readRecord', { recordType: 'Companies', externalId: 'company-2' });
+    await call(rehearsed, 'updateRecord', { recordType: 'Companies', externalId: 'company-3', fields: {} });
+    expect(kept.map(({ adapterType, recordType, externalId }) => ({ adapterType, recordType, externalId }))).toEqual([
+      { adapterType: 'attio', recordType: 'Companies', externalId: 'company-new' },
+      { adapterType: 'attio', recordType: 'Companies', externalId: 'company-1' },
+    ]);
+    for (const write of kept) expect(new Date(write.at).getTime()).toBeGreaterThanOrEqual(before);
+  });
+
+  it('a write the ledger cannot keep fails the call: a write it does not know would let its echo start a chain', async () => {
+    const { call, live } = await writes(async () => {
+      throw new Error('the ledger is down');
+    });
+    expect(await call(live, 'createRecord', { recordType: 'Companies', fields: {} })).toEqual({
+      error: {
+        kind: 'adapter_error',
+        message: 'keeping the write of Companies company-new in the write ledger failed after the write was sent: the ledger is down',
+      },
+    });
+  });
+});
+
+describe("a connection's schema, held for the minute it is shared", () => {
+  afterEach(() => jest.useRealTimers());
+
+  it('is let go once its minute is over, so the process does not keep every connection it ever read', async () => {
+    jest.useFakeTimers({ now: Date.parse('2026-11-04T10:00:00.000Z') });
+    const reading = async () => ({ schema: { positions: {}, collections: {}, writableRoots: {} }, notes: [] });
+    await readOnce('team-a|attio|', reading);
+    await readOnce('team-b|attio|', reading);
+    const held = heldSchemaCount();
+    jest.setSystemTime(Date.parse('2026-11-04T10:02:00.000Z'));
+    await readOnce('team-c|attio|', reading);
+    expect(heldSchemaCount()).toBeLessThan(held);
+    expect(heldSchemaCount()).toBe(1);
   });
 });

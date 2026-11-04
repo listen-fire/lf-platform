@@ -228,6 +228,9 @@ export async function dispatchTriggerByIdEvent(
     }
     const firing = await runMovementFiring({
       teamId: input.teamId,
+      // A trigger row is a listen: its firing asks the pin's version to fire
+      // its listens before anything else.
+      door: { kind: 'listen' },
       triggerId: input.triggerId,
       triggerName: triggerRow.name,
       ...(triggerRow.firedMovementName !== null

@@ -28,6 +28,9 @@ import type { AnyParkedScopeState } from 'engine-contracts';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 
+import { refusalOf, type CarriedEvent, type RunningCapability } from '@listen-fire/language-versions';
+import { neverAsAny } from 'movement-engine/public/types';
+import { isLegacyLanguageVersion } from 'legacy-lang';
 import { describeError } from 'movement-engine/public/errors';
 import { logger } from 'movement-engine/public/log';
 import { refuseHeldRun, runMovement, resumeMovement, settleRaceFrame } from '@listen-fire/legacy-engine/dispatch';
@@ -64,6 +67,7 @@ import { RunLeaseLost, takeRunLease, type HeldRunLease } from '../../movement_en
 async function interpretMovementFiring(input: {
   teamId: TeamId;
   version: ShippedVersion;
+  door: FiringDoor;
   /** Which movement in the file to run; absent = the file's only one. */
   movementName?: string;
   event: TriggerEvent;
@@ -90,29 +94,32 @@ async function interpretMovementFiring(input: {
    *  the waits it opened on the trigger read from there. */
   triggerMark?: number;
 }): Promise<MovementRunResult> {
-  // A pin a carried version runs is run by that version's own engine and
-  // modules: this release's catalog and parser never read its text.
-  const carried = await carriedRunLaneOf(input.version.languageVersion);
-  if (carried !== undefined) {
-    return runCarriedSegment({
-      lane: carried,
-      teamId: input.teamId,
-      source: input.version.source,
-      pin: input.version.languageVersion,
-      ...(input.movementName !== undefined ? { movementName: input.movementName } : {}),
-      event: input.event,
-      firedAt: input.firedAt,
-      triggerRunId: input.triggerRunId,
-      imports: 'shipped',
-      cancel: input.cancelGate,
-      ...(input.lease !== undefined ? { lease: input.lease } : {}),
-      ...(input.trace !== undefined ? { trace: input.trace } : {}),
-      ...(input.dryRun !== undefined ? { dryRun: input.dryRun } : {}),
-      costCapMicrodollars: runCostCapFromEnv(),
-    });
+  // A person's press of a pin a carried version runs is run by that
+  // version's own engine and modules, on the event in its own shape: this
+  // release's catalog and parser never read its text.
+  if (input.door.kind === 'manual') {
+    const carried = await carriedRunLaneOf(input.version.languageVersion);
+    if (carried !== undefined) {
+      return runCarriedSegment({
+        lane: carried,
+        teamId: input.teamId,
+        source: input.version.source,
+        pin: input.version.languageVersion,
+        ...(input.movementName !== undefined ? { movementName: input.movementName } : {}),
+        event: input.door.event,
+        firedAt: input.firedAt,
+        triggerRunId: input.triggerRunId,
+        imports: 'shipped',
+        cancel: input.cancelGate,
+        ...(input.lease !== undefined ? { lease: input.lease } : {}),
+        ...(input.trace !== undefined ? { trace: input.trace } : {}),
+        ...(input.dryRun !== undefined ? { dryRun: input.dryRun } : {}),
+        costCapMicrodollars: runCostCapFromEnv(),
+      });
+    }
   }
-  // A pin this build does not run is refused before its text reaches this
-  // release's catalog.
+  // Everything else runs on this release's engines, which refuse a pin they
+  // do not run themselves before its text reaches this release's catalog.
   refuseHeldRun(input.version.languageVersion);
   const teamCatalog = await runCatalogSnapshotForTeam(input.teamId, {
     source: input.version.source,
@@ -283,8 +290,39 @@ async function refreshValidityOnContradiction(input: {
   }
 }
 
+/**
+ * Which door started a firing. A listen's firing (a trigger row judged an
+ * arrival: an inbound delivery, a poll, a schedule, a Run now through a
+ * provisioned manual listen) needs the pin's version to fire its listens. A
+ * person's press of an automation with no listen this platform fires (a
+ * carried version's Run now) needs it to run a segment, and carries the event
+ * in that version's own shape, read only by that version.
+ */
+export type FiringDoor = { kind: 'listen' } | { kind: 'manual'; event: CarriedEvent };
+
+/** The capability a firing's door needs of the pin's version. */
+function neededBy(door: FiringDoor): RunningCapability {
+  switch (door.kind) {
+    case 'listen':
+      return 'listen';
+    case 'manual':
+      return 'run';
+    default:
+      return neverAsAny(door);
+  }
+}
+
+/** Why `pin`'s version does not serve `door`, in the registry's text;
+ *  undefined when it does. A legacy id is the legacy packages' to run, by
+ *  their own rules, and is not asked. */
+function doorRefusal(pin: LanguageVersion, door: FiringDoor): string | undefined {
+  return isLegacyLanguageVersion(pin) ? undefined : refusalOf(pin, neededBy(door));
+}
+
 type MovementFiringInput = {
   teamId: TeamId;
+  /** Which door started it: what the pin's version is asked for first. */
+  door: FiringDoor;
   triggerId: string;
   /** The trigger row's display name (a `listen as "…"` label when aliased) —
    *  recorded on the run, NOT parsed for the fired movement. */
@@ -295,6 +333,7 @@ type MovementFiringInput = {
   firedMovementName?: string;
   /** What fires: the movement and the version it shipped. */
   movement: ShippedMovement;
+  /** The event as this release records it on the run. */
   event: TriggerEvent;
   recordingTriggerType: TriggerRunTriggerType;
   dryRun?: boolean;
@@ -313,6 +352,46 @@ export async function runMovementFiring(
   return withFiringContext(input, () => runMovementFiringInContext(input));
 }
 
+/** A firing whose door the pin's version does not serve: recorded failed
+ *  with the registry's refusal, loudly, and an issue for a live one. */
+async function refuseFiring(refused: {
+  input: MovementFiringInput;
+  recorder: TriggerRunRecorder;
+  movementName: string | undefined;
+  refusal: string;
+}): Promise<MovementFiringOutcome> {
+  const { input, recorder, refusal } = refused;
+  logger.error('[MovementEngine] firing refused: the pinned version does not serve its door', {
+    triggerId: input.triggerId,
+    movementId: input.movement.row.id,
+    languageVersion: input.movement.version.languageVersion,
+    door: input.door.kind,
+    refusal,
+  });
+  if (!input.dryRun) {
+    await recordMovementFailureIssue({
+      teamId: input.teamId as unknown as string,
+      movementId: input.movement.row.id,
+      movementName: input.movement.row.name,
+      triggerName: input.triggerName,
+      runId: recorder.triggerRunId as unknown as string,
+      message: refusal,
+    }).catch((issueErr) =>
+      logger.warn('[MovementEngine] failed to record failure issue', {
+        error: issueErr instanceof Error ? issueErr.message : String(issueErr),
+      }),
+    );
+  }
+  recorder.recordStepFailure({
+    tgId: `movement:${input.movement.row.id}`,
+    tgName: refused.movementName ?? input.movement.row.name,
+    sourceAdapterType: input.event.adapterType,
+    message: refusal,
+  });
+  await recorder.finish();
+  return { result: null, error: refusal };
+}
+
 async function runMovementFiringInContext(
   input: MovementFiringInput,
 ): Promise<MovementFiringOutcome> {
@@ -329,6 +408,11 @@ async function runMovementFiringInContext(
   });
   await recorder.startOpsRun();
   const movementName = input.firedMovementName ?? firedMovementNameFromTriggerName(input.triggerName);
+  // The door asks the pin's version for what it needs before anything else.
+  // A version without it refuses, recorded as the firing's failure: nothing
+  // runs on any engine.
+  const refusal = doorRefusal(input.movement.version.languageVersion, input.door);
+  if (refusal !== undefined) return refuseFiring({ input, recorder, movementName, refusal });
   // The cooperative cancel gate (runs-and-cancel spec §cancel): reads
   // trigger_run.cancel_requested_at (debounced) so a user-requested cancel stops
   // the run at the next statement / LLM-call boundary. Fail-open — a read fault
@@ -363,6 +447,7 @@ async function runMovementFiringInContext(
       interpretMovementFiring({
         teamId: input.teamId,
         version: input.movement.version,
+        door: input.door,
         ...(movementName !== undefined ? { movementName } : {}),
         event: engineEvent(input),
         firedAt: recorder.firedAt,

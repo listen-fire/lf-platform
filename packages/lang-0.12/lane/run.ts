@@ -49,7 +49,7 @@ import { MANUAL_ADAPTER_TYPE, type ManualInvocationPayload } from '../units/manu
 import { teamSnapshot } from './catalog';
 import { importClosure, readingPin } from './imports';
 import { moduleTable } from './modules';
-import type { RunPlatform, SegmentOutcome, SegmentRequest } from './run_types';
+import type { EventReading, RunPlatform, SegmentOutcome, SegmentRequest } from './run_types';
 
 /** What a park is stopped with: the registry's refusal, as 0.12's own error,
  *  so the engine fails the segment where it parks. */
@@ -94,7 +94,7 @@ function cancelGateOf(control: RunPlatform['control'], runId: string | undefined
 /** `adapters`, keeping each record write in the platform's write ledger the
  *  moment its module answers it, as the platform keeps its own release's. A
  *  rehearsed instance sends nothing, so nothing is kept. */
-function ledgered(adapters: HostAdapters, keepWrite: NonNullable<RunPlatform['keepWrite']>): HostAdapters {
+export function ledgered(adapters: HostAdapters, keepWrite: NonNullable<RunPlatform['keepWrite']>): HostAdapters {
   const instances = new Map<string, { adapterType: string; rehearsed: boolean }>();
   return {
     async resolve(resolution) {
@@ -228,6 +228,11 @@ export async function runSegment(
   try {
     const program = parseProgram(request.source, { languageVersion: request.pin });
     const closure = importClosure(program, request.pin, request.team.files);
+    // An import of a library on another version is the program's own error,
+    // named with both versions, before anything runs.
+    if (closure.diagnostics.length > 0) {
+      throw new MovementEngineError('MOVENG_CHECK', closure.diagnostics.map((diagnostic) => diagnostic.message).join('; '));
+    }
     const catalog = await teamSnapshot(request.team, closure.files, {
       teamId: request.teamId,
       modules: platform.modules,
@@ -298,5 +303,23 @@ export function manualInvocationEvent(input: { key: string; invocation: ManualIn
     payload: input.invocation,
     occurredAt: input.invocation.firedAt,
     ...(input.requestId !== undefined ? { idempotencyKey: input.requestId } : {}),
+  };
+}
+
+/** An event in 0.12's shape, read with 0.12's own schema: what the platform
+ *  records of it (its run row), or why 0.12 cannot read it. */
+export function readEvent(event: Readonly<Record<string, unknown>>): EventReading {
+  const parsed = triggerEventSchema.safeParse(event);
+  if (!parsed.success) return { ok: false, reason: parsed.error.issues.map((issue) => `${issue.path.join('.') || 'event'}: ${issue.message}`).join('; ') };
+  const { pipelineInputId, adapterType, triggerType, payload, recordId } = parsed.data;
+  return {
+    ok: true,
+    record: {
+      pipelineInputId,
+      adapterType,
+      triggerType,
+      ...(payload !== undefined ? { payload } : {}),
+      ...(recordId !== undefined ? { recordId } : {}),
+    },
   };
 }

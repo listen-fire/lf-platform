@@ -118,6 +118,20 @@ export interface RunPlatform {
  *  schema where it arrives. The platform reads it only as data. */
 export type CarriedEvent = Readonly<Record<string, unknown>>;
 
+/** What the platform records of a carried event: its version read it with
+ *  its own schema, and answers these fields as plain data. */
+export interface CarriedEventRecord {
+  pipelineInputId: string;
+  adapterType: string;
+  triggerType: TriggerEvent['triggerType'];
+  payload?: unknown;
+  recordId?: string;
+}
+
+/** A carried event read by its own version, or why that version cannot read
+ *  it. */
+export type CarriedEventReading = { ok: true; record: CarriedEventRecord } | { ok: false; reason: string };
+
 /** One segment someone started, from its first statement. */
 export interface SegmentRequest {
   source: string;
@@ -158,6 +172,9 @@ export interface RunningLane {
   manualListens: (request: { source: string; pin: string }) => string[];
   /** A Run now press as the event the version's manual unit reads. */
   manualInvocationEvent: (input: { key: string; invocation: ManualInvocation; requestId?: string }) => CarriedEvent;
+  /** An event in the version's own shape, read with its own schema: what the
+   *  platform records of it, or why it cannot be read. */
+  readEvent: (event: CarriedEvent) => CarriedEventReading;
 }
 
 /** What a remote adapter of this release stores fetched files in, and the
