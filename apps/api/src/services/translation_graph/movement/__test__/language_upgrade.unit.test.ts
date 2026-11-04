@@ -30,6 +30,7 @@ jest.mock('../../../context', () => ({
 }));
 jest.mock('../store', () => ({
   getMovementRow: jest.fn(),
+  lockMovementRow: jest.fn(),
   listAllMovementRows: jest.fn(),
   // The team's files: none besides the movement itself unless a case says so,
   // so an upgrade's import group is the movement alone.
@@ -51,7 +52,7 @@ import { parseProgram } from 'legacy-lang';
 
 import { assessMovementValidity, type AuthoringDiagnostic } from '../authoring';
 
-import { getMovementRow, listMovementRows, recordUpgradeCheck, type MovementRow } from '../store';
+import { getMovementRow, listMovementRows, lockMovementRow, recordUpgradeCheck, type MovementRow } from '../store';
 import { saveMovement } from '../provision';
 import { bringUpListensLater } from '../listens_up';
 import {
@@ -162,7 +163,11 @@ function expectNoPinMoved(): void {
   expect(saveMovement).not.toHaveBeenCalled();
 }
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  // The row read again inside the transaction is the one that was checked.
+  jest.mocked(lockMovementRow).mockImplementation(async ({ id }) => movement({ id }));
+});
 
 describe('the deploy check', () => {
   it('offers the upgrade to a movement clean under the current version, and keeps its pin', async () => {
