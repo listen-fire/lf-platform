@@ -114,16 +114,16 @@ export type FileTextReader = (input: { file: FileRef }) => Promise<FileTextResol
  */
 export function makeFileTextResolver(
   rawText: RawTextStore,
-  { skipImages = false, ...bytes }: StreamFileRefOptions & { skipImages?: boolean },
+  { asCarriedRelease = false, ...bytes }: StreamFileRefOptions & { asCarriedRelease?: boolean },
 ): FileTextReader {
   const read: PackageFileTextReader<FileRef> = makeResolver<FileRef>({
     // A file that is not the team's is refused by name, never read as one
-    // whose bytes were merely unavailable, and a read past the run's budget
-    // reaches the host's refusal, never read as a file that failed.
+    // whose bytes were merely unavailable, and a current run's read past its
+    // budget reaches the host's refusal, never read as a file that failed.
     openBytes: (ref) => streamFileRef(ref, bytes),
-    isRefusal: (error) => error instanceof FileOutsideTeamError || isBudgetExhausted(error),
+    isRefusal: (error) => error instanceof FileOutsideTeamError || (!asCarriedRelease && isBudgetExhausted(error)),
     ocrPdf,
-    ...(skipImages ? {} : { ocrImage }),
+    ...(asCarriedRelease ? {} : { ocrImage }),
     transcribe: (input) =>
       transcribe('whisper-1', { ...input, label: 'file_transcription' }),
     analyzeSheet,

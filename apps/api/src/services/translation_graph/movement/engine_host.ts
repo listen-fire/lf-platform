@@ -235,8 +235,9 @@ export function sharedRunServices(input: {
   cancel: CancelGate;
   rawText?: RawTextStore;
   locks?: WriteLocks;
-  /** Images read as `unsupported_type`, unopened. */
-  skipImages?: boolean;
+  /** Files read as a carried release read them: images `unsupported_type`,
+   *  unopened, and a read past the budget an unreadable file. */
+  asCarriedRelease?: boolean;
 }): {
   llm: EngineHost['llm'];
   resolveFileText: ResolveFileText;
@@ -255,7 +256,7 @@ export function sharedRunServices(input: {
     resolveFileText: billedFileText(
       makeFileTextResolver(input.rawText ?? postgresRawTextStore(input.teamId), {
         teamId: input.teamId,
-        ...(input.skipImages === true ? { skipImages: true } : {}),
+        ...(input.asCarriedRelease === true ? { asCarriedRelease: true } : {}),
       }),
       usage,
     ),

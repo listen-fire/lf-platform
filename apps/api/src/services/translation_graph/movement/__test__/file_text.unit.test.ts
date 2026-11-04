@@ -35,7 +35,7 @@ import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { FileRef } from 'movement-engine/public/adapter';
 
 import { FileOutsideTeamError } from 'movement-engine/public/files';
-import { metered, NO_BUDGET_LIMIT } from 'movement-engine/public/models';
+import { assertRunBudget, metered, NO_BUDGET_LIMIT } from 'movement-engine/public/models';
 import { UnconfiguredOcrAdapter } from '../../../../adapters/ocr/unconfigured';
 import { makeFileTextResolver } from '../file_text';
 import { services } from '../../../../adapters/registry';
@@ -448,5 +448,25 @@ describe('an image is read by OCR, and the run pays for it', () => {
       cost: [],
     });
     expect(readMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('a read past the run\'s budget, by the version the run is on', () => {
+  const readUnderSpentBudget = (bytes: Parameters<typeof makeFileTextResolver>[1]) =>
+    metered({ file: audioRef(), budget: { remainingMicrodollars: 0 } }, (input) => makeFileTextResolver(rawText, bytes)(input));
+
+  beforeEach(() => {
+    transcribeMock.mockImplementation(async () => {
+      assertRunBudget();
+      return { text: 'never heard', durationSeconds: 1 };
+    });
+  });
+
+  it('a current run stops at the cap', async () => {
+    expect(await readUnderSpentBudget(FILE_BYTES)).toEqual({ error: { kind: 'budget', message: expect.any(String) }, cost: [] });
+  });
+
+  it('a run on a carried release reads the file as unreadable and goes on, as it did', async () => {
+    expect(await readUnderSpentBudget({ ...FILE_BYTES, asCarriedRelease: true })).toMatchObject({ unreadable: 'extraction_failed' });
   });
 });

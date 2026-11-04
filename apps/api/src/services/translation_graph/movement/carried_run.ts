@@ -111,12 +111,14 @@ export function runPlatformFor(input: {
     teamId: input.teamId,
     ...(input.triggerRunId !== undefined ? { triggerRunId: input.triggerRunId } : {}),
     cancel: input.cancel,
-    // A pin's meaning does not change within its compatibility key, and a run
-    // pinned to a carried release skips an image. Reading one here would spend
-    // its budget and change its answers; worse, its host holds no file owners
+    // A pin's meaning does not change within its compatibility key. A run
+    // pinned to a carried release skips an image: reading one would spend its
+    // budget and change its answers; worse, its host holds no file owners
     // (`withFileOwners`), so an image a connected system owns would fail the
-    // run where it used to be skipped. Upgrading the pin is how it gets OCR.
-    skipImages: true,
+    // run where it used to be skipped. And a read past its budget reads as an
+    // unreadable file and the run goes on, where a current run stops at the
+    // cap. Upgrading the pin is how it gets both.
+    asCarriedRelease: true,
   });
   const keep = input.triggerRunId !== undefined ? writeKeeper({ teamId: input.teamId, runId: input.triggerRunId }) : undefined;
   return {
