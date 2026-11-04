@@ -388,7 +388,7 @@ ${LISTENS}`);
       expect(await listenPauses({ teamId, triggerIds: [row!.id] })).toEqual(new Map([[row!.id, { reason: 'LISTEN_LOOP: it echoes itself', held: 0 }]]));
     });
 
-    it('the deploy sweep keeps a paused row, so an upgrade after it finds the pause; it removes the others', async () => {
+    it('the deploy sweep keeps the rows of a 0.12 automation, as its listens: an upgrade after it finds a pause on them', async () => {
       const paused = await seed('swept_paused', LISTENS);
       await leftRow(paused, { kind: 'manual', run_mode: 'off' });
       const guarded = await seed('swept_guarded', LISTENS);
@@ -399,7 +399,7 @@ ${LISTENS}`);
 
       for (const id of [paused, guarded, plain]) await unprovision((await getMovementRow({ teamId, id }))!);
 
-      expect(await triggersOf(plain)).toEqual([]);
+      expect(await triggersOf(plain)).toHaveLength(1);
       expect(await pausedRowOf(guarded)).toHaveLength(1);
       expect(await pausedRowOf(paused)).toHaveLength(1);
 

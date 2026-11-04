@@ -285,7 +285,7 @@ describe('a run production parked', () => {
     it('an answer and the closed sweep queue no wake for it, while the same sweep wakes a 0.12 run beside it', async () => {
       const legacy = await load('legacy-4-ask');
       const beside = await load('ask');
-      expect(await answerAskById(legacy.rows.ask?.[0]?.id as AskId, { Budget: '10' })).toMatchObject({ kind: 'answered' });
+      expect(await answerAskById(legacy.rows.ask?.[0]?.id as AskId, { Budget: '10' })).toMatchObject({ kind: 'held' });
       expect(await wakeKeys()).toEqual([]);
 
       // The 0.12 run's wake was lost: only the sweep can find it.

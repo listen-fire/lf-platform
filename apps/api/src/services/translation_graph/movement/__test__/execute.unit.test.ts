@@ -567,11 +567,11 @@ describe('a firing runs under the movement\'s language version pin', () => {
       teamId: TEAM,
       triggerId: 't-1',
       triggerName: 'movement/intake_file/intake',
-      movement: shippedMovement({ languageVersion: '0.15.0' }) as never,
+      movement: shippedMovement({ languageVersion: '1' }) as never,
       event,
       recordingTriggerType: 'webhook',
     });
-    expect(runMovement).toHaveBeenCalledWith(expect.objectContaining({ languageVersion: '0.15.0' }));
+    expect(runMovement).toHaveBeenCalledWith(expect.objectContaining({ languageVersion: '1' }));
   });
 });
 

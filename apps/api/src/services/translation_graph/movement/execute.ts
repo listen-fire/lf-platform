@@ -328,9 +328,12 @@ export function legacyStartRefusal(pin: LanguageVersion): string {
 }
 
 /** Why `pin`'s version does not serve `door`, in the registry's text;
- *  undefined when it does. */
+ *  undefined when it does. A legacy id's listens are read only by the carried
+ *  version they ran beside, so `judged` is the door that reaches one; Run now
+ *  says the same where it is pressed (run_now.ts). */
 export function doorRefusal(pin: LanguageVersion, door: FiringDoor): string | undefined {
-  return isLegacyLanguageVersion(pin) ? legacyStartRefusal(pin) : refusalOf(pin, neededBy(door));
+  if (isLegacyLanguageVersion(pin)) return door.kind === 'judged' ? legacyStartRefusal(pin) : undefined;
+  return refusalOf(pin, neededBy(door));
 }
 
 type MovementFiringInput = {
