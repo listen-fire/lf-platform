@@ -210,6 +210,7 @@ jest.mock('../../adapters/registry', () => {
       ? { kind: 'slug', key: 'key', prefix: 'inbox+', suffix: '@example.com', routingKey: true }
       : null;
   return {
+    resolveAdapterSlug: (kind: string) => kind,
     adapterInboundRoutingKey: routingKey,
     inboundAddressFor: (slug: string, config: Record<string, unknown>) => {
       const field = routingKey(slug);

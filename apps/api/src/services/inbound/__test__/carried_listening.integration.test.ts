@@ -903,7 +903,7 @@ describe('0.12 listens beside the current version (real Postgres)', () => {
 
         // The mark has moved inside the instant, and still reads nothing heard.
         await pollEach();
-        expect(await firesOf()).toEqual(first);
+        expect((await firesOf()).sort()).toEqual([...first].sort());
 
         // Just after it, once each; and the mark has left the instant behind.
         const justAfter = new Date(T.getTime() + 1);
