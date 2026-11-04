@@ -17,7 +17,30 @@ jest.mock('../../translation_graph/adapters/resolve', () => {
   return { ...actual, resolveAdapter: jest.fn(actual.resolveAdapter) };
 });
 
-const mockBetween: { pull?: () => Promise<void> } = {};
+const mockBetween: { pull?: () => Promise<void>; keep?: () => Promise<void>; listWork?: (kind: string) => void } = {};
+// Part way through a schedule's or a poll's one write, with its row held.
+jest.mock('../carried_delivery', () => {
+  const actual = jest.requireActual('../carried_delivery');
+  return {
+    ...actual,
+    receiveJudgedEvent: async (input: unknown) => {
+      const hook = mockBetween.keep;
+      mockBetween.keep = undefined;
+      await hook?.();
+      return actual.receiveJudgedEvent(input);
+    },
+  };
+});
+jest.mock('../../work/store', () => {
+  const actual = jest.requireActual('../../work/store');
+  return {
+    ...actual,
+    listWorkByKind: async (kind: string) => {
+      mockBetween.listWork?.(kind);
+      return actual.listWorkByKind(kind);
+    },
+  };
+});
 jest.mock('../../translation_graph/adapters/system/carried_records', () => {
   const actual = jest.requireActual('../../translation_graph/adapters/system/carried_records');
   return {
@@ -51,7 +74,7 @@ import { testWorkContext } from '../../../test/harness/work';
 import { refreshDueAirtableWebhooks } from '../../airtable_webhook_refresh/worker';
 import { cronReconcileHandler, fireCronHandler } from '../../movement_scheduler/worker';
 import { pollSourceHandler, reconcileCarriedPolls } from '../../poll_source/carried_worker';
-import { pollShared, sharedPolls } from '../../poll_source/worker';
+import { pollReconcileHandler, pollShared, sharedPolls } from '../../poll_source/worker';
 import { resolveAdapter } from '../../translation_graph/adapters/resolve';
 import { runMovementFiring } from '../../translation_graph/movement/execute';
 import { upgradeMovement } from '../../translation_graph/movement/language_upgrade';
@@ -576,6 +599,20 @@ describe('0.12 listens beside the current version (real Postgres)', () => {
       await pollSourceHandler.run({ triggerId: row!.id }, ctx(new Date()));
       expect(await receipts()).toEqual([]);
     });
+
+    it('a throw in the current version\'s reconcile does not stop 0.12 polls being armed, and the failure still shows', async () => {
+      const id = await shipped(SYSTEM_012);
+      const [row] = await triggersOf(id);
+      mockBetween.listWork = (kind) => {
+        if (kind === 'poll_edge') throw new Error('the current version\'s half failed');
+      };
+      try {
+        await expect(pollReconcileHandler.run({}, ctx(new Date()))).rejects.toThrow('the current version\'s half failed');
+      } finally {
+        mockBetween.listWork = undefined;
+      }
+      expect((await workOf('poll_source')).map((work) => work.key)).toEqual([`poll_source:${row!.id}`]);
+    });
   });
 
   describe('an upgrade carries how far a listen heard', () => {
@@ -724,6 +761,84 @@ describe('0.12 listens beside the current version (real Postgres)', () => {
       expect(firing).toHaveBeenCalledTimes(1);
       await upgraded(id);
       expect((await getMovementRow({ teamId, id }))!.languageVersion).toBe(LANGUAGE_VERSION);
+    });
+
+    it('a row buried dead is not on its way, so it never says "try again" for ever', async () => {
+      const id = await shipped(EVERY_MINUTE_012);
+      const [row] = await triggersOf(id);
+      const reading = `read_delivery:0.12:${randomUUID()}`;
+      const starting = `dispatch_event:${randomUUID()}`;
+      await enqueueWork({ kind: 'read_delivery', key: reading, teamId, payload: { adapterType: 'cron' } });
+      await enqueueWork({ kind: 'dispatch_event', key: starting, teamId, payload: { triggerId: row!.id, storedEventId: randomUUID() } });
+      expect(await upgradeMovement({ teamId, id, acknowledge: true, inFlightWaitMs: 0 })).toMatchObject({ status: 'blocked' });
+      await sql`update automations.work set dead_at = now(), dead_reason = 'gave up' where key = any(${[reading, starting]}::text[])`.execute(getAutomationsQb(['work']));
+      await upgraded(id);
+      expect((await getMovementRow({ teamId, id }))!.languageVersion).toBe(LANGUAGE_VERSION);
+    });
+
+    describe('a turn under 0.12 and the move, at once', () => {
+      /** Until the upgrade waits on a row another transaction holds. */
+      async function untilWaitingOnARow(): Promise<void> {
+        const giveUpAt = Date.now() + 30_000;
+        for (;;) {
+          const { rows } = await sql<{ count: string }>`
+            select count(*)::text as count from pg_stat_activity
+            where datname = current_database() and wait_event_type = 'Lock' and query ilike '%for update%'`.execute(getAutomationsQb(['trigger']));
+          if (Number(rows[0]?.count) > 0) return;
+          if (Date.now() > giveUpAt) throw new Error('test: the upgrade never waited on the row');
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+      }
+
+      /** The turn holds the row and has not kept its event; the upgrade starts and
+       *  reaches the row; then the turn commits. */
+      async function turnCommittingUnderTheMove(id: string, turn: () => Promise<unknown>) {
+        let turnGoesOn = (): void => {};
+        const held = new Promise<void>((resolve) => {
+          turnGoesOn = resolve;
+        });
+        let holding = (): void => {};
+        const turnHolds = new Promise<void>((resolve) => {
+          holding = resolve;
+        });
+        mockBetween.keep = async () => {
+          holding();
+          await held;
+        };
+        const turning = turn();
+        await turnHolds;
+        const answer = upgradeMovement({ teamId, id, acknowledge: true, inFlightWaitMs: 0 });
+        await untilWaitingOnARow();
+        turnGoesOn();
+        await turning;
+        return answer;
+      }
+
+      it('a schedule: the tick is seen on its way and the move waits, so it is not lost', async () => {
+        const id = await shipped(EVERY_MINUTE_012);
+        const [row] = await triggersOf(id);
+        await setRow(row!.id, { cron_last_fired_at: new Date(Date.now() - 5 * 60_000) });
+        const answer = await turnCommittingUnderTheMove(id, () => fireCronHandler.run({ triggerId: row!.id }, ctx(new Date())));
+        expect(answer).toMatchObject({ status: 'blocked', detail: expect.stringMatching(/waiting to start.*nothing is lost/) });
+        expect((await getMovementRow({ teamId, id }))!.languageVersion).toBe(PIN);
+        await drain();
+        expect(firing).toHaveBeenCalledTimes(1);
+        await upgraded(id);
+        expect((await getMovementRow({ teamId, id }))!.languageVersion).toBe(LANGUAGE_VERSION);
+      });
+
+      it('a poll: the page is seen on its way and the move waits, so it is not lost', async () => {
+        const id = await shipped(SYSTEM_012);
+        const [row] = await triggersOf(id);
+        const base = Date.now() - 10 * 60_000;
+        await setRow(row!.id, { poll_checkpoint: JSON.stringify({ runFailed: { failedAt: new Date(base).toISOString(), runId: '00000000-0000-0000-0000-000000000000' } }) });
+        await failedRun(new Date(base + 60_000));
+        const answer = await turnCommittingUnderTheMove(id, () => pollSourceHandler.run({ triggerId: row!.id }, ctx(new Date())));
+        expect(answer).toMatchObject({ status: 'blocked', detail: expect.stringMatching(/waiting to start.*nothing is lost/) });
+        await drain();
+        expect(firing).toHaveBeenCalledTimes(1);
+        await upgraded(id);
+      });
     });
 
     it('a door keeping a delivery waits while a move holds the team\'s doors, and then sees the move', async () => {

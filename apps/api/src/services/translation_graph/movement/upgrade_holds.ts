@@ -55,25 +55,32 @@ export async function holdsOnMoving(group: readonly MovementRow[]): Promise<stri
 
 /**
  * What is still on its way to a member under its current version, read with the
- * team's doors held: a delivery its version has not read, and an event judged for
- * it whose run has not started. Each is that version's to finish, so the move
- * waits for it rather than losing it. Later deliveries see the move, and a run
- * already going finishes where it started.
+ * team's doors and the group's listen rows held: a delivery its version has not
+ * read, and an event judged for it whose run has not started. Each is that
+ * version's to finish, so the move waits for it rather than losing it. Later
+ * deliveries see the move, and a run already going finishes where it started.
+ * A row buried dead is on its way nowhere.
+ *
+ * The rows are locked first because a schedule's or a poll's turn holds only its
+ * row, not the doors: it has committed, and its event is counted here, or it waits
+ * for the row and then finds it moved.
  */
 export async function eventsInFlight(group: readonly MovementRow[], teamId: string): Promise<string[]> {
   const triggers = await getAutomationsQb(['trigger'])
     .selectFrom('trigger')
     .where('movement_id', 'in', group.map((member) => member.id) as MovementId[])
     .select(['id', 'kind'])
+    .orderBy('id')
+    .forUpdate()
     .execute();
   if (triggers.length === 0) return [];
   const exec = getAutomationsQb(['work', 'trigger_run']);
   const { rows: reading } = await sql<{ count: string }>`
     select count(*)::text as count from automations.work
-    where kind = 'read_delivery' and team_id = ${teamId}::uuid and payload->>'adapterType' = any(${[...new Set(triggers.map((row) => resolveAdapterSlug(row.kind)))]}::text[])`.execute(exec);
+    where kind = 'read_delivery' and dead_at is null and team_id = ${teamId}::uuid and payload->>'adapterType' = any(${[...new Set(triggers.map((row) => resolveAdapterSlug(row.kind)))]}::text[])`.execute(exec);
   const { rows: starting } = await sql<{ count: string }>`
     select count(*)::text as count from automations.work w
-    where w.kind = 'dispatch_event' and w.team_id = ${teamId}::uuid and w.payload->>'triggerId' = any(${triggers.map((row) => row.id as string)}::text[])
+    where w.kind = 'dispatch_event' and w.dead_at is null and w.team_id = ${teamId}::uuid and w.payload->>'triggerId' = any(${triggers.map((row) => row.id as string)}::text[])
       and not exists (select 1 from automations.trigger_run r where r.trigger_event_id = (w.payload->>'storedEventId')::uuid)`.execute(exec);
   const unread = Number(reading[0]?.count ?? 0);
   const unstarted = Number(starting[0]?.count ?? 0);

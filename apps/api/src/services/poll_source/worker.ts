@@ -191,31 +191,35 @@ export const pollEdgeHandler: WorkHandler = {
  *  none for a key no listen shares any more. */
 export const pollReconcileHandler: WorkHandler = {
   async run(_payload, ctx) {
-    const [polls, rows] = await Promise.all([sharedPolls(), listWorkByKind('poll_edge')]);
-    const armed = new Set(rows.map((row) => row.key));
-    const active = new Set<string>();
-    for (const poll of polls) {
-      const key = pollWorkKey(poll.digest);
-      active.add(key);
-      // An armed row keeps its time: its handler arms it after each poll, and
-      // a failed one holds its backoff.
-      if (armed.has(key)) continue;
-      try {
-        await armPoll(poll, ctx.now);
-      } catch (err) {
-        logger.error('[EdgePolls] reconcile failed for a shared poll', {
-          teamId: poll.key.teamId,
-          adapterType: poll.key.adapterType,
-          edge: poll.key.edge,
-          error: err instanceof Error ? err.message : String(err),
-        });
+    try {
+      const [polls, rows] = await Promise.all([sharedPolls(), listWorkByKind('poll_edge')]);
+      const armed = new Set(rows.map((row) => row.key));
+      const active = new Set<string>();
+      for (const poll of polls) {
+        const key = pollWorkKey(poll.digest);
+        active.add(key);
+        // An armed row keeps its time: its handler arms it after each poll, and
+        // a failed one holds its backoff.
+        if (armed.has(key)) continue;
+        try {
+          await armPoll(poll, ctx.now);
+        } catch (err) {
+          logger.error('[EdgePolls] reconcile failed for a shared poll', {
+            teamId: poll.key.teamId,
+            adapterType: poll.key.adapterType,
+            edge: poll.key.edge,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
       }
+      for (const row of rows) {
+        if (!active.has(row.key)) await removeWork({ key: row.key });
+      }
+    } finally {
+      // A carried version's listens are polled per row, on their own cursors. A
+      // failure above is this row's to retry, and is no reason for them not to be armed.
+      await reconcileCarriedPolls(ctx.now);
     }
-    for (const row of rows) {
-      if (!active.has(row.key)) await removeWork({ key: row.key });
-    }
-    // A carried version's listens are polled per row, on their own cursors.
-    await reconcileCarriedPolls(ctx.now);
   },
 };
 
