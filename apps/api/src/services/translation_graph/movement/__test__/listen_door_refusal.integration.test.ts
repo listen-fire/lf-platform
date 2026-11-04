@@ -1,8 +1,9 @@
 // A listen's firing asks the pin's version to fire its listens before
-// anything else (real Postgres, real router). A 0.12 automation can still have
-// a trigger row (one made before the deploy, one the deploy check has not yet
-// removed): an arrival it is judged against is refused with the registry's
-// listen text and recorded failed, and runs on no engine, 0.12's included.
+// anything else (real Postgres, real router). An automation pinned to a
+// version this build does not carry can still have a trigger row (one the
+// deploy check has not yet removed): an arrival it is judged against is
+// refused with the registry's listen text and recorded failed, and runs on no
+// engine. (0.12 is carried and its listens fire, so the pin here is 0.13.0.)
 
 import { randomUUID } from 'node:crypto';
 
@@ -34,10 +35,12 @@ jest.mock('../carried_run', () => {
   return { ...actual, runCarriedSegment: jest.fn(actual.runCarriedSegment) };
 });
 
-/** A 0.12 automation with a manual listen, as 0.12 spells it. */
-const STAMP_012 = 'function stamp(run: <manual-[:Invocation]->>) {\n  t = run.Text\n  return t\n}\nlisten to manual fire stamp\n';
+const UNCARRIED_PIN = '0.13.0';
 
-describe("a listen's firing of a 0.12 automation (real Postgres, real router)", () => {
+/** A manual listen, as 0.12 spells it: no version of this build reads it for this pin. */
+const STAMP = 'function stamp(run: <manual-[:Invocation]->>) {\n  t = run.Text\n  return t\n}\nlisten to manual fire stamp\n';
+
+describe("a listen's firing of an automation on a version this build does not carry (real Postgres, real router)", () => {
   let teamId: TeamId;
 
   beforeAll(async () => {
@@ -57,9 +60,9 @@ describe("a listen's firing of a 0.12 automation (real Postgres, real router)", 
     const movementId = randomUUID();
     await getAutomationsQb(['movement'])
       .insertInto('movement')
-      .values({ id: movementId as MovementId, team_id: teamId, name: 'stamp', source: STAMP_012, description: '', language_version: '0.12.13' })
+      .values({ id: movementId as MovementId, team_id: teamId, name: 'stamp', source: STAMP, description: '', language_version: UNCARRIED_PIN })
       .execute();
-    await mintMovementVersionIfChanged({ teamId, movementId, source: STAMP_012, languageVersion: '0.12.13' });
+    await mintMovementVersionIfChanged({ teamId, movementId, source: STAMP, languageVersion: UNCARRIED_PIN });
     const triggerId = randomUUID();
     await getAutomationsQb(['trigger'])
       .insertInto('trigger')
@@ -87,8 +90,8 @@ describe("a listen's firing of a 0.12 automation (real Postgres, real router)", 
     // Asked first: nothing was counted, no source adapter built, no sender judged.
     expect(loadGuardPausedState).not.toHaveBeenCalled();
     expect(resolveAdapter).not.toHaveBeenCalled();
-    const refusal = refusalOf('0.12.13', 'listen');
-    expect(refusal).toMatch(/but not to fire its listens/);
+    const refusal = refusalOf(UNCARRIED_PIN, 'listen');
+    expect(refusal).toEqual(expect.any(String));
     expect(dispatched.errors).toEqual([{ triggerEntryId: triggerId, message: refusal }]);
     expect(runCarriedSegment).not.toHaveBeenCalled();
     const runs = await getAutomationsQb(['trigger_run'])

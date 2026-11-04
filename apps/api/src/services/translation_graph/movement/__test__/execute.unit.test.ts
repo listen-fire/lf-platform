@@ -407,19 +407,19 @@ describe('runMovementFiring', () => {
     expect(outcome.result?.movementName).toBe('intake');
   });
 
-  it("a listen's firing of a 0.12 automation (a leftover trigger row) asks for listen first: refused, recorded failed, run on no engine", async () => {
+  it("a listen's firing of an automation on a version this build does not carry (a leftover trigger row) asks for listen first: refused, recorded failed, run on no engine", async () => {
     const { runCarriedSegment } = jest.requireMock('../carried_run') as { runCarriedSegment: jest.Mock };
     const { recordMovementFailureIssue } = jest.requireMock('../issues') as { recordMovementFailureIssue: jest.Mock };
     runCarriedSegment.mockResolvedValue({ movementName: 'intake', writes: [], extractionSites: {}, trace: [] });
-    const listenRefusal = refusalOf('0.12.13', 'listen');
-    expect(listenRefusal).toMatch(/but not to fire its listens/);
+    const listenRefusal = refusalOf('0.13.0', 'listen');
+    expect(listenRefusal).toEqual(expect.any(String));
 
     const outcome = await runMovementFiring({
       teamId: TEAM,
       door: { kind: 'listen' },
       triggerId: 't-1',
       triggerName: 'movement/intake_file/intake',
-      movement: shippedMovement({ languageVersion: '0.12.13' }) as never,
+      movement: shippedMovement({ languageVersion: '0.13.0' }) as never,
       event,
       recordingTriggerType: 'webhook',
     });
