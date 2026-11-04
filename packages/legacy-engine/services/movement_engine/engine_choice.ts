@@ -1,11 +1,14 @@
 // Which engine a run's segment runs on: its pin. A legacy id ('1'..'4') runs
 // on the TypeScript engine this package keeps; any other pin is a release's
-// semver, run on the Rust engine (`@listen-fire/engine`) when the installed
-// language reads it by its rule, and refused otherwise. No fallback between
-// them.
+// semver, and its compatibility key chooses a carried version
+// (`@listen-fire/language-versions`). The current version runs on the Rust
+// engine (`@listen-fire/engine`); a version this build carries but cannot yet
+// run, and a key it does not carry, are refused alike, by the current
+// language's text. No fallback between them.
 
-import { LANGUAGE_VERSION, compatible, languageVersionDiagnostic, type LanguageVersion } from 'movement-lang';
+import { LANGUAGE_VERSION, languageVersionDiagnostic, neverAsAny, type LanguageVersion } from 'movement-lang';
 import { isLegacyLanguageVersion } from 'legacy-lang';
+import { capabilityOf } from '@listen-fire/language-versions';
 
 import { MovementEngineError, PARKED_ON_TYPESCRIPT } from 'movement-engine/public/errors';
 
@@ -22,12 +25,18 @@ export type EngineChoice = 'rust' | 'ts';
  */
 export function engineFor(run: { languageVersion: LanguageVersion; parkedOn?: EngineChoice }): EngineChoice {
   if (isLegacyLanguageVersion(run.languageVersion)) return 'ts';
-  if (!compatible(run.languageVersion, LANGUAGE_VERSION)) {
-    throw new MovementEngineError(
-      'MOVENG_LANGUAGE_VERSION',
-      languageVersionDiagnostic(run.languageVersion, LANGUAGE_VERSION)?.message ??
-        `this automation pins language ${run.languageVersion}, which this release (${LANGUAGE_VERSION}) does not read`,
-    );
+  const running = capabilityOf(run.languageVersion, 'run');
+  switch (running.kind) {
+    case 'current':
+      break;
+    case 'held':
+      throw new MovementEngineError(
+        'MOVENG_LANGUAGE_VERSION',
+        languageVersionDiagnostic(run.languageVersion, LANGUAGE_VERSION)?.message ??
+          `this automation pins language ${run.languageVersion}, which this release (${LANGUAGE_VERSION}) does not read`,
+      );
+    default:
+      return neverAsAny(running);
   }
   if (run.parkedOn === 'ts') {
     throw new MovementEngineError(

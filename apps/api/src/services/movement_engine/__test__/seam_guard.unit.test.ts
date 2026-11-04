@@ -162,6 +162,9 @@ const ALLOWED: Array<(module: string) => boolean> = [
   (m) => m.startsWith('public/'),
   // The TypeScript checker and catalog the legacy engine runs pins 1-4 against.
   (m) => m === 'legacy-lang' || m.startsWith('legacy-lang/'),
+  // The language versions this build carries: which one a release pin runs on.
+  // Pure lookup over the pin; it reaches no host.
+  (m) => m === '@listen-fire/language-versions',
   // The contracts the engine speaks: data shapes and the protocol schema.
   (m) => m === 'engine-contracts' || m.startsWith('engine-contracts/'),
   (m) => m === 'zod',

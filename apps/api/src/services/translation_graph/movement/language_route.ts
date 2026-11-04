@@ -1,9 +1,12 @@
 // Which checker judges a movement, by its pin. A legacy id ('1'..'4') is
 // legacy-lang's: its TypeScript checker and the TypeScript engine's
-// interpretability scan. A release pin the installed language reads is the
-// wasm's, against the run snapshot: the check its run on the Rust engine
-// enforces, so the verdict an author sees is the one the run holds. Any other
-// pin is refused with the language's own text, and nothing reads it.
+// interpretability scan. A release pin chooses a carried version by its
+// compatibility key (`@listen-fire/language-versions`): the current version's
+// pin is the wasm's, against the run snapshot, the check its run on the Rust
+// engine enforces, so the verdict an author sees is the one the run holds. A
+// pin whose version this build carries but cannot yet check, and a pin whose
+// key it does not carry, are refused alike with the language's own text, and
+// nothing reads them.
 //
 // Every verdict on a current pin goes through here; no caller hands a semver
 // to legacy-lang's checker or legacy-engine's scan. Presentation (completion,
@@ -11,12 +14,11 @@
 // wasm for an installed pin and legacy-lang under its own id for a legacy one.
 
 import {
-  LANGUAGE_VERSION,
   RustCheckRefused,
   checkSourceInRust,
-  compatible,
   fromCatalogSnapshot,
   languageVersionDiagnostic,
+  neverAsAny,
   parseProgram,
   resolveFileFromSnapshot,
   type Catalog,
@@ -27,6 +29,7 @@ import {
   type ResolveFile,
 } from 'movement-lang';
 import { isLegacyLanguageVersion, upgradeWarnings, withUpgradeWarnings } from 'legacy-lang';
+import { capabilityOf } from '@listen-fire/language-versions';
 
 export type PinRoute =
   | { kind: 'legacy'; pin: LanguageVersion }
@@ -35,12 +38,20 @@ export type PinRoute =
 
 export function routeOf(pin: LanguageVersion): PinRoute {
   if (isLegacyLanguageVersion(pin)) return { kind: 'legacy', pin };
-  if (compatible(pin, LANGUAGE_VERSION)) return { kind: 'installed', pin };
-  const diagnostic = languageVersionDiagnostic(pin);
-  if (diagnostic === undefined) {
-    throw new Error(`the installed language neither reads nor refuses the pin '${pin}'`);
+  const checking = capabilityOf(pin, 'check');
+  switch (checking.kind) {
+    case 'current':
+      return { kind: 'installed', pin };
+    case 'held': {
+      const diagnostic = languageVersionDiagnostic(pin);
+      if (diagnostic === undefined) {
+        throw new Error(`the installed language neither reads nor refuses the pin '${pin}'`);
+      }
+      return { kind: 'refused', diagnostic };
+    }
+    default:
+      return neverAsAny(checking);
   }
-  return { kind: 'refused', diagnostic };
 }
 
 /**

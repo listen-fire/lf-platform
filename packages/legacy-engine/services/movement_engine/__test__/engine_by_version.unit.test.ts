@@ -6,7 +6,7 @@
 // TypeScript engine. The engine settings that once chose otherwise are
 // refused at boot.
 
-import { LANGUAGE_VERSION, EMPTY_CATALOG_SNAPSHOT, mockCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
+import { LANGUAGE_VERSION, EMPTY_CATALOG_SNAPSHOT, languageVersionDiagnostic, mockCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import { tenantIdOf } from 'engine-contracts';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 
@@ -154,6 +154,33 @@ describe('the engine a segment runs on', () => {
     expect(() => engineFor({ languageVersion: LANGUAGE_VERSION, parkedOn: 'ts' })).toThrow(
       `MOVENG_UNSUPPORTED: this run is pinned to language ${LANGUAGE_VERSION}, which runs only on the Rust engine, but the TypeScript engine parked it: it cannot resume`,
     );
+  });
+});
+
+describe('a version this build carries but cannot yet run (0.12)', () => {
+  const OLDER = '0.12.13';
+  const refusal = languageVersionDiagnostic(OLDER, LANGUAGE_VERSION)!.message;
+
+  it('is refused by pin, with the same text as a key the build does not carry', () => {
+    expect(() => engineFor({ languageVersion: OLDER })).toThrow(MovementEngineError);
+    expect(() => engineFor({ languageVersion: OLDER })).toThrow(`MOVENG_LANGUAGE_VERSION: ${refusal}`);
+    expect(() => engineFor({ languageVersion: OLDER, parkedOn: 'rust' })).toThrow(`MOVENG_LANGUAGE_VERSION: ${refusal}`);
+  });
+
+  /** A park state as 0.12 wrote it: version 2, which this release's reader refuses. */
+  const PARKED_BY_012 = { version: 2 } as unknown as ParkedScopeState;
+
+  it("a run 0.12 parked is answered by its pin, never by this release's park-state reader", async () => {
+    const resume = { ...inputOf(SLEEPS, LANGUAGE_VERSION, 'run-012-park'), languageVersion: OLDER, state: PARKED_BY_012, parkedOnEngine: 'rust' as const };
+    const failure = await resumeMovement(resume).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(MovementEngineError);
+    expect(String(failure)).toContain(refusal);
+    expect(String(failure)).not.toMatch(/park state version/);
+  });
+
+  it("a current run's park state is still read by this release's reader", async () => {
+    const resume = { ...inputOf(SLEEPS, LANGUAGE_VERSION, 'run-current-v2'), state: PARKED_BY_012, parkedOnEngine: 'rust' as const };
+    await expect(resumeMovement(resume)).rejects.toThrow(/park state version 2, which this release does not read/);
   });
 });
 

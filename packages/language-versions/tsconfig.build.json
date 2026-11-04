@@ -1,0 +1,13 @@
+// The compiled artifact: the api's build emits this package into its OWN output
+// tree (`build/node_modules/@listen-fire/language-versions`), the same
+// arrangement as the other source packages. The version packages it loads are
+// not vendored: the deployed image installs each with its own dependencies.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": false,
+    "sourceMap": true
+  },
+  "exclude": ["node_modules", "dist", "jest.config.cjs", "**/__test__/**"]
+}

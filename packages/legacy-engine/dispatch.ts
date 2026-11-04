@@ -1,9 +1,14 @@
 // A saved movement runs on the engine its pin names (`engineFor`): a legacy id
 // ('1'..'4') on the TypeScript engine this package keeps, a release's semver on
-// the Rust engine (`@listen-fire/engine`) when the installed language reads it.
-// A parked run resumes by the same rule; a release-pinned run the TypeScript
-// engine parked has no engine to resume on and fails loudly. There is no
-// fallback between the two.
+// the engine of the version its compatibility key chooses
+// (`@listen-fire/language-versions`). A parked run resumes by the same rule; a
+// release-pinned run the TypeScript engine parked has no engine to resume on
+// and fails loudly. There is no fallback between engines.
+//
+// The engine is chosen BEFORE the park state is read: a park state's version is
+// the business of the version that wrote it, so a run parked under another
+// version is answered by its own version (today, refused by pin) and never by
+// this one's park-state reader.
 
 import { LANGUAGE_VERSION } from 'movement-lang';
 import { refuseUnsupportedParkStateVersion, type SettleRaceInput } from 'engine-contracts';
@@ -22,13 +27,15 @@ export async function runMovement(input: rust.RunMovementInput): Promise<Movemen
 }
 
 export async function resumeMovement(input: rust.ResumeMovementInput): Promise<MovementRunResult> {
+  const engine = engineOf(input);
   refuseUnsupportedParkStateVersion(input.state.version);
-  return engineOf(input) === 'rust' ? rust.resumeMovement(input) : typescript.resumeMovement(input);
+  return engine === 'rust' ? rust.resumeMovement(input) : typescript.resumeMovement(input);
 }
 
 export async function settleRaceFrame(input: SettleRaceInput & { host: EngineHost }): Promise<MovementRunResult> {
+  const engine = engineOf(input);
   refuseUnsupportedParkStateVersion(input.state.version);
-  return engineOf(input) === 'rust' ? rust.settleRaceFrame(input) : typescript.settleRaceFrame(input);
+  return engine === 'rust' ? rust.settleRaceFrame(input) : typescript.settleRaceFrame(input);
 }
 
 /** The engine a segment of `input`'s run runs on: the run's pin, and, for a

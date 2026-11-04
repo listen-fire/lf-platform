@@ -53,6 +53,11 @@ COPY modules/system/package.json modules/system/
 COPY modules/native-valuations/package.json modules/native-valuations/
 COPY packages/legacy-engine/package.json packages/legacy-engine/
 COPY packages/legacy-lang/package.json packages/legacy-lang/
+COPY packages/language-versions/package.json packages/language-versions/
+# A language version's package set ships whole (its façade is plain JavaScript):
+# `pnpm deploy` installs it with that release's packages beside it, which a copy
+# vendored into the api's build could not resolve.
+COPY packages/lang-0.12/package.json packages/lang-0.12/index.js packages/lang-0.12/index.d.ts packages/lang-0.12/
 COPY packages/platform-constants/package.json packages/platform-constants/
 COPY packages/story-view/package.json packages/story-view/
 

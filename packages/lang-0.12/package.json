@@ -1,0 +1,55 @@
+{
+  "name": "@listen-fire/lang-0.12",
+  "private": true,
+  "license": "Apache-2.0",
+  "version": "0.12.13",
+  "description": "Language release 0.12's package set, at the exact versions production ran, by their real names so every module's peers resolve to 0.12 here. Only @listen-fire/language-versions imports it, through index.js.",
+  "engines": {
+    "node": "22.23.4"
+  },
+  "scripts": {
+    "code:type-check": "tsc --pretty --noEmit",
+    "test": "jest --config jest.config.cjs"
+  },
+  "main": "index.js",
+  "files": ["index.js", "index.d.ts"],
+  "types": "index.d.ts",
+  "type": "commonjs",
+  "dependencies": {
+    "@listen-fire/affinity": "0.12.7",
+    "@listen-fire/airtable": "0.12.7",
+    "@listen-fire/anthropic": "0.12.7",
+    "@listen-fire/attio": "0.12.7",
+    "@listen-fire/dealroom": "0.12.7",
+    "@listen-fire/dropbox": "0.12.6",
+    "@listen-fire/email": "0.12.6",
+    "@listen-fire/engine": "0.12.13",
+    "@listen-fire/engine-contracts": "0.12.13",
+    "@listen-fire/evertrace": "0.12.7",
+    "@listen-fire/gmail": "0.12.10",
+    "@listen-fire/google-drive": "0.12.7",
+    "@listen-fire/google-sheets": "0.12.6",
+    "@listen-fire/granola": "0.12.7",
+    "@listen-fire/handbook": "0.12.8",
+    "@listen-fire/judge-llm": "0.12.7",
+    "@listen-fire/mcp": "0.12.11",
+    "@listen-fire/module-kit": "0.12.10",
+    "@listen-fire/module-runtime": "0.12.8",
+    "@listen-fire/movement-lang": "0.12.13",
+    "@listen-fire/pdf": "0.12.6",
+    "@listen-fire/postgres-limiter": "0.12.7",
+    "@listen-fire/slack": "0.12.7",
+    "@listen-fire/telegram": "0.12.6",
+    "@listen-fire/wake-cloud-tasks": "0.12.7",
+    "@listen-fire/web": "0.12.7",
+    "@listen-fire/whatsapp": "0.12.8"
+  },
+  "devDependencies": {
+    "@listen-fire/fake-channels": "0.12.8",
+    "@types/jest": "29.5.14",
+    "@types/node": "20.16.5",
+    "jest": "29.7.0",
+    "ts-jest": "29.2.5",
+    "typescript": "5.5.4"
+  }
+}

@@ -20,6 +20,7 @@
   "type": "commonjs",
   "dependencies": {
     "engine-contracts": "catalog:",
+    "@listen-fire/language-versions": "workspace:*",
     "legacy-lang": "workspace:@listen-fire/legacy-lang@*",
     "movement-engine": "catalog:",
     "movement-lang": "catalog:",
