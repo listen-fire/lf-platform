@@ -105,8 +105,7 @@ listen to graph-[:Organisation]->-[c:Changes WHERE c.Kind == "created"]-> fire o
 });
 
 describe("a text on a carried version, whose parser is on the server", () => {
-  // This text does not parse under the current release, and a saved 0.12 listen
-  // names its unit: if the panel read it itself, it would show nothing.
+  // The panel's own parser is the current release's, and it never reads this.
   const ZERO_TWELVE = "function echo(run: <manual-[:Invocation]->>) {\n  return run.Text\n}\nlisten to manual fire echo\n";
   const carried = (serverOutline: ListenersPanelProps["serverOutline"], serverListeners: ListenerSummary[] = []) =>
     renderToStaticMarkup(

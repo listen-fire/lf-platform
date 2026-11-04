@@ -129,6 +129,13 @@ describe('movementFileFacets of a text on another version', () => {
     expect(movementFileFacets('# listen to manual fire echo\n', '0.12.13')).toMatchObject({ listenerCount: 0, isAutomation: false });
   });
 
+  it("never this release's parser: a text the two read differently is scanned", () => {
+    // The parser sees one statement, a string over two lines; the scan sees a line.
+    const text = 'note = "\nlisten to manual fire echo\n"\n';
+    expect(movementFileFacets(text)).toMatchObject({ listenerCount: 0 });
+    expect(movementFileFacets(text, '0.12.13')).toMatchObject({ listenerCount: 1 });
+  });
+
   it('a legacy id is read the same way', () => {
     expect(movementFileFacets(ZERO_TWELVE, '4')).toMatchObject({ listenerCount: 1 });
   });
