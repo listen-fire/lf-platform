@@ -22,6 +22,8 @@ import { randomUUID } from 'node:crypto';
 import { LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang';
 import { isCurrent } from '@listen-fire/language-versions';
 
+import { sql } from 'kysely';
+
 import type { UserId } from '../../../generated/kysely/core/User';
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
 import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
@@ -457,7 +459,38 @@ export function leftoverTriggerConfig(config: Record<string, unknown>): Record<s
 }
 
 function isLeftoverTriggerRow(row: DerivedTriggerRow): boolean {
-  return row.config.leftoverForUnfinishedRuns === true;
+  return isLeftoverConfig(row.config);
+}
+
+/** Whether a trigger row's config is one kept only for the unfinished runs that
+ *  name it: no automation, no listen, nothing a person acts on. */
+export function isLeftoverConfig(config: unknown): boolean {
+  return typeof config === 'object' && config !== null && (config as Record<string, unknown>).leftoverForUnfinishedRuns === true;
+}
+
+/** The rows a person sees: a leftover row is none of them. */
+export const notLeftover = sql<boolean>`coalesce(config->>'leftoverForUnfinishedRuns', '') <> 'true'`;
+
+/** The unfinished runs that name a leftover row: what it is kept for. */
+export async function runsKeepingLeftover(triggerId: string): Promise<string[]> {
+  const rows = await getAutomationsQb(['trigger_run'])
+    .selectFrom('trigger_run')
+    .where('host', '=', 'platform')
+    .where('trigger_id', '=', triggerId)
+    .where('status', 'in', ['running', 'parked'])
+    .select('id')
+    .execute();
+  return rows.map((row) => row.id as unknown as string);
+}
+
+/** A leftover row goes when the last run it was kept for has finished. */
+export async function removeFinishedLeftovers(): Promise<void> {
+  await sql`
+    delete from automations.trigger t
+    where t.config->>'leftoverForUnfinishedRuns' = 'true'
+      and not exists (
+        select 1 from automations.trigger_run r
+        where r.host = 'platform' and r.trigger_id = t.id::text and r.status in ('running', 'parked'))`.execute(getAutomationsQb(['trigger', 'trigger_run']));
 }
 
 async function triggerRowsOf(movementId: string): Promise<DerivedTriggerRow[]> {
@@ -558,12 +591,13 @@ export async function listenersFiringMovementNames(input: {
     .selectFrom('trigger')
     .where('team_id', '=', input.teamId as never)
     .where('fired_movement_name', 'in', input.movementNames)
-    .select(['movement_id', 'fired_movement_name', 'run_mode'])
+    .select(['movement_id', 'fired_movement_name', 'run_mode', 'config'])
     .execute();
 
+  // A row kept only for a run's sake is no listener of anything.
   const foreign = triggers.filter((row) => {
     const movementId = row.movement_id as unknown as string | null;
-    return movementId !== null && movementId !== input.excludeMovementId;
+    return movementId !== null && movementId !== input.excludeMovementId && !isLeftoverConfig(row.config);
   });
   if (foreign.length === 0) return [];
 

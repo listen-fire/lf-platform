@@ -43,7 +43,10 @@ import { mayBeRemoteSlug } from '../translation_graph/adapters/remote/slugs';
 import { LEGACY_INTERCEPTS, builtInVerifierFor } from '../inbound/legacy_signature_headers';
 import { builtinModuleInboundVerifier, builtinModuleRequestKeeping } from '../translation_graph/adapters/builtin_modules';
 import { capturedRequest } from '../inbound/captured_request';
+import { answerTappedCallbacks } from '../whatsapp/inbound_message';
 import { judgedEmpty, keepForEveryVersion, waitingKeyOf } from '../inbound/carried_delivery';
+
+const WHATSAPP_ADAPTER_TYPE = 'whatsapp';
 
 /** What capture keeps of one event: nothing. Every listen is judged on the
  *  delivery's arrivals as it is kept (`keepDelivery`), so no event is matched
@@ -172,6 +175,19 @@ function builtInIntercept(input: {
           responder: new TelegramAdapter(input.subscription.teamId as TeamId, input.credentialsId),
         });
         return handled ? 'handled' : 'continue';
+      },
+    };
+  }
+  // A subscription an operator made for a WhatsApp number of their own posts here
+  // (`webhookSubscriptions.create` takes any provider; the platform's own number
+  // posts at its own door). A tap on a 0.12 button is an ordinary message, and a
+  // delivery can batch several, so it is fired here and the delivery carries on:
+  // a module drops an interactive message as unclassified, so it is not fired twice.
+  if (input.adapterType === WHATSAPP_ADAPTER_TYPE) {
+    return {
+      async intercept(body) {
+        await answerTappedCallbacks(body as Parameters<typeof answerTappedCallbacks>[0]);
+        return 'continue';
       },
     };
   }

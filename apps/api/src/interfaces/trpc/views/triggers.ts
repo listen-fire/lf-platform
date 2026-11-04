@@ -33,6 +33,7 @@ import { resumeListen } from '../../../services/inbound/listen_pause';
 import { mq } from '../../../lib/message_queue';
 import { trpc } from '../trpc';
 import { getAutomationsQb, getKnowledgeQb } from '../../../lib/kysely';
+import { isLeftoverConfig, notLeftover, runsKeepingLeftover } from '../../../services/translation_graph/movement/store';
 import { runMovementTestRun } from '../../../services/translation_graph/movement/test_run';
 import { describeAutomation } from '../../../lib/automation/describe';
 import {
@@ -133,6 +134,7 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
       const triggerRow = await getAutomationsQb(['trigger'])
         .selectFrom('trigger')
         .where('team_id', '=', teamId)
+        .where(notLeftover)
         .select('id')
         .limit(1)
         .executeTakeFirst();
@@ -150,6 +152,7 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
       const rows = await getAutomationsQb(['trigger'])
         .selectFrom('trigger')
         .where('team_id', '=', teamId)
+        .where(notLeftover)
         .select(['id', 'name', 'kind', 'config', 'created_at', 'updated_at'])
         .orderBy('created_at', 'desc')
         .execute();
@@ -535,6 +538,18 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
       .mutation(async ({ input }): Promise<{ id: string }> => {
         const ctx = currentContext();
         const teamId = ctx.user.teamId as TeamId;
+        const row = await getAutomationsQb(['trigger'])
+          .selectFrom('trigger')
+          .where('id', '=', input.triggerId as TriggerId)
+          .where('team_id', '=', teamId)
+          .select('config')
+          .executeTakeFirst();
+        if (row !== undefined && isLeftoverConfig(row.config)) {
+          const runs = await runsKeepingLeftover(input.triggerId);
+          if (runs.length > 0) {
+            throw new Error(`This row is kept for ${runs.length === 1 ? `run ${runs[0]}` : `runs ${runs.join(', ')}`}, which still ${runs.length === 1 ? 'needs' : 'need'} it. It goes when ${runs.length === 1 ? 'that run finishes' : 'they finish'}; cancel ${runs.length === 1 ? 'it' : 'them'} to remove it sooner.`);
+          }
+        }
         const result = await getAutomationsQb(['trigger'])
           .deleteFrom('trigger')
           .where('id', '=', input.triggerId as TriggerId)

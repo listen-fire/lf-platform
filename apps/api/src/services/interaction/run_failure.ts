@@ -52,6 +52,8 @@ export async function settleUnresumableRun(input: {
 export async function settleRunsParkedOnTriggers(input: {
   triggerIds: string[];
   reason: string;
+  /** Only the runs on this language version: one on another finishes on its own. */
+  pinned?: string;
 }): Promise<void> {
   if (input.triggerIds.length === 0) return;
   // `parked_run` holds only LIVE leaves (a settled one is deleted), so this is
@@ -68,13 +70,15 @@ export async function settleRunsParkedOnTriggers(input: {
   const parkedRunIds = [...new Set(parked.map((p) => p.run_id))];
   if (parkedRunIds.length === 0) return;
 
-  const runs = await getAutomationsQb(['trigger_run'])
+  let query = getAutomationsQb(['trigger_run', 'movement_version'])
     .selectFrom('trigger_run')
     .where('host', '=', 'platform')
-    .where('id', 'in', parkedRunIds)
-    .where('trigger_id', 'in', input.triggerIds)
-    .select('id')
-    .execute();
+    .where('trigger_run.id', 'in', parkedRunIds)
+    .where('trigger_id', 'in', input.triggerIds);
+  if (input.pinned !== undefined) {
+    query = query.innerJoin('movement_version', 'movement_version.id', 'trigger_run.movement_version_id').where('movement_version.language_version', '=', input.pinned);
+  }
+  const runs = await query.select('trigger_run.id as id').execute();
   for (const run of runs) {
     // Under the run's lease. A run another instance is resuming right now is
     // stamped instead: its cancel gate stops it at the next statement and

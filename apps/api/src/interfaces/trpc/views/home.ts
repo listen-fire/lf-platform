@@ -29,6 +29,7 @@ import type { MovementId } from '../../../generated/kysely/automations/Movement'
 import { currentContext } from '../../../services/context';
 import { trpc } from '../trpc';
 import { getKnowledgeQb, getAutomationsQb, getQb } from '../../../lib/kysely';
+import { notLeftover } from '../../../services/translation_graph/movement/store';
 import {
   deriveAutomationStatus,
   statusLabel,
@@ -144,6 +145,7 @@ const homeRouter = (procedure: typeof trpc.procedure) => {
       const triggers = await getAutomationsQb(['trigger'])
         .selectFrom('trigger')
         .where('team_id', '=', teamId)
+        .where(notLeftover)
         .select(['id', 'name', 'kind', 'config', 'movement_id', 'created_at'])
         .orderBy('created_at', 'desc')
         .execute();

@@ -547,7 +547,17 @@ async function reconcileDerivedTriggers(input: {
       .where('id', '=', row.id as TriggerId)
       .execute();
   }
-  for (const row of plan.retired.filter((retired) => namedElsewhere.has(retired.id))) {
+  // A row that stays only for a run on another version still ends this version's:
+  // its listen is gone, as for a row deleted above.
+  const keptForOthers = plan.retired.filter((retired) => namedElsewhere.has(retired.id));
+  if (keptForOthers.length > 0) {
+    await settleRunsParkedOnTriggers({
+      triggerIds: keptForOthers.map((row) => row.id),
+      pinned: input.movementRow.languageVersion,
+      reason: input.retirementReason ?? 'This run was still waiting to continue when its listener was removed from the automation, so it was stopped.',
+    });
+  }
+  for (const row of keptForOthers) {
     noteSchedule(row.kind);
     await qb
       .updateTable('trigger')

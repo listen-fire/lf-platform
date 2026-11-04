@@ -109,7 +109,10 @@ export async function fireCallback(input: {
 }): Promise<CallbackFireOutcome> {
   const existing = await getDoorCallback(input.id);
   if (existing === null) return { kind: 'not_found' };
-  if (await runIsOnLegacyPin(existing.runId)) return { kind: 'held', callback: existing };
+  // A call that is over answers as over, below: `held` is for a run that could
+  // still be stopped.
+  const open = existing.status === 'live' && (existing.expiresAt === null || existing.expiresAt.getTime() > Date.now());
+  if (open && (await runIsOnLegacyPin(existing.runId))) return { kind: 'held', callback: existing };
 
   const bound = bindSuppliedValue(existing.params, input.values, input.suppliedValue);
   if (!bound.ok) return { kind: 'mismatch', callback: existing, message: bound.message };

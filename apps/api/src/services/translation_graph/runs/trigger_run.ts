@@ -21,6 +21,7 @@ import { QUEUED_RUN_WORK_KINDS, type WorkHandler } from '../../work/kinds';
 
 import { isWriteEffect, type MovementTraceEntry } from 'movement-engine/public/trace';
 import { SECOND } from '../../../constants';
+import { removeFinishedLeftovers } from '../movement/store';
 import { getAutomationsQb, getQb } from '../../../lib/kysely';
 import { costMicrodollarsToUsd } from '../../../lib/llm_usage';
 import { mq } from '../../../lib/message_queue';
@@ -1106,6 +1107,7 @@ export const runOrphanSweepHandler: WorkHandler = {
     // A leaf claimed for resuming by a holder that died is parked again once
     // that holder's lease has lapsed, so the run's next wake finds it.
     await returnLeavesOfLapsedLeases();
+    await removeFinishedLeftovers();
   },
 };
 

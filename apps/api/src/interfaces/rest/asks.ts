@@ -213,6 +213,11 @@ asksRouter.post('/:token', async (req: Request, res: Response) => {
       return;
     }
     if (outcome.kind === 'held') {
+      // The web `/a/<token>` page says it in its own frame; a plain link's page is this.
+      if (req.accepts(['html', 'json']) === 'json') {
+        res.status(409).json({ error: 'held', message: outcome.message });
+        return;
+      }
       res.status(409).type('html').send(messagePage('This question cannot be answered', outcome.message));
       return;
     }

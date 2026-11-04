@@ -106,15 +106,33 @@ async function runWhatsappMessage(row: WhatsappMessageRow): Promise<void> {
     await tellTapper(row, text);
   }
 
-  if (row.announce) {
-    try {
-      await announceToOps(message);
-    } catch (error) {
-      logger.warn('[whatsapp/webhook] ops notice failed', {
-        messageId: message.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
+  if (row.announce) await announcing(message);
+}
+
+/** The ops notice, which may only fail quietly. */
+async function announcing(message: WhatsAppMessage): Promise<void> {
+  try {
+    await announceToOps(message);
+  } catch (error) {
+    logger.warn('[whatsapp/webhook] ops notice failed', {
+      messageId: message.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+/**
+ * Each tapped 0.12 callback a delivery carries, fired and answered: what a door
+ * that holds a WhatsApp subscription of its own does before its events, since a
+ * tap is an ordinary message there too and a delivery can batch several. A fire
+ * that fails throws, so the provider's retry finds the tap unspent.
+ */
+export async function answerTappedCallbacks(body: Parameters<typeof whatsappMessageRowsOf>[0]): Promise<void> {
+  for (const row of whatsappMessageRowsOf(body)) {
+    const tapped = tappedCallbackOf(row.message);
+    if (tapped === undefined) continue;
+    const { text } = await answerCallbackTap(tapped);
+    await tellTapper(row, text);
   }
 }
 
@@ -177,6 +195,7 @@ export const whatsappMessageHandler: WorkHandler = {
         attempts: ctx.attempts,
         error: error instanceof Error ? error.message : String(error),
       });
+      if (parsed.data.announce) await announcing(parsed.data.message);
       if (tappedCallbackOf(parsed.data.message) !== undefined) await tellTapper(parsed.data, 'Something went wrong recording that.');
     }
   },

@@ -92,11 +92,17 @@ export default function AnswerPage() {
       try {
         const res = await fetch(`/api/asks/${encodeURIComponent(token)}`, {
           method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "text/html" },
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
           body: JSON.stringify({ answer }),
         });
         if (res.ok) {
           setState({ phase: "done", recorded: recordedLabel });
+          return;
+        }
+        // Its run can't continue, and nothing was recorded: the server says why.
+        if (res.status === 409) {
+          const body = (await res.json().catch(() => ({}))) as { message?: string };
+          setState({ phase: "error", message: body.message ?? "This question can't be answered." });
           return;
         }
         // A lost race / expired token comes back 410; surface it cleanly.
