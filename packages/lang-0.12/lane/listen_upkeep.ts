@@ -245,20 +245,22 @@ function recordOf(value: unknown): Record<string, unknown> {
 const NIL_ID = '00000000-0000-0000-0000-000000000000';
 
 /** The system module's marks: a 0.12 cursor keeps one for failed runs and one
- *  across the stored kinds, and the current one keeps one per source. A row at
- *  exactly a stored mark's instant is read again, since the current mark orders
- *  by another field than 0.12's. */
+ *  across the stored kinds, and the current one keeps one per source. The current
+ *  mark orders a stored kind's rows by another field than 0.12's row id, and no
+ *  value of that field says which rows of one instant 0.12 had heard (a deploy
+ *  check stamps a whole sweep with one), so the 0.12 row id goes with it. A listen
+ *  that had read no stored event yet carries the lowest id, which 0.12 armed with. */
 function systemCursor(checkpoint: Record<string, unknown>): Record<string, unknown> | undefined {
   const failed = recordOf(checkpoint.runFailed);
   const stored = recordOf(checkpoint.stored);
   const cursor: Record<string, unknown> = {};
   if (typeof failed.failedAt === 'string' && typeof failed.runId === 'string') cursor.failed = { at: failed.failedAt, runId: failed.runId };
-  if (typeof stored.occurredAt === 'string') {
-    const at = stored.occurredAt;
-    cursor.paused = { at, runId: NIL_ID };
-    cursor.releases = { at, version: '' };
-    cursor.validation = { at, automationId: '' };
-    cursor.deprecated = { at, automationId: '' };
+  if (typeof stored.occurredAt === 'string' && typeof stored.id === 'string') {
+    const place = { at: stored.occurredAt, heardThrough: stored.id };
+    cursor.paused = { ...place, runId: NIL_ID };
+    cursor.releases = { ...place, version: '' };
+    cursor.validation = { ...place, automationId: '' };
+    cursor.deprecated = { ...place, automationId: '' };
   }
   return Object.keys(cursor).length > 0 ? cursor : undefined;
 }

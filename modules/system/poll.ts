@@ -18,7 +18,7 @@
 
 import type { PollEdgeAnswer, PollEdgeInput } from 'module-kit';
 
-import type { NoticeMark, ProgramNotice, ReleaseMark, RunMark, SettledRun, StrandedWait, SystemRecords, UnjudgedArrival, UnjudgedMark, WaitMark } from './records';
+import type { CarriedPosition, NoticeMark, ProgramNotice, ReleaseMark, RunMark, SettledRun, StrandedWait, SystemRecords, UnjudgedArrival, UnjudgedMark, WaitMark } from './records';
 import {
   ARRIVAL_NOT_JUDGED,
   DEPRECATED_VERSION,
@@ -84,6 +84,12 @@ export function kindsTaken(filter: unknown): SystemEventKind[] | undefined {
   const op: unknown = Reflect.get(filter, 'op');
   const names = op === 'eq' && typeof value === 'string' ? [value] : op === 'in' && Array.isArray(value) && value.every((v) => typeof v === 'string') ? (value as string[]) : undefined;
   return names === undefined ? undefined : SYSTEM_EVENT_KINDS.filter((kind) => names.includes(kind.name));
+}
+
+/** The mark moved to `to`. A position carried from 0.12 still says what was heard
+ *  at its instant, so it stays until the mark leaves it. */
+function movedTo<Mark extends CarriedPosition & { at: string }>(mark: Mark, to: Mark): Mark {
+  return mark.heardThrough !== undefined && Date.parse(to.at) === Date.parse(mark.at) ? { ...to, heardThrough: mark.heardThrough } : to;
 }
 
 function cursorOf(cursor: unknown): SystemCursor | undefined {
@@ -231,7 +237,7 @@ export async function pollSystemEvents(records: SystemRecords, input: PollEdgeIn
     if (!asked(kind) || mark === undefined) continue;
     const runs = await read({ after: mark, until, limit });
     const last = runs.at(-1);
-    if (last !== undefined) next[member] = { at: last.at, runId: last.runId };
+    if (last !== undefined) next[member] = movedTo(mark, { at: last.at, runId: last.runId });
     // A run no program owns, or a rehearsal: the mark passes it, nothing is said.
     for (const run of runs) if (run.automation !== null && !run.rehearsal) arrivals.push(runEvent(kind, run, webBaseUrl, takenApplied));
   }
@@ -248,7 +254,7 @@ export async function pollSystemEvents(records: SystemRecords, input: PollEdgeIn
     const releases = await records.releases({ after: previous.releases, limit });
     const settled = releases.slice(0, firstPast(releases, until));
     const last = settled.at(-1);
-    if (last !== undefined) next.releases = { at: last.at, version: last.version };
+    if (last !== undefined) next.releases = movedTo(previous.releases, { at: last.at, version: last.version });
     for (const release of settled) {
       arrivals.push(event({ kind: RELEASE_APPLIED, id: `${RELEASE_APPLIED.id}:${release.version}`, at: release.at, fields: { Version: release.version, Reason: `release ${release.version} is running` }, taken: takenApplied }));
     }
@@ -276,7 +282,7 @@ export async function pollSystemEvents(records: SystemRecords, input: PollEdgeIn
     const notices = await read({ after: mark, limit });
     const settled = notices.slice(0, firstPast(notices, until));
     const last = settled.at(-1);
-    if (last !== undefined) next[member] = { at: last.at, automationId: last.automation.id };
+    if (last !== undefined) next[member] = movedTo(mark, { at: last.at, automationId: last.automation.id });
     for (const notice of settled) arrivals.push(noticeEvent(kind, notice, takenApplied));
   }
   return { arrivals, cursor: next };

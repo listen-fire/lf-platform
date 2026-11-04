@@ -5,8 +5,16 @@
 // The facts name no event kind: which are events, and what each says, is
 // the poll's (poll.ts).
 
+/** A mark a listen brought from 0.12, which ordered the rows of one instant by
+ *  their row id where this module orders them by a field: at the mark's instant,
+ *  only rows past this id are still to come. A host that keeps no such rows never
+ *  meets it. It goes when the mark leaves that instant (poll.ts). */
+export interface CarriedPosition {
+  heardThrough?: string;
+}
+
 /** Where a page of runs left off: its last run (when it settled, and its id). */
-export interface RunMark {
+export interface RunMark extends CarriedPosition {
   at: string;
   runId: string;
 }
@@ -18,7 +26,7 @@ export interface WaitMark {
 }
 
 /** Where a page of releases left off: its last release. */
-export interface ReleaseMark {
+export interface ReleaseMark extends CarriedPosition {
   at: string;
   version: string;
 }
@@ -108,7 +116,7 @@ export interface Release {
 
 /** Where a page of program notices (validation issues, deprecated versions)
  *  left off: its last one, by when it was found and the program's id. */
-export interface NoticeMark {
+export interface NoticeMark extends CarriedPosition {
   at: string;
   automationId: string;
 }

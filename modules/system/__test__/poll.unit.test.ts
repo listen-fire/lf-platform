@@ -230,6 +230,18 @@ describe('pollSystemEvents', () => {
     expect(later.arrivals.map((a) => field(a, 'Reason'))).toEqual(['still broken']);
   });
 
+  it('a position carried from 0.12 stays on the mark while it stands at that instant, and goes when it leaves', async () => {
+    const release = (version: string, seconds: number): Release => ({ version, at: at(seconds) });
+    const facts = { releases: [release('a', -60)] };
+    const host = records(facts);
+    const carried: SystemCursor = { releases: { at: at(-60), version: '', heardThrough: 'row-9' } };
+    const same = await pollSystemEvents(host, { edge: 'Events', cursor: carried }, SETTINGS, T0);
+    expect((same.cursor as SystemCursor).releases).toEqual({ at: at(-60), version: 'a', heardThrough: 'row-9' });
+    facts.releases.push(release('b', -30));
+    const left = await pollSystemEvents(host, { edge: 'Events', cursor: same.cursor }, SETTINGS, T0);
+    expect((left.cursor as SystemCursor).releases).toEqual({ at: at(-30), version: 'b' });
+  });
+
   it('a host with no reader for a kind reports none of it, whatever a listen asks for, and keeps no mark for it', async () => {
     const host = records({ failed: [failed('run-a', 3)] });
     expect(host.validationIssues).toBeUndefined();

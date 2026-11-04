@@ -4,7 +4,14 @@
 import type { AdapterManifest } from 'movement-engine/public/adapter';
 
 import { SYSTEM_HANDBOOK_SECTION } from './handbook_section';
-import { DEFAULT_KIND, EVENTS_EDGE, KIND_FIELD, SYSTEM_ADAPTER_TYPE } from './types';
+import { DEFAULT_KIND, DEPRECATED_VERSION, EVENTS_EDGE, KIND_FIELD, RELEASE_APPLIED, SYSTEM_ADAPTER_TYPE, VALIDATION_ISSUE } from './types';
+
+/** A settings listen as a traversal, whichever kinds it names. */
+const LISTEN_ON_EVENTS = {
+  path: [EVENTS_EDGE],
+  aliases: ['e'],
+  keys: { events: { hop: 0, field: KIND_FIELD, op: 'in', absent: DEFAULT_KIND.name } },
+} satisfies NonNullable<AdapterManifest['listenSettingsBecome']>;
 
 export const SYSTEM_MANIFEST: AdapterManifest = {
   adapterType: SYSTEM_ADAPTER_TYPE,
@@ -27,12 +34,16 @@ export const SYSTEM_MANIFEST: AdapterManifest = {
   methods: ['listEntryPoints', 'describe', 'getFieldValue'],
   // A 0.12 `listen to sys { events: ["Run Failed", "Run Paused"] }` is
   // `listen to sys-[e:Events WHERE e.Kind IN ["Run Failed", "Run Paused"]]->`;
-  // one naming no events heard `Run Failed`.
+  // one naming no events heard `Run Failed`. Each kind was its own position under
+  // 0.12, so a handler of one of the deploy check's kinds is retyped by that kind's
+  // own mapping; without it its parameter names a position nothing has now, and the
+  // upgrade stops. The mappings differ by position, so a listen naming several of
+  // them, or one of them beside `Run Failed`, has no rewrite: it splits into one
+  // listen per handler.
   listenSettingsBecome: {
-    path: [EVENTS_EDGE],
-    aliases: ['e'],
+    ...LISTEN_ON_EVENTS,
     paramFrom: DEFAULT_KIND.name,
-    keys: { events: { hop: 0, field: KIND_FIELD, op: 'in', absent: DEFAULT_KIND.name } },
+    byEvent: Object.fromEntries([VALIDATION_ISSUE, DEPRECATED_VERSION, RELEASE_APPLIED].map((kind) => [kind.name, { ...LISTEN_ON_EVENTS, paramFrom: kind.name }])),
   },
   vocabulary: {
     // A built-in owns no brand, but it still owns a mark (see the manual

@@ -103,6 +103,20 @@ const ATTIO_012 = 'import { attio } from adapters\nimport { attio_conn } from cr
 const CRON_012 = 'import { `@lf/cron` as cron } from adapters\ntimer = connect cron\nfunction digest(t: <timer-[:Tick]->>) {\n  return t.`Fired at`\n}\n';
 const DAILY_012 = `${CRON_012}listen to timer { schedule: "0 9 * * *" } fire digest\n`;
 const EVERY_MINUTE_012 = `${CRON_012}listen to timer { schedule: "* * * * *" } fire digest\n`;
+// Automation Alerts' shape: one listen per kind, each handler typed by its kind's own position.
+const ALERTS_012 = [
+  'import { system } from adapters',
+  'sys = connect system',
+  'function `Run Failed`(e: <sys-[:`Run Failed`]->>) {\n  return e.`Reason`\n}',
+  'function `Validation Issue`(e: <sys-[:`Validation Issue`]->>) {\n  return e.`Version`\n}',
+  'function `Deprecated Version`(e: <sys-[:`Deprecated Version`]->>) {\n  return e.`Automation`\n}',
+  'function `Release Applied`(e: <sys-[:`Release Applied`]->>) {\n  return e.`Reason`\n}',
+  'listen as "Failed runs" to sys { events: ["Run Failed"] } fire `Run Failed`',
+  'listen as "Validation issues" to sys { events: ["Validation Issue"] } fire `Validation Issue`',
+  'listen as "Deprecated versions" to sys { events: ["Deprecated Version"] } fire `Deprecated Version`',
+  'listen as "Releases" to sys { events: ["Release Applied"] } fire `Release Applied`',
+  '',
+].join('\n');
 const SYSTEM_012 = 'import { `@lf/system` as system } from adapters\nsys = connect system\nfunction onFailed(failed: <sys-[:`Run Failed`]->>) {\n  return failed.Reason\n}\nlisten to sys { events: ["Run Failed"] } fire onFailed\n';
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
@@ -723,6 +737,95 @@ describe('0.12 listens beside the current version (real Postgres)', () => {
       const all = JSON.stringify((await fireRows()).map((row) => (row.payload as { arrival: unknown }).arrival));
       expect(all).toContain(after);
       expect(all).not.toContain(heardBy012);
+    });
+
+    describe('the system module, whose stored kinds 0.12 and the current version order differently', () => {
+      /** An id past every id a batch was given, whatever it was given. */
+      const lastId = () => `ffffffff-ffff-4fff-bfff-${randomUUID().slice(-12)}`;
+      type StoredKind = 'validation_issue' | 'deprecated_version' | 'release_applied';
+
+      /** What the deploy check records, with the row id and instant a test says. */
+      async function recorded(kind: StoredKind, input: { at: Date; automationId?: string; version?: string; id?: string }): Promise<void> {
+        const payload = { automation: 'a', automationId: input.automationId ?? '', runId: '', version: input.version ?? '', reason: 'r', url: '', at: input.at.toISOString() };
+        await sql`
+          insert into automations.system_event (id, team_id, kind, payload, occurred_at)
+          values (${input.id ?? randomUUID()}::uuid, ${teamId}::uuid, ${kind}::text, ${JSON.stringify(payload)}::text::jsonb, ${input.at}::timestamptz)`.execute(getAutomationsQb(['system_event']));
+      }
+
+      async function failedRunIs(id: string, at: Date): Promise<void> {
+        const { triggerId } = await kept({ source: EVERY_MINUTE_012, pin: PIN, kind: 'manual', firedMovementName: 'digest' });
+        await sql`
+          insert into automations.trigger_run (id, team_id, trigger_id, trigger_type, status, started_at, failed_at, failure_reason, dry_run)
+          values (${id}::uuid, ${teamId}::uuid, ${triggerId}::text, 'webhook', 'failed', ${at}::timestamptz, ${at}::timestamptz, 'it failed', false)`.execute(getAutomationsQb(['trigger_run']));
+      }
+
+      it('the four kinds Automation Alerts listens on: a batch at the mark\'s instant is not posted again, and what came after it is, once', async () => {
+        const id = await shipped(ALERTS_012);
+        const rows = await triggersOf(id);
+        expect(rows).toHaveLength(4);
+        const T = new Date(Date.now() - 20 * 60_000);
+        const beforeT = new Date(T.getTime() - 60_000).toISOString();
+        const NIL = '00000000-0000-0000-0000-000000000000';
+        for (const row of rows) {
+          const failing = (row.config as { events: string[] }).events[0] === 'Run Failed';
+          await setRow(row.id, { poll_checkpoint: JSON.stringify(failing ? { runFailed: { failedAt: beforeT, runId: NIL } } : { stored: { occurredAt: beforeT, id: NIL } }) });
+        }
+
+        // A deploy check's sweep: one instant, and a failed run in the same millisecond.
+        const heard = { release: `9.9.${randomUUID()}`, deprecated: [randomUUID(), randomUUID(), randomUUID(), randomUUID()], issues: [randomUUID(), randomUUID()], runs: [randomUUID(), randomUUID()] };
+        await recorded('release_applied', { at: T, version: heard.release });
+        for (const automationId of heard.deprecated) await recorded('deprecated_version', { at: T, automationId, version: '0.12.8' });
+        for (const automationId of heard.issues) await recorded('validation_issue', { at: T, automationId, version: '0.15.1' });
+        for (const run of heard.runs) await failedRunIs(run, T);
+
+        for (const row of rows) await pollSourceHandler.run({ triggerId: row.id }, ctx(new Date()));
+        expect(await receipts()).toHaveLength(9);
+        await drain();
+        expect(firing).toHaveBeenCalledTimes(9);
+        firing.mockClear();
+
+        // Not heard yet: at the same instant, past the 0.12 mark in 0.12's order and
+        // before everything heard in the current version's.
+        const late = '00000000-0000-4000-8000-000000000001';
+        const lateRun = lastId();
+        await recorded('release_applied', { at: T, version: '0.0.1', id: lastId() });
+        await recorded('deprecated_version', { at: T, automationId: late, version: '0.12.8', id: lastId() });
+        await recorded('validation_issue', { at: T, automationId: late, version: '0.15.1', id: lastId() });
+        await failedRunIs(lateRun, T);
+
+        await upgraded(id);
+        const pollEach = async (): Promise<void> => {
+          for (const moved of await triggersOf(id)) {
+            const polls = await pollsOf(moved.id);
+            expect(polls).toHaveLength(1);
+            await pollShared(polls[0]!);
+          }
+        };
+        const heardAgain = (fired: string[]) => fired.filter((identity) => [heard.release, ...heard.deprecated, ...heard.issues, ...heard.runs].some((old) => identity.includes(old)));
+        await pollEach();
+        const first = await firesOf();
+        expect(heardAgain(first)).toEqual([]);
+        expect(first.filter((identity) => identity.startsWith('release_applied:0.0.1') || identity.includes(late) || identity.includes(lateRun))).toHaveLength(4);
+        expect(first).toHaveLength(4);
+
+        // The mark has moved inside the instant, and still reads nothing heard.
+        await pollEach();
+        expect(await firesOf()).toEqual(first);
+
+        // Just after it, once each; and the mark has left the instant behind.
+        const justAfter = new Date(T.getTime() + 1);
+        const after = randomUUID();
+        await recorded('release_applied', { at: justAfter, version: `9.9.${after}` });
+        await recorded('deprecated_version', { at: justAfter, automationId: after, version: '0.12.8' });
+        await recorded('validation_issue', { at: justAfter, automationId: after, version: '0.15.1' });
+        await failedRunIs(after, justAfter);
+        await pollEach();
+        await pollEach();
+        const all = await firesOf();
+        expect(all.filter((identity) => identity.includes(after))).toHaveLength(4);
+        expect(all).toHaveLength(8);
+        expect(heardAgain(all)).toEqual([]);
+      });
     });
 
     it('a re-save of a moved listen keeps its poll', async () => {

@@ -266,10 +266,11 @@ async function failedRuns(teamId: TeamId, input: { after: RunMark; until: string
 // ── Kept here: paused runs, releases ─────────────────────────────────────────
 
 /** The team's `kind` rows after the mark (their instant, then the payload's
- *  `field`), no later than `until` when given, oldest first. */
+ *  `field`), no later than `until` when given, oldest first. A mark carried from
+ *  0.12 says too how far its instant was heard, in 0.12's order of those rows. */
 async function storedEvents(
   teamId: TeamId,
-  input: { kind: SystemEventKind; field: 'runId' | 'version' | 'automationId'; after: { at: string; id: string }; until?: string; limit: number },
+  input: { kind: SystemEventKind; field: 'runId' | 'version' | 'automationId'; after: { at: string; id: string; heardThrough?: string }; until?: string; limit: number },
 ): Promise<Array<{ payload: SystemEventPayload; at: string }>> {
   const { rows } = await sql<{ payload: unknown; at: string }>`
     select e.payload, ${iso('e.occurred_at')} as at
@@ -277,6 +278,7 @@ async function storedEvents(
     where e.team_id = ${teamId}::uuid and e.kind = ${input.kind.id}
       ${input.until === undefined ? sql`` : sql`and date_trunc('milliseconds', e.occurred_at) <= ${input.until}::timestamptz`}
       and ${afterMark('e.occurred_at', `(e.payload->>'${input.field}')`, input.after)}
+      ${input.after.heardThrough === undefined ? sql`` : sql`and (date_trunc('milliseconds', e.occurred_at) > ${input.after.at}::timestamptz or e.id > ${input.after.heardThrough}::uuid)`}
     order by date_trunc('milliseconds', e.occurred_at), e.payload->>${input.field}
     limit ${input.limit}::int8`.execute(db());
   return rows.flatMap((row) => {
@@ -289,7 +291,7 @@ async function pausedRuns(teamId: TeamId, input: { after: RunMark; until: string
   const events = await storedEvents(teamId, {
     kind: RUN_PAUSED,
     field: 'runId',
-    after: { at: input.after.at, id: input.after.runId },
+    after: { ...input.after, id: input.after.runId },
     until: input.until,
     limit: input.limit,
   });
@@ -312,7 +314,7 @@ async function releases(teamId: TeamId, input: { after: ReleaseMark; limit: numb
   const events = await storedEvents(teamId, {
     kind: RELEASE_APPLIED,
     field: 'version',
-    after: { at: input.after.at, id: input.after.version },
+    after: { ...input.after, id: input.after.version },
     limit: input.limit,
   });
   return events.map(({ payload, at }) => ({ version: payload.version, at }));
@@ -327,7 +329,7 @@ async function programNotices(teamId: TeamId, kind: SystemEventKind, input: { af
   const events = await storedEvents(teamId, {
     kind,
     field: 'automationId',
-    after: { at: input.after.at, id: input.after.automationId },
+    after: { ...input.after, id: input.after.automationId },
     limit: input.limit,
   });
   return events.map(({ payload, at }) => ({
