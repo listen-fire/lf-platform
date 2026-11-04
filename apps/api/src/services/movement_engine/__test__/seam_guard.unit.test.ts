@@ -100,6 +100,7 @@ const HOST_SIDE_FILES = [
   'resume_step.ts',
   'run_engine_record.ts',
   'run_host.ts',
+  'doors_hold.ts',
   'run_host_deliveries.ts',
   'run_host_queue.ts',
   'run_host_store.ts',
