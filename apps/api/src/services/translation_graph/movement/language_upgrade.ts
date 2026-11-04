@@ -1010,7 +1010,10 @@ export const advanceLive: Advance = async ({ movement, to, source, movingWith })
       languageUpgrade: { to, movedAt },
       inTransaction: { teamCatalog },
     });
-    if (saved.ok) return { ok: true, ...(saved.leftPaused !== undefined ? { warnings: saved.leftPaused } : {}) };
+    if (saved.ok) {
+      const warnings = [...(saved.leftPaused ?? []), ...(saved.cursorsNotCarried ?? [])];
+      return { ok: true, ...(warnings.length > 0 ? { warnings } : {}) };
+    }
     const what = source === movement.source ? `it did not ship under ${to}` : 'the rewritten text did not ship';
     return { ok: false, detail: `${what}: ${(saved.errors ?? []).join('; ') || 'the save stopped short of shipping'}` };
   };

@@ -121,7 +121,7 @@ import {
 } from './authoring';
 import { checkInstalled, routeOf } from './language_route';
 import { notListenedDiagnostic, teamFactsOf, validateUnderCarried } from './carried_check';
-import { carriedListen, carryingFromShipped, heardSoFarOf, keepCarriedCursors, keepingCarriedFrom, predecessorsOf, type CarriedListen, type CarryingFrom, type HeardRow } from './carried_cursors';
+import { carriedListen, carryingFromShipped, heardAnything, heardSoFarOf, keepCarriedCursors, keepingCarriedFrom, predecessorsOf, type CarriedListen, type CarryingFrom, type HeardRow } from './carried_cursors';
 import { modulePlatform } from './carried_run';
 import { listeningOf, type ListeningLane } from '@listen-fire/language-versions';
 import { runningOf } from '@listen-fire/language-versions';
@@ -197,6 +197,10 @@ export interface ProvisionedMovement {
    *  tell which of the earlier listens a person had paused. Not a warning of
    *  every save, so it is not among `warnings`. */
   leftPaused?: string[];
+  /** A language upgrade's: the listens that had heard something and could not
+   *  take how far with them, each starting from its first poll. As `leftPaused`,
+   *  not a warning of every save. */
+  cursorsNotCarried?: string[];
 }
 
 export interface ProvisionMovementFailure {
@@ -450,7 +454,7 @@ async function reconcileDerivedTriggers(input: {
   /** A language upgrade from a carried version: each listen takes how far its
    *  predecessor heard (./carried_cursors.ts). */
   carrying?: CarryingFrom;
-}): Promise<{ listeners: ProvisionedListener[]; reconciles: Set<WorkKind>; leftPaused: string[] }> {
+}): Promise<{ listeners: ProvisionedListener[]; reconciles: Set<WorkKind>; leftPaused: string[]; cursorsNotCarried: string[] }> {
   const qb = getAutomationsQb(['trigger']);
   // Read before the rows are touched, with each held: a tick or a pull under its
   // old version committed first, or finds its row moved.
@@ -502,14 +506,24 @@ async function reconcileDerivedTriggers(input: {
         return { identity: listenIdentityOf({ movementName: row.firedMovementName, kind: row.kind, credentialsId: row.credentialsId }), pause };
       })
     : [];
-  const predecessors =
+  const { predecessors, unmatched } =
     input.carrying !== undefined
       ? predecessorsOf({
           desired: input.desired.map(({ movementName, adapter, credentialsId }) => ({ movementName, adapter, credentialsId })),
           rows: existing,
           statements: input.carrying.statements,
         })
-      : [];
+      : { predecessors: [], unmatched: [] };
+  // A cursor is never lost in silence: what cannot be carried is said, by the
+  // listen, in the upgrade's answer.
+  const cursorsNotCarried: string[] = [];
+  const cursorNotCarried = (row: { id: string; kind: string; firedMovementName: string | null; config: unknown }): void => {
+    logger.warn('[LanguageUpgrade] how far a listen heard was not carried', { movementId: input.movementRow.id, triggerId: row.id, kind: row.kind, firedMovementName: row.firedMovementName });
+    cursorsNotCarried.push(`${input.movementRow.name}: how far the ${row.kind} listen ${JSON.stringify(row.config)} that fired \`${row.firedMovementName ?? ''}\` had heard was not carried: it could not be told from the automation's other listens, or its place could not be read. It starts from its first poll, so what arrived after its last poll or tick under its earlier version is not delivered.`);
+  };
+  for (const row of unmatched) {
+    if (heardAnything(heard.get(row.id))) cursorNotCarried(row);
+  }
   const carriedCursors: CarriedListen['cursors'] = [];
   const freshIndexes = input.desired.flatMap((_, i) => (plan.matches[i] === undefined ? [i] : []));
   const carried = new Map(
@@ -581,6 +595,7 @@ async function reconcileDerivedTriggers(input: {
           })
         : undefined;
     if (moved !== undefined) carriedCursors.push(...moved.cursors);
+    if (moved?.notCarried === true) cursorNotCarried(predecessors[i]!);
     const desired: DesiredListener = {
       ...input.desired[i],
       config: moved?.config ?? (kept !== undefined ? keepingCarriedFrom(input.desired[i].config, kept.config) : input.desired[i].config),
@@ -678,7 +693,7 @@ async function reconcileDerivedTriggers(input: {
     });
   }
   await keepCarriedCursors(input.teamId, carriedCursors);
-  return { listeners, reconciles, leftPaused };
+  return { listeners, reconciles, leftPaused, cursorsNotCarried };
 }
 
 // ── Provision: check the program, then reconcile the listeners ──────────────
@@ -870,7 +885,7 @@ async function provisionListeners(input: {
   }));
 
   const carrying = input.movedAt !== undefined ? await carryingFromShipped(input.movementRow, input.movedAt) : undefined;
-  const { listeners, reconciles, leftPaused } = await within('reconcile', () =>
+  const { listeners, reconciles, leftPaused, cursorsNotCarried } = await within('reconcile', () =>
     reconcileDerivedTriggers({
       teamId: input.teamId,
       movementRow: input.movementRow,
@@ -924,6 +939,7 @@ async function provisionListeners(input: {
     // itself has no view of the rest of the team's automations.
     warnings: [],
     ...(leftPaused.length > 0 ? { leftPaused } : {}),
+    ...(cursorsNotCarried.length > 0 ? { cursorsNotCarried } : {}),
   };
 }
 

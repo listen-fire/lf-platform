@@ -66,10 +66,14 @@ import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
 import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
 
+import { GMAIL_READONLY_SCOPE } from '@listen-fire/gmail/api_client';
+
 import { encryptToken } from '../../../lib/credentials';
 import ExternalServiceType from '../../../generated/kysely/automations/ExternalServiceType';
 import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
+import { captureEngineLogs } from '../../../test/engine_logs';
 import { cleanupTeam } from '../../../test/harness/cleanup';
+import { GMAIL_APP_ID } from '../../credentials/app_id';
 import { testWorkContext } from '../../../test/harness/work';
 import { refreshDueAirtableWebhooks } from '../../airtable_webhook_refresh/worker';
 import { cronReconcileHandler, fireCronHandler } from '../../movement_scheduler/worker';
@@ -117,9 +121,25 @@ const ALERTS_012 = [
   'listen as "Releases" to sys { events: ["Release Applied"] } fire `Release Applied`',
   '',
 ].join('\n');
+// Project A's two polled shapes, as each is written.
+const GMAIL_012 = 'import { gmail } from adapters\nimport { Gmail } from credentials\nmail = connect gmail using Gmail\nfunction `Arrived`(msg: <mail-[:Message]->>) {\n  return msg.`Subject`\n}\nlisten to mail { query: "-from:project-a.vc", labels: ["INBOX", "SPAM"] } fire `Arrived`\n';
+const RECAP_012 = 'import { cron } from adapters\ntimer = connect cron\nfunction `Scheduled`(t: <timer-[:Tick]->>) {\n  return t.`Fired at`\n}\nlisten as "Morning" to timer { schedule: "0 7 * * 1-5", timezone: "Europe/Berlin" } fire `Scheduled`\n';
 const SYSTEM_012 = 'import { `@lf/system` as system } from adapters\nsys = connect system\nfunction onFailed(failed: <sys-[:`Run Failed`]->>) {\n  return failed.Reason\n}\nlisten to sys { events: ["Run Failed"] } fire onFailed\n';
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+
+/** A mailbox with one message arrived since history id 100. */
+function gmailAnswer(url: string): Response {
+  const { pathname } = new URL(url);
+  if (pathname.endsWith('/profile')) return json({ emailAddress: 'deals@example.com', historyId: '100' });
+  if (pathname.endsWith('/labels')) return json({ labels: [{ id: 'INBOX', name: 'INBOX', type: 'system' }, { id: 'SPAM', name: 'SPAM', type: 'system' }] });
+  if (pathname.endsWith('/history')) return json({ historyId: '200', history: [{ id: '150', messagesAdded: [{ message: { id: 'm1', threadId: 't1' } }] }] });
+  if (pathname.endsWith('/messages')) return json({ messages: [{ id: 'm1', threadId: 't1' }] });
+  if (pathname.endsWith('/messages/m1')) {
+    return json({ id: 'm1', threadId: 't1', labelIds: ['INBOX'], internalDate: String(Date.now() - 60_000), payload: { mimeType: 'text/plain', headers: [{ name: 'Subject', value: 'hello' }, { name: 'From', value: 'a@b.c' }], body: { data: Buffer.from('hi').toString('base64url') } } });
+  }
+  return json({});
+}
 
 describe('0.12 listens beside the current version (real Postgres)', () => {
   let teamId: TeamId;
@@ -158,6 +178,48 @@ describe('0.12 listens beside the current version (real Postgres)', () => {
         run_mode: 'live',
         credentials_id: (input.credentialsId ?? null) as never,
       })
+      .execute();
+    return { movementId, triggerId };
+  }
+
+  async function gmailCredential(): Promise<string> {
+    const id = randomUUID();
+    await getAutomationsQb(['external_service_credentials'])
+      .insertInto('external_service_credentials')
+      .values({
+        id: id as never,
+        team_id: teamId,
+        type: ExternalServiceType.GOOGLE_GMAIL,
+        name: 'Gmail',
+        identifier: id,
+        app_id: GMAIL_APP_ID.oauthMailbox,
+        credentials: await encryptToken(JSON.stringify({ mailbox: 'deals@example.com', accessToken: 'k', refreshToken: 'r', expiresAt: Date.now() + 3_600_000, grantedScopes: [GMAIL_READONLY_SCOPE] }), id),
+      } as never)
+      .execute();
+    return id;
+  }
+
+  /** A listen's row as production's save at c388d81d writes it: named by its
+   *  automation, its kind and config what the text states, with no address. */
+  async function productionRow(input: { source: string; kind: string; config: unknown; firedMovementName: string; alias?: string; credentialsId?: string | null }): Promise<{ movementId: string; triggerId: string }> {
+    const movementId = await draft(input.source, PIN);
+    await mintMovementVersionIfChanged({ teamId, movementId, source: input.source, languageVersion: PIN });
+    const triggerId = randomUUID();
+    await getAutomationsQb(['trigger'])
+      .insertInto('trigger')
+      .values({
+        id: triggerId as TriggerId,
+        team_id: teamId,
+        name: input.alias ?? `movement/m-${movementId}/${input.firedMovementName}`,
+        kind: input.kind,
+        config: JSON.stringify(input.config) as never,
+        resolved_address: null,
+        credentials_id: (input.credentialsId ?? null) as never,
+        movement_id: movementId as MovementId,
+        fired_movement_name: input.firedMovementName,
+        run_mode: 'live',
+        provisioned_by_setup_agent: false,
+      } as never)
       .execute();
     return { movementId, triggerId };
   }
@@ -224,6 +286,7 @@ describe('0.12 listens beside the current version (real Postgres)', () => {
       if (method === 'PATCH' && url.includes('/v2/webhooks/')) {
         return json({ data: { id: { workspace_id: 'ws', webhook_id: 'patched' }, target_url: 'x', subscriptions: [], status: 'active', created_at: new Date().toISOString() } });
       }
+      if (url.includes('gmail.googleapis.com')) return gmailAnswer(url);
       if (url.endsWith('/v0/meta/bases')) return json({ bases: [{ id: 'app1', name: 'CRM', permissionLevel: 'create' }] });
       if (url.endsWith('/v0/meta/bases/app1/tables')) return json({ tables: [{ id: 'tbl1', name: 'Companies', primaryFieldId: 'f', fields: [], views: [] }] });
       if (method === 'POST' && url.endsWith('/bases/app1/webhooks')) return json({ id: 'ach1', macSecretBase64: 'c2VjcmV0', expirationTime: new Date(Date.now() + 86_400_000).toISOString() });
@@ -614,6 +677,36 @@ describe('0.12 listens beside the current version (real Postgres)', () => {
       expect(await receipts()).toEqual([]);
     });
 
+    it('Gmail: its row is armed at its own interval, a pull goes through 0.12\'s module from the row\'s history id, and a second turn inside the interval pulls nothing', async () => {
+      const credentialsId = await gmailCredential();
+      const { movementId, triggerId } = await productionRow({ source: GMAIL_012, kind: 'gmail', config: { query: '-from:project-a.vc', labels: ['INBOX', 'SPAM'] }, firedMovementName: 'Arrived', credentialsId });
+      const lastSeenAt = new Date(Date.now() - 5 * 60_000).toISOString();
+      await setRow(triggerId, { poll_checkpoint: JSON.stringify({ historyId: '100', lastSeenAt }) });
+      const now = new Date();
+      await reconcileCarriedPolls(now);
+      expect((await workOf('poll_source')).map((work) => work.key)).toEqual([`poll_source:${triggerId}`]);
+
+      // A claimed row's next time is the drain's to keep: here the turn alone arms it.
+      await removeWork({ key: `poll_source:${triggerId}` });
+      await pollSourceHandler.run({ triggerId }, ctx(now));
+      const history = calls.find((call) => call.url.includes('/history'));
+      expect(history?.url).toContain('startHistoryId=100');
+      const stored = await receipts();
+      expect(stored).toHaveLength(1);
+      expect(stored[0]!.payload).toMatchObject({ pipelineInputId: `trigger:${triggerId}`, adapterType: 'gmail', triggerType: 'poll' });
+      expect(stored[0]!.external_event_id).toBe('gmail:m1');
+      const [after] = await triggersOf(movementId);
+      expect(after!.poll_checkpoint).toMatchObject({ historyId: '200' });
+      // Armed one interval on, 60 seconds being Gmail's own under 0.12.
+      const [armed] = await workOf('poll_source');
+      expect(armed!.due_at.getTime()).toBe(now.getTime() + 60_000);
+
+      calls = [];
+      await pollSourceHandler.run({ triggerId }, ctx(new Date(now.getTime() + 30_000)));
+      expect(calls).toEqual([]);
+      expect(await receipts()).toHaveLength(1);
+    });
+
     it('a throw in the current version\'s reconcile does not stop 0.12 polls being armed, and the failure still shows', async () => {
       const id = await shipped(SYSTEM_012);
       const [row] = await triggersOf(id);
@@ -825,6 +918,111 @@ describe('0.12 listens beside the current version (real Postgres)', () => {
         expect(all.filter((identity) => identity.includes(after))).toHaveLength(4);
         expect(all).toHaveLength(8);
         expect(heardAgain(all)).toEqual([]);
+      });
+    });
+
+    describe('a listen\'s predecessor, on rows as production wrote them', () => {
+      const logs = captureEngineLogs();
+      const cursors = async () => {
+        const { rows } = await sql<{ checkpoint: unknown }>`
+          select checkpoint from automations.inbound_checkpoint where team_id = ${teamId}::uuid and subscription_id like 'edge-poll:%'`.execute(getAutomationsQb(['inbound_checkpoint']));
+        return rows.map((row) => row.checkpoint);
+      };
+      const upgradedAnswer = async (id: string) => {
+        const answer = await upgradeMovement({ teamId, id, acknowledge: true });
+        expect(answer.status).toBe('upgraded');
+        return answer as { warnings?: string[] };
+      };
+      const GMAIL_CONFIG = { query: '-from:project-a.vc', labels: ['INBOX', 'SPAM'] };
+      const HEARD = { historyId: '100', lastSeenAt: '2026-11-04T05:00:00.000Z' };
+      const RECAP_CONFIG = { schedule: '0 7 * * 1-5', timezone: 'Europe/Berlin' };
+
+      it('Gmail: the whole cursor is carried to its moved listen', async () => {
+        const credentialsId = await gmailCredential();
+        const { movementId, triggerId } = await productionRow({ source: GMAIL_012, kind: 'gmail', config: GMAIL_CONFIG, firedMovementName: 'Arrived', credentialsId });
+        await setRow(triggerId, { poll_checkpoint: JSON.stringify(HEARD) });
+        const answer = await upgradedAnswer(movementId);
+        expect(answer.warnings ?? []).toEqual([]);
+        expect(await cursors()).toEqual([HEARD]);
+        const [moved] = await triggersOf(movementId);
+        expect(moved!.config).toMatchObject({ listen: { carriedFrom: { pollsAlone: true } } });
+      });
+
+      it('a cron with a timezone: its mark is carried, and the occurrence due since fires once, in its zone', async () => {
+        const { movementId, triggerId } = await productionRow({ source: RECAP_012, kind: 'cron', config: RECAP_CONFIG, firedMovementName: 'Scheduled', alias: 'Morning' });
+        // Far enough back for a weekday's 07:00 to have passed whatever today is.
+        const mark = new Date(Date.now() - 5 * 24 * 3600_000);
+        await setRow(triggerId, { cron_last_fired_at: mark });
+        const answer = await upgradedAnswer(movementId);
+        expect(answer.warnings ?? []).toEqual([]);
+        expect(await cursors()).toEqual([mark.toISOString()]);
+        const [moved] = await triggersOf(movementId);
+        const [poll] = await pollsOf(moved!.id);
+        const polled = await pollShared(poll!);
+        expect(polled.armed).toBe(false);
+        expect(polled.arrivals).toBe(1);
+        const [fire] = await fireRows();
+        const fields = (fire!.payload as { arrival: { landing: { fields: Record<string, unknown> } } }).arrival.landing.fields;
+        expect(JSON.stringify(fields)).toContain('Europe/Berlin');
+        const firedAt = Object.values(fields).find((value) => typeof value === 'string' && !Number.isNaN(Date.parse(value)) && value.includes('T'));
+        const inBerlin = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' }).format(new Date(String(firedAt)));
+        expect(inBerlin).toBe('07:00');
+      });
+
+      it('a row that is not deep equal to what 0.12 derives is matched by what identifies the listen, and keeps its cursor', async () => {
+        const credentialsId = await gmailCredential();
+        const { movementId, triggerId } = await productionRow({ source: GMAIL_012, kind: 'gmail', config: { ...GMAIL_CONFIG, pollIntervalSeconds: 60 }, firedMovementName: 'Arrived', credentialsId });
+        await setRow(triggerId, { poll_checkpoint: JSON.stringify(HEARD) });
+        const answer = await upgradedAnswer(movementId);
+        expect(answer.warnings ?? []).toEqual([]);
+        expect(await cursors()).toEqual([HEARD]);
+      });
+
+      it('one row found exactly leaves the other as the only one its identity can be', async () => {
+        const source = `${CRON_012}listen to timer { schedule: "0 9 * * *" } fire digest\nlisten to timer { schedule: "0 10 * * *" } fire digest\n`;
+        const { movementId, triggerId } = await productionRow({ source, kind: 'cron', config: { schedule: '0 9 * * *' }, firedMovementName: 'digest' });
+        const other = randomUUID();
+        await getAutomationsQb(['trigger']).insertInto('trigger').values({ id: other as TriggerId, team_id: teamId, name: 'listen', kind: 'cron', config: JSON.stringify({ schedule: '0 10 * * *', older: true }) as never, movement_id: movementId as MovementId, fired_movement_name: 'digest', run_mode: 'live' }).execute();
+        const at9 = new Date(Date.now() - 3 * 3600_000);
+        const at10 = new Date(Date.now() - 4 * 3600_000);
+        await setRow(triggerId, { cron_last_fired_at: at9 });
+        await setRow(other, { cron_last_fired_at: at10 });
+        const answer = await upgradedAnswer(movementId);
+        expect(answer.warnings ?? []).toEqual([]);
+        expect((await cursors()).sort()).toEqual([at10.toISOString(), at9.toISOString()].sort());
+      });
+
+      it('when even that cannot tell, no cursor is guessed: the upgrade names each listen, and logs it', async () => {
+        const source = `${CRON_012}listen to timer { schedule: "0 9 * * *" } fire digest\nlisten to timer { schedule: "0 10 * * *" } fire digest\n`;
+        const { movementId, triggerId } = await productionRow({ source, kind: 'cron', config: { schedule: '0 9 * * *', older: true }, firedMovementName: 'digest' });
+        const other = randomUUID();
+        await getAutomationsQb(['trigger']).insertInto('trigger').values({ id: other as TriggerId, team_id: teamId, name: 'listen', kind: 'cron', config: JSON.stringify({ schedule: '0 10 * * *', older: true }) as never, movement_id: movementId as MovementId, fired_movement_name: 'digest', run_mode: 'live' }).execute();
+        await setRow(triggerId, { cron_last_fired_at: new Date(Date.now() - 3 * 3600_000) });
+        await setRow(other, { cron_last_fired_at: new Date(Date.now() - 4 * 3600_000) });
+        const answer = await upgradedAnswer(movementId);
+        expect(await cursors()).toEqual([]);
+        expect(answer.warnings).toHaveLength(2);
+        for (const warning of answer.warnings!) expect(warning).toMatch(/fired `digest`.*was not carried/);
+        expect(answer.warnings!.join(' ')).toContain('0 9 * * *');
+        expect(answer.warnings!.join(' ')).toContain('0 10 * * *');
+        expect(logs.warn().filter((line) => line.message.includes('not carried'))).toHaveLength(2);
+      });
+
+      it('a cursor this version cannot read is not guessed at either, and is named', async () => {
+        const credentialsId = await gmailCredential();
+        const { movementId, triggerId } = await productionRow({ source: GMAIL_012, kind: 'gmail', config: GMAIL_CONFIG, firedMovementName: 'Arrived', credentialsId });
+        await setRow(triggerId, { poll_checkpoint: JSON.stringify({ somethingElse: 1 }) });
+        const answer = await upgradedAnswer(movementId);
+        expect(await cursors()).toEqual([]);
+        expect(answer.warnings).toHaveLength(1);
+        expect(answer.warnings![0]).toMatch(/fired `Arrived`.*was not carried/);
+      });
+
+      it('a listen that had heard nothing has nothing to lose: it arms, and nothing is said', async () => {
+        const source = `${CRON_012}listen to timer { schedule: "0 9 * * *" } fire digest\nlisten to timer { schedule: "0 10 * * *" } fire digest\n`;
+        const { movementId } = await productionRow({ source, kind: 'cron', config: { schedule: '0 9 * * *', older: true }, firedMovementName: 'digest' });
+        const answer = await upgradedAnswer(movementId);
+        expect(answer.warnings ?? []).toEqual([]);
       });
     });
 

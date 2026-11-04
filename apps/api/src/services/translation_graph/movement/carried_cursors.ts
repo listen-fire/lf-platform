@@ -11,7 +11,8 @@
 // All of it happens in the upgrade's transaction, holding the listen's row: a pull
 // or a tick under 0.12 either committed first, and is read here, or finds the row
 // moved and keeps nothing (poll_source/carried_worker.ts,
-// movement_scheduler/worker.ts).
+// movement_scheduler/worker.ts). A place that cannot be carried is never guessed at
+// and never lost in silence: the upgrade's answer names the listen.
 
 import { isDeepStrictEqual } from 'node:util';
 
@@ -30,6 +31,8 @@ import { isLegacyLanguageVersion } from 'legacy-lang';
 import { getAutomationsQb } from '../../../lib/kysely';
 import { listenConfigSchema, type SavedListen } from '../../inbound/listen_door';
 import { listenEdgeKeysOf } from '../../inbound/listen_edge';
+import { resolveAdapterSlug } from '../adapters/registry';
+import { listenIdentityOf } from './carried_pauses';
 import { loadPinnedVersion } from './version_store';
 
 export interface CarryingFrom {
@@ -75,6 +78,16 @@ export async function heardSoFarOf(movementId: string): Promise<Map<string, Hear
   return new Map(rows.map((row) => [row.id as string, { pollCheckpoint: row.poll_checkpoint, cronLastFiredAt: row.cron_last_fired_at }]));
 }
 
+/** Whether a listen's row says it had heard anything: if not, a first poll under
+ *  the new version loses nothing. */
+export function heardAnything(heard: HeardRow | undefined): boolean {
+  if (heard === undefined) return false;
+  if (heard.cronLastFiredAt !== null) return true;
+  const cursor = heard.pollCheckpoint;
+  if (cursor === null || cursor === undefined) return false;
+  return typeof cursor !== 'object' || Object.keys(cursor).length > 0;
+}
+
 interface Predecessor {
   id: string;
   firedMovementName: string | null;
@@ -83,32 +96,50 @@ interface Predecessor {
   config: unknown;
 }
 
+const sameModule = (a: string, b: string): boolean => resolveAdapterSlug(a) === resolveAdapterSlug(b);
+
 /**
- * The row each new listen came from. Statement by statement, since a rewrite keeps
- * the file's order and each statement's config is what its row kept; else, when a
- * text has another number of listens, by what the row fires, when only one row
- * fires it through that module and credential. `null` for a listen with no such
- * row: it starts as a new listen does.
+ * The row each new listen came from. First statement by statement, since a rewrite
+ * keeps the file's order and each statement's config is what its row kept. Then,
+ * for a row whose config is not what the statement derives, or a text with another
+ * number of listens, by what identifies a listen (the same movement, module and
+ * credential, as the pause matching does), when just one row and one listen are
+ * left with that identity. Several left alike cannot be told apart, and a cursor
+ * from the wrong one would miss events or repeat them, so none of them takes one.
+ * `null` for a listen with no such row: it starts as a new listen does. `unmatched`
+ * is every row no listen came from.
  */
 export function predecessorsOf(input: {
   desired: ReadonlyArray<{ movementName: string; adapter: string; credentialsId: string | null }>;
   rows: readonly Predecessor[];
   statements: readonly CarriedFileListener[] | null;
-}): Array<Predecessor | null> {
-  const { desired, rows, statements } = input;
-  const left = [...rows];
-  const take = (row: Predecessor | undefined): Predecessor | null => {
-    if (row === undefined) return null;
-    left.splice(left.indexOf(row), 1);
-    return row;
+}): { predecessors: Array<Predecessor | null>; unmatched: Predecessor[] } {
+  const { desired, statements } = input;
+  const unmatched = [...input.rows];
+  const predecessors = desired.map((): Predecessor | null => null);
+  const take = (index: number, row: Predecessor): void => {
+    unmatched.splice(unmatched.indexOf(row), 1);
+    predecessors[index] = row;
   };
   if (statements !== null && statements.length === desired.length) {
-    return statements.map((statement) => take(left.find((row) => row.kind === statement.adapter && row.firedMovementName === statement.movementName && isDeepStrictEqual(row.config, statement.config))));
+    statements.forEach((statement, index) => {
+      const row = unmatched.find((candidate) => sameModule(candidate.kind, statement.adapter) && candidate.firedMovementName === statement.movementName && isDeepStrictEqual(candidate.config, statement.config));
+      if (row !== undefined) take(index, row);
+    });
   }
-  return desired.map((listen) => {
-    const alike = left.filter((row) => row.kind === listen.adapter && row.firedMovementName === listen.movementName && row.credentialsId === listen.credentialsId);
-    return alike.length === 1 ? take(alike[0]) : null;
-  });
+  const identityOfListen = (index: number): string | null => {
+    const { movementName, adapter, credentialsId } = desired[index]!;
+    return listenIdentityOf({ movementName, kind: resolveAdapterSlug(adapter), credentialsId });
+  };
+  const identityOfRow = (row: Predecessor): string | null => listenIdentityOf({ movementName: row.firedMovementName, kind: resolveAdapterSlug(row.kind), credentialsId: row.credentialsId });
+  const waiting = desired.flatMap((_, index) => (predecessors[index] === null ? [index] : []));
+  for (const index of waiting) {
+    const identity = identityOfListen(index);
+    const peers = waiting.filter((other) => identityOfListen(other) === identity);
+    const alike = unmatched.filter((row) => identityOfRow(row) === identity);
+    if (peers.length === 1 && alike.length === 1) take(index, alike[0]!);
+  }
+  return { predecessors, unmatched };
 }
 
 export interface CarriedListen {
@@ -116,6 +147,8 @@ export interface CarriedListen {
   config: Record<string, unknown>;
   /** The cursors its polls start from, by the subscription id each is kept under. */
   cursors: Array<{ subscriptionId: string; cursor: unknown }>;
+  /** It had heard something, and none of that could be carried to this version. */
+  notCarried: boolean;
 }
 
 /** The moved listen's config and cursors. */
@@ -128,7 +161,7 @@ export function carriedListen(input: {
 }): CarriedListen {
   const { carrying, heard } = input;
   const parsed = listenConfigSchema.safeParse(input.config);
-  if (!parsed.success) return { config: input.config, cursors: [] };
+  if (!parsed.success) return { config: input.config, cursors: [], notCarried: heardAnything(heard) };
   const at = carrying.movedAt.toISOString();
   const listenOf = (pollsAlone: boolean): SavedListen => ({
     ...parsed.data.listen,
@@ -136,7 +169,7 @@ export function carriedListen(input: {
     carriedFrom: { at, ...(pollsAlone ? { pollsAlone: true } : {}) },
   });
   const moved = { ...input.config, listen: { ...(input.config.listen as Record<string, unknown>), carriedFrom: { at } } };
-  if (heard === undefined) return { config: moved, cursors: [] };
+  if (heard === undefined) return { config: moved, cursors: [], notCarried: false };
   const found = listenEdgeKeysOf(listenOf(false), ['polled']).map(({ key }) => ({
     edge: key.edge,
     carried: carrying.lane.cursorOnCurrent({
@@ -146,12 +179,12 @@ export function carriedListen(input: {
       cronLastFiredAt: heard.cronLastFiredAt === null ? null : heard.cronLastFiredAt.toISOString(),
     }),
   }));
-  if (!found.some(({ carried }) => carried !== undefined)) return { config: moved, cursors: [] };
+  if (!found.some(({ carried }) => carried !== undefined)) return { config: moved, cursors: [], notCarried: heardAnything(heard) };
   const cursors = listenEdgeKeysOf(listenOf(true), ['polled']).flatMap(({ key, digest }) => {
     const carried = found.find(({ edge }) => edge === key.edge)?.carried;
     return carried === undefined ? [] : [{ subscriptionId: input.pollSubscriptionId(digest), cursor: carried.cursor }];
   });
-  return { config: { ...input.config, listen: { ...(input.config.listen as Record<string, unknown>), carriedFrom: { at, pollsAlone: true } } }, cursors };
+  return { config: { ...input.config, listen: { ...(input.config.listen as Record<string, unknown>), carriedFrom: { at, pollsAlone: true } } }, cursors, notCarried: false };
 }
 
 /** A re-save of a moved listen keeps its poll and so its cursor. */
