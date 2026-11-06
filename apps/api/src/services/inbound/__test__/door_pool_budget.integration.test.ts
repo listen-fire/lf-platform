@@ -487,7 +487,8 @@ describe.each([4, 2])('doors at a pool of %i', (poolMax) => {
       expect((await row()).rows).toEqual([{ attempts: 0, deferrals: 1 }]);
 
       await elsewhere.query('rollback');
-      await sql`update automations.work set due_at = now() where kind = 'slack_event' and payload->'envelope'->>'event_id' = ${eventId}`.execute(at.globalQb);
+      // On the drain's clock, which its claim compares with, as enqueueing does: the database's may run ahead.
+      await sql`update automations.work set due_at = ${new Date()} where kind = 'slack_event' and payload->'envelope'->>'event_id' = ${eventId}`.execute(at.globalQb);
       await withinBudget('the next pass', at.drainWork({ owner: `pool-${poolMax}`, limit: 50 }));
       expect(await keptIds()).toEqual([`slack:${eventId}`]);
       expect((await row()).rows).toEqual([]);
