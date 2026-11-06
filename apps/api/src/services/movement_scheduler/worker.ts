@@ -34,6 +34,7 @@ import { teamIdSchema } from '../../lib/team_id';
 import { currentContext } from '../context';
 import { receiveJudgedEvent } from '../inbound/carried_delivery';
 import { carriedListenRows, laneOfRow, lockCarriedListenRow, type CarriedListenRow } from '../inbound/carried_listen_rows';
+import { isLfEngineTeam } from '../lf_engine/team_engine';
 import { withTeamContext } from '../translation_graph/movement/firing_context';
 import { notifyWork, registerWorkHandler } from '../work/drain';
 import { enqueueWork, listWorkByKind, removeWork } from '../work/store';
@@ -87,6 +88,9 @@ async function armOccurrenceAfter(input: { row: CarriedListenRow; schedule: Pars
 /** One schedule's turn, in one write: fire the occurrence due since the mark, if
  *  any, and arm the next. Nothing happens to a row a move took meanwhile. */
 async function fireOne(triggerId: TriggerId, teamId: TeamId, now: Date): Promise<void> {
+  // Before the transaction: the answer may wait for a connection, and a turn
+  // holding one while it waits starves every other turn of the pool.
+  if (await isLfEngineTeam(teamId)) return;
   let queued = false;
   await withTeamContext(teamId, async () => {
     await currentContext().enterTransaction();

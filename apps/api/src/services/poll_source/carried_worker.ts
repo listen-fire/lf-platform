@@ -27,6 +27,7 @@ import { getAutomationsQb } from '../../lib/kysely';
 import { currentContext } from '../context';
 import { receiveJudgedEvent } from '../inbound/carried_delivery';
 import { carriedListenRows, laneOfRow, lockCarriedListenRow, type CarriedListenRow } from '../inbound/carried_listen_rows';
+import { isLfEngineTeam } from '../lf_engine/team_engine';
 import { resolveAdapterSlug } from '../translation_graph/adapters/registry';
 import { modulePlatform } from '../translation_graph/movement/carried_run';
 import { withTeamContext } from '../translation_graph/movement/firing_context';
@@ -77,6 +78,8 @@ async function pollOne(row: CarriedListenRow, lane: ListeningLane, now: Date): P
     modulePlatform(),
   );
   let kept = false;
+  // Before the transaction, as a schedule's turn does: see `fireOne`.
+  if (await isLfEngineTeam(row.teamId)) return { kept, events: 0 };
   await withTeamContext(row.teamId, async () => {
     await currentContext().enterTransaction();
     const locked = await lockCarriedListenRow(row.id as TriggerId);

@@ -107,11 +107,15 @@ export async function carriedListenRows(input: { kind?: string } = {}): Promise<
  * version's listen. An upgrade writes the row in its own transaction, so a turn on
  * the row and a move happen one after the other: a turn that waited for a move
  * finds a current listen, and leaves it. Null for that, or a row gone.
+ *
+ * It does not ask whether the team's engine is lf: that read goes to the shared
+ * pool, and a caller holding its transaction's connection while it waits there
+ * hangs for good once enough turns do. A turn asks (`isLfEngineTeam`) before it
+ * opens its transaction.
  */
 export async function lockCarriedListenRow(id: TriggerId): Promise<CarriedListenRow | null> {
   const raw = await rowQuery().where('trigger.id', '=', id).forUpdate('trigger').executeTakeFirst();
   if (raw === undefined) return null;
-  if ((await lfEngineTeams()).has(raw.team_id)) return null;
   return asCarried(raw as Raw);
 }
 
