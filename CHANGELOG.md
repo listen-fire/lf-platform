@@ -17,6 +17,10 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 
 <!-- add merged PRs here -->
 
+## [0.15.2] - 2026-11-06
+
+The platform release that matches the language's 0.15.2, and the first full release since 0.12.13. It moves the core from 0.12.13 to 0.15.2 through 0.13 and 0.15.1, so the lines below name the core at each step; the catalog block says where it ended. Automations pinned to 0.12 keep running on 0.12's own engine in the same service until each is upgraded. Moving off 0.12.13 asks something of you: read [`deploy/UPGRADING.md`](deploy/UPGRADING.md), from "Before moving off 0.12.13".
+
 - The language core is at 0.15.2 (the catalog block), a patch of the same compatibility key 0.15 (the language's CHANGELOG, 0.15.2). A recursion past the run's call limit ends the run with `MOVENG_CALL_DEPTH` instead of aborting the process. A 0.15.2 `listen-fire` puts `hostRelease` on every request to a slot module, which this platform's store, movements and secrets modules do not read. Runners sharing a secrets module now record who holds each webhook in the credential's `webhook_holders`; nothing in this platform reads that field, so its own webhook subscriptions still ignore other runners' holders. `@listen-fire/web` is 0.12.11.
 - Person research finds text about a person more cheaply, and says what it found without claiming more. `linkedin_research` takes an optional `context` (text the caller already has about the person; it steers the searches and is never evidence alone) and returns an optional `activity_text`: the passages that name the person and something tying them to their profile, each under its address. It can arrive alone, with no summary and no confidence, which means nothing beyond that text was confirmed. It asks `site:linkedin.com/in/<slug>` first, runs up to two activity queries inside four searches, counts the person's own posts as evidence, and reads the paid profile only when nothing ties the person down. A location ties nobody down. On the Bright Data search provider a result's plain text `extensions` (often \"location · role · organisation\") now lead its snippet, for every caller of the search; the Google provider is unchanged. The handbook chapter and the Plugins page say so.
 - A burst of deliveries no longer hangs a process with a small database pool: a door's keep reads on its own transaction, and the team's doors lock is held on a pool of its own of 2 connections, where a door waits its turn. A process can hold 2 more connections than before.
@@ -2308,7 +2312,8 @@ Releases before v0.11 are kept one file per minor line, newest first:
 - [v0.2.x](docs/changelog/v0.2.md) (v0.2.0)
 - [v0.1.x](docs/changelog/v0.1.md) (v0.1.0 to v0.1.2)
 
-[Unreleased]: https://github.com/listen-fire/lf-platform/compare/v0.12.13...HEAD
+[Unreleased]: https://github.com/listen-fire/lf-platform/compare/v0.15.2...HEAD
+[0.15.2]: https://github.com/listen-fire/lf-platform/compare/v0.12.13...v0.15.2
 [0.12.13]: https://github.com/listen-fire/lf-platform/compare/v0.12.11...v0.12.13
 [0.12.11]: https://github.com/listen-fire/lf-platform/compare/v0.12.8...v0.12.11
 [0.12.8]: https://github.com/listen-fire/lf-platform/compare/v0.12.6...v0.12.8
