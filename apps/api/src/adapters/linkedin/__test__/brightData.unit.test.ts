@@ -16,6 +16,7 @@ jest.mock('node:timers/promises', () => ({
 }));
 
 import { installLimiter, MemoryLimiter } from 'movement-engine/public/limiter';
+import { logger } from 'movement-engine/public/log';
 
 import { BrightDataAdapter } from '../brightData';
 
@@ -113,6 +114,63 @@ describe('the profile service’s wait', () => {
     );
 
     expect(polls.count).toBe(6);
+  });
+});
+
+describe('a profile the service could not collect', () => {
+  function serveErrorCodes(errorCodes?: Record<string, number>) {
+    jest.spyOn(global, 'fetch').mockImplementation(async (input) => {
+      if (String(input).includes('/datasets/v3/trigger')) {
+        return new Response(JSON.stringify({ snapshot_id: 'snap-1' }), { status: 200 });
+      }
+      return new Response(
+        JSON.stringify({
+          status: 'running',
+          snapshot_id: 'snap-1',
+          dataset_id: 'ds-1',
+          errors: 1,
+          ...(errorCodes ? { error_codes: errorCodes } : {}),
+        }),
+        { status: 200 },
+      );
+    });
+  }
+
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-09-01T00:00:00Z'));
+    installLimiter(new MemoryLimiter());
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    jest.useRealTimers();
+  });
+
+  it('a dead page is an answer: nothing, and no error logged', async () => {
+    serveErrorCodes({ dead_page: 1 });
+    const error = jest.spyOn(logger, 'error');
+    const info = jest.spyOn(logger, 'info');
+
+    const result = await new BrightDataAdapter({ accessToken: 'k' }).getProfileTextByUrl(PROFILE_URL);
+
+    expect(result).toBeNull();
+    expect(error).not.toHaveBeenCalled();
+    expect(info).toHaveBeenCalledWith(expect.stringContaining('dead_page'));
+  });
+
+  it.each<[string, Record<string, number> | undefined]>([
+    ['another code', { auth_failed: 1 }],
+    ['a dead page beside another code', { dead_page: 1, auth_failed: 1 }],
+    ['no code at all', undefined],
+  ])('%s is still logged as an error', async (_name, errorCodes) => {
+    serveErrorCodes(errorCodes);
+    const error = jest.spyOn(logger, 'error');
+
+    const result = await new BrightDataAdapter({ accessToken: 'k' }).getProfileTextByUrl(PROFILE_URL);
+
+    expect(result).toBeNull();
+    expect(error).toHaveBeenCalledTimes(1);
   });
 });
 

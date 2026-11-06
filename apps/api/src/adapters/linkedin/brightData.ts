@@ -149,9 +149,13 @@ class BrightDataAdapter implements LinkedinAdapter {
       status = progress.status;
 
       if (progress.errors) {
-        logger.error(
-          `Bright Data errors on ${cleanUrl}: ${progress.error_codes ? Object.keys(progress.error_codes).join(', ') : 'Unknown'}`,
-        );
+        const codes = Object.keys(progress.error_codes ?? {});
+        const message = `Bright Data errors on ${cleanUrl}: ${codes.length > 0 ? codes.join(', ') : 'Unknown'}`;
+        // A page that cannot be opened is the service's answer about that
+        // page (private, renamed or gone), and the caller carries on without
+        // it. Anything else may be a fault in the service or the account.
+        if (codes.length > 0 && codes.every((code) => code === 'dead_page')) logger.info(message);
+        else logger.error(message);
         return null;
       }
     }

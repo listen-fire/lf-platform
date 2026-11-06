@@ -17,6 +17,8 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 
 <!-- add merged PRs here -->
 
+- A LinkedIn profile that Bright Data reports as a dead page is logged as information, not an error. The page cannot be opened (private, renamed or gone), and research carries on without it, so it no longer alerts on a healthy run. Every other Bright Data error code still logs as an error.
+
 ## [0.15.2] - 2026-11-06
 
 The platform release that matches the language's 0.15.2, and the first full release since 0.12.13. It moves the core from 0.12.13 to 0.15.2 through 0.13 and 0.15.1, so the lines below name the core at each step; the catalog block says where it ended. Automations pinned to 0.12 keep running on 0.12's own engine in the same service until each is upgraded. Moving off 0.12.13 asks something of you: read [`deploy/UPGRADING.md`](deploy/UPGRADING.md), from "Before moving off 0.12.13".
