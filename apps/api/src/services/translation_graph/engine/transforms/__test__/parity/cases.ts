@@ -138,12 +138,19 @@ export const PARITY_CASES: ParityCase[] = [
   {
     name: 'linkedin-research: profile, search, synthesis',
     plugin: 'linkedin_research',
-    config: { url: 'https://www.linkedin.com/in/ada-lovelace' },
+    config: {
+      url: 'https://www.linkedin.com/in/ada-lovelace',
+      context: 'Ada mentioned Acme Rockets in the launch thread',
+    },
     extractedContext: { name: 'Ada Lovelace' },
-    profiles: { 'https://www.linkedin.com/in/ada-lovelace': ADA_PROFILE },
+    // The hosted profile reader's labelled form, not ADA_PROFILE's free text.
+    profiles: {
+      'https://www.linkedin.com/in/ada-lovelace':
+        'Name: Ada Lovelace\nPosition: Founder & CEO at Acme Rockets\nCity: Berlin\nPast experience:\n  - Propulsion lead @ Orbital Works',
+    },
     chat: {
       plugin_linkedin_research_plan:
-        '{"organisation":"Acme Rockets","queries":[{"query":"Ada Lovelace Acme Rockets","worth_reading":true}]}',
+        '{"organisation":"Acme Rockets","queries":[{"query":"Ada Lovelace Acme Rockets","worth_reading":true}],"terms":["Acme Rockets"],"tied_down":true}',
     },
     search: {
       '*': [{ link: 'https://news.example/acme-series-a', title: 'Acme Rockets raises Series A', snippet: 'Ada Lovelace, CEO of Acme Rockets, said…' }],

@@ -113,11 +113,13 @@
     },
     "@lf/web/linkedin_research": {
       "args": [
-        "url"
+        "url",
+        "context"
       ],
       "priced": true,
       "argTypes": {
-        "url": "text"
+        "url": "text",
+        "context": "text"
       },
       "requiredArgs": [
         "url"
@@ -150,10 +152,14 @@
           "activity_sources": {
             "kind": "maybeAbsent",
             "of": "text"
+          },
+          "activity_text": {
+            "kind": "maybeAbsent",
+            "of": "text"
           }
         }
       },
-      "description": "From a LinkedIn profile address, research what that person is currently doing — their role, their organisation, and their recent public activity — and attach a summary, a confidence, and the sources it rests on.",
+      "description": "From a LinkedIn profile address, research what that person is currently doing — their role, their organisation, and their recent public activity — and attach a summary, a confidence, the sources it rests on, and the passages found about them. Passages with no summary mean the research could not confirm anything beyond that text.",
       "package": "@lf/web",
       "name": "linkedin_research"
     },
@@ -428,11 +434,13 @@
     },
     "@lf/web/linkedin_research": {
       "args": [
-        "url"
+        "url",
+        "context"
       ],
       "priced": true,
       "argTypes": {
-        "url": "text"
+        "url": "text",
+        "context": "text"
       },
       "requiredArgs": [
         "url"
@@ -465,10 +473,14 @@
           "activity_sources": {
             "kind": "maybeAbsent",
             "of": "text"
+          },
+          "activity_text": {
+            "kind": "maybeAbsent",
+            "of": "text"
           }
         }
       },
-      "description": "From a LinkedIn profile address, research what that person is currently doing — their role, their organisation, and their recent public activity — and attach a summary, a confidence, and the sources it rests on.",
+      "description": "From a LinkedIn profile address, research what that person is currently doing — their role, their organisation, and their recent public activity — and attach a summary, a confidence, the sources it rests on, and the passages found about them. Passages with no summary mean the research could not confirm anything beyond that text.",
       "package": "@lf/web",
       "name": "linkedin_research"
     },
@@ -794,11 +806,13 @@
     },
     "@lf/web/linkedin_research": {
       "args": [
-        "url"
+        "url",
+        "context"
       ],
       "priced": true,
       "argTypes": {
-        "url": "text"
+        "url": "text",
+        "context": "text"
       },
       "requiredArgs": [
         "url"
@@ -831,20 +845,26 @@
           "activity_sources": {
             "kind": "maybeAbsent",
             "of": "text"
+          },
+          "activity_text": {
+            "kind": "maybeAbsent",
+            "of": "text"
           }
         }
       },
-      "description": "From a LinkedIn profile address, research what that person is currently doing — their role, their organisation, and their recent public activity — and attach a summary, a confidence, and the sources it rests on.",
+      "description": "From a LinkedIn profile address, research what that person is currently doing — their role, their organisation, and their recent public activity — and attach a summary, a confidence, the sources it rests on, and the passages found about them. Passages with no summary mean the research could not confirm anything beyond that text.",
       "package": "@lf/web",
       "name": "linkedin_research"
     },
     "linkedin-research": {
       "args": [
-        "url"
+        "url",
+        "context"
       ],
       "priced": true,
       "argTypes": {
-        "url": "text"
+        "url": "text",
+        "context": "text"
       },
       "requiredArgs": [
         "url"
@@ -877,10 +897,14 @@
           "activity_sources": {
             "kind": "maybeAbsent",
             "of": "text"
+          },
+          "activity_text": {
+            "kind": "maybeAbsent",
+            "of": "text"
           }
         }
       },
-      "description": "From a LinkedIn profile address, research what that person is currently doing — their role, their organisation, and their recent public activity — and attach a summary, a confidence, and the sources it rests on.",
+      "description": "From a LinkedIn profile address, research what that person is currently doing — their role, their organisation, and their recent public activity — and attach a summary, a confidence, the sources it rests on, and the passages found about them. Passages with no summary mean the research could not confirm anything beyond that text.",
       "package": "@lf/web",
       "name": "linkedin_research"
     },

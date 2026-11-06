@@ -135,7 +135,7 @@ describe('the shipped plugin sections', () => {
   it.each([
     ['plugin:vc_url_retrieval', 'vcUrlRetrieval(msg.Body)'],
     ['plugin:fetch_url', 'fetchUrl(c.website)'],
-    ['plugin:linkedin_research', 'linkedinResearch(p.linkedin)'],
+    ['plugin:linkedin_research', 'linkedinResearch(p.linkedin, { context: p.about })'],
     ['plugin:web_research', 'webResearch(c.name, { context: c.description'],
     ['plugin:research', 'questions: "what it does, which sector it is in, where it is based"'],
   ])('%s is on the shelf and reads back', (chapter, marker) => {

@@ -251,6 +251,55 @@ describe('WebSearchService.search — brightdata response mapping', () => {
     ]);
   });
 
+  it('carries plain text extensions ahead of the description, once each, and drops the rest', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        organic: [
+          {
+            title: 'Jane Doe - Head of Platform - Acme | LinkedIn',
+            link: 'https://www.linkedin.com/in/jane-doe',
+            description: 'Experience: Acme · Education: Example University',
+            extensions: [
+              { type: 'text', text: 'Berlin' },
+              // A repeat, text the description already holds, a sitelink and a
+              // blank each add nothing to the snippet.
+              { type: 'text', text: 'Berlin' },
+              { type: 'text', text: 'education: example university' },
+              { type: 'site_link', text: 'Contact info' },
+              { type: 'text', text: '  ' },
+              { type: 'text', text: 'Head of Platform' },
+            ],
+          },
+          { link: 'https://example.com/a', description: 'Only a description', extensions: [{ type: 'site_link', text: 'Home' }] },
+          { link: 'https://example.com/b', extensions: [{ type: 'text', text: 'No description' }] },
+        ],
+      }),
+    );
+
+    const result = await WebSearchService.search('Jane Doe');
+
+    expect(result.items?.map((item) => item.snippet)).toEqual([
+      'Berlin · Head of Platform · Experience: Acme · Education: Example University',
+      'Only a description',
+      'No description',
+    ]);
+  });
+
+  it('tolerates an extensions field the provider reshaped, keeping the description', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        organic: [
+          { link: 'https://example.com/a', description: 'Kept', extensions: 'not a list' },
+          { link: 'https://example.com/b', description: 'Also kept', extensions: [{ type: 'text', text: 7 }, 'odd', { type: 'text', text: 'Zürich' }] },
+        ],
+      }),
+    );
+
+    const result = await WebSearchService.search('anything');
+
+    expect(result.items?.map((item) => item.snippet)).toEqual(['Kept', 'Zürich · Also kept']);
+  });
+
   it('an empty organic array is a real "no results", not an error', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({ general: { search_engine: 'google', query: 'no such thing' }, organic: [] }),

@@ -63,6 +63,9 @@ import { captureEngineLogs } from '../../../test/engine_logs';
 
 const PROFILE_URL = 'https://www.linkedin.com/in/example-person-1234/';
 const PROFILE_LINK = 'https://www.linkedin.com/in/example-person-1234';
+/** The first thing asked of the index: the site query finds the profile far
+ *  more often than the bare address, which is only the second try. */
+const SITE_QUERY = 'site:linkedin.com/in/example-person-1234';
 
 const sourceNode: SourcePosition = makeStablePosition({
   adapterType: 'fixture',
@@ -115,6 +118,14 @@ const PLAN_REPLY = JSON.stringify({
     { query: '"Alex Example" podcast', worth_reading: false },
   ],
   terms: ['Northwind Labs', 'Berlin'],
+  tied_down: true,
+});
+
+/** A planner that found nothing in what it was given to tie the person down. */
+const UNTIED_PLAN_REPLY = JSON.stringify({
+  queries: [{ query: '"Alex Example" interview', worth_reading: false }],
+  terms: [],
+  tied_down: false,
 });
 
 /** The synthesiser answers through a forced tool call, so its reply is an
@@ -160,7 +171,7 @@ beforeEach(() => {
 // ── The signature ─────────────────────────────────────────────────────────
 
 describe('linkedin-research signature', () => {
-  it('declares a required url and the five properties it attaches', () => {
+  it('declares a required url, an optional context, and the six properties it attaches', () => {
     const sig = linkedinResearchImpl.signature;
     expect(sig.name).toBe('linkedin-research');
     expect(sig.dataDependency).toBe('extracted_context');
@@ -170,10 +181,15 @@ describe('linkedin-research signature', () => {
     expect(url?.required).toBe(true);
     expect(url?.type.kind).toBe('string');
 
+    const context = sig.params.find((p) => p.name === 'context');
+    expect(context?.required).not.toBe(true);
+    expect(context?.type.kind).toBe('string');
+
     expect(Object.keys(sig.additions.properties ?? {}).sort()).toEqual([
       'activity_confidence',
       'activity_sources',
       'activity_summary',
+      'activity_text',
       'current_organisation',
       'current_role',
     ]);
@@ -230,7 +246,9 @@ describe('identity', () => {
       text: 'Alex Example\nHead of Platform at Northwind Labs\nBerlin',
     });
     mockSearch.mockResolvedValueOnce(THIN_INDEX_RESULT).mockResolvedValue(ACTIVITY_RESULT);
-    replies({ plan: PLAN_REPLY, synthesis: SYNTHESIS_REPLY });
+    // The paid read is the last resort: it runs because the planner could find
+    // nothing to tie the person down, not because the title was thin.
+    replies({ plan: UNTIED_PLAN_REPLY, synthesis: SYNTHESIS_REPLY });
 
     const out = await invoke({ url: PROFILE_URL });
     expect(mockGetProfileTextByUrl).toHaveBeenCalledWith(
@@ -240,17 +258,43 @@ describe('identity', () => {
     expect(out.properties?.activity_summary).toBeDefined();
   });
 
-  it('carries on at low confidence when the snippet is thin and no service is configured', async () => {
+  it('does not read the profile on a thin snippet when the planner says something ties the person down', async () => {
+    services.linkedin = { getProfileTextByUrl: mockGetProfileTextByUrl };
+    mockSearch.mockResolvedValueOnce(THIN_INDEX_RESULT).mockResolvedValue(ACTIVITY_RESULT);
+    replies({ plan: PLAN_REPLY, synthesis: SYNTHESIS_REPLY });
+
+    await invoke({ url: PROFILE_URL });
+    expect(mockGetProfileTextByUrl).not.toHaveBeenCalled();
+  });
+
+  it('does not ask the writer to choose among namesakes when the title is thin and nothing ties the person down', async () => {
+    mockSearch.mockResolvedValueOnce(THIN_INDEX_RESULT).mockResolvedValue(ACTIVITY_RESULT);
+    replies({ plan: UNTIED_PLAN_REPLY, synthesis: SYNTHESIS_REPLY });
+
+    // Only the name could connect a result to this person.
+    expect(await invoke({ url: PROFILE_URL })).toEqual({});
+    expect(mockAnthropicChatStructured).not.toHaveBeenCalled();
+  });
+
+  it('caps the confidence at low when nothing ties the person down and no profile was read', async () => {
+    mockSearch.mockResolvedValueOnce(RICH_INDEX_RESULT).mockResolvedValue(ACTIVITY_RESULT);
+    replies({ plan: UNTIED_PLAN_REPLY, synthesis: SYNTHESIS_REPLY });
+
+    const out = await invoke({ url: PROFILE_URL });
+    // The synthesiser said `high`; a person nothing tied down was searched for
+    // on a name alone, which cannot support more than a hedge.
+    expect(out.properties?.activity_confidence).toBe('low');
+  });
+
+  it('keeps the writer\'s confidence on a thin snippet when the planner ties the person down', async () => {
     mockSearch.mockResolvedValueOnce(THIN_INDEX_RESULT).mockResolvedValue(ACTIVITY_RESULT);
     replies({ plan: PLAN_REPLY, synthesis: SYNTHESIS_REPLY });
 
     const out = await invoke({ url: PROFILE_URL });
-    // The synthesiser said `high`; a headline that told us nothing to check
-    // against cannot support more than a hedge.
-    expect(out.properties?.activity_confidence).toBe('low');
+    expect(out.properties?.activity_confidence).toBe('high');
   });
 
-  it('asks the index about the slug when the first search returns somebody else', async () => {
+  it('asks the index about the bare address when the site query returns somebody else', async () => {
     mockSearch
       .mockResolvedValueOnce({
         items: [{ link: 'https://www.linkedin.com/in/someone-else-9999', title: 'Someone Else' }],
@@ -260,7 +304,8 @@ describe('identity', () => {
     replies({ plan: PLAN_REPLY, synthesis: SYNTHESIS_REPLY });
 
     const out = await invoke({ url: PROFILE_URL });
-    expect(mockSearch.mock.calls[1][0]).toBe('site:linkedin.com/in/example-person-1234');
+    expect(mockSearch.mock.calls[0][0]).toBe(SITE_QUERY);
+    expect(mockSearch.mock.calls[1][0]).toBe(PROFILE_LINK);
     expect(out.properties?.current_organisation).toBe('Northwind Labs');
   });
 
@@ -274,11 +319,75 @@ describe('identity', () => {
   });
 });
 
+describe('what the caller already knows', () => {
+  it('goes to the planner as steering text and never to the writer', async () => {
+    mockSearch.mockResolvedValueOnce(RICH_INDEX_RESULT).mockResolvedValue(ACTIVITY_RESULT);
+    replies({ plan: PLAN_REPLY, synthesis: SYNTHESIS_REPLY });
+
+    await invoke({ url: PROFILE_URL, context: 'Alex joined the thread about the Northwind rollout' });
+
+    const planned = mockAnthropicChat.mock.calls[0][0] as { userMessage: string };
+    expect(planned.userMessage).toContain('it steers the searches, it is not evidence');
+    expect(planned.userMessage).toContain('Alex joined the thread about the Northwind rollout');
+    const written = mockAnthropicChatStructured.mock.calls[0][0] as { userMessage: string };
+    expect(written.userMessage).not.toContain('Alex joined the thread');
+  });
+
+  it('is cut to what a cheap planner call should carry', async () => {
+    mockSearch.mockResolvedValueOnce(RICH_INDEX_RESULT).mockResolvedValue(ACTIVITY_RESULT);
+    replies({ plan: PLAN_REPLY, synthesis: SYNTHESIS_REPLY });
+
+    await invoke({ url: PROFILE_URL, context: 'x'.repeat(5000) });
+
+    const planned = mockAnthropicChat.mock.calls[0][0] as { userMessage: string };
+    expect(planned.userMessage).toContain('x'.repeat(2000));
+    expect(planned.userMessage).not.toContain('x'.repeat(2001));
+  });
+
+  it('is never what names the person: with no name from the index or the profile, nothing is planned', async () => {
+    services.linkedin = { getProfileTextByUrl: mockGetProfileTextByUrl };
+    mockGetProfileTextByUrl.mockResolvedValue(null);
+    mockSearch.mockResolvedValue({ items: [] });
+    replies({ plan: PLAN_REPLY, synthesis: SYNTHESIS_REPLY });
+
+    expect(await invoke({ url: PROFILE_URL, context: 'Alex Example, Head of Platform at Northwind Labs' })).toEqual({});
+    expect(mockAnthropicChat).not.toHaveBeenCalled();
+  });
+});
+
+describe('the hosted profile reader\'s labelled form', () => {
+  it('gives the name and the headline without their labels, when the index found nobody', async () => {
+    services.linkedin = { getProfileTextByUrl: mockGetProfileTextByUrl };
+    mockGetProfileTextByUrl.mockResolvedValue({
+      text: 'Name: Alex Example\nPosition: Head of Platform at Northwind Labs\nCity: Berlin',
+    });
+    mockSearch.mockResolvedValueOnce({ items: [] }).mockResolvedValueOnce({ items: [] }).mockResolvedValue(ACTIVITY_RESULT);
+    replies({ plan: PLAN_REPLY, synthesis: SYNTHESIS_REPLY });
+
+    await invoke({ url: PROFILE_URL });
+
+    const planned = mockAnthropicChat.mock.calls[0][0] as { userMessage: string };
+    expect(planned.userMessage).toContain('Name: Alex Example\nHeadline: Head of Platform at Northwind Labs');
+  });
+
+  it('leaves the headline absent when the record has no Position line, rather than taking the next line', async () => {
+    services.linkedin = { getProfileTextByUrl: mockGetProfileTextByUrl };
+    mockGetProfileTextByUrl.mockResolvedValue({ text: 'Name: Alex Example\nCity: Berlin' });
+    mockSearch.mockResolvedValueOnce({ items: [] }).mockResolvedValueOnce({ items: [] }).mockResolvedValue(ACTIVITY_RESULT);
+    replies({ plan: PLAN_REPLY, synthesis: SYNTHESIS_REPLY });
+
+    await invoke({ url: PROFILE_URL });
+
+    const planned = mockAnthropicChat.mock.calls[0][0] as { userMessage: string };
+    expect(planned.userMessage).toContain('Name: Alex Example\nHeadline: unknown');
+  });
+});
+
 // ── Budget ────────────────────────────────────────────────────────────────
 
 describe('the budget', () => {
-  it('runs one activity query however many the planner returns', async () => {
-    mockSearch.mockResolvedValueOnce(RICH_INDEX_RESULT).mockResolvedValue({ items: [] });
+  it('runs two activity queries however many the planner returns', async () => {
+    mockSearch.mockResolvedValueOnce(RICH_INDEX_RESULT).mockResolvedValue(ACTIVITY_RESULT);
     replies({
         plan: JSON.stringify({
           // Each names the person, which is what a query has to do to be run
@@ -294,12 +403,27 @@ describe('the budget', () => {
       });
 
     await invoke({ url: PROFILE_URL });
-    // 1 identity + 1 activity + 1 organisation, which the activity search
-    // left uncovered.
+    // 1 identity + 2 activity. The results name the person with a term, so
+    // there is no retry, and they name the organisation, so no expansion.
     expect(mockSearch).toHaveBeenCalledTimes(3);
     const queries = mockSearch.mock.calls.map((c) => c[0]);
-    expect(queries[1]).toBe('"Alex Example" q1');
-    expect(queries[2]).toContain('site:crunchbase.com');
+    expect(queries.slice(1)).toEqual(['"Alex Example" q1', '"Alex Example" q2']);
+  });
+
+  it('spends the fourth search on one retry when the first two found nobody, and none on the organisation', async () => {
+    mockSearch.mockResolvedValueOnce(RICH_INDEX_RESULT).mockResolvedValue({ items: [] });
+    // The first plan, then the retry's reply, which writes one different query.
+    mockAnthropicChat
+      .mockResolvedValueOnce(
+        JSON.stringify({ queries: ['"Alex Example" q1', '"Alex Example" q2'], terms: ['Northwind Labs'], tied_down: true }),
+      )
+      .mockResolvedValueOnce(JSON.stringify({ queries: ['"Alex Example" q3'] }));
+    mockAnthropicChatStructured.mockResolvedValue(SYNTHESIS_REPLY);
+
+    await invoke({ url: PROFILE_URL });
+    const queries: string[] = mockSearch.mock.calls.map((c) => c[0]);
+    expect(queries).toEqual([SITE_QUERY, '"Alex Example" q1', '"Alex Example" q2', '"Alex Example" q3']);
+    expect(queries.some((q) => q.includes('site:crunchbase.com'))).toBe(false);
   });
 
   it('skips the organisation search when the activity search already named the organisation', async () => {
@@ -307,8 +431,8 @@ describe('the budget', () => {
     replies({ plan: PLAN_REPLY, synthesis: SYNTHESIS_REPLY });
 
     await invoke({ url: PROFILE_URL });
-    // 1 identity + 1 activity; the activity result names Northwind Labs.
-    expect(mockSearch).toHaveBeenCalledTimes(2);
+    // 1 identity + 2 activity; the activity results name Northwind Labs.
+    expect(mockSearch).toHaveBeenCalledTimes(3);
     const queries: string[] = mockSearch.mock.calls.map((c) => c[0]);
     expect(queries.some((q) => q.includes('site:crunchbase.com'))).toBe(false);
   });
@@ -378,7 +502,7 @@ describe('the distinctiveness gate', () => {
     const queries: string[] = mockSearch.mock.calls.map((c) => c[0]);
     // One identity search and one activity query: the placeholder query is
     // dropped and the aggregator expansion never runs.
-    expect(queries).toEqual([PROFILE_LINK, '"Alex Example" founder']);
+    expect(queries).toEqual([SITE_QUERY, '"Alex Example" founder']);
     expect(queries.some((q) => q.includes('site:crunchbase.com'))).toBe(false);
     expect(queries.some((q) => q.toLowerCase().includes('stealth'))).toBe(false);
     // Nor is the placeholder a consistency term the synthesiser is told to
@@ -467,14 +591,36 @@ describe('the distinctiveness gate', () => {
 // ── The answer ────────────────────────────────────────────────────────────
 
 describe('the answer', () => {
-  it('attaches nothing when the synthesiser found nothing consistent', async () => {
+  /** What a passage looks like in `activity_text`: the address, then the
+   *  words that name the person and a term. */
+  const NORTHWIND_PASSAGE = [
+    'https://news.example.com/northwind-launch',
+    'Northwind Labs launches its platform',
+    'Alex Example, Head of Platform at Northwind Labs, said…',
+  ].join('\n');
+  const OWN_ENTRY_PASSAGE = [
+    PROFILE_LINK,
+    'Alex Example - Head of Platform - Northwind Labs | LinkedIn',
+    'Head of Platform at Northwind Labs. Berlin.',
+  ].join('\n');
+
+  it('attaches the passages alone when the synthesiser found nothing consistent', async () => {
     mockSearch.mockResolvedValueOnce(RICH_INDEX_RESULT).mockResolvedValue(ACTIVITY_RESULT);
+    replies({ plan: PLAN_REPLY, synthesis: NOTHING_CONSISTENT });
+
+    // No summary and no confidence: nothing beyond the text was confirmed.
+    const out = await invoke({ url: PROFILE_URL });
+    expect(out).toEqual({ properties: { activity_text: `${OWN_ENTRY_PASSAGE}\n\n${NORTHWIND_PASSAGE}` } });
+  });
+
+  it('attaches nothing when the synthesiser found nothing and no passage names the person with a term', async () => {
+    mockSearch.mockResolvedValueOnce(THIN_INDEX_RESULT).mockResolvedValue({ items: [] });
     replies({ plan: PLAN_REPLY, synthesis: NOTHING_CONSISTENT });
 
     expect(await invoke({ url: PROFILE_URL })).toEqual({});
   });
 
-  it('attaches the five properties with numbered sources', async () => {
+  it('attaches the six properties with numbered sources and the passages', async () => {
     mockSearch.mockResolvedValueOnce(RICH_INDEX_RESULT).mockResolvedValue(ACTIVITY_RESULT);
     replies({ plan: PLAN_REPLY, synthesis: SYNTHESIS_REPLY });
 
@@ -485,25 +631,29 @@ describe('the answer', () => {
       current_role: 'Head of Platform',
       current_organisation: 'Northwind Labs',
       activity_sources: `1. https://news.example.com/northwind-launch\n2. ${PROFILE_LINK}`,
+      activity_text: `${OWN_ENTRY_PASSAGE}\n\n${NORTHWIND_PASSAGE}`,
     });
   });
 
-  it('attaches nothing when the synthesiser call fails outright', async () => {
+  it('attaches the passages alone when the synthesiser call fails outright', async () => {
     mockSearch.mockResolvedValueOnce(RICH_INDEX_RESULT).mockResolvedValue(ACTIVITY_RESULT);
     mockAnthropicChat.mockResolvedValue(PLAN_REPLY);
     // The forced tool call raises rather than handing back a half-answer.
     mockAnthropicChatStructured.mockRejectedValue(new Error('the tool call was truncated'));
 
-    expect(await invoke({ url: PROFILE_URL })).toEqual({});
+    expect(await invoke({ url: PROFILE_URL })).toEqual({
+      properties: { activity_text: `${OWN_ENTRY_PASSAGE}\n\n${NORTHWIND_PASSAGE}` },
+    });
   });
 
-  it('attaches nothing when the query planner returns something unreadable', async () => {
+  it('attaches the profile\'s own entry alone when the query planner returns something unreadable', async () => {
     mockSearch.mockResolvedValueOnce(RICH_INDEX_RESULT).mockResolvedValue({ items: [] });
     replies({ plan: 'not json at all', synthesis: NOTHING_CONSISTENT });
 
     // No plan means no activity queries; the headline alone is what the
-    // synthesiser sees, and it found nothing consistent.
-    expect(await invoke({ url: PROFILE_URL })).toEqual({});
+    // synthesiser sees, and it found nothing consistent. The profile's own
+    // entry still names the person and their organisation, so it comes back.
+    expect(await invoke({ url: PROFILE_URL })).toEqual({ properties: { activity_text: OWN_ENTRY_PASSAGE } });
   });
 });
 
@@ -533,7 +683,7 @@ describe('the trailing site name', () => {
 
     const queries: string[] = mockSearch.mock.calls.map((c) => c[0]);
     // The headline is everything after the name, and the site is no part of it.
-    expect(queries).toEqual([PROFILE_LINK, '"Alex Example" news']);
+    expect(queries).toEqual([SITE_QUERY, '"Alex Example" news']);
     expect(queries.some((q) => q.includes('site:crunchbase.com'))).toBe(false);
     expect(out.properties?.current_organisation).toBe('NewCo');
   });
@@ -561,7 +711,7 @@ describe('the trailing site name', () => {
 
     const queries: string[] = mockSearch.mock.calls.map((c) => c[0]);
     // No `"LinkedIn" site:crunchbase.com` expansion…
-    expect(queries).toEqual([PROFILE_LINK, '"Alex Example" news']);
+    expect(queries).toEqual([SITE_QUERY, '"Alex Example" news']);
     // …and a page that names only the site is not about this person, so it is
     // never opened.
     expect(mockFetchWithTimeout).not.toHaveBeenCalled();

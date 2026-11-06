@@ -21,10 +21,13 @@ export const LINKEDIN_RESEARCH_PLUGIN_MANIFEST: PluginManifest = {
     'activity found on the web — and writes it up with a confidence and its sources.',
   params: LINKEDIN_RESEARCH_PLUGIN.signature.params,
   contextAdditions:
-    'Adds five fields to the record it runs on: a written summary of what the ' +
+    'Adds up to six fields to the record it runs on: a written summary of what the ' +
     'person appears to be doing, how confident that reading is, the role and ' +
-    'organisation it read, and the addresses the summary cites. Adds nothing ' +
-    'at all when no public signal consistent with the profile exists.',
+    'organisation it read, the addresses the summary cites, and the passages ' +
+    'found about the person. Adds nothing at all when no public signal ' +
+    'consistent with the profile exists. Passages can come back at low ' +
+    'confidence with no summary, and then nothing beyond that text was ' +
+    'confirmed. Text the caller passes as context is never evidence alone.',
   additions: LINKEDIN_RESEARCH_PLUGIN.signature.additions,
   handbookSection: LINKEDIN_RESEARCH_HANDBOOK_SECTION,
 };

@@ -64,12 +64,37 @@ const BRIGHT_DATA_SERP_RATE_LIMIT_RETRY_DELAY = 30 * SECOND;
 // `brd_json=1` in the query string, and the reply is Google's own parsed
 // result set. Only the fields the callers below actually read are declared;
 // everything else (`general`, `people_also_ask`, `knowledge`, …) passes
-// through unparsed.
+// through unparsed. `extensions` is a bonus on top of a result, so one the
+// provider reshaped is dropped rather than costing the whole search.
 const BrightDataSerpOrganicResult = z.object({
   link: z.string().optional(),
   title: z.string().optional(),
   description: z.string().optional(),
+  extensions: z
+    .array(z.object({ type: z.string().nullish(), text: z.string().nullish() }).catch({}))
+    .nullish()
+    .catch(null),
 });
+
+/** Google's extensions often read "location · role · organisation", which the
+ *  description leaves out. They go first so that whoever clips a long snippet
+ *  keeps them and loses the free text. Only the plain text kind is carried: a
+ *  sitelink's text is a navigation label pointing at another page, not
+ *  something the result says about its subject. Text the description already
+ *  holds would only repeat itself in every prompt, so it is left out. This is
+ *  what the web module's standalone search does. */
+function snippetOf(hit: z.infer<typeof BrightDataSerpOrganicResult>): string | undefined {
+  const description = hit.description ?? '';
+  const extensions: string[] = [];
+  for (const extension of hit.extensions ?? []) {
+    const text = extension.type === 'text' ? extension.text?.trim() : undefined;
+    if (!text || extensions.includes(text)) continue;
+    if (description.toLowerCase().includes(text.toLowerCase())) continue;
+    extensions.push(text);
+  }
+  if (extensions.length === 0) return hit.description;
+  return [...extensions, ...(description ? [description] : [])].join(' · ');
+}
 const BrightDataSerpResponseShape = z.object({
   organic: z.array(BrightDataSerpOrganicResult),
 });
@@ -94,7 +119,7 @@ function mapBrightDataSerpResponse(raw: unknown): Search {
   const items: SearchResult[] = parsed.data.organic.map((hit) => ({
     link: hit.link,
     title: hit.title,
-    snippet: hit.description,
+    snippet: snippetOf(hit),
   }));
 
   return { items };
