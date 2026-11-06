@@ -58,6 +58,7 @@ jest.mock('../../translation_graph/adapters/system/carried_records', () => {
 });
 
 import { sql } from 'kysely';
+import { Client } from 'pg';
 import { versionOf, type ListeningLane } from '@listen-fire/language-versions';
 import { LANGUAGE_VERSION } from 'movement-lang';
 import { answerDelivery } from 'movement-engine/public/inbound';
@@ -1078,16 +1079,24 @@ describe('0.12 listens beside the current version (real Postgres)', () => {
     });
 
     describe('a turn under 0.12 and the move, at once', () => {
-      /** Until the upgrade waits on a row another transaction holds. */
+      /** Until the upgrade waits on a row another transaction holds. It looks from
+       *  a session of its own: from the pool it would wait for a connection the
+       *  turn and the upgrade hold, and the turn would never be let go. */
       async function untilWaitingOnARow(): Promise<void> {
-        const giveUpAt = Date.now() + 30_000;
-        for (;;) {
-          const { rows } = await sql<{ count: string }>`
-            select count(*)::text as count from pg_stat_activity
-            where datname = current_database() and wait_event_type = 'Lock' and query ilike '%for update%'`.execute(getAutomationsQb(['trigger']));
-          if (Number(rows[0]?.count) > 0) return;
-          if (Date.now() > giveUpAt) throw new Error('test: the upgrade never waited on the row');
-          await new Promise((resolve) => setTimeout(resolve, 25));
+        const look = new Client({ connectionString: process.env.DATABASE_URL });
+        await look.connect();
+        try {
+          const giveUpAt = Date.now() + 30_000;
+          for (;;) {
+            const { rows } = await look.query<{ count: string }>(`
+              select count(*)::text as count from pg_stat_activity
+              where datname = current_database() and wait_event_type = 'Lock' and query ilike '%for update%'`);
+            if (Number(rows[0]?.count) > 0) return;
+            if (Date.now() > giveUpAt) throw new Error('test: the upgrade never waited on the row');
+            await new Promise((resolve) => setTimeout(resolve, 25));
+          }
+        } finally {
+          await look.end();
         }
       }
 
