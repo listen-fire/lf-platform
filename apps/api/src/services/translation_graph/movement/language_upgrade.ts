@@ -82,6 +82,9 @@ import type { MovementId } from '../../../generated/kysely/automations/Movement'
 import type { TeamFacts } from '@listen-fire/language-versions';
 import { movementCatalogForTeam, type ImportedFile } from './catalog';
 import type { CatalogAudience } from './audience';
+import type { Principal } from 'principal';
+import { accessTo } from '../../access/decide';
+import { connectionsNamed, connectionsRefusal, unusableConnections } from './save_access';
 
 import { getAutomationsQb } from '../../../lib/kysely';
 import { listenPauses } from '../../inbound/listen_pause';
@@ -1202,6 +1205,10 @@ export async function upgradeMovement(input: {
    *  (listed on the diagnostics otherwise), and move past the warnings that
    *  the program may now do something else, once the author checked them. */
   applyAllFixes?: boolean;
+  /** The person upgrading. It changes every member's text and pin, so it needs
+   *  write on each; and a rewrite not proved to keep the meaning is an edit, so
+   *  under `applyAllFixes` it needs use on every connection the texts name. */
+  by?: Principal;
   validate?: ValidateUnder;
   advance?: Advance;
   /** How the group's moves are made together; absent, one transaction. */
@@ -1247,6 +1254,21 @@ export async function upgradeMovement(input: {
       detail: holdsDetail(holds),
     };
   }
+  const by = input.by;
+  if (by !== undefined) {
+    const writable = await Promise.all(
+      group.map((member) => accessTo(by, { target: { thing: 'automation', id: member.id }, verb: 'write' })),
+    );
+    // Not named: a member the upgrader may not see stays unseen.
+    if (writable.some((may) => !may)) {
+      return {
+        status: 'blocked',
+        ...base,
+        diagnostics: [],
+        detail: 'it moves together with automations or libraries it shares imports with that you may not change, so nothing moved',
+      };
+    }
+  }
   const movingWith = new Map<string, ImportedFile>();
   const checked: CheckedMember[] = [];
   for (const member of group) {
@@ -1276,6 +1298,16 @@ export async function upgradeMovement(input: {
     ...(others.length > 0 ? { movesWith: others.map(asMember) } : {}),
     ...(heldBy.length > 0 ? { heldBy } : {}),
   };
+  if (by !== undefined && all) {
+    const unusable = (
+      await Promise.all(
+        checked.map(async (member) =>
+          unusableConnections(by, await connectionsNamed({ teamId: input.teamId, file: member.movement.name, source: member.rewrite.source })),
+        ),
+      )
+    ).flat();
+    if (unusable.length > 0) return { status: 'blocked', ...shown, diagnostics, detail: connectionsRefusal(unusable).message };
+  }
   if (checked.some((member) => member.held)) {
     return { status: 'blocked', ...shown, diagnostics, ...(own.held ? {} : { detail: heldDetail(heldBy) }) };
   }

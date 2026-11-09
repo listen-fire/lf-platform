@@ -46,6 +46,15 @@ jest.mock('../listens_up', () => ({ bringUpListensLater: jest.fn(async () => und
 // The real authoring core is loaded by one case below; its team wrapper's
 // catalog assembly is never reached.
 jest.mock('../catalog', () => ({ movementCatalogForTeam: jest.fn() }));
+// A person's upgrade is decided: write on every member, and under applyAllFixes
+// use on every connection the rewritten texts name. Nobody asks unless a case
+// says who is upgrading.
+jest.mock('../../../access/decide', () => ({ accessTo: jest.fn(async () => true) }));
+jest.mock('../save_access', () => ({
+  connectionsNamed: jest.fn(async () => []),
+  unusableConnections: jest.fn(async () => []),
+  connectionsRefusal: (unusable: { file: string }[]) => ({ message: `names connections you may not use (in ${unusable.map((u) => u.file).join(', ')})` }),
+}));
 
 import { LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalog, mockCatalogSnapshot, type LanguageVersion, type PluginOutput, type PluginSpec, type ResolveFile } from 'movement-lang';
 import { checkProgram, isLegacyLanguageVersion } from 'legacy-lang';
@@ -56,6 +65,8 @@ import { assessMovementValidity, type AuthoringDiagnostic } from '../authoring';
 import { getMovementRow, listMovementRows, lockMovementRow, recordUpgradeCheck, type MovementRow } from '../store';
 import { saveMovement } from '../provision';
 import { bringUpListensLater } from '../listens_up';
+import { accessTo } from '../../../access/decide';
+import { connectionsNamed, unusableConnections } from '../save_access';
 import {
   runDeployCheck,
   upgradeMovement,
@@ -1507,5 +1518,61 @@ describe('what an upgrade says it changes', () => {
     if (result.status === 'not_found') throw new Error('it is there');
     expect(result.status).toBe('needs_acknowledgement');
     expect(result.changes?.behaviour.join(' ')).toContain('New runs use');
+  });
+});
+
+describe('a person upgrading needs write on what moves', () => {
+  const LIBRARY = 'export function shout(t: <text>) {\n  return t\n}\n';
+  const rows = [
+    movement({ id: 'lib', languageVersion: '0.12.13', source: LIBRARY }),
+    movement({ id: 'app', languageVersion: '0.12.13', source: 'import { shout } from "lib"\nfunction app(t: <text>) {\n  return shout(t)\n}\n' }),
+  ];
+  const by = { teamId: 'team-1', userId: 'u1', access: 'write' as const, scopes: ['*'], pinnedTeamId: null };
+  const validate: ValidateUnder = async () => ({ diagnostics: [], gaps: [] });
+  const advance = jest.fn(async () => async () => ({ ok: true as const }));
+
+  beforeEach(() => {
+    advance.mockClear();
+    jest.mocked(accessTo).mockReset().mockResolvedValue(true);
+    jest.mocked(connectionsNamed).mockClear();
+    jest.mocked(unusableConnections).mockReset().mockResolvedValue([]);
+    jest.mocked(assessMovementValidity).mockReturnValue({ status: 'valid', reason: null } as never);
+  });
+
+  it('moves nothing when a member it moves with may not be changed by them, naming no member', async () => {
+    jest.mocked(getMovementRow).mockResolvedValueOnce(rows[1]);
+    jest.mocked(listMovementRows).mockResolvedValueOnce(rows);
+    jest.mocked(accessTo).mockImplementation(async (_principal, asked) => asked.target.id !== 'lib');
+
+    const result = await upgradeMovement({ teamId: 'team-1', id: 'app', acknowledge: true, by, validate, advance });
+
+    expect(result).toEqual(expect.objectContaining({ status: 'blocked', detail: expect.stringContaining('that you may not change') }));
+    expect(JSON.stringify(result)).not.toContain('"lib"');
+    expect(advance).not.toHaveBeenCalled();
+  });
+
+  it('needs write alone for its own rewrites, and use on the connections the texts name under applyAllFixes', async () => {
+    jest.mocked(getMovementRow).mockResolvedValue(rows[1]);
+    jest.mocked(listMovementRows).mockResolvedValue(rows);
+    jest.mocked(unusableConnections).mockResolvedValue([{ file: 'app', reach: { connection: 'Finance' }, id: undefined }] as never);
+
+    const safe = await upgradeMovement({ teamId: 'team-1', id: 'app', acknowledge: true, by, validate, advance });
+    expect(safe.status).toBe('upgraded');
+    expect(connectionsNamed).not.toHaveBeenCalled();
+
+    advance.mockClear();
+    const all = await upgradeMovement({ teamId: 'team-1', id: 'app', acknowledge: true, applyAllFixes: true, by, validate, advance });
+    expect(all).toEqual(expect.objectContaining({ status: 'blocked', detail: expect.stringContaining('names connections you may not use') }));
+    expect(advance).not.toHaveBeenCalled();
+    jest.mocked(getMovementRow).mockReset();
+    jest.mocked(listMovementRows).mockReset().mockResolvedValue([]);
+  });
+
+  it('asks nothing of a run, which upgrades for nobody', async () => {
+    jest.mocked(getMovementRow).mockResolvedValueOnce(rows[1]);
+    jest.mocked(listMovementRows).mockResolvedValueOnce(rows);
+    const result = await upgradeMovement({ teamId: 'team-1', id: 'app', acknowledge: true, applyAllFixes: true, validate, advance });
+    expect(result.status).toBe('upgraded');
+    expect(accessTo).not.toHaveBeenCalled();
   });
 });

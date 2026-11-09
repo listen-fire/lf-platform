@@ -1174,11 +1174,14 @@ const upgradeMovementHandler: RequestHandler = jsonHandler(
     const teamId = await resolveToolTeam(input.team);
     const id = await resolveMovementIdInTeam({ teamId, idOrName: input.automation });
     if (id === null) return { error: `No automation '${input.automation}' in this team.` };
+    const refused = await refusedChange({ automationId: id, missing: { error: `No automation '${input.automation}' in this team.` } });
+    if (refused !== null) return refused;
     const result = await upgradeMovement({
       teamId,
       id,
       acknowledge: input.acknowledge === true,
       applyAllFixes: input.applyAllFixes === true,
+      by: currentPrincipal(),
     });
     if (result.status === 'not_found') {
       return { error: `No automation '${input.automation}' in this team.` };
@@ -1240,7 +1243,8 @@ const saveMovementSchema = z.object({
 
 const saveMovementHandler: RequestHandler = jsonHandler(saveMovementSchema, 'body', async (input) => {
   const teamId = await resolveToolTeam(input.team);
-  const saving = input.id !== undefined ? await getMovementRow({ teamId, id: input.id }).catch(() => null) : null;
+  const stored = input.id !== undefined ? await getMovementRow({ teamId, id: input.id }).catch(() => null) : null;
+  const saving = stored !== null && !(await unseen(stored.id)) ? stored : null;
   const helpNote = saving !== null ? helpNoteOf(saving) : {};
   // Validate first, and save nothing that would not go live: an agent's save is
   // its check, so text it got wrong never becomes the stored automation.
@@ -1257,11 +1261,13 @@ const saveMovementHandler: RequestHandler = jsonHandler(saveMovementSchema, 'bod
     if (refusal) return refusal;
     checked = validation.diagnostics;
   }
+  const savedBy = actingUserId();
   const result = await saveMovement({
     teamId,
     source: input.source,
     audience: callerAudience(),
     changeSource: 'agent',
+    ...(savedBy !== undefined ? { userId: savedBy } : {}),
     ...(input.name !== undefined ? { name: input.name } : {}),
     ...(input.description !== undefined ? { description: input.description } : {}),
     ...(input.id !== undefined ? { id: input.id } : {}),
@@ -1282,7 +1288,6 @@ const saveMovementHandler: RequestHandler = jsonHandler(saveMovementSchema, 'bod
     // retired by an unreadable consented source, a movement name another
     // automation fires); this handler only adds what it alone can see.
     const warnings: string[] = [...result.warnings];
-    const savedBy = actingUserId();
     if (savedBy !== undefined && result.listeners.some((l) => l.kind === 'whatsapp')) {
       const verified = await userHasVerifiedWhatsappNumber(savedBy);
       if (!verified) {
@@ -1388,6 +1393,9 @@ const editAutomationHandler: RequestHandler = async (req, res) => {
     const input = parsed.data;
     const ref = await resolveMovementRef(input.idOrName);
     if (!ref) return res.status(404).json({ error: `No automation '${input.idOrName}'.` });
+    const refused = await refusedChange({ automationId: ref.movementId, missing: { error: `No automation '${input.idOrName}'.` } });
+    if (refused instanceof Forbidden) return res.status(403).json({ error: refused.message });
+    if (refused !== null) return res.status(404).json(refused);
     const current = await getMovement({ teamId: ref.teamId, id: ref.movementId });
     if (!current) return res.status(404).json({ error: `No automation '${input.idOrName}'.` });
 
@@ -1857,10 +1865,10 @@ function mountAutomationToolRoutes(router: ReturnType<typeof Router>): void {
   route.get('/automations/grep', READS, grepAutomationsHandler);
   route.get('/automations/:idOrName/runs', READS, listRunsHandler);
   route.get('/automations/:idOrName/source', READS, readAutomationHandler);
-  route.post('/automations/:idOrName/edit', EXEMPT.savedPerTarget, editAutomationHandler);
+  route.post('/automations/:idOrName/edit', WRITES, editAutomationHandler);
   route.get('/automations/:idOrName', READS, getMovementHandler);
   route.post('/automations/validate', READS, validateMovementHandler);
-  route.post('/automations/upgrade', EXEMPT.savedPerTarget, upgradeMovementHandler);
+  route.post('/automations/upgrade', WRITES, upgradeMovementHandler);
   route.post('/automations/completions', READS, completionsAtHandler);
   route.post('/automations/save', EXEMPT.savedPerTarget, saveMovementHandler);
   route.post('/automations/delete', WRITES, deleteMovementHandler);

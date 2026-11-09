@@ -66,6 +66,12 @@ jest.mock('../statement', () => {
             return access === undefined ? [] : [[userId.toLowerCase(), access] as const];
           }),
         ),
+      membersOf: async (teamId: string) =>
+        new Map(
+          [...mockTable.members]
+            .filter(([key]) => key.startsWith(`${teamId}:`))
+            .map(([key, access]) => [key.slice(teamId.length + 1), access] as const),
+        ),
       writeMembersOf: async (teamId: string) =>
         mockTable.memberSince
           .filter((key) => key.startsWith(`${teamId}:`) && mockTable.members.get(key) === 'write')
@@ -74,7 +80,16 @@ jest.mock('../statement', () => {
   };
 });
 
-import { accessTo, passOnWhatTheyHeld, readableIds, setStatement, StatementRefusedError } from '../decide';
+import {
+  accessTo,
+  checkCreation,
+  membersAdmitted,
+  passOnWhatTheyHeld,
+  readableIds,
+  setStatement,
+  stateCreation,
+  StatementRefusedError,
+} from '../decide';
 
 const TEAM = '11111111-1111-4111-8111-111111111111';
 const OTHER_TEAM = '22222222-2222-4222-8222-222222222222';
@@ -370,6 +385,47 @@ describe('setStatement', () => {
     await expect(
       setStatement(person(ALICE), { target: { thing: 'automation', id: 'd0000000-0000-4000-8000-00000000dead' }, verb: 'read', grantees: [team] }),
     ).rejects.toMatchObject({ refusal: 'not_found' });
+  });
+});
+
+describe('creating an automation with its statements', () => {
+  const NEW: Target<'automation'> = { thing: 'automation', id: 'd0000000-0000-4000-8000-000000000009' };
+  const statements = { read: [team], write: [user(ALICE)], fire: [{ kind: 'anyone' } as const] };
+
+  it('passes a write member who names themselves, or the team, on the write list', async () => {
+    member(TEAM, ALICE, 'write');
+    await expect(checkCreation(person(ALICE), { teamId: TEAM, statements })).resolves.toBeUndefined();
+    await expect(checkCreation(person(ALICE), { teamId: TEAM, statements: { ...statements, write: [team] } })).resolves.toBeUndefined();
+  });
+
+  it('refuses a creator the write list leaves out, a read member, and lists that could not be stored', async () => {
+    member(TEAM, ALICE, 'write');
+    member(TEAM, BOB, 'write');
+    member(TEAM, CAROL, 'read');
+    await expect(checkCreation(person(ALICE), { teamId: TEAM, statements: { ...statements, write: [user(BOB)] } })).rejects.toMatchObject({ refusal: 'not_allowed' });
+    await expect(checkCreation(person(CAROL), { teamId: TEAM, statements: { ...statements, write: [team] } })).rejects.toMatchObject({ refusal: 'not_allowed' });
+    await expect(checkCreation(person(ALICE), { teamId: TEAM, statements: { ...statements, read: [] } })).rejects.toMatchObject({ refusal: 'empty' });
+    await expect(checkCreation(person(ALICE), { teamId: TEAM, statements: { ...statements, read: [{ kind: 'anyone' }] } })).rejects.toMatchObject({ refusal: 'outsider' });
+    await expect(checkCreation(person(ALICE), { teamId: TEAM, statements: { ...statements, write: [user(ALICE), user(CAROL)] } })).rejects.toMatchObject({ refusal: 'not_a_writer' });
+  });
+
+  it('states write first, then read and fire, so the creator states the rest as a writer', async () => {
+    member(TEAM, ALICE, 'write');
+    thing(NEW);
+    await stateCreation(person(ALICE), { target: NEW, statements });
+    expect(mockTable.rows.filter((r) => r.target.id === NEW.id).map((r) => r.verb)).toEqual(['write', 'read', 'fire']);
+    expect(await accessTo(person(ALICE), { target: NEW, verb: 'write' })).toBe(true);
+  });
+});
+
+describe('membersAdmitted', () => {
+  it('names the members any of the lists admits, as membership caps them', async () => {
+    member(TEAM, ALICE, 'write');
+    member(TEAM, BOB, 'read');
+    member(OTHER_TEAM, CAROL, 'write');
+    expect(await membersAdmitted(TEAM, [{ verb: 'read', grantees: [team] }])).toEqual(new Set([ALICE, BOB]));
+    expect(await membersAdmitted(TEAM, [{ verb: 'write', grantees: [team] }])).toEqual(new Set([ALICE]));
+    expect(await membersAdmitted(TEAM, [{ verb: 'use', grantees: [user(BOB), user(CAROL)] }])).toEqual(new Set([BOB]));
   });
 });
 

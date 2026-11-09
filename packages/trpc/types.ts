@@ -1189,6 +1189,30 @@ export interface DependentCheckResult {
     problemCount: number;
 }
 
+export type Thing = 'automation' | 'connection';
+/** The verbs each thing's statement has: firing is an automation's, using is a connection's. */
+export type StatedVerb<T extends Thing> = T extends 'automation' ? 'read' | 'write' | 'fire' : 'use';
+
+/** Why a person's save was refused. Nothing of the text was stored. */
+export type SaveRefusal = {
+    kind: 'read_only';
+} | {
+    kind: 'name_taken';
+    name: string;
+} | {
+    kind: 'missing_statement';
+    missing: StatedVerb<'automation'>[];
+} | {
+    kind: 'statement';
+    message: string;
+} | {
+    kind: 'connections';
+    connections: {
+        connection: string;
+        file: string;
+    }[];
+};
+
 /** Why a listen runs nothing until a person resumes it. */
 export interface ListenPause {
     /** Said by whichever paused it (the loop breaker's `LISTEN_LOOP` line, or
@@ -1269,6 +1293,9 @@ export interface SaveMovementFailure extends ProvisionMovementFailure {
          *  straight off it once it has merged. */
         currentRevision?: string;
     };
+    /** A person's save that was not theirs to make; `errors` says why. Nothing
+     *  was stored. */
+    refused?: SaveRefusal;
     /** The save landed non-`valid` and no consent was given: the source is
      *  persisted (retained artifact) but not shipped live. The caller either
      *  self-repairs off `validity.reason` or re-calls with `acknowledgeErrors`. */
@@ -11638,6 +11665,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     };
                     transformer: _trpc_server.DefaultDataTransformer;
                 }>;
+                _meta: object;
                 _ctx_out: {
                     authorise: () => Promise<void>;
                 };
@@ -11645,7 +11673,6 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _input_out: typeof _trpc_server.unsetMarker;
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
-                _meta: object;
             }, ({
                 kind: "invalid";
                 id: string;
@@ -12297,9 +12324,11 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
             }, {
-                adapterType: string;
-                redirectUri: string;
                 declarations: ({
+                    credentials: {
+                        id: string;
+                        name: string;
+                    }[];
                     kind: "oauth2";
                     signInAvailable: boolean;
                     name: string;
@@ -12309,11 +12338,11 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         secret: boolean;
                         optional: boolean;
                     }[];
+                } | {
                     credentials: {
                         id: string;
                         name: string;
                     }[];
-                } | {
                     kind: "static";
                     name: string;
                     fields: {
@@ -12322,11 +12351,9 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         secret: boolean;
                         optional: boolean;
                     }[];
-                    credentials: {
-                        id: string;
-                        name: string;
-                    }[];
                 })[];
+                adapterType: string;
+                redirectUri: string;
             }>;
             createStaticCredential: _trpc_server.BuildProcedure<"mutation", {
                 _config: _trpc_server.RootConfig<{

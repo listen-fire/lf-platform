@@ -26,7 +26,9 @@ const EXEMPT = {
   teamCatalog: { exempt: 'team catalog, no automation' },
   newConnection: { exempt: "starts a new connection, which no one may use yet; its statement is Task 6's" },
   deploymentConnects: { exempt: 'how this deployment connects a system, no connection' },
-  savedPerTarget: { exempt: 'decided per target in runSave (Task 5)' },
+  savedPerTarget: {
+    exempt: 'creates or overwrites by name, so the save decides per target: write on what it overwrites, statements for what it creates, use on every connection it names',
+  },
   ownTeams: { exempt: "the caller's own teams, no automation" },
   platformAdmin: { exempt: 'platform admins only, across teams' },
 } satisfies Record<string, Decision>;

@@ -92,9 +92,25 @@ import {
 } from './files';
 import { movementCatalogForTeam, type CatalogGap, type TeamMovementCatalog } from './catalog';
 import type { CatalogAudience } from './audience';
+import { checkCreation, stateCreation, StatementRefusedError, type CreationStatements } from '../../access/decide';
+import {
+  READ_ONLY_REFUSAL,
+  accessWarnings,
+  connectionsNamed,
+  connectionsRefusal,
+  creationStatements,
+  inOneTransaction,
+  missingStatementRefusal,
+  nameTakenRefusal,
+  overwriteRefusal,
+  saverOf,
+  unusableConnections,
+  type SaveRefusal,
+} from './save_access';
 import {
   deleteMovementRow,
   getMovementRow,
+  getMovementRowByName,
   leftoverTriggerConfig,
   listDerivedTriggerRows,
   listLeftoverTriggerRows,
@@ -963,8 +979,12 @@ export interface SaveMovementInput {
   teamId: string;
   /** The movement program text — the canonical artifact. */
   source: string;
-  /** Whose save this is: the connections its check, and its listens, may resolve. */
+  /** Whose save this is: the connections its check, and its listens, may
+   *  resolve. A person's save is also decided for them (./save_access.ts). */
   audience: CatalogAudience;
+  /** Who may read, write and fire the automation, when this save creates it.
+   *  A person's save that creates one without all three is refused. */
+  statements?: Partial<CreationStatements>;
   /** Existing movement row id (the editor's re-save path). */
   id?: string;
   /** The row's name (the `<file>` half of the trigger-name convention).
@@ -1033,6 +1053,9 @@ export interface SaveMovementFailure extends ProvisionMovementFailure {
      *  straight off it once it has merged. */
     currentRevision?: string;
   };
+  /** A person's save that was not theirs to make; `errors` says why. Nothing
+   *  was stored. */
+  refused?: SaveRefusal;
   /** The save landed non-`valid` and no consent was given: the source is
    *  persisted (retained artifact) but not shipped live. The caller either
    *  self-repairs off `validity.reason` or re-calls with `acknowledgeErrors`. */
@@ -1260,8 +1283,20 @@ async function runSave(
   const existing = input.id
     ? await getMovementRow({ teamId: input.teamId, id: input.id })
     : null;
-  if (input.id !== undefined && !existing) {
-    return { ok: false, errors: [`movement ${input.id} not found`], catalogNotes: [] };
+  const missing = (id: string): SaveMovementFailure => ({ ok: false, errors: [`movement ${id} not found`], catalogNotes: [] });
+  const refused = (refusal: SaveRefusal, message: string): SaveMovementFailure => ({
+    ok: false,
+    errors: [message],
+    catalogNotes: [],
+    refused: refusal,
+  });
+  if (input.id !== undefined && !existing) return missing(input.id);
+  // Decided before the guards below, which hand back the stored text.
+  const saver = saverOf(input.audience);
+  if (saver !== undefined && input.id !== undefined && existing) {
+    const refusal = await overwriteRefusal(saver, existing);
+    if (refusal === 'unseen') return missing(input.id);
+    if (refusal === 'read_only') return refused({ kind: 'read_only' }, READ_ONLY_REFUSAL);
   }
   // Optimistic-concurrency guard: if the editor loaded an older version
   // than what's stored, something saved underneath it (the assistant, or
@@ -1324,7 +1359,43 @@ async function runSave(
     };
   }
 
-  const row = await timer.step('persist', () =>
+  // A person's save, decided before anything is stored: a save by name over an
+  // automation overwrites it, so it is a write on it like a save by id; one
+  // that names nothing there creates it, with its statements.
+  let creating: CreationStatements | undefined;
+  let named: Awaited<ReturnType<typeof connectionsNamed>> = [];
+  if (saver !== undefined) {
+    const over = existing ?? (await getMovementRowByName({ teamId: input.teamId, name }));
+    if (over !== null && existing === null) {
+      const refusal = await overwriteRefusal(saver, over);
+      // A name is unique in its team, so one held by an automation the saver may
+      // not see can only be refused as taken. That says a name is in use, never
+      // what holds it.
+      if (refusal === 'unseen') return refused({ kind: 'name_taken', name }, nameTakenRefusal(name));
+      if (refusal === 'read_only') return refused({ kind: 'read_only' }, READ_ONLY_REFUSAL);
+    }
+    if (over === null) {
+      const given = creationStatements(input.statements);
+      if ('missing' in given) {
+        return refused({ kind: 'missing_statement', missing: given.missing }, missingStatementRefusal(given.missing));
+      }
+      creating = given.statements;
+      try {
+        await checkCreation(saver, { teamId: input.teamId, statements: creating });
+      } catch (error) {
+        if (!(error instanceof StatementRefusedError)) throw error;
+        return refused({ kind: 'statement', message: error.message }, error.message);
+      }
+    }
+    named = await timer.step('connections', () => connectionsNamed({ teamId: input.teamId, file: name, source: input.source }));
+    const unusable = await unusableConnections(saver, named);
+    if (unusable.length > 0) {
+      const refusal = connectionsRefusal(unusable);
+      return refused(refusal.refused, refusal.message);
+    }
+  }
+
+  const persist = (): Promise<MovementRow> =>
     upsertMovementRow({
       teamId: input.teamId,
       ...(input.id !== undefined ? { id: input.id } : {}),
@@ -1333,8 +1404,21 @@ async function runSave(
       ...(input.description !== undefined ? { description: input.description } : {}),
       ...(input.userId !== undefined ? { userId: input.userId } : {}),
       ...(input.languageUpgrade !== undefined ? { languageVersion: input.languageUpgrade.to } : {}),
-    }),
+    });
+  const statements = creating;
+  const row = await timer.step('persist', () =>
+    saver === undefined || statements === undefined
+      ? persist()
+      : // The automation and what it states commit together: a save never
+        // leaves one with no statement, which would admit nobody.
+        inOneTransaction(async () => {
+          const created = await persist();
+          await stateCreation(saver, { target: { thing: 'automation', id: created.id }, statements });
+          return created;
+        }),
   );
+  const warned = async (listeners: readonly ProvisionedListener[]): Promise<string[]> =>
+    saver === undefined ? [] : accessWarnings({ teamId: input.teamId, automationId: row.id, named, listeners });
 
   // The source row is now saved — emit the resource-change hint here (the
   // shared service layer), so UI saves and agent saves both propagate
@@ -1473,11 +1557,12 @@ async function runSave(
         listeners: [],
         infos: [],
         catalogNotes: notes,
-        warnings: (provisioned.diagnostics ?? []).map((diagnostic) => diagnostic.message),
+        warnings: [...(provisioned.diagnostics ?? []).map((diagnostic) => diagnostic.message), ...(await warned([]))],
         validity,
       };
     }
-    return { ...provisioned, movementId: row.id, validity };
+    if (!provisioned.ok) return { ...provisioned, movementId: row.id, validity };
+    return { ...provisioned, warnings: [...provisioned.warnings, ...(await warned(provisioned.listeners))], movementId: row.id, validity };
   }
 
   if (!provisioned.ok && validity.status === 'valid') {
@@ -1498,13 +1583,16 @@ async function runSave(
   recordMilestones();
 
   const declaredNames = declaredMovementNames(input.source);
-  const collisionWarnings = await timer.step('collisions', () =>
-    movementNameCollisionWarnings({
-      teamId: input.teamId,
-      movementId: row.id,
-      declaredNames: declaredNames ?? [],
-    }),
-  );
+  const shippedWarnings = [
+    ...(await timer.step('collisions', () =>
+      movementNameCollisionWarnings({
+        teamId: input.teamId,
+        movementId: row.id,
+        declaredNames: declaredNames ?? [],
+      }),
+    )),
+    ...(await timer.step('accessWarnings', () => warned(provisioned.ok ? provisioned.listeners : []))),
+  ];
 
   if (!provisioned.ok) {
     // The source didn't reach a listener set. Two very different reasons:
@@ -1532,7 +1620,7 @@ async function runSave(
         catalogNotes: notes,
         warnings: [
           'This source could not be read, so no listeners could be derived from it. You saved it anyway, so every listener this automation had has been retired — it will not fire again until a source that reads cleanly restores them.',
-          ...collisionWarnings,
+          ...shippedWarnings,
         ],
         validity,
       };
@@ -1551,7 +1639,7 @@ async function runSave(
         ...notes,
         'listeners could not be derived from this source — existing listeners (if any) keep firing it',
       ],
-      warnings: collisionWarnings,
+      warnings: shippedWarnings,
       validity,
     };
   }
@@ -1565,7 +1653,7 @@ async function runSave(
   });
   return {
     ...provisioned,
-    warnings: [...provisioned.warnings, ...collisionWarnings],
+    warnings: [...provisioned.warnings, ...shippedWarnings],
     movementId: row.id,
     validity,
   };

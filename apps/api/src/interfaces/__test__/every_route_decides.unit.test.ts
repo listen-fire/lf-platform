@@ -75,6 +75,8 @@ type Row = { teamId: string; target: Target; verb: Verb; grantee: Grantee };
 /** What a write route changes: none of it may be reached by a caller who may not write. */
 const mockEffects = {
   deleteMovement: jest.fn(async () => true),
+  saveMovement: jest.fn(async () => ({ ok: false, errors: ['not saved'], catalogNotes: [] })),
+  upgradeMovement: jest.fn(async () => ({ status: 'not_found' })),
   runMovementAsync: jest.fn(async () => ({ ok: true, runId: mockSeeded.runId, status: 'running', movementName: 'Deals' })),
   abortRun: jest.fn(async () => ({ runId: mockSeeded.runId })),
   resumeRun: jest.fn(async () => ({ runId: mockSeeded.runId, resumed: 1 })),
@@ -96,7 +98,7 @@ const mockState: {
   rows: Row[];
   asked: number;
   teams: string[];
-  automations: { id: string; teamId: string; name: string }[];
+  automations: { id: string; teamId: string; name: string; source?: string }[];
   activity: EventEmitter;
   connections: Table;
   subscriptions: Table;
@@ -299,11 +301,11 @@ jest.mock('../../lib/kysely', () => {
 
 jest.mock('../../services/translation_graph/movement/store', () => {
   const actual = jest.requireActual('../../services/translation_graph/movement/store');
-  const row = (a: { id: string; teamId: string; name: string }) => ({
+  const row = (a: { id: string; teamId: string; name: string; source?: string }) => ({
     id: a.id,
     teamId: a.teamId,
     name: a.name,
-    source: 'listen to manual-[:Invocations]-> fire deals\n',
+    source: a.source ?? 'listen to manual-[:Invocations]-> fire deals\n',
     languageVersion: '0.15.0',
     validityStatus: null,
     validityCheckedAt: null,
@@ -348,8 +350,24 @@ jest.mock('../../services/translation_graph/movement/provision', () => {
       return found === undefined ? null : item(found);
     },
     deleteMovement: () => mockEffects.deleteMovement(),
+    saveMovement: () => mockEffects.saveMovement(),
   };
 });
+
+// A dependent's re-check after a save is the checker's; what is asked of it here is which importers it is handed.
+jest.mock('../../services/translation_graph/movement/files', () => {
+  const actual = jest.requireActual('../../services/translation_graph/movement/files');
+  return {
+    ...actual,
+    checkMovementDependentsOf: (input: Record<string, unknown>) =>
+      actual.checkMovementDependentsOf({ ...input, validate: async () => ({ ok: true, diagnostics: [] }) }),
+  };
+});
+
+jest.mock('../../services/translation_graph/movement/language_upgrade', () => ({
+  ...jest.requireActual('../../services/translation_graph/movement/language_upgrade'),
+  upgradeMovement: () => mockEffects.upgradeMovement(),
+}));
 
 jest.mock('../../services/translation_graph/movement/story_token', () => ({
   ...jest.requireActual('../../services/translation_graph/movement/story_token'),
@@ -900,6 +918,10 @@ const REST_CALLS: Record<string, { call: (refs: Refs) => RestCall; list?: true }
   'POST /v1/automation/automations/validate': { call: (r) => ({ body: { source: 'x', automation: r.automationId } }) },
   'POST /v1/automation/automations/completions': { call: (r) => ({ body: { source: 'x', automation: r.automationId } }) },
   'POST /v1/automation/automations/delete': { call: (r) => ({ body: { automation: r.automationId } }) },
+  'POST /v1/automation/automations/:/edit': {
+    call: (r) => ({ params: { idOrName: r.automationName }, body: { oldString: 'fire deals', newString: 'fire deals_too' } }),
+  },
+  'POST /v1/automation/automations/upgrade': { call: (r) => ({ body: { automation: r.automationName } }) },
   'POST /v1/automation/automations/run': { call: (r) => ({ body: { automation: r.automationName } }) },
   'POST /v1/automation/automations/run-status': { call: (r) => ({ body: { runId: r.runId } }) },
   'POST /v1/automation/automations/inspect-run': { call: (r) => ({ body: { runId: r.runId } }) },
@@ -1365,5 +1387,39 @@ describe('a name lookup across the caller’s teams', () => {
     const answer = await callRest(get.handler, { params: { idOrName: SEEDED.automationName } });
     expect(answer.status).toBe(200);
     expect(answer.body).toMatchObject({ id: SECOND_DEALS });
+  });
+});
+
+describe('who imports a file, told only as far as the caller may read', () => {
+  const IMPORTER = 'd0000000-0000-4000-8000-0000000000aa';
+
+  beforeEach(() => {
+    statesOnly(SEEDED.automationId, TEAM, { kind: 'user', userId: ALICE });
+    mockState.automations.push({ id: IMPORTER, teamId: TEAM, name: 'Importer', source: `import { shout } from "${SEEDED.automationName}"\n` });
+    statesOnly(IMPORTER, TEAM, { kind: 'user', userId: BOB });
+  });
+
+  const mayReadImporter = () =>
+    mockState.rows.push({ teamId: TEAM, target: { thing: 'automation', id: IMPORTER }, verb: 'read', grantee: { kind: 'user', userId: ALICE } });
+
+  it('counts on the list only the importers the caller may read', async () => {
+    const usedBy = async () => {
+      const listed = (await callTrpc('views.movement.list', undefined)).body as { id: string; usedBy: number }[];
+      return listed.find((item) => item.id === SEEDED.automationId)?.usedBy;
+    };
+    expect(await usedBy()).toBe(0);
+    mayReadImporter();
+    expect(await usedBy()).toBe(1);
+  });
+
+  it('re-checks after a save, and names, only the importers the saver may read', async () => {
+    const shipped = { ok: true, movementId: SEEDED.automationId, movementName: SEEDED.automationName, listeners: [], infos: [], catalogNotes: [], warnings: [] };
+    const saved = async () => {
+      mockEffects.saveMovement.mockResolvedValueOnce(shipped as never);
+      return (await callTrpc('views.movement.save', { source: 'x', id: SEEDED.automationId })).body as { dependentChecks: { id: string }[] };
+    };
+    expect((await saved()).dependentChecks).toEqual([]);
+    mayReadImporter();
+    expect((await saved()).dependentChecks).toEqual([expect.objectContaining({ id: IMPORTER, name: 'Importer' })]);
   });
 });

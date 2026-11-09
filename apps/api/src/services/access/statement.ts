@@ -236,6 +236,17 @@ async function membershipsAmong(teamId: string, userIds: readonly string[]): Pro
   return new Map(rows.map((r) => [String(r.user_id), accessOf(r.access)]));
 }
 
+/** Every member of the team, with their access there. */
+async function membersOf(teamId: string): Promise<Map<string, Access>> {
+  if (!isUuid(teamId)) return new Map();
+  const rows = await getCoreQb(['team_membership'])
+    .selectFrom('team_membership')
+    .select(['user_id', 'access'])
+    .where('team_id', '=', teamId as TeamId)
+    .execute();
+  return new Map(rows.map((r) => [String(r.user_id), accessOf(r.access)]));
+}
+
 /** Whether anything at all is stated about a thing, for any verb. */
 async function hasAnyStatement(target: Target): Promise<boolean> {
   const row = await getAutomationsQb(['access_statement'])
@@ -269,6 +280,7 @@ const StatementStore = {
   hasAnyStatement,
   membershipsOf,
   membershipsAmong,
+  membersOf,
   writeMembersOf,
 };
 

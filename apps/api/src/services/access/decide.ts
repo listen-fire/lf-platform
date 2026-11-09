@@ -306,6 +306,20 @@ async function setStatement<T extends Thing>(
       `Only someone who may ${changedBy(target.thing)} this ${target.thing} can change who may ${verb} it.`,
     );
   }
+  const list = await checkedList(teamId, { verb, grantees });
+  await StatementStore.replaceGrants(target, { teamId, verb, grantees: list });
+}
+
+/**
+ * One verb's list as it would be stored on a thing of this team: never empty,
+ * every grantee well formed and of a kind the verb takes, and every user it
+ * names on the team with the access the verb needs.
+ */
+async function checkedList(teamId: string, stated: { verb: Verb; grantees: readonly Grantee[] }): Promise<Grantee[]> {
+  const { verb, grantees } = stated;
+  if (grantees.length === 0) {
+    throw new StatementRefusedError('empty', `The ${verb} list can't be emptied: name the team, or someone on it.`);
+  }
   const list = listFor(verb, grantees);
   const named = list.flatMap((grantee) => (grantee.kind === 'user' ? [grantee.userId] : []));
   const memberships = await StatementStore.membershipsAmong(teamId, named);
@@ -324,7 +338,68 @@ async function setStatement<T extends Thing>(
       `Only members with write access on the team can be named on the ${verb} list; not: ${readers.join(', ')}.`,
     );
   }
-  await StatementStore.replaceGrants(target, { teamId, verb, grantees: list });
+  return list;
+}
+
+/** The read, write and fire lists a new automation is created with. */
+type CreationStatements = Readonly<Record<StatedVerb<'automation'>, readonly Grantee[]>>;
+
+/**
+ * Whether the principal may create an automation on this team with these
+ * statements, checked before anything is stored so a refusal leaves nothing
+ * behind. Creating is a write on the team, and the creator must be on the
+ * write list they state: the read and fire lists are stated after it, by
+ * someone who may write, and nobody creates what they could not change.
+ */
+async function checkCreation(
+  principal: Principal,
+  asked: { teamId: string; statements: CreationStatements },
+): Promise<void> {
+  const { teamId, statements } = asked;
+  const standing = (await standingsIn(principal, [teamId])).get(teamId);
+  if (standing?.access !== 'write') {
+    throw new StatementRefusedError('not_allowed', 'Only someone with write access on the team can create an automation.');
+  }
+  const write = await checkedList(teamId, { verb: 'write', grantees: statements.write });
+  await checkedList(teamId, { verb: 'read', grantees: statements.read });
+  await checkedList(teamId, { verb: 'fire', grantees: statements.fire });
+  if (!write.some((grantee) => admits(grantee, standing))) {
+    throw new StatementRefusedError(
+      'not_allowed',
+      "You can't create an automation you could not change: put yourself, or the team, on its write list.",
+    );
+  }
+}
+
+/**
+ * State a just-created automation's lists: write first, while nothing is
+ * stated about it, then read and fire, as someone the write list now admits.
+ * `checkCreation` has passed for the same lists.
+ */
+async function stateCreation(
+  principal: Principal,
+  created: { target: Target<'automation'>; statements: CreationStatements },
+): Promise<void> {
+  const { target, statements } = created;
+  for (const verb of ['write', 'read', 'fire'] as const) {
+    await setStatement(principal, { target, verb, grantees: statements[verb] });
+  }
+}
+
+/** The team's members these lists admit, as the team stands now: the people who hold any of them. */
+async function membersAdmitted(
+  teamId: string,
+  lists: readonly { verb: Verb; grantees: readonly Grantee[] }[],
+): Promise<Set<string>> {
+  const members = await StatementStore.membersOf(teamId);
+  const admitted = new Set<string>();
+  for (const list of lists) {
+    for (const [userId, access] of members) {
+      if (!meets(access, holderNeeds(list.verb))) continue;
+      if (list.grantees.some((grantee) => admits(grantee, { access, userId }))) admitted.add(userId);
+    }
+  }
+  return admitted;
 }
 
 /**
@@ -406,8 +481,12 @@ export {
   accessTo,
   readableIds,
   setStatement,
+  checkCreation,
+  stateCreation,
+  membersAdmitted,
   passOnWhatTheyHeld,
   StatementRefusedError,
+  type CreationStatements,
   type StatementRefusal,
   type StandingChange,
 };

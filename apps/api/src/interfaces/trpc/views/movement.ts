@@ -78,7 +78,7 @@ import {
   type MovementRunStatus,
 } from '../../../services/translation_graph/movement/run_now';
 import {
-  checkMovementDependents,
+  checkMovementDependentsOf,
   movementDependents,
   movementFileFacets,
   movementUsageIndex,
@@ -613,8 +613,10 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
         // stored validity stays untouched — it's assessed by each file's
         // OWN saves and runs.
         if (!result.ok) return { ...result, dependentChecks: null };
-        const dependentChecks = await checkMovementDependents({
+        // Only the importers the saver may read are checked and named.
+        const dependentChecks = await checkMovementDependentsOf({
           teamId,
+          rows: await readableAmong(await listMovementRows(teamId), { automationOf: (row) => row.id, teamIds: [teamId] }),
           name: result.movementName,
           validate: (dependent) => validateMovementForTeam({ ...dependent, audience }),
         });
@@ -671,9 +673,10 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
         listMovements(teamId),
         listMovementRows(teamId),
       ]);
-      // Who imports a file counts every importer: the count names none of them.
       const items = await readableAmong(listed, { automationOf: (item) => item.id, teamIds: [teamId] });
-      const usage = movementUsageIndex(rows);
+      // Who imports a file counts only the importers the caller may read.
+      const readable = new Set(items.map((item) => item.id));
+      const usage = movementUsageIndex(rows.filter((row) => readable.has(row.id)));
 
       const allTriggerIds = items.flatMap((item) => item.listeners.map((l) => l.triggerId));
       const latestRuns = await latestRunsByTriggerId({ teamId, triggerIds: allTriggerIds });

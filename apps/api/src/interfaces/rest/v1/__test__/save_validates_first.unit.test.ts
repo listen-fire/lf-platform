@@ -148,6 +148,12 @@ describe('saveAutomation validates first', () => {
     expect(res.body?.diagnostics).toEqual([diagnostic('warning')]);
   });
 
+  it('records the person saving, so a new automation names its creator', async () => {
+    validateMock.mockResolvedValue(validation({}));
+    await call(saveMovementHandler, { body: { source: 'clean' } });
+    expect(saveMovementMock).toHaveBeenCalledWith(expect.objectContaining({ source: 'clean', userId: 'u1' }));
+  });
+
   it('answers a clean save with no diagnostics key at all', async () => {
     validateMock.mockResolvedValue(validation({}));
     const res = await call(saveMovementHandler, { body: { source: 'clean' } });
