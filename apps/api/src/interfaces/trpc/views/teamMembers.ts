@@ -15,7 +15,6 @@ import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { UserId } from '../../../generated/kysely/core/User';
 import type { TeamInviteId } from '../../../generated/kysely/core/TeamInvite';
 
-import { passOnWhatTheyHeld } from '../../../services/access/decide';
 import { currentContext } from '../../../services/context';
 import { TeamInviteService } from '../../../services/team_invite';
 import {
@@ -261,8 +260,7 @@ const teamMembersRouter = (procedure: typeof trpc.procedure) => {
         const teamId = ctx.user.teamId as TeamId;
         await requireWriteAccess(teamId, ctx.user.id as UserId);
 
-        // One transaction, so a member never leaves while what only they held
-        // stays with nobody.
+        // One transaction, so what only they held passes on as they leave.
         await ctx.enterTransaction();
         const result = await TeamMembershipService.removeMember({
           teamId,
@@ -271,7 +269,6 @@ const teamMembersRouter = (procedure: typeof trpc.procedure) => {
 
         switch (result.status) {
           case 'removed':
-            await passOnWhatTheyHeld({ teamId, userId: input.userId });
             return { removed: true as const, signedOut: result.signedOut };
           case 'not_a_member':
             throw new TRPCError({
@@ -336,6 +333,8 @@ const teamMembersRouter = (procedure: typeof trpc.procedure) => {
         const teamId = await managedTeam();
         const userId = await requireMember(teamId, input.userId);
 
+        // One transaction, so a write list they alone held passes on as they lose write.
+        await currentContext().enterTransaction();
         const result = await TeamMembershipService.changeAccess({
           teamId,
           userId,

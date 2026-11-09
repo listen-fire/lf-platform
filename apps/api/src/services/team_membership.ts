@@ -26,6 +26,7 @@ import type CoreSchema from '../generated/kysely/core/CoreSchema';
 import { getCoreQb } from '../lib/kysely';
 import { logger } from 'movement-engine/public/log';
 import { ProvisioningService } from './provisioning';
+import { passOnWhatTheyHeld } from './access/decide';
 
 type Access = 'read' | 'write';
 
@@ -85,7 +86,31 @@ async function invitedToAnotherTeam(input: { teamId: TeamId; email: string }): P
  * client's `team_membership.upsert` is a `notImplemented` stub.
  */
 async function grantAccess(input: { teamId: TeamId; userId: UserId; access: Access }): Promise<void> {
-  await upsertMembership(getCoreQb(['team_membership']), input);
+  const db = getCoreQb(['team_membership']);
+  const before = await db
+    .selectFrom('team_membership')
+    .select('access')
+    .where('team_id', '=', input.teamId)
+    .where('user_id', '=', input.userId)
+    .executeTakeFirst();
+  await upsertMembership(db, input);
+  await afterAccessChange({ ...input, wasWrite: before?.access === 'write' });
+}
+
+/**
+ * A member who loses write access no longer holds a write list on the team, so
+ * any write list they were the last to hold passes on, as when someone leaves.
+ * In the caller's transaction, when it has one, so the two commit together.
+ */
+async function afterAccessChange(input: {
+  teamId: TeamId;
+  userId: UserId;
+  access: Access;
+  wasWrite: boolean;
+}): Promise<void> {
+  if (input.wasWrite && input.access !== 'write') {
+    await passOnWhatTheyHeld({ teamId: input.teamId, userId: input.userId, because: 'lost_write' });
+  }
 }
 
 /**
@@ -102,7 +127,7 @@ async function withoutLosingLastAdmin(input: {
   /** Whether the target ends up without write access after `write`. */
   losesWriteAccess: boolean;
   write: (db: MembershipDb) => Promise<void>;
-}): Promise<{ status: 'done' } | { status: 'not_a_member' } | { status: 'last_admin' }> {
+}): Promise<{ status: 'done'; wasWrite: boolean } | { status: 'not_a_member' } | { status: 'last_admin' }> {
   const run = async (db: MembershipDb) => {
     const memberships = await db
       .selectFrom('team_membership')
@@ -120,7 +145,7 @@ async function withoutLosingLastAdmin(input: {
     }
 
     await input.write(db);
-    return { status: 'done' as const };
+    return { status: 'done' as const, wasWrite: target.access === 'write' };
   };
 
   const db = getCoreQb(['team_membership']);
@@ -139,7 +164,9 @@ async function changeAccess(input: {
     losesWriteAccess: input.access !== 'write',
     write: (db) => upsertMembership(db, input),
   });
-  return result.status === 'done' ? { status: 'changed' } : result;
+  if (result.status !== 'done') return result;
+  await afterAccessChange({ ...input, wasWrite: result.wasWrite });
+  return { status: 'changed' };
 }
 
 /**
@@ -276,6 +303,10 @@ async function removeMember(input: {
     },
   });
   if (guarded.status !== 'done') return guarded;
+
+  // In the caller's transaction, when it has one, so a member never leaves
+  // while a list only they held stays with nobody.
+  await passOnWhatTheyHeld({ teamId: input.teamId, userId: input.userId, because: 'left' });
 
   // A pending invite for the same address on this team would silently re-admit
   // them at their next sign-in, so removing a member withdraws that too.

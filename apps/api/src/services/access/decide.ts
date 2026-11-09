@@ -328,14 +328,11 @@ async function setStatement<T extends Thing>(
 }
 
 /**
- * Whether a verb's list still admits someone once `leaver` is off the team. A
- * user grant holds only while its user is on the team with the access the verb
+ * Whether a verb's list still admits someone as the team stands now. A user
+ * grant holds only while its user is on the team with the access the verb
  * needs; anything else holds regardless of who is.
  */
-async function stillHeld(
-  teamId: string,
-  list: { verb: Verb; grantees: readonly Grantee[]; leaver: string },
-): Promise<boolean> {
+async function stillHeld(teamId: string, list: { verb: Verb; grantees: readonly Grantee[] }): Promise<boolean> {
   const named: string[] = [];
   for (const grantee of list.grantees) {
     switch (grantee.kind) {
@@ -346,7 +343,7 @@ async function stillHeld(
       case 'phone':
         return true;
       case 'user':
-        if (grantee.userId !== list.leaver) named.push(grantee.userId);
+        named.push(grantee.userId);
         break;
       default:
         return neverAsAny(grantee);
@@ -357,26 +354,46 @@ async function stillHeld(
   return [...memberships.values()].some((access) => meets(access, needs));
 }
 
+/** Why a member's standing on a team just changed. */
+type StandingChange = 'left' | 'lost_write';
+
+function reasonOf(because: StandingChange): string {
+  switch (because) {
+    case 'left':
+      return 'left the team';
+    case 'lost_write':
+      return 'lost write access on the team';
+    default:
+      return neverAsAny(because);
+  }
+}
+
 /**
- * Called once a member has left a team. Every list they were the last holder
- * of passes to the team's write members, by name, so nothing is left that
- * nobody on the team can reach; to the whole team when it has no write member
- * left. Each hand on is logged.
+ * Called once a member has left a team or lost write access on it, with their
+ * membership already changed. Every list that names them and now admits nobody
+ * passes to the team's write members, by name, so nothing is left that nobody
+ * on the team can reach; to the whole team when it has no write member left.
+ * Each hand on is logged.
  */
-async function passOnWhatTheyHeld(input: { teamId: string; userId: string }): Promise<void> {
-  const { teamId } = input;
+async function passOnWhatTheyHeld(input: {
+  teamId: string;
+  userId: string;
+  because: StandingChange;
+}): Promise<void> {
+  const { teamId, because } = input;
   const userId = input.userId.toLowerCase();
   let writers: string[] | undefined;
   for (const { target, verb } of await StatementStore.listsNaming({ teamId, userId })) {
     const grantees = await StatementStore.grantsOf(target, { teamId, verb });
-    if (await stillHeld(teamId, { verb, grantees, leaver: userId })) continue;
+    if (await stillHeld(teamId, { verb, grantees })) continue;
     writers ??= (await StatementStore.writeMembersOf(teamId)).filter((writer) => writer !== userId);
     const heirs: Grantee[] =
       writers.length > 0 ? writers.map((writer) => ({ kind: 'user', userId: writer })) : [{ kind: 'team' }];
     await StatementStore.replaceGrants(target, { teamId, verb, grantees: heirs });
-    logger.info('[access] a list’s last holder left the team; it passes to the team’s write members', {
+    logger.info(`[access] a list’s last holder ${reasonOf(because)}; it passes to the team’s write members`, {
       teamId,
       userId,
+      because,
       thing: target.thing,
       thingId: target.id,
       verb,
@@ -392,4 +409,5 @@ export {
   passOnWhatTheyHeld,
   StatementRefusedError,
   type StatementRefusal,
+  type StandingChange,
 };

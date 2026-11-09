@@ -198,6 +198,8 @@ const userManagementRouter = (procedure: typeof trpc.procedure) => {
           select: { name: true },
         });
 
+        // One transaction, so a write list they alone held passes on if they lose write.
+        await ctx.enterTransaction();
         await TeamMembershipService.grantAccess({
           userId: input.userId as UserId,
           teamId: input.teamId as TeamId,

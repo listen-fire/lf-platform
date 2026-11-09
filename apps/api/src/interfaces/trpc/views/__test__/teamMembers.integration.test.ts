@@ -277,6 +277,30 @@ describe('team members — managing the team from its own settings', () => {
     }
   });
 
+  it('passes a write list a demoted member alone held to the team’s write members, and keeps their read', async () => {
+    const demoted = await makeUser(teamId, 'write');
+    const deals: Target<'automation'> = { thing: 'automation', id: randomUUID() };
+    await getAutomationsQb(['movement'])
+      .insertInto('movement')
+      .values({ id: deals.id as MovementId, team_id: teamId, name: 'Deals', source: '' })
+      .execute();
+    const theirs = [{ kind: 'user' as const, userId: demoted.userId }];
+    await StatementStore.replaceGrants(deals, { teamId, verb: 'write', grantees: theirs });
+    await StatementStore.replaceGrants(deals, { teamId, verb: 'read', grantees: theirs });
+
+    try {
+      await asMember({ userId: admin.userId, teamId }, (c) => c.setAccess({ userId: demoted.userId, access: 'read' }));
+
+      expect(await accessOn(teamId, demoted.userId)).toBe('read');
+      expect(await StatementStore.grantsOf(deals, { teamId, verb: 'write' })).toEqual([
+        { kind: 'user', userId: admin.userId },
+      ]);
+      expect(await StatementStore.grantsOf(deals, { teamId, verb: 'read' })).toEqual(theirs);
+    } finally {
+      await getAutomationsQb(['movement']).deleteFrom('movement').where('id', '=', deals.id as MovementId).execute();
+    }
+  });
+
   it('tells a read-only member they are read-only, and refuses their writes as FORBIDDEN', async () => {
     const reader = await makeUser(teamId, 'read');
     const overview = await asMember({ userId: reader.userId, teamId }, (c) => c.overview());

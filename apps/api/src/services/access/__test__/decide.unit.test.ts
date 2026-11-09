@@ -385,7 +385,7 @@ describe('passOnWhatTheyHeld, when a member leaves the team', () => {
     stated(NOTES, 'read', [team, user(ALICE)]);
 
     leaves(TEAM, ALICE);
-    await passOnWhatTheyHeld({ teamId: TEAM, userId: ALICE });
+    await passOnWhatTheyHeld({ teamId: TEAM, userId: ALICE, because: 'left' });
 
     expect(listOf(DEALS, 'read')).toEqual([user(BOB)]);
     expect(listOf(DEALS, 'write')).toEqual([user(ALICE), user(BOB)]);
@@ -405,7 +405,7 @@ describe('passOnWhatTheyHeld, when a member leaves the team', () => {
     stated(DEALS, 'read', [user(ALICE), user(CAROL)]);
 
     leaves(TEAM, ALICE);
-    await passOnWhatTheyHeld({ teamId: TEAM, userId: ALICE });
+    await passOnWhatTheyHeld({ teamId: TEAM, userId: ALICE, because: 'left' });
     expect(listOf(DEALS, 'read')).toEqual([user(BOB)]);
   });
 
@@ -417,7 +417,7 @@ describe('passOnWhatTheyHeld, when a member leaves the team', () => {
     stated(DEALS, 'write', [user(ALICE), user(CAROL)]);
 
     leaves(TEAM, ALICE);
-    await passOnWhatTheyHeld({ teamId: TEAM, userId: ALICE });
+    await passOnWhatTheyHeld({ teamId: TEAM, userId: ALICE, because: 'left' });
     expect(listOf(DEALS, 'write')).toEqual([user(BOB)]);
   });
 
@@ -428,7 +428,7 @@ describe('passOnWhatTheyHeld, when a member leaves the team', () => {
     stated(DEALS, 'read', [user(ALICE)]);
 
     leaves(TEAM, ALICE);
-    await passOnWhatTheyHeld({ teamId: TEAM, userId: ALICE.toUpperCase() });
+    await passOnWhatTheyHeld({ teamId: TEAM, userId: ALICE.toUpperCase(), because: 'left' });
     expect(listOf(DEALS, 'read')).toEqual([user(BOB)]);
   });
 
@@ -439,7 +439,7 @@ describe('passOnWhatTheyHeld, when a member leaves the team', () => {
     stated(DEALS, 'fire', [user(ALICE), { kind: 'domain', domain: 'acme.com' }]);
 
     leaves(TEAM, ALICE);
-    await passOnWhatTheyHeld({ teamId: TEAM, userId: ALICE });
+    await passOnWhatTheyHeld({ teamId: TEAM, userId: ALICE, because: 'left' });
     expect(listOf(DEALS, 'fire')).toEqual([user(ALICE), { kind: 'domain', domain: 'acme.com' }]);
   });
 
@@ -450,7 +450,40 @@ describe('passOnWhatTheyHeld, when a member leaves the team', () => {
     stated(DEALS, 'read', [user(ALICE)]);
 
     leaves(TEAM, ALICE);
-    await passOnWhatTheyHeld({ teamId: TEAM, userId: ALICE });
+    await passOnWhatTheyHeld({ teamId: TEAM, userId: ALICE, because: 'left' });
     expect(listOf(DEALS, 'read')).toEqual([team]);
+  });
+});
+
+describe('passOnWhatTheyHeld, when a member loses write access', () => {
+  it('passes a write list they alone held to the remaining write members, and keeps what they still hold', async () => {
+    const info = jest.spyOn(logger, 'info').mockImplementation(() => undefined);
+    member(TEAM, ALICE, 'write');
+    member(TEAM, BOB, 'write');
+    stated(DEALS, 'write', [user(ALICE)]);
+    stated(DEALS, 'read', [user(ALICE)]);
+    stated(FINANCE, 'use', [user(ALICE)]);
+
+    mockTable.members.set(`${TEAM}:${ALICE}`, 'read');
+    await passOnWhatTheyHeld({ teamId: TEAM, userId: ALICE, because: 'lost_write' });
+
+    expect(listOf(DEALS, 'write')).toEqual([user(BOB)]);
+    expect(listOf(DEALS, 'read')).toEqual([user(ALICE)]);
+    expect(listOf(FINANCE, 'use')).toEqual([user(ALICE)]);
+    expect(info).toHaveBeenCalledTimes(1);
+    expect(info).toHaveBeenCalledWith(
+      expect.stringContaining('lost write access'),
+      expect.objectContaining({ userId: ALICE, because: 'lost_write', thingId: DEALS.id, verb: 'write', to: [BOB] }),
+    );
+  });
+
+  it('gives the write list to the team when nobody on it has write access any more', async () => {
+    jest.spyOn(logger, 'info').mockImplementation(() => undefined);
+    member(TEAM, ALICE, 'write');
+    stated(DEALS, 'write', [user(ALICE)]);
+
+    mockTable.members.set(`${TEAM}:${ALICE}`, 'read');
+    await passOnWhatTheyHeld({ teamId: TEAM, userId: ALICE, because: 'lost_write' });
+    expect(listOf(DEALS, 'write')).toEqual([team]);
   });
 });
