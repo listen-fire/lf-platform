@@ -13,7 +13,14 @@ import type { Access, Principal } from 'principal';
 
 import { StatementStore, type AskedVerb, type Grantee, type StatedVerb, type Target, type Thing, type Verb } from './statement';
 
-type StatementRefusal = 'empty' | 'not_found' | 'not_allowed' | 'outsider' | 'not_a_member' | 'malformed';
+type StatementRefusal =
+  | 'empty'
+  | 'not_found'
+  | 'not_allowed'
+  | 'outsider'
+  | 'not_a_member'
+  | 'not_a_writer'
+  | 'malformed';
 
 class StatementRefusedError extends Error {
   readonly refusal: StatementRefusal;
@@ -32,6 +39,11 @@ function narrower(a: Access, b: Access): Access {
   return a === 'write' && b === 'write' ? 'write' : 'read';
 }
 
+/** Whether team access `held` is at least `needed`. */
+function meets(held: Access, needed: Access): boolean {
+  return needed === 'read' || held === 'write';
+}
+
 /**
  * The principal's standing on each of these teams it may act in at all. A user
  * stands on a team by membership there; a principal with no user stands only
@@ -42,7 +54,8 @@ async function standingsIn(principal: Principal, teamIds: readonly string[]): Pr
   const reachable = [...new Set(teamIds)].filter(
     (teamId) => principal.pinnedTeamId === null || principal.pinnedTeamId === teamId,
   );
-  const { userId } = principal;
+  // Stored user ids are lowercase (`normalised`); compare like with like.
+  const userId = principal.userId?.toLowerCase();
   if (userId === undefined) {
     return new Map(
       reachable
@@ -61,16 +74,34 @@ async function standingsIn(principal: Principal, teamIds: readonly string[]): Pr
   );
 }
 
-/** The team access a verb needs before any statement is read. Undefined for firing, which this never answers. */
-function floorOf(verb: Verb): Access | undefined {
+/** The team access someone needs to hold a verb through a statement: a read member never writes. */
+function holderNeeds(verb: Verb): Access {
   switch (verb) {
-    case 'read':
-    case 'use':
-      return 'read';
     case 'write':
       return 'write';
+    case 'read':
+    case 'use':
     case 'fire':
-      return undefined;
+      return 'read';
+    default:
+      return neverAsAny(verb);
+  }
+}
+
+/**
+ * The lists whose holders may do `verb`: whoever may write an automation may
+ * also read it. Empty for firing, which this decision never answers.
+ */
+function grantedBy(verb: Verb): Verb[] {
+  switch (verb) {
+    case 'read':
+      return ['read', 'write'];
+    case 'write':
+      return ['write'];
+    case 'use':
+      return ['use'];
+    case 'fire':
+      return [];
     default:
       return neverAsAny(verb);
   }
@@ -95,18 +126,21 @@ function admits(grantee: Grantee, standing: Standing): boolean {
 
 async function accessTo<T extends Thing>(
   principal: Principal,
-  target: Target<T>,
-  verb: AskedVerb<T>,
+  asked: { target: Target<T>; verb: AskedVerb<T> },
 ): Promise<boolean> {
-  const floor = floorOf(verb);
-  if (floor === undefined) return false;
+  const { target, verb } = asked;
+  const lists = grantedBy(verb);
+  if (lists.length === 0) return false;
   const teamId = await StatementStore.teamOf(target);
   if (teamId === undefined) return false;
   const standing = (await standingsIn(principal, [teamId])).get(teamId);
-  if (standing === undefined) return false;
-  if (floor === 'write' && standing.access !== 'write') return false;
-  const grantees = await StatementStore.grantsOf(target, { teamId, verb });
-  return grantees.some((grantee) => admits(grantee, standing));
+  if (standing === undefined || !meets(standing.access, holderNeeds(verb))) return false;
+  for (const list of lists) {
+    if (!meets(standing.access, holderNeeds(list))) continue;
+    const grantees = await StatementStore.grantsOf(target, { teamId, verb: list });
+    if (grantees.some((grantee) => admits(grantee, standing))) return true;
+  }
+  return false;
 }
 
 /** The verb that lets a thing be seen in a list. */
@@ -122,14 +156,23 @@ function seenBy(thing: Thing): Verb {
 }
 
 /** The ids of the things of one kind, across these teams, that the principal may see. For lists. */
-async function readableIds(principal: Principal, thing: Thing, teamIds: readonly string[]): Promise<Set<string>> {
-  const standings = await standingsIn(principal, teamIds);
-  return StatementStore.grantedIds({
-    thing,
-    verb: seenBy(thing),
-    teamIds: [...standings.keys()],
-    userId: principal.userId,
-  });
+async function readableIds(
+  principal: Principal,
+  asked: { thing: Thing; teamIds: readonly string[] },
+): Promise<Set<string>> {
+  const { thing } = asked;
+  const standings = [...(await standingsIn(principal, asked.teamIds))];
+  const ids = new Set<string>();
+  for (const list of grantedBy(seenBy(thing))) {
+    const teamIds = standings
+      .filter(([, standing]) => meets(standing.access, holderNeeds(list)))
+      .map(([teamId]) => teamId);
+    const userId = principal.userId?.toLowerCase();
+    for (const id of await StatementStore.grantedIds({ thing, verb: list, teamIds, userId })) {
+      ids.add(id);
+    }
+  }
+  return ids;
 }
 
 /** The verb whose holders may change a thing's statement. */
@@ -147,16 +190,14 @@ function changedBy(thing: Thing): AskedVerb<Thing> {
 /**
  * Whether the principal may change this thing's statement: whoever may write
  * the automation or use the connection, and only while they may write on the
- * team, since changing a statement is a write. A thing with nothing stated yet
- * is being created, so any write member may state it.
+ * team, since changing a statement is a write. A thing with nothing stated
+ * about it at all is being created, so any write member may state it.
  */
 async function mayChange(principal: Principal, target: Target, teamId: string): Promise<boolean> {
   const standing = (await standingsIn(principal, [teamId])).get(teamId);
   if (standing?.access !== 'write') return false;
-  const verb = changedBy(target.thing);
-  const stated = await StatementStore.grantsOf(target, { teamId, verb });
-  if (stated.length === 0) return true;
-  return accessTo<Thing>(principal, target, verb);
+  if (!(await StatementStore.hasAnyStatement(target))) return true;
+  return accessTo<Thing>(principal, { target, verb: changedBy(target.thing) });
 }
 
 /** Whether a verb's list may name people who are not on the team. */
@@ -173,7 +214,11 @@ function admitsOutsiders(verb: Verb): boolean {
   }
 }
 
-/** A grantee as it is stored: domains and addresses lowercased, a phone as its digits. Undefined when it names nothing. */
+/**
+ * A grantee as it is stored: user ids, domains and addresses lowercased, a
+ * phone as its digits, so a stored value compares exactly. Undefined when it
+ * names nothing.
+ */
 function normalised(grantee: Grantee): Grantee | undefined {
   const present = <G extends Grantee>(g: G, value: string): G | undefined => (value === '' ? undefined : g);
   switch (grantee.kind) {
@@ -181,7 +226,7 @@ function normalised(grantee: Grantee): Grantee | undefined {
     case 'anyone':
       return grantee;
     case 'user': {
-      const userId = grantee.userId.trim();
+      const userId = grantee.userId.trim().toLowerCase();
       return present({ kind: 'user', userId }, userId);
     }
     case 'domain': {
@@ -239,15 +284,15 @@ function listFor(verb: Verb, grantees: readonly Grantee[]): Grantee[] {
 
 /**
  * Replace one verb's whole list on one thing. A list is never emptied, every
- * user it names must be on the thing's team, and only someone who may change
- * the statement may replace it.
+ * user it names must be able to hold it (on the thing's team, and a write
+ * member for the write list), and only someone who may change the statement
+ * may replace it.
  */
 async function setStatement<T extends Thing>(
   principal: Principal,
-  target: Target<T>,
-  verb: StatedVerb<T>,
-  grantees: readonly Grantee[],
+  stated: { target: Target<T>; verb: StatedVerb<T>; grantees: readonly Grantee[] },
 ): Promise<void> {
+  const { target, verb, grantees } = stated;
   if (grantees.length === 0) {
     throw new StatementRefusedError('empty', `The ${verb} list can't be emptied: name the team, or someone on it.`);
   }
@@ -263,25 +308,36 @@ async function setStatement<T extends Thing>(
   }
   const list = listFor(verb, grantees);
   const named = list.flatMap((grantee) => (grantee.kind === 'user' ? [grantee.userId] : []));
-  const members = await StatementStore.membersAmong(teamId, named);
-  const strangers = named.filter((userId) => !members.has(userId));
+  const memberships = await StatementStore.membershipsAmong(teamId, named);
+  const strangers = named.filter((userId) => !memberships.has(userId));
   if (strangers.length > 0) {
     throw new StatementRefusedError(
       'not_a_member',
       `Only people on the team can be named on the ${verb} list; not: ${strangers.join(', ')}.`,
     );
   }
+  const needs = holderNeeds(verb);
+  const readers = named.filter((userId) => !meets(memberships.get(userId) ?? 'read', needs));
+  if (readers.length > 0) {
+    throw new StatementRefusedError(
+      'not_a_writer',
+      `Only members with write access on the team can be named on the ${verb} list; not: ${readers.join(', ')}.`,
+    );
+  }
   await StatementStore.replaceGrants(target, { teamId, verb, grantees: list });
 }
 
 /**
- * Whether a list still admits someone once `leaver` is off the team. A user
- * grant admits only while its user is on the team; anything else admits
- * regardless of who is.
+ * Whether a verb's list still admits someone once `leaver` is off the team. A
+ * user grant holds only while its user is on the team with the access the verb
+ * needs; anything else holds regardless of who is.
  */
-async function stillHeld(teamId: string, grantees: readonly Grantee[], leaver: string): Promise<boolean> {
+async function stillHeld(
+  teamId: string,
+  list: { verb: Verb; grantees: readonly Grantee[]; leaver: string },
+): Promise<boolean> {
   const named: string[] = [];
-  for (const grantee of grantees) {
+  for (const grantee of list.grantees) {
     switch (grantee.kind) {
       case 'team':
       case 'anyone':
@@ -290,13 +346,15 @@ async function stillHeld(teamId: string, grantees: readonly Grantee[], leaver: s
       case 'phone':
         return true;
       case 'user':
-        if (grantee.userId !== leaver) named.push(grantee.userId);
+        if (grantee.userId !== list.leaver) named.push(grantee.userId);
         break;
       default:
         return neverAsAny(grantee);
     }
   }
-  return (await StatementStore.membersAmong(teamId, named)).size > 0;
+  const needs = holderNeeds(list.verb);
+  const memberships = await StatementStore.membershipsAmong(teamId, named);
+  return [...memberships.values()].some((access) => meets(access, needs));
 }
 
 /**
@@ -306,11 +364,12 @@ async function stillHeld(teamId: string, grantees: readonly Grantee[], leaver: s
  * left. Each hand on is logged.
  */
 async function passOnWhatTheyHeld(input: { teamId: string; userId: string }): Promise<void> {
-  const { teamId, userId } = input;
+  const { teamId } = input;
+  const userId = input.userId.toLowerCase();
   let writers: string[] | undefined;
   for (const { target, verb } of await StatementStore.listsNaming({ teamId, userId })) {
     const grantees = await StatementStore.grantsOf(target, { teamId, verb });
-    if (await stillHeld(teamId, grantees, userId)) continue;
+    if (await stillHeld(teamId, { verb, grantees, leaver: userId })) continue;
     writers ??= (await StatementStore.writeMembersOf(teamId)).filter((writer) => writer !== userId);
     const heirs: Grantee[] =
       writers.length > 0 ? writers.map((writer) => ({ kind: 'user', userId: writer })) : [{ kind: 'team' }];

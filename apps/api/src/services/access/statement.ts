@@ -223,17 +223,29 @@ async function membershipsOf(userId: string, teamIds: readonly string[]): Promis
   return new Map(rows.map((r) => [String(r.team_id), accessOf(r.access)]));
 }
 
-/** Which of these users are members of the team. */
-async function membersAmong(teamId: string, userIds: readonly string[]): Promise<Set<string>> {
+/** The access each of these users has on the team, for those who are members. */
+async function membershipsAmong(teamId: string, userIds: readonly string[]): Promise<Map<string, Access>> {
   const candidates = userIds.filter(isUuid);
-  if (candidates.length === 0) return new Set();
+  if (candidates.length === 0) return new Map();
   const rows = await getCoreQb(['team_membership'])
     .selectFrom('team_membership')
-    .select('user_id')
+    .select(['user_id', 'access'])
     .where('team_id', '=', teamId as TeamId)
     .where('user_id', 'in', candidates.map((id) => id as UserId))
     .execute();
-  return new Set(rows.map((r) => String(r.user_id)));
+  return new Map(rows.map((r) => [String(r.user_id), accessOf(r.access)]));
+}
+
+/** Whether anything at all is stated about a thing, for any verb. */
+async function hasAnyStatement(target: Target): Promise<boolean> {
+  const row = await getAutomationsQb(['access_statement'])
+    .selectFrom('access_statement')
+    .select('id')
+    .where('thing', '=', target.thing)
+    .where('thing_id', '=', target.id)
+    .limit(1)
+    .executeTakeFirst();
+  return row !== undefined;
 }
 
 /** The team's members with write access, oldest first. */
@@ -254,8 +266,9 @@ const StatementStore = {
   replaceGrants,
   grantedIds,
   listsNaming,
+  hasAnyStatement,
   membershipsOf,
-  membersAmong,
+  membershipsAmong,
   writeMembersOf,
 };
 

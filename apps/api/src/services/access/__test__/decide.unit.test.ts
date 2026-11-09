@@ -49,15 +49,23 @@ jest.mock('../statement', () => {
         mockTable.rows
           .filter((r) => r.teamId === options.teamId && r.grantee.kind === 'user' && r.grantee.userId === options.userId)
           .map((r) => ({ target: r.target, verb: r.verb })),
+      hasAnyStatement: async (target: Target) => mockTable.rows.some((r) => same(r.target, target)),
+      // Membership is keyed by a uuid column, which Postgres compares without
+      // regard to case, and it answers with the canonical lowercase id.
       membershipsOf: async (userId: string, teamIds: string[]) =>
         new Map(
           teamIds.flatMap((teamId) => {
-            const access = mockTable.members.get(`${teamId}:${userId}`);
+            const access = mockTable.members.get(`${teamId}:${userId.toLowerCase()}`);
             return access === undefined ? [] : [[teamId, access] as const];
           }),
         ),
-      membersAmong: async (teamId: string, userIds: string[]) =>
-        new Set(userIds.filter((userId) => mockTable.members.has(`${teamId}:${userId}`))),
+      membershipsAmong: async (teamId: string, userIds: string[]) =>
+        new Map(
+          userIds.flatMap((userId) => {
+            const access = mockTable.members.get(`${teamId}:${userId.toLowerCase()}`);
+            return access === undefined ? [] : [[userId.toLowerCase(), access] as const];
+          }),
+        ),
       writeMembersOf: async (teamId: string) =>
         mockTable.memberSince
           .filter((key) => key.startsWith(`${teamId}:`) && mockTable.members.get(key) === 'write')
@@ -130,85 +138,97 @@ describe('accessTo', () => {
   it('admits a named user only while they are on the thing’s team', async () => {
     member(TEAM, ALICE, 'write');
     stated(DEALS, 'read', [user(ALICE)]);
-    expect(await accessTo(person(ALICE), DEALS, 'read')).toBe(true);
+    expect(await accessTo(person(ALICE), { target: DEALS, verb: 'read' })).toBe(true);
 
     leaves(TEAM, ALICE);
     member(OTHER_TEAM, ALICE, 'write');
-    expect(await accessTo(person(ALICE), DEALS, 'read')).toBe(false);
+    expect(await accessTo(person(ALICE), { target: DEALS, verb: 'read' })).toBe(false);
   });
 
   it('admits nobody a list does not name, and nobody when nothing is stated', async () => {
     member(TEAM, ALICE, 'write');
     member(TEAM, BOB, 'write');
     stated(DEALS, 'read', [user(BOB)]);
-    expect(await accessTo(person(ALICE), DEALS, 'read')).toBe(false);
-    expect(await accessTo(person(ALICE), NOTES, 'read')).toBe(false);
+    expect(await accessTo(person(ALICE), { target: DEALS, verb: 'read' })).toBe(false);
+    expect(await accessTo(person(ALICE), { target: NOTES, verb: 'read' })).toBe(false);
   });
 
   it('lets team membership cap it: a read member never writes, whatever the statement says', async () => {
     member(TEAM, ALICE, 'read');
     member(TEAM, BOB, 'write');
     stated(DEALS, 'write', [team, user(ALICE)]);
-    expect(await accessTo(person(ALICE), DEALS, 'write')).toBe(false);
-    expect(await accessTo(person(BOB), DEALS, 'write')).toBe(true);
+    expect(await accessTo(person(ALICE), { target: DEALS, verb: 'write' })).toBe(false);
+    expect(await accessTo(person(BOB), { target: DEALS, verb: 'write' })).toBe(true);
+  });
+
+  it('lets whoever may write an automation read it, while membership still caps', async () => {
+    member(TEAM, ALICE, 'write');
+    member(TEAM, BOB, 'write');
+    member(TEAM, CAROL, 'read');
+    stated(DEALS, 'read', [user(ALICE)]);
+    stated(DEALS, 'write', [team]);
+    expect(await accessTo(person(BOB), { target: DEALS, verb: 'read' })).toBe(true);
+    expect(await accessTo(person(CAROL), { target: DEALS, verb: 'read' })).toBe(false);
+    expect(await readableIds(person(BOB), { thing: 'automation', teamIds: [TEAM] })).toEqual(new Set([DEALS.id]));
+    expect(await readableIds(person(CAROL), { thing: 'automation', teamIds: [TEAM] })).toEqual(new Set());
   });
 
   it('caps by the membership on the thing’s team, not by the access the caller arrived with', async () => {
     member(TEAM, ALICE, 'read');
     stated(DEALS, 'write', [team]);
-    expect(await accessTo(person(ALICE, { teamId: OTHER_TEAM, access: 'write' }), DEALS, 'write')).toBe(false);
+    expect(await accessTo(person(ALICE, { teamId: OTHER_TEAM, access: 'write' }), { target: DEALS, verb: 'write' })).toBe(false);
   });
 
   it('takes a key as its creator', async () => {
     member(TEAM, ALICE, 'write');
     member(TEAM, BOB, 'write');
     stated(DEALS, 'read', [user(ALICE)]);
-    expect(await accessTo(person(ALICE, { credentialId: 'key-1', pinnedTeamId: TEAM }), DEALS, 'read')).toBe(true);
-    expect(await accessTo(person(BOB, { credentialId: 'key-2', pinnedTeamId: TEAM }), DEALS, 'read')).toBe(false);
+    expect(await accessTo(person(ALICE, { credentialId: 'key-1', pinnedTeamId: TEAM }), { target: DEALS, verb: 'read' })).toBe(true);
+    expect(await accessTo(person(BOB, { credentialId: 'key-2', pinnedTeamId: TEAM }), { target: DEALS, verb: 'read' })).toBe(false);
   });
 
   it('keeps a credential pinned to one team out of the others its creator belongs to', async () => {
     member(TEAM, ALICE, 'write');
     member(OTHER_TEAM, ALICE, 'write');
     stated(ELSEWHERE, 'read', [team], OTHER_TEAM);
-    expect(await accessTo(person(ALICE, { pinnedTeamId: TEAM }), ELSEWHERE, 'read')).toBe(false);
-    expect(await accessTo(person(ALICE), ELSEWHERE, 'read')).toBe(true);
+    expect(await accessTo(person(ALICE, { pinnedTeamId: TEAM }), { target: ELSEWHERE, verb: 'read' })).toBe(false);
+    expect(await accessTo(person(ALICE), { target: ELSEWHERE, verb: 'read' })).toBe(true);
   });
 
   it('matches a principal with no user to team grants only, on its own team', async () => {
     stated(DEALS, 'read', [team]);
     stated(NOTES, 'read', [user(ALICE)]);
     stated(ELSEWHERE, 'read', [team], OTHER_TEAM);
-    expect(await accessTo(machine(), DEALS, 'read')).toBe(true);
-    expect(await accessTo(machine(), NOTES, 'read')).toBe(false);
-    expect(await accessTo(machine(), ELSEWHERE, 'read')).toBe(false);
+    expect(await accessTo(machine(), { target: DEALS, verb: 'read' })).toBe(true);
+    expect(await accessTo(machine(), { target: NOTES, verb: 'read' })).toBe(false);
+    expect(await accessTo(machine(), { target: ELSEWHERE, verb: 'read' })).toBe(false);
   });
 
   it('caps a machine principal by its own access', async () => {
     stated(DEALS, 'write', [team]);
-    expect(await accessTo(machine({ access: 'read' }), DEALS, 'write')).toBe(false);
-    expect(await accessTo(machine(), DEALS, 'write')).toBe(true);
+    expect(await accessTo(machine({ access: 'read' }), { target: DEALS, verb: 'write' })).toBe(false);
+    expect(await accessTo(machine(), { target: DEALS, verb: 'write' })).toBe(true);
   });
 
   it('decides a connection by its use list', async () => {
     member(TEAM, ALICE, 'read');
     member(TEAM, BOB, 'write');
     stated(FINANCE, 'use', [user(ALICE)]);
-    expect(await accessTo(person(ALICE), FINANCE, 'use')).toBe(true);
-    expect(await accessTo(person(BOB), FINANCE, 'use')).toBe(false);
+    expect(await accessTo(person(ALICE), { target: FINANCE, verb: 'use' })).toBe(true);
+    expect(await accessTo(person(BOB), { target: FINANCE, verb: 'use' })).toBe(false);
   });
 
   it('is never asked about firing, which is judged at the door', async () => {
     member(TEAM, ALICE, 'write');
     stated(DEALS, 'fire', [team]);
     // @ts-expect-error -- firing is not a verb this decision takes
-    expect(await accessTo(person(ALICE), DEALS, 'fire')).toBe(false);
+    expect(await accessTo(person(ALICE), { target: DEALS, verb: 'fire' })).toBe(false);
   });
 
   it('says no about a thing that does not exist, or an id that is not one', async () => {
     member(TEAM, ALICE, 'write');
-    expect(await accessTo(person(ALICE), { thing: 'automation', id: 'd0000000-0000-4000-8000-00000000dead' }, 'read')).toBe(false);
-    expect(await accessTo(person(ALICE), { thing: 'automation', id: 'not-a-uuid' }, 'read')).toBe(false);
+    expect(await accessTo(person(ALICE), { target: { thing: 'automation', id: 'd0000000-0000-4000-8000-00000000dead' }, verb: 'read' })).toBe(false);
+    expect(await accessTo(person(ALICE), { target: { thing: 'automation', id: 'not-a-uuid' }, verb: 'read' })).toBe(false);
   });
 });
 
@@ -219,23 +239,23 @@ describe('readableIds', () => {
     stated(DEALS, 'read', [team]);
     stated(NOTES, 'read', [user(BOB)]);
     stated(ELSEWHERE, 'read', [user(ALICE)], OTHER_TEAM);
-    expect(await readableIds(person(ALICE), 'automation', [TEAM, OTHER_TEAM])).toEqual(new Set([DEALS.id, ELSEWHERE.id]));
-    expect(await readableIds(person(ALICE), 'automation', [TEAM])).toEqual(new Set([DEALS.id]));
+    expect(await readableIds(person(ALICE), { thing: 'automation', teamIds: [TEAM, OTHER_TEAM] })).toEqual(new Set([DEALS.id, ELSEWHERE.id]));
+    expect(await readableIds(person(ALICE), { thing: 'automation', teamIds: [TEAM] })).toEqual(new Set([DEALS.id]));
   });
 
   it('lists nothing on a team the caller is not on, or one their credential is not pinned to', async () => {
     member(TEAM, ALICE, 'write');
     member(OTHER_TEAM, ALICE, 'write');
     stated(ELSEWHERE, 'read', [team], OTHER_TEAM);
-    expect(await readableIds(person(BOB), 'automation', [TEAM, OTHER_TEAM])).toEqual(new Set());
-    expect(await readableIds(person(ALICE, { pinnedTeamId: TEAM }), 'automation', [OTHER_TEAM])).toEqual(new Set());
+    expect(await readableIds(person(BOB), { thing: 'automation', teamIds: [TEAM, OTHER_TEAM] })).toEqual(new Set());
+    expect(await readableIds(person(ALICE, { pinnedTeamId: TEAM }), { thing: 'automation', teamIds: [OTHER_TEAM] })).toEqual(new Set());
   });
 
   it('lists connections by their use list, and a machine principal by team grants on its own team', async () => {
     stated(FINANCE, 'use', [team]);
     stated(ELSEWHERE, 'read', [team], OTHER_TEAM);
-    expect(await readableIds(machine(), 'connection', [TEAM])).toEqual(new Set([FINANCE.id]));
-    expect(await readableIds(machine(), 'automation', [TEAM, OTHER_TEAM])).toEqual(new Set());
+    expect(await readableIds(machine(), { thing: 'connection', teamIds: [TEAM] })).toEqual(new Set([FINANCE.id]));
+    expect(await readableIds(machine(), { thing: 'automation', teamIds: [TEAM, OTHER_TEAM] })).toEqual(new Set());
   });
 });
 
@@ -245,7 +265,7 @@ describe('setStatement', () => {
     member(TEAM, BOB, 'write');
     stated(DEALS, 'write', [user(ALICE)]);
     stated(DEALS, 'read', [team]);
-    await setStatement(person(ALICE), DEALS, 'read', [user(ALICE), user(BOB)]);
+    await setStatement(person(ALICE), { target: DEALS, verb: 'read', grantees: [user(ALICE), user(BOB)] });
     expect(listOf(DEALS, 'read')).toEqual([user(ALICE), user(BOB)]);
     expect(listOf(DEALS, 'write')).toEqual([user(ALICE)]);
   });
@@ -254,7 +274,7 @@ describe('setStatement', () => {
     member(TEAM, ALICE, 'write');
     stated(DEALS, 'write', [user(ALICE)]);
     stated(DEALS, 'read', [team]);
-    await expect(setStatement(person(ALICE), DEALS, 'read', [])).rejects.toMatchObject({ refusal: 'empty' });
+    await expect(setStatement(person(ALICE), { target: DEALS, verb: 'read', grantees: [] })).rejects.toMatchObject({ refusal: 'empty' });
     expect(listOf(DEALS, 'read')).toEqual([team]);
   });
 
@@ -263,11 +283,11 @@ describe('setStatement', () => {
     member(TEAM, BOB, 'write');
     stated(DEALS, 'write', [user(ALICE)]);
     stated(DEALS, 'read', [team]);
-    await expect(setStatement(person(BOB), DEALS, 'read', [user(BOB)])).rejects.toBeInstanceOf(StatementRefusedError);
-    await expect(setStatement(person(BOB), DEALS, 'write', [user(BOB)])).rejects.toMatchObject({ refusal: 'not_allowed' });
+    await expect(setStatement(person(BOB), { target: DEALS, verb: 'read', grantees: [user(BOB)] })).rejects.toBeInstanceOf(StatementRefusedError);
+    await expect(setStatement(person(BOB), { target: DEALS, verb: 'write', grantees: [user(BOB)] })).rejects.toMatchObject({ refusal: 'not_allowed' });
     expect(listOf(DEALS, 'write')).toEqual([user(ALICE)]);
 
-    await setStatement(person(ALICE), DEALS, 'fire', [{ kind: 'anyone' }]);
+    await setStatement(person(ALICE), { target: DEALS, verb: 'fire', grantees: [{ kind: 'anyone' }] });
     expect(listOf(DEALS, 'fire')).toEqual([{ kind: 'anyone' }]);
   });
 
@@ -276,19 +296,19 @@ describe('setStatement', () => {
     member(TEAM, BOB, 'write');
     member(TEAM, CAROL, 'read');
     stated(FINANCE, 'use', [user(ALICE), user(CAROL)]);
-    await expect(setStatement(person(BOB), FINANCE, 'use', [user(BOB)])).rejects.toMatchObject({ refusal: 'not_allowed' });
-    await expect(setStatement(person(CAROL), FINANCE, 'use', [team])).rejects.toMatchObject({ refusal: 'not_allowed' });
-    await setStatement(person(ALICE), FINANCE, 'use', [team]);
+    await expect(setStatement(person(BOB), { target: FINANCE, verb: 'use', grantees: [user(BOB)] })).rejects.toMatchObject({ refusal: 'not_allowed' });
+    await expect(setStatement(person(CAROL), { target: FINANCE, verb: 'use', grantees: [team] })).rejects.toMatchObject({ refusal: 'not_allowed' });
+    await setStatement(person(ALICE), { target: FINANCE, verb: 'use', grantees: [team] });
     expect(listOf(FINANCE, 'use')).toEqual([team]);
   });
 
   it('lets a write member state a thing that has no statement yet, as at creation', async () => {
     member(TEAM, ALICE, 'write');
     member(TEAM, CAROL, 'read');
-    await expect(setStatement(person(CAROL), DEALS, 'write', [team])).rejects.toMatchObject({ refusal: 'not_allowed' });
-    await setStatement(person(ALICE), DEALS, 'write', [user(ALICE)]);
-    await setStatement(person(ALICE), DEALS, 'read', [team]);
-    await setStatement(machine(), FINANCE, 'use', [team]);
+    await expect(setStatement(person(CAROL), { target: DEALS, verb: 'write', grantees: [team] })).rejects.toMatchObject({ refusal: 'not_allowed' });
+    await setStatement(person(ALICE), { target: DEALS, verb: 'write', grantees: [user(ALICE)] });
+    await setStatement(person(ALICE), { target: DEALS, verb: 'read', grantees: [team] });
+    await setStatement(machine(), { target: FINANCE, verb: 'use', grantees: [team] });
     expect(listOf(DEALS, 'write')).toEqual([user(ALICE)]);
     expect(listOf(DEALS, 'read')).toEqual([team]);
     expect(listOf(FINANCE, 'use')).toEqual([team]);
@@ -297,15 +317,15 @@ describe('setStatement', () => {
   it('gives reading, writing and using only to the team or its members; firing also admits outsiders', async () => {
     member(TEAM, ALICE, 'write');
     stated(DEALS, 'write', [user(ALICE)]);
-    await expect(setStatement(person(ALICE), DEALS, 'read', [{ kind: 'domain', domain: 'acme.com' }])).rejects.toMatchObject({
+    await expect(setStatement(person(ALICE), { target: DEALS, verb: 'read', grantees: [{ kind: 'domain', domain: 'acme.com' }] })).rejects.toMatchObject({
       refusal: 'outsider',
     });
-    await expect(setStatement(person(ALICE), DEALS, 'read', [user(BOB)])).rejects.toMatchObject({ refusal: 'not_a_member' });
-    await setStatement(person(ALICE), DEALS, 'fire', [
+    await expect(setStatement(person(ALICE), { target: DEALS, verb: 'read', grantees: [user(BOB)] })).rejects.toMatchObject({ refusal: 'not_a_member' });
+    await setStatement(person(ALICE), { target: DEALS, verb: 'fire', grantees: [
       { kind: 'domain', domain: ' Acme.COM ' },
       { kind: 'email', address: 'Pat@Example.com' },
       { kind: 'phone', digits: '+44 7700 900000' },
-    ]);
+    ] });
     expect(listOf(DEALS, 'fire')).toEqual([
       { kind: 'domain', domain: 'acme.com' },
       { kind: 'email', address: 'pat@example.com' },
@@ -313,10 +333,42 @@ describe('setStatement', () => {
     ]);
   });
 
+  it('names only write members on the write list, so it never ends with nobody who can write', async () => {
+    member(TEAM, ALICE, 'write');
+    member(TEAM, CAROL, 'read');
+    stated(DEALS, 'write', [user(ALICE)]);
+    await expect(
+      setStatement(person(ALICE), { target: DEALS, verb: 'write', grantees: [user(CAROL)] }),
+    ).rejects.toMatchObject({ refusal: 'not_a_writer' });
+    expect(listOf(DEALS, 'write')).toEqual([user(ALICE)]);
+    await setStatement(person(ALICE), { target: DEALS, verb: 'read', grantees: [user(CAROL)] });
+    expect(listOf(DEALS, 'read')).toEqual([user(CAROL)]);
+  });
+
+  it('stores a user id in its lowercase form, so it matches whoever it names', async () => {
+    member(TEAM, ALICE, 'write');
+    member(TEAM, BOB, 'write');
+    stated(DEALS, 'write', [user(ALICE)]);
+    await setStatement(person(ALICE), { target: DEALS, verb: 'read', grantees: [user(BOB.toUpperCase())] });
+    expect(listOf(DEALS, 'read')).toEqual([user(BOB)]);
+    expect(await accessTo(person(BOB), { target: DEALS, verb: 'read' })).toBe(true);
+    expect(await readableIds(person(BOB), { thing: 'automation', teamIds: [TEAM] })).toEqual(new Set([DEALS.id]));
+  });
+
+  it('opens the creation window only while nothing at all is stated about the thing', async () => {
+    member(TEAM, ALICE, 'write');
+    member(TEAM, BOB, 'write');
+    stated(DEALS, 'read', [user(BOB)]);
+    await expect(
+      setStatement(person(ALICE), { target: DEALS, verb: 'write', grantees: [user(ALICE)] }),
+    ).rejects.toMatchObject({ refusal: 'not_allowed' });
+    expect(listOf(DEALS, 'write')).toEqual([]);
+  });
+
   it('refuses a thing that does not exist', async () => {
     member(TEAM, ALICE, 'write');
     await expect(
-      setStatement(person(ALICE), { thing: 'automation', id: 'd0000000-0000-4000-8000-00000000dead' }, 'read', [team]),
+      setStatement(person(ALICE), { target: { thing: 'automation', id: 'd0000000-0000-4000-8000-00000000dead' }, verb: 'read', grantees: [team] }),
     ).rejects.toMatchObject({ refusal: 'not_found' });
   });
 });
@@ -354,6 +406,29 @@ describe('passOnWhatTheyHeld, when a member leaves the team', () => {
 
     leaves(TEAM, ALICE);
     await passOnWhatTheyHeld({ teamId: TEAM, userId: ALICE });
+    expect(listOf(DEALS, 'read')).toEqual([user(BOB)]);
+  });
+
+  it('counts a read member on a write list as nobody who can write', async () => {
+    jest.spyOn(logger, 'info').mockImplementation(() => undefined);
+    member(TEAM, ALICE, 'write');
+    member(TEAM, BOB, 'write');
+    member(TEAM, CAROL, 'read');
+    stated(DEALS, 'write', [user(ALICE), user(CAROL)]);
+
+    leaves(TEAM, ALICE);
+    await passOnWhatTheyHeld({ teamId: TEAM, userId: ALICE });
+    expect(listOf(DEALS, 'write')).toEqual([user(BOB)]);
+  });
+
+  it('finds what a leaver held whatever case their id arrives in', async () => {
+    jest.spyOn(logger, 'info').mockImplementation(() => undefined);
+    member(TEAM, ALICE, 'write');
+    member(TEAM, BOB, 'write');
+    stated(DEALS, 'read', [user(ALICE)]);
+
+    leaves(TEAM, ALICE);
+    await passOnWhatTheyHeld({ teamId: TEAM, userId: ALICE.toUpperCase() });
     expect(listOf(DEALS, 'read')).toEqual([user(BOB)]);
   });
 

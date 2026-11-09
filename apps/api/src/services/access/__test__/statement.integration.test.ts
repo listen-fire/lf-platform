@@ -73,40 +73,57 @@ describe('access statements — one table, one decision', () => {
   });
 
   it('states an automation, decides from it, and lists by it', async () => {
-    await setStatement(as(alice), deals, 'write', [user(alice)]);
-    await setStatement(as(alice), deals, 'read', [team]);
+    await setStatement(as(alice), { target: deals, verb: 'write', grantees: [user(alice)] });
+    await setStatement(as(alice), { target: deals, verb: 'read', grantees: [team] });
 
-    expect(await accessTo(as(alice), deals, 'write')).toBe(true);
-    expect(await accessTo(as(bob), deals, 'write')).toBe(false);
-    expect(await accessTo(as(carol), deals, 'read')).toBe(true);
-    expect(await readableIds(as(carol), 'automation', [teamId])).toEqual(new Set([deals.id]));
+    expect(await accessTo(as(alice), { target: deals, verb: 'write' })).toBe(true);
+    expect(await accessTo(as(bob), { target: deals, verb: 'write' })).toBe(false);
+    expect(await accessTo(as(carol), { target: deals, verb: 'read' })).toBe(true);
+    expect(await readableIds(as(carol), { thing: 'automation', teamIds: [teamId] })).toEqual(new Set([deals.id]));
 
-    await setStatement(as(alice), deals, 'read', [user(alice), user(bob)]);
-    expect(await accessTo(as(carol), deals, 'read')).toBe(false);
-    expect(await readableIds(as(carol), 'automation', [teamId])).toEqual(new Set());
+    await setStatement(as(alice), { target: deals, verb: 'read', grantees: [user(alice), user(bob)] });
+    expect(await accessTo(as(carol), { target: deals, verb: 'read' })).toBe(false);
+    expect(await readableIds(as(carol), { thing: 'automation', teamIds: [teamId] })).toEqual(new Set());
     const read = await StatementStore.grantsOf(deals, { teamId, verb: 'read' });
     expect(read).toHaveLength(2);
     expect(read).toEqual(expect.arrayContaining([user(alice), user(bob)]));
   });
 
   it('decides a connection by its use list', async () => {
-    await setStatement(as(alice), finance, 'use', [user(carol)]);
-    expect(await accessTo(as(carol), finance, 'use')).toBe(true);
-    expect(await accessTo(as(bob), finance, 'use')).toBe(false);
-    expect(await readableIds(as(bob), 'connection', [teamId])).toEqual(new Set());
+    await setStatement(as(alice), { target: finance, verb: 'use', grantees: [user(carol)] });
+    expect(await accessTo(as(carol), { target: finance, verb: 'use' })).toBe(true);
+    expect(await accessTo(as(bob), { target: finance, verb: 'use' })).toBe(false);
+    expect(await readableIds(as(bob), { thing: 'connection', teamIds: [teamId] })).toEqual(new Set());
   });
 
   it('keeps a list whole when its replacement fails partway', async () => {
-    await setStatement(as(alice), deals, 'write', [user(alice)]);
+    await setStatement(as(alice), { target: deals, verb: 'write', grantees: [user(alice)] });
     await expect(
       StatementStore.replaceGrants(deals, { teamId, verb: 'write', grantees: [team, { kind: 'domain', domain: 'acme.com' }] }),
     ).rejects.toThrow(/access_statement_members_only_check/);
     expect(await StatementStore.grantsOf(deals, { teamId, verb: 'write' })).toEqual([user(alice)]);
   });
 
+  it('names write members only on the write list, stores ids lowercase, and opens creation only once', async () => {
+    await setStatement(as(alice), { target: deals, verb: 'write', grantees: [user(alice)] });
+    await expect(
+      setStatement(as(alice), { target: deals, verb: 'write', grantees: [user(carol)] }),
+    ).rejects.toMatchObject({ refusal: 'not_a_writer' });
+
+    await setStatement(as(alice), { target: deals, verb: 'read', grantees: [user(bob.toUpperCase())] });
+    expect(await StatementStore.grantsOf(deals, { teamId, verb: 'read' })).toEqual([user(bob)]);
+    expect(await accessTo(as(bob), { target: deals, verb: 'read' })).toBe(true);
+
+    await StatementStore.replaceGrants(finance, { teamId, verb: 'use', grantees: [user(carol)] });
+    expect(await StatementStore.hasAnyStatement(finance)).toBe(true);
+    await expect(
+      setStatement(as(bob), { target: finance, verb: 'use', grantees: [user(bob)] }),
+    ).rejects.toMatchObject({ refusal: 'not_allowed' });
+  });
+
   it('finds the lists that name a member', async () => {
-    await setStatement(as(alice), deals, 'write', [user(alice)]);
-    await setStatement(as(alice), finance, 'use', [user(alice), user(bob)]);
+    await setStatement(as(alice), { target: deals, verb: 'write', grantees: [user(alice)] });
+    await setStatement(as(alice), { target: finance, verb: 'use', grantees: [user(alice), user(bob)] });
     const lists = await StatementStore.listsNaming({ teamId, userId: bob });
     expect(lists).toEqual([{ target: finance, verb: 'use' }]);
   });
