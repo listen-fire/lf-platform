@@ -39,7 +39,7 @@ import { describeSource } from '../../../lib/automation/describe';
 import { resolveAutomationName } from '../../../lib/automation/naming';
 import { listAskRecordsForTeam } from '../../../services/interaction/ask_records';
 import { userProcedure as sharedUserProcedure } from '../procedures';
-import { decidesEach, readableAmong } from '../../access_route';
+import { decidesEach, readableAmong, readableOwned } from '../../access_route';
 import { Whose } from '../../../services/access/whose';
 
 /**
@@ -350,10 +350,7 @@ const homeRouter = (procedure: typeof trpc.procedure) => {
       const openRecords = (await listAskRecordsForTeam(teamId)).filter((record) => record.state === 'open');
       const askOwners = await Whose.automationsOfAsks({ askIds: openRecords.map((r) => r.askId), teamIds: [teamId] });
       const openAsks = (
-        await readableAmong(openRecords, {
-          automationOf: (r) => askOwners.get(r.askId)?.automationId ?? null,
-          teamIds: [teamId],
-        })
+        await readableOwned(openRecords, { owners: askOwners, keyOf: (r) => r.askId, teamIds: [teamId] })
       ).length;
 
       const thingsWaiting: DashboardThingWaiting[] = [];

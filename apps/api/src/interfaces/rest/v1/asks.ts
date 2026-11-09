@@ -16,7 +16,10 @@
 // `cancelAskAndWake` do not check ownership themselves, so every route that reaches
 // an ask by id compares `ask.teamId` before doing anything with it, and a
 // mismatch is a 404 rather than a 403 — another team's ask should not be
-// discoverable by probing ids.
+// discoverable by probing ids. A question a run asked is its automation's
+// besides (`access_route.ts`): the list keeps only those the caller may read,
+// one the caller may not read is a 404 too, and a cancel, which wakes the run
+// parked on it, needs write.
 //
 // offset paging
 
@@ -25,6 +28,7 @@ import { randomUUID } from 'node:crypto';
 import { Router, type Response } from 'express';
 import { z } from 'zod';
 import { currentPrincipal } from 'principal';
+import { neverAsAny } from 'movement-engine/public/types';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { AskId } from '../../../generated/kysely/asks/Ask';
@@ -40,6 +44,8 @@ import { cancelAskAndWake, createAsk } from '../../../services/asks/doors';
 import { readAskDeliveryHealth } from '../../../services/asks/webhook_delivery/worker';
 import { askSettleDelivery } from '../../../services/asks/delivery_mode';
 import { requireScope } from './require_scope';
+import { READ_ONLY_MESSAGE, decidingRouter, readableOwned, refusalOn } from '../../access_route';
+import { Whose } from '../../../services/access/whose';
 
 const ASKS_SCOPE = 'asks';
 
@@ -111,14 +117,25 @@ const listQuery = z.object({
 
 const uuidParam = z.object({ id: z.string().uuid() });
 
+/** The asks the caller may read, newest first: `want` of them, or every one the team has. */
+async function readableAsksForTeam(team: TeamId, want: number): Promise<AskRecord[]> {
+  for (let window = want; ; window *= 2) {
+    const asks = await listAsksForTeam(team, window);
+    const owners = await Whose.automationsOfAsks({ askIds: asks.map((ask) => ask.id), teamIds: [team] });
+    const readable = await readableOwned(asks, { owners, keyOf: (ask) => ask.id, teamIds: [team] });
+    if (readable.length >= want || asks.length < window) return readable.slice(0, want);
+  }
+}
+
 const asksRouter: ReturnType<typeof Router> = Router();
+const route = decidingRouter(asksRouter, '/v1/asks');
 
 asksRouter.use(requireScope(ASKS_SCOPE));
 
 // GET /api/v1/asks/health — is the settle notification path alive, and is
 // anything stuck in it. Publishes the delivery MODE so a split deployment whose
 // two halves disagree can be seen to, rather than falling silent.
-asksRouter.get('/health', async (_req, res) => {
+route.get('/health', { exempt: 'the settle notification path, no question' }, async (_req, res) => {
   try {
     return res.status(200).json({ data: { delivery: askSettleDelivery(), ...(await readAskDeliveryHealth()) } });
   } catch (err) {
@@ -127,7 +144,7 @@ asksRouter.get('/health', async (_req, res) => {
 });
 
 // POST /api/v1/asks — raise a question. Always creates (F16).
-asksRouter.post('/', async (req, res) => {
+route.post('/', { exempt: 'raises a question of no automation, which only team membership decides' }, async (req, res) => {
   const parsed = createSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ error: 'invalid_body', issues: parsed.error.format() });
@@ -151,8 +168,8 @@ asksRouter.post('/', async (req, res) => {
   }
 });
 
-// GET /api/v1/asks — this team's asks, newest first, offset-paged.
-asksRouter.get('/', async (req, res) => {
+// GET /api/v1/asks — this team's asks the caller may read, newest first, offset-paged.
+route.get('/', { thing: 'automation', verb: 'read' }, async (req, res) => {
   const parsed = listQuery.safeParse(req.query);
   if (!parsed.success) {
     return res.status(400).json({ error: 'invalid_query', issues: parsed.error.format() });
@@ -161,7 +178,7 @@ asksRouter.get('/', async (req, res) => {
   try {
     // The store's list is the whole team's, newest first; paging slices it here
     // rather than growing the store a paging surface it has one caller for.
-    const all = await listAsksForTeam(teamId(), offset + limit);
+    const all = await readableAsksForTeam(teamId(), offset + limit);
     const page = all.slice(offset);
     return res.status(200).json({
       data: page.map(view),
@@ -172,11 +189,16 @@ asksRouter.get('/', async (req, res) => {
   }
 });
 
-// GET /api/v1/asks/:id — one ask. Another team's is a 404, not a 403.
-asksRouter.get('/:id', async (req, res) => {
+// GET /api/v1/asks/:id — one ask. Another team's, or one whose automation the
+// caller may not read, is a 404, not a 403.
+route.get('/:id', { thing: 'automation', verb: 'read' }, async (req, res) => {
   const parsed = uuidParam.safeParse(req.params);
   if (!parsed.success) return res.status(404).json({ error: 'not_found' });
   try {
+    const owner = await Whose.automationOfAsk({ askId: parsed.data.id, teamIds: [teamId()] });
+    if (owner === undefined || (await refusalOn({ automationId: owner.automationId, verb: 'read' })) !== undefined) {
+      return res.status(404).json({ error: 'not_found' });
+    }
     const ask = await getAsk(parsed.data.id as AskId);
     if (!ask || ask.teamId !== teamId()) return res.status(404).json({ error: 'not_found' });
     return res.status(200).json({ data: view(ask) });
@@ -188,10 +210,23 @@ asksRouter.get('/:id', async (req, res) => {
 // POST /api/v1/asks/:id/cancel — withdraw an unanswered question. Refuses
 // OBSERVABLY on an already-settled one: the first outcome stands, and the
 // caller is told which one it was rather than being handed a silent no-op.
-asksRouter.post('/:id/cancel', async (req, res) => {
+route.post('/:id/cancel', { thing: 'automation', verb: 'write' }, async (req, res) => {
   const parsed = uuidParam.safeParse(req.params);
   if (!parsed.success) return res.status(404).json({ error: 'not_found' });
   try {
+    const owner = await Whose.automationOfAsk({ askId: parsed.data.id, teamIds: [teamId()] });
+    if (owner === undefined) return res.status(404).json({ error: 'not_found' });
+    const refusal = await refusalOn({ automationId: owner.automationId, verb: 'write' });
+    switch (refusal) {
+      case undefined:
+        break;
+      case 'unseen':
+        return res.status(404).json({ error: 'not_found' });
+      case 'read_only':
+        return res.status(403).json({ error: 'forbidden', message: READ_ONLY_MESSAGE });
+      default:
+        return neverAsAny(refusal);
+    }
     const existing = await getAsk(parsed.data.id as AskId);
     if (!existing || existing.teamId !== teamId()) return res.status(404).json({ error: 'not_found' });
     const outcome = await cancelAskAndWake({ id: existing.id });

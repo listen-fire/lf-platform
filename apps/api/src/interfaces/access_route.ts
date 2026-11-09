@@ -84,8 +84,9 @@ const READ_ONLY_MESSAGE = 'You may read this automation but not change it.';
 
 /**
  * Whether the caller may do `verb` to this automation, and if not, why not.
- * Something that belongs to no automation has no statement; team membership,
- * which already admitted the request, decides it.
+ * Something that belongs to no automation (null: a listen whose movement is
+ * gone, a question a REST caller asked) has no statement; team membership,
+ * which already admitted the request, decides it. A run always names one.
  */
 async function refusalOn(asked: {
   automationId: string | null;
@@ -123,6 +124,24 @@ async function readableAmong<T>(
   });
 }
 
+/**
+ * The items whose owner (`Whose`, keyed by `keyOf`) the caller may read. An
+ * item the owners leave out is one whose automation cannot be traced, and is
+ * hidden; an item of no automation stays.
+ */
+async function readableOwned<T>(
+  items: readonly T[],
+  options: { owners: ReadonlyMap<string, { automationId: string | null }>; keyOf: (item: T) => string; teamIds: readonly string[] },
+): Promise<T[]> {
+  const traced = items.flatMap((item) => {
+    const owner = options.owners.get(options.keyOf(item));
+    return owner === undefined ? [] : [{ item, automationId: owner.automationId }];
+  });
+  return (await readableAmong(traced, { automationOf: (entry) => entry.automationId, teamIds: options.teamIds })).map(
+    (entry) => entry.item,
+  );
+}
+
 export {
   decides,
   decidesEach,
@@ -132,6 +151,7 @@ export {
   refusalOn,
   unseen,
   readableAmong,
+  readableOwned,
   EXEMPT,
   READ_ONLY_MESSAGE,
   type Decision,

@@ -55,6 +55,16 @@ function bodyOf(base64: string): { body: string; bodyEncoding: 'utf8' | 'base64'
   }
 }
 
+/** Refused before any delivery is looked at: to anyone but a team admin. */
+export function adminRefusal(reader: RequestReader): ShownRequest | undefined {
+  return reader.access === 'write' ? undefined : { outcome: 'refused', reason: "only the team's admins may read a delivery's request" };
+}
+
+/** The answer for a delivery the team does not have. */
+export function noSuchDelivery(deliveryId: string): ShownRequest {
+  return { outcome: 'refused', reason: `no delivery ${deliveryId} is kept for this team: a delivery past its retention is forgotten` };
+}
+
 /**
  * Show `deliveryId`'s kept request to `reader`, recording the read in the
  * same write. Refused, recording nothing, to anyone but a team admin, and for
@@ -62,16 +72,15 @@ function bodyOf(base64: string): { body: string; bodyEncoding: 'utf8' | 'base64'
  */
 export async function showDeliveryRequest(input: { teamId: TeamId; deliveryId: string; reader: RequestReader }): Promise<ShownRequest> {
   const { teamId, deliveryId, reader } = input;
-  if (reader.access !== 'write') {
-    return { outcome: 'refused', reason: "only the team's admins may read a delivery's request" };
-  }
+  const refused = adminRefusal(reader);
+  if (refused !== undefined) return refused;
   return getAutomationsQb(['delivery', 'delivery_request_read']).transaction().execute(async (trx): Promise<ShownRequest> => {
     const { rows } = await sql<{ id: string; received_at: Date; source: string; replay_of: string | null; request: unknown }>`
       select id::text as id, received_at, source, replay_of::text as replay_of, request
       from automations.delivery
       where team_id = ${teamId}::uuid and id::text = ${deliveryId}::text`.execute(trx);
     const row = rows[0];
-    if (row === undefined) return { outcome: 'refused', reason: `no delivery ${deliveryId} is kept for this team: a delivery past its retention is forgotten` };
+    if (row === undefined) return noSuchDelivery(deliveryId);
     if (row.request === null) {
       return {
         outcome: 'refused',

@@ -29,7 +29,7 @@ import OpsEventType from '../../../generated/kysely/public/OpsEventType';
 import OpsSeverity from '../../../generated/kysely/public/OpsSeverity';
 import { UserService } from '../../../services/user';
 import { requireScope } from './require_scope';
-import { decidingRouter, readableAmong, refusalOn } from '../../access_route';
+import { decidingRouter, readableOwned, refusalOn } from '../../access_route';
 import { Whose } from '../../../services/access/whose';
 import { teamIdSchema } from '../../../lib/team_id';
 
@@ -82,7 +82,7 @@ const listAsksHandler: RequestHandler = async (_req, res) => {
 async function readableAsks(teamId: string) {
   const asks = await listOpenAsksForTeam(teamIdSchema.parse(teamId));
   const owners = await Whose.automationsOfAsks({ askIds: asks.map((a) => String(a.requestId)), teamIds: [teamId] });
-  return readableAmong(asks, { automationOf: (a) => owners.get(String(a.requestId))?.automationId ?? null, teamIds: [teamId] });
+  return readableOwned(asks, { owners, keyOf: (a) => String(a.requestId), teamIds: [teamId] });
 }
 
 const answerAskSchema = z.object({

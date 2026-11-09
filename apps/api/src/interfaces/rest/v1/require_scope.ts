@@ -14,7 +14,7 @@ import type { RequestHandler } from 'express';
  * in the config file and behaves as empty at the door.
  */
 function requireScope(scope: string): RequestHandler {
-  return (_req, res, next) => {
+  return function scopeGate(_req, res, next) {
     const scopes: readonly string[] | undefined = res.locals.apiKeyScopes;
     if (!scopes?.some((granted) => granted === scope || granted === '*')) {
       res.status(403).json({ error: `API key missing required scope: ${scope}` });

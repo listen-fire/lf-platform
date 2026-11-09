@@ -21,6 +21,7 @@ import { drainUntilIdle, inProcessNotifier, resetWorkHandlersForTests, setWorkNo
 import { registerCoreWork } from '../../../work/register';
 import { runMovementAsync } from '../run_now';
 import { mintMovementVersionIfChanged } from '../version_store';
+import { Whose } from '../../../access/whose';
 
 const ASK = 'import { `@lf/ask` as ask } from adapters\nqa = connect ask\n';
 const AFTER = (t: string) => `  n = write qa-[:Form]-> { Prompt: ${t}, Fields: ["after"] }\n  return n\n}\nlisten to manual fire go\n`;
@@ -51,7 +52,7 @@ describe('a 0.12 Run now that pauses', () => {
     await cleanupTeam(teamId);
   });
 
-  async function pressed(name: keyof typeof PROGRAMS): Promise<TriggerRunId> {
+  async function pressed(name: keyof typeof PROGRAMS): Promise<{ runId: TriggerRunId; movementId: string }> {
     const movementId = randomUUID();
     await getAutomationsQb(['movement'])
       .insertInto('movement')
@@ -61,7 +62,7 @@ describe('a 0.12 Run now that pauses', () => {
     const queued = await runMovementAsync({ teamId, movementId, text: `pressed: ${name}` });
     if (!queued.ok) throw new Error(queued.errors.join('; '));
     await drainUntilIdle({ teamId, heartbeatMs: false });
-    return queued.runId as TriggerRunId;
+    return { runId: queued.runId as TriggerRunId, movementId };
   }
 
   const status = (runId: TriggerRunId) =>
@@ -74,7 +75,7 @@ describe('a 0.12 Run now that pauses', () => {
   });
 
   it('on a timer parks, and wakes on 0.12 with what it had bound', async () => {
-    const runId = await pressed('timer');
+    const { runId } = await pressed('timer');
     expect(await status(runId)).toMatchObject({ status: 'parked', failure_reason: null });
     const past = new Date(Date.now() - 1000);
     await getAutomationsQb(['parked_run']).updateTable('parked_run').set({ wake_at: past }).where('run_id', '=', runId).execute();
@@ -87,17 +88,19 @@ describe('a 0.12 Run now that pauses', () => {
   });
 
   it('on an ask parks on its key, and an answer at the platform door wakes it', async () => {
-    const runId = await pressed('ask');
+    const { runId, movementId } = await pressed('ask');
     expect(await status(runId)).toMatchObject({ status: 'parked' });
     const ask = await getAsksQb(['ask']).selectFrom('ask').where('team_id', '=', teamId).where('prompt', '=', 'Deal?').select('id').executeTakeFirstOrThrow();
     expect(await answerAskById(ask.id as AskId, { Budget: '10' })).toMatchObject({ kind: 'answered' });
     await drainUntilIdle({ teamId, heartbeatMs: false });
     expect(await status(runId)).toMatchObject({ status: 'success' });
     expect(await asked()).toEqual(['Deal?', 'pressed: ask']);
+    // 0.12's host told the question which run asked it: settled, it is still that automation's.
+    expect(await Whose.automationOfAsk({ askId: String(ask.id), teamIds: [teamId] })).toEqual({ teamId, automationId: movementId });
   });
 
   it('on a callback parks, and a call runs its body and then the awaiter', async () => {
-    const runId = await pressed('callback');
+    const { runId } = await pressed('callback');
     expect(await status(runId)).toMatchObject({ status: 'parked' });
     const callback = await getAutomationsQb(['callback']).selectFrom('callback').where('run_id', '=', runId).select('id').executeTakeFirstOrThrow();
     expect(await fireCallback({ id: callback.id, values: {} })).toMatchObject({ kind: 'recorded' });

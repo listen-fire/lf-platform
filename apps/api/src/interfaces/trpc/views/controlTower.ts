@@ -39,14 +39,14 @@ import {
   type AskRecordSummary,
 } from '../../../services/interaction/ask_records';
 import { userProcedure as sharedUserProcedure } from '../procedures';
-import { decidesEach, readableAmong, unseen, type Decision } from '../../access_route';
+import { decidesEach, readableOwned, unseen, type Decision } from '../../access_route';
 import { cannotChange } from '../access';
 import { Whose } from '../../../services/access/whose';
 
 /** The runs whose automation the caller may read. */
 async function readableRuns<T extends { runId: string }>(runs: T[], teamId: string): Promise<T[]> {
   const owners = await Whose.automationsOfRuns({ runIds: runs.map((r) => r.runId), teamIds: [teamId] });
-  return readableAmong(runs, { automationOf: (r) => owners.get(r.runId)?.automationId ?? null, teamIds: [teamId] });
+  return readableOwned(runs, { owners, keyOf: (r) => r.runId, teamIds: [teamId] });
 }
 
 /** Refuse an operator action on a run the caller may not change, as for a run that is not there. */
@@ -72,7 +72,7 @@ const controlTowerRouter = (procedure: typeof trpc.procedure) => {
       const ctx = currentContext();
       const asks = await listAskRecordsForTeam(ctx.user.teamId as TeamId);
       const owners = await Whose.automationsOfAsks({ askIds: asks.map((a) => a.askId), teamIds: [ctx.user.teamId] });
-      return readableAmong(asks, { automationOf: (a) => owners.get(a.askId)?.automationId ?? null, teamIds: [ctx.user.teamId] });
+      return readableOwned(asks, { owners, keyOf: (a) => a.askId, teamIds: [ctx.user.teamId] });
     }),
 
     /** Answer a new-store question in place — the same lattice transition every

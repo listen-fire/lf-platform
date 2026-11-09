@@ -39,6 +39,7 @@ import {
   type ActingUserLookup,
 } from 'movement-engine/public/host';
 import { ledgeredAdapters } from '../../inbound/loop_breaker';
+import { runWriteKeeper } from '../../movement_engine/run_writes';
 import { makeRecorderParks } from '../../movement_engine/park_sink';
 import { postgresRunHostStore } from '../../movement_engine/run_host_store';
 import { parkSources } from 'movement-engine/public/run-host';
@@ -147,7 +148,11 @@ export function productionEngineHost(input: {
     // no run, and its writes are rehearsed.
     adapters:
       input.triggerRunId !== undefined
-        ? ledgeredAdapters(adapters, { teamId: input.teamId, runId: input.triggerRunId })
+        ? ledgeredAdapters(adapters, {
+            teamId: input.teamId,
+            runId: input.triggerRunId,
+            keep: runWriteKeeper({ teamId: input.teamId, runId: input.triggerRunId }),
+          })
         : { resolve: (resolution) => adapters.resolve(resolution), call: (call) => adapters.call(call) },
     llm: {
       client: billedLlmClient(makeAnthropicLlmClient({ cancel }), usage),

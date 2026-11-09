@@ -1,12 +1,16 @@
 // Every route that reaches an automation or a connection asks the access
 // decision, or is registered as exempt with its reason. The walk covers the
-// REST tree under /v1/automation, every MCP automation tool's endpoint, and
-// every tRPC procedure, so a route added without a decision fails here.
+// REST trees under /v1/automation and /v1/asks (every layer of them, nested
+// routers included), every MCP automation tool's endpoint, and every tRPC
+// procedure, so a route added without a decision fails here.
 //
 // Then each route that decides is called as a write member of the team, on an
 // automation whose statements name only someone else. It must refuse exactly
 // as it refuses a name that does not exist, or leave the automation out of its
-// list, and it must have asked the decision to get there.
+// list, and it must have asked the decision to get there. Again with read
+// alone stated for the caller: a read route answers as it does for the
+// automation, a list shows it, and a write route gives the read-only refusal.
+// Neither pass may reach what a write route changes.
 
 import { EventEmitter } from 'node:events';
 
@@ -22,7 +26,7 @@ const ALICE = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const BOB = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
 /** What a route is asked about: the seeded automation's, or names that exist nowhere. */
-type Refs = { automationId: string; automationName: string; runId: string; listenId: string; askId: string };
+type Refs = { automationId: string; automationName: string; runId: string; listenId: string; askId: string; deliveryId: string };
 
 const mockSeeded: Refs = {
   automationId: 'd0000000-0000-4000-8000-000000000001',
@@ -30,6 +34,7 @@ const mockSeeded: Refs = {
   runId: 'e0000000-0000-4000-8000-000000000001',
   listenId: 'f0000000-0000-4000-8000-000000000001',
   askId: 'a0000000-0000-4000-8000-000000000001',
+  deliveryId: 'b0000000-0000-4000-8000-000000000001',
 };
 
 const SEEDED = mockSeeded;
@@ -40,6 +45,7 @@ const MISSING: Refs = {
   runId: 'e0000000-0000-4000-8000-00000000dead',
   listenId: 'f0000000-0000-4000-8000-00000000dead',
   askId: 'a0000000-0000-4000-8000-00000000dead',
+  deliveryId: 'b0000000-0000-4000-8000-00000000dead',
 };
 
 /** The same name in a second team, which the caller may read: a lookup must find it. */
@@ -47,6 +53,17 @@ const SECOND_DEALS = 'd0000000-0000-4000-8000-000000000002';
 const FINANCE: Target<'connection'> = { thing: 'connection', id: 'c0000000-0000-4000-8000-000000000001' };
 
 type Row = { teamId: string; target: Target; verb: Verb; grantee: Grantee };
+
+/** What a write route changes: none of it may be reached by a caller who may not write. */
+const mockEffects = {
+  deleteMovement: jest.fn(async () => true),
+  runMovementAsync: jest.fn(async () => ({ ok: true, runId: mockSeeded.runId, status: 'running', movementName: 'Deals' })),
+  abortRun: jest.fn(async () => ({ runId: mockSeeded.runId })),
+  resumeRun: jest.fn(async () => ({ runId: mockSeeded.runId, resumed: 1 })),
+  replayThroughListen: jest.fn(async () => ({ outcome: 'replayed', runIds: [mockSeeded.runId] })),
+  resumeListen: jest.fn(async () => ({ resumed: true, held: 0 })),
+  cancelAskAndWake: jest.fn(async () => ({ ok: false, reason: 'not_found' })),
+};
 
 const mockState: {
   things: Map<string, string>;
@@ -112,7 +129,7 @@ jest.mock('../../services/access/statement', () => {
 });
 
 jest.mock('../../services/access/whose', () => {
-  type Owner = { teamId: string; automationId: string | null };
+  type Owner = { teamId: string; automationId: string };
   const owners = (seeded: string) => (ids: readonly string[]) =>
     new Map<string, Owner>(
       ids.flatMap((id) => (id === seeded ? [[id, { teamId: mockTeam, automationId: mockSeeded.automationId }] as const] : [])),
@@ -126,6 +143,10 @@ jest.mock('../../services/access/whose', () => {
       automationsOfRuns: async (asked: { runIds: string[] }) => runs(asked.runIds),
       automationsOfListens: async (asked: { triggerIds: string[] }) => listens(asked.triggerIds),
       automationsOfAsks: async (asked: { askIds: string[] }) => asks(asked.askIds),
+      automationsReachedBy: async (asked: { deliveryId: string }) => ({
+        automationIds: new Set(asked.deliveryId === mockSeeded.deliveryId ? [mockSeeded.automationId] : []),
+        untraced: false,
+      }),
       automationOfRun: async (asked: { runId: string }) => runs([asked.runId]).get(asked.runId),
       automationOfListen: async (asked: { triggerId: string }) => listens([asked.triggerId]).get(asked.triggerId),
       automationOfAsk: async (asked: { askId: string }) => asks([asked.askId]).get(asked.askId),
@@ -274,7 +295,7 @@ jest.mock('../../services/translation_graph/movement/provision', () => {
       const found = mockState.automations.find((a) => a.teamId === input.teamId && a.id === input.id);
       return found === undefined ? null : item(found);
     },
-    deleteMovement: async () => true,
+    deleteMovement: () => mockEffects.deleteMovement(),
   };
 });
 
@@ -286,7 +307,7 @@ jest.mock('../../services/translation_graph/movement/story_token', () => ({
 
 jest.mock('../../services/translation_graph/movement/run_now', () => ({
   ...jest.requireActual('../../services/translation_graph/movement/run_now'),
-  runMovementAsync: async () => ({ ok: true, runId: mockSeeded.runId, status: 'running', movementName: 'Deals' }),
+  runMovementAsync: () => mockEffects.runMovementAsync(),
   getMovementRunStatus: async () => ({ runId: mockSeeded.runId, status: 'success' }),
   listMovementRuns: async () => [{ runId: mockSeeded.runId }],
   inspectMovementRun: async () => ({ runId: mockSeeded.runId }),
@@ -294,8 +315,8 @@ jest.mock('../../services/translation_graph/movement/run_now', () => ({
 
 jest.mock('../../services/interaction/operator', () => ({
   ...jest.requireActual('../../services/interaction/operator'),
-  abortRun: async () => ({ runId: mockSeeded.runId }),
-  resumeRun: async () => ({ runId: mockSeeded.runId, resumed: 1 }),
+  abortRun: () => mockEffects.abortRun(),
+  resumeRun: () => mockEffects.resumeRun(),
 }));
 
 jest.mock('../../services/interaction/answer_surfaces', () => ({
@@ -328,13 +349,57 @@ jest.mock('../../services/inbound/arrival_ledger', () => ({
 
 jest.mock('../../services/inbound/listen_replay', () => ({
   ...jest.requireActual('../../services/inbound/listen_replay'),
-  replayThroughListen: async () => ({ outcome: 'replayed', runIds: [mockSeeded.runId] }),
+  replayThroughListen: () => mockEffects.replayThroughListen(),
 }));
 
 jest.mock('../../services/inbound/listen_pause', () => ({
   ...jest.requireActual('../../services/inbound/listen_pause'),
-  resumeListen: async () => ({ resumed: true, held: 0 }),
+  resumeListen: () => mockEffects.resumeListen(),
 }));
+
+jest.mock('../../services/asks/store', () => {
+  const ask = {
+    id: mockSeeded.askId,
+    teamId: mockTeam,
+    family: 'Check',
+    answerType: null,
+    prompt: 'Close Deals?',
+    detail: null,
+    options: null,
+    rows: null,
+    state: 'open',
+    answer: null,
+    token: 'ask_token',
+    url: 'https://example.test/api/asks/ask_token',
+    tokenExpiresAt: new Date(0),
+    provenance: { runId: mockSeeded.runId },
+    callbackUrl: null,
+    createdAt: new Date(0),
+    answeredAt: null,
+    expiredAt: null,
+  };
+  return {
+    ...jest.requireActual('../../services/asks/store'),
+    getAsk: async (id: string) => (id === mockSeeded.askId ? ask : null),
+    listAsksForTeam: async (teamId: string) => (teamId === mockTeam ? [ask] : []),
+  };
+});
+
+jest.mock('../../services/asks/doors', () => ({
+  ...jest.requireActual('../../services/asks/doors'),
+  cancelAskAndWake: () => mockEffects.cancelAskAndWake(),
+}));
+
+jest.mock('../../services/inbound/show_request', () => {
+  const actual = jest.requireActual('../../services/inbound/show_request');
+  return {
+    ...actual,
+    showDeliveryRequest: async (input: { deliveryId: string }) =>
+      input.deliveryId === mockSeeded.deliveryId
+        ? { outcome: 'shown', deliveryId: input.deliveryId, receivedAt: new Date(0), source: 'webhook', replayOf: null, kept: { kind: 'page', adapter: 'manual', credential: null, arrivals: [] } }
+        : actual.noSuchDelivery(input.deliveryId),
+  };
+});
 
 jest.mock('../../services/user', () => ({
   UserService: { getById: async (id: string) => ({ id, email: 'alice@example.com', username: 'alice' }) },
@@ -348,10 +413,15 @@ jest.mock('../../lib/message_queue', () => {
 
 import { automationConnectorOptions } from '../mcp/connectors/automation';
 import { automationRouter } from '../rest/v1/automation';
+import { asksRouter } from '../rest/v1/asks';
 import { viewsRouter } from '../trpc/views';
-import { registeredDecisions, restRoute, type Decision } from '../access_route';
+import { READ_ONLY_MESSAGE, registeredDecisions, restRoute, type Decision } from '../access_route';
 
-const AUTOMATION_BASE = '/v1/automation';
+/** The REST routers that reach automations, runs, arrivals or questions, where they are mounted. */
+const REST_TREES = [
+  { base: '/v1/automation', router: automationRouter },
+  { base: '/v1/asks', router: asksRouter },
+];
 
 function statesOnly(automationId: string, teamId: string, grantee: Grantee): void {
   const target: Target = { thing: 'automation', id: automationId };
@@ -360,6 +430,7 @@ function statesOnly(automationId: string, teamId: string, grantee: Grantee): voi
 }
 
 beforeEach(() => {
+  for (const effect of Object.values(mockEffects)) effect.mockClear();
   mockState.things = new Map();
   mockState.members = new Map([
     [`${TEAM}:${ALICE}`, 'write'],
@@ -379,26 +450,57 @@ beforeEach(() => {
 // The walk
 // ---------------------------------------------------------------------------
 
-type ExpressLayer = { route?: { path: string; methods: Record<string, boolean>; stack: { handle: RequestHandler }[] } };
+type ExpressLayer = {
+  name: string;
+  regexp: { fast_slash?: boolean };
+  handle: { stack?: ExpressLayer[] };
+  route?: { path: string; methods: Record<string, boolean>; stack: { handle: RequestHandler }[] };
+};
 
-function mountedRestRoutes(): { key: string; handler: RequestHandler }[] {
-  const stack = (automationRouter as unknown as { stack: ExpressLayer[] }).stack;
-  return stack.flatMap((layer) => {
+/** Middleware that answers no route of its own: it only lets a request on, or turns it away. */
+const KNOWN_MIDDLEWARE = new Set(['scopeGate']);
+
+/**
+ * Every route mounted in `router`, into its nested routers, and every layer
+ * the walk cannot read: unknown middleware, or a router nested at a path
+ * (whose routes' paths the walk cannot know), either of which could answer a
+ * request no decision was asked for.
+ */
+function walkRest(router: unknown, base: string): { routes: { key: string; handler: RequestHandler }[]; unread: string[] } {
+  const stack = (router as { stack: ExpressLayer[] }).stack;
+  const routes: { key: string; handler: RequestHandler }[] = [];
+  const unread: string[] = [];
+  for (const layer of stack) {
     const route = layer.route;
-    if (route === undefined) return [];
-    const handler = route.stack[route.stack.length - 1]?.handle;
-    if (handler === undefined) return [];
-    return Object.keys(route.methods).map((method) => ({ key: restRoute(method, `${AUTOMATION_BASE}${route.path}`), handler }));
-  });
+    if (route !== undefined) {
+      const handler = route.stack[route.stack.length - 1]?.handle;
+      if (handler === undefined) unread.push(`${base}${route.path} (no handler)`);
+      else for (const method of Object.keys(route.methods)) routes.push({ key: restRoute(method, `${base}${route.path}`), handler });
+    } else if (layer.handle.stack !== undefined) {
+      if (layer.regexp.fast_slash !== true) unread.push(`${base}: a router nested at a path`);
+      else {
+        const nested = walkRest(layer.handle, base);
+        routes.push(...nested.routes);
+        unread.push(...nested.unread);
+      }
+    } else if (!KNOWN_MIDDLEWARE.has(layer.name)) unread.push(`${base}: middleware ${layer.name}`);
+  }
+  return { routes, unread };
 }
 
 const procedureNames = Object.keys(viewsRouter._def.procedures).map((name) => `views.${name}`);
-const restRoutes = mountedRestRoutes();
+const restWalk = REST_TREES.map((tree) => walkRest(tree.router, tree.base));
+const restRoutes = restWalk.flatMap((walked) => walked.routes);
 const decided = (decision: Decision | undefined): boolean => decision !== undefined && !('exempt' in decision);
 
 describe('the registry', () => {
-  it('has a decision or an exemption for every REST route under /v1/automation', () => {
+  it('reads every layer of the REST trees', () => {
+    expect(restWalk.flatMap((walked) => walked.unread)).toEqual([]);
+  });
+
+  it('has a decision or an exemption for every REST route under /v1/automation and /v1/asks', () => {
     expect(restRoutes.length).toBeGreaterThan(20);
+    expect(restRoutes.some((r) => r.key.startsWith('POST /v1/asks/'))).toBe(true);
     expect(restRoutes.map((r) => r.key).filter((key) => !registeredDecisions().has(key))).toEqual([]);
   });
 
@@ -454,8 +556,11 @@ const REST_CALLS: Record<string, { call: (refs: Refs) => RestCall; list?: true }
   'POST /v1/automation/automations/inspect-run': { call: (r) => ({ body: { runId: r.runId } }) },
   'POST /v1/automation/automations/cancel-run': { call: (r) => ({ body: { runId: r.runId } }) },
   'POST /v1/automation/automations/resume-run': { call: (r) => ({ body: { runId: r.runId } }) },
-  'POST /v1/automation/automations/replay-delivery': { call: (r) => ({ body: { listen: r.listenId, deliveryId: 'delivery-1' } }) },
+  'POST /v1/automation/automations/replay-delivery': { call: (r) => ({ body: { listen: r.listenId, deliveryId: r.deliveryId } }) },
   'POST /v1/automation/automations/resume-listen': { call: (r) => ({ body: { listen: r.listenId } }) },
+  'GET /v1/asks/': { call: () => ({}), list: true },
+  'GET /v1/asks/:': { call: (r) => ({ params: { id: r.askId } }) },
+  'POST /v1/asks/:/cancel': { call: (r) => ({ params: { id: r.askId } }) },
 };
 
 /** How to ask each tRPC procedure about the refs. */
@@ -484,7 +589,8 @@ const TRPC_CALLS: Record<string, { input: (refs: Refs) => unknown; list?: true }
   'views.triggers.resumeGuardPaused': { input: (r) => ({ triggerId: r.listenId }) },
   'views.triggers.setTriggerCredential': { input: (r) => ({ triggerId: r.listenId, credentialsId: null }) },
   'views.triggers.submitWebEvent': { input: (r) => ({ triggerId: r.listenId, text: 'hello' }) },
-  'views.triggers.replayDelivery': { input: (r) => ({ triggerId: r.listenId, deliveryId: 'delivery-1' }) },
+  'views.triggers.replayDelivery': { input: (r) => ({ triggerId: r.listenId, deliveryId: r.deliveryId }) },
+  'views.triggers.showDeliveryRequest': { input: (r) => ({ deliveryId: r.deliveryId }) },
   'views.controlTower.listParkedRuns': { input: () => undefined, list: true },
   'views.controlTower.listAskRecords': { input: () => undefined, list: true },
   'views.controlTower.answerAskRecord': { input: (r) => ({ askId: r.askId, answer: true }) },
@@ -577,8 +683,18 @@ function mentionsSeeded(outcome: Outcome): boolean {
   return [SEEDED.automationId, SEEDED.automationName, SEEDED.runId, SEEDED.listenId, SEEDED.askId].some((ref) => text.includes(ref));
 }
 
+/** The effects a refused call reached, by name. */
+function effectsReached(): string[] {
+  return Object.entries(mockEffects).flatMap(([name, effect]) => (effect.mock.calls.length > 0 ? [name] : []));
+}
+
 const restDecided = restRoutes.filter((route) => decided(registeredDecisions().get(route.key)));
 const trpcDecided = procedureNames.filter((name) => decided(registeredDecisions().get(name)));
+
+function verbOf(route: string): 'read' | 'write' | 'use' | undefined {
+  const decision = registeredDecisions().get(route);
+  return decision === undefined || 'exempt' in decision ? undefined : decision.verb;
+}
 
 describe('as a write member, on an automation whose statements name only someone else', () => {
   it('knows how to call every route that decides', () => {
@@ -601,6 +717,7 @@ describe('as a write member, on an automation whose statements name only someone
     const missing = await callRest(handler, how.call(MISSING));
     expect(seen.status).not.toBe(500);
     expect(seen).toEqual(asIfSeeded(missing));
+    expect(effectsReached()).toEqual([]);
   });
 
   it.each(trpcDecided)('%s refuses it as it refuses a missing name, or leaves it out', async (name) => {
@@ -618,6 +735,50 @@ describe('as a write member, on an automation whose statements name only someone
     const missing = await callTrpc(name, how.input(MISSING));
     expect(seen).toEqual(asIfSeeded(missing));
     if (seen.status === 'thrown') expect(JSON.stringify(seen.body)).toMatch(/not(\s+be)?[\s_]found/i);
+    expect(effectsReached()).toEqual([]);
+  });
+});
+
+describe('as a write member who may only read the automation', () => {
+  beforeEach(() => {
+    mockState.rows.push({ teamId: TEAM, target: { thing: 'automation', id: SEEDED.automationId }, verb: 'read', grantee: { kind: 'user', userId: ALICE } });
+  });
+
+  /** What the route answers for a name that does not exist, written as if it were about the seeded one. */
+  async function missingAnswer(call: () => Promise<Outcome>): Promise<Outcome> {
+    mockState.automations = [];
+    mockState.things = new Map();
+    return asIfSeeded(await call());
+  }
+
+  it.each(restDecided.map((r) => [r.key, r.handler] as const))('%s reads it, or gives the read-only refusal', async (key, handler) => {
+    const how = REST_CALLS[key];
+    if (how === undefined) throw new Error(`no call for ${key}`);
+    const seen = await callRest(handler, how.call(SEEDED));
+    expect(seen.status).not.toBe(500);
+    if (verbOf(key) === 'write') {
+      expect(seen.status).toBe(403);
+      expect(JSON.stringify(seen.body)).toContain(READ_ONLY_MESSAGE);
+      expect(effectsReached()).toEqual([]);
+    } else if (how.list) {
+      expect(mentionsSeeded(seen)).toBe(true);
+    } else {
+      expect(seen).not.toEqual(await missingAnswer(() => callRest(handler, how.call(MISSING))));
+    }
+  });
+
+  it.each(trpcDecided)('%s reads it, or gives the read-only refusal', async (name) => {
+    const how = TRPC_CALLS[name];
+    if (how === undefined) throw new Error(`no call for ${name}`);
+    const seen = await callTrpc(name, how.input(SEEDED));
+    if (verbOf(name) === 'write') {
+      expect(seen).toEqual({ status: 'thrown', body: { code: 'FORBIDDEN', message: READ_ONLY_MESSAGE } });
+      expect(effectsReached()).toEqual([]);
+    } else if (how.list) {
+      expect(mentionsSeeded(seen)).toBe(true);
+    } else {
+      expect(seen).not.toEqual(await missingAnswer(() => callTrpc(name, how.input(MISSING))));
+    }
   });
 });
 

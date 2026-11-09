@@ -31,7 +31,13 @@ import type { MovementId } from '../../../generated/kysely/automations/Movement'
 
 import { currentContext } from '../../../services/context';
 import { noSuchListen, replayThroughListen, type ReplayOutcome } from '../../../services/inbound/listen_replay';
-import { showDeliveryRequest, type ShownRequest } from '../../../services/inbound/show_request';
+import {
+  adminRefusal,
+  noSuchDelivery,
+  showDeliveryRequest,
+  type RequestReader,
+  type ShownRequest,
+} from '../../../services/inbound/show_request';
 import { resumeListen } from '../../../services/inbound/listen_pause';
 import { mq } from '../../../lib/message_queue';
 import { trpc } from '../trpc';
@@ -127,6 +133,17 @@ async function readsListen(triggerId: string, teamId: string): Promise<boolean> 
 async function changesListen(triggerId: string, teamId: string): Promise<boolean> {
   const owner = await Whose.automationOfListen({ triggerId, teamIds: [teamId] });
   return owner !== undefined && !(await cannotChange(owner.automationId));
+}
+
+/**
+ * Whether the caller may read every automation a delivery of the team reached.
+ * One that reached a run whose automation cannot be traced is read by nobody.
+ */
+async function readsEverythingReached(deliveryId: string, teamId: string): Promise<boolean> {
+  const reached = await Whose.automationsReachedBy({ deliveryId, teamIds: [teamId] });
+  if (reached.untraced) return false;
+  for (const automationId of reached.automationIds) if (await unseen(automationId)) return false;
+  return true;
 }
 
 const triggersRouter = (procedure: typeof trpc.procedure) => {
@@ -918,15 +935,16 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
       .input(z.object({ deliveryId: z.string().min(1) }))
       .mutation(async ({ input }): Promise<ShownRequest> => {
         const { user } = currentContext();
-        return showDeliveryRequest({
-          teamId: user.teamId as TeamId,
-          deliveryId: input.deliveryId,
-          reader: {
-            userId: user.id,
-            access: user.isTeamReadonly ? 'read' : 'write',
-            ...(user.apiKeyId !== undefined ? { credentialId: user.apiKeyId } : {}),
-          },
-        });
+        const reader: RequestReader = {
+          userId: user.id,
+          access: user.isTeamReadonly ? 'read' : 'write',
+          ...(user.apiKeyId !== undefined ? { credentialId: user.apiKeyId } : {}),
+        };
+        // A kept request is what reached each of those automations' listens.
+        const refused = adminRefusal(reader);
+        if (refused !== undefined) return refused;
+        if (!(await readsEverythingReached(input.deliveryId, user.teamId))) return noSuchDelivery(input.deliveryId);
+        return showDeliveryRequest({ teamId: user.teamId as TeamId, deliveryId: input.deliveryId, reader });
       }),
   });
 };
@@ -1121,7 +1139,8 @@ decidesEach('triggers', {
   createAutomation: { exempt: 'creates a listen of no automation, which only team membership decides' },
   submitWebEvent: WRITES,
   replayDelivery: WRITES,
-  showDeliveryRequest: { exempt: "a delivery's kept request, which only the team's admins see (ruling 3)" },
+  // Besides only the team's admins (ruling 3), only one who may read every automation it reached.
+  showDeliveryRequest: READS,
 });
 
 export { triggersRouter };

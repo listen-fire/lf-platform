@@ -206,11 +206,20 @@ function sentRef(args: unknown): { recordType?: string; externalId?: string } {
  * echo the provider sends right after finds it). A rehearsed instance's
  * writes are never sent, so none is kept. A write the ledger cannot keep
  * fails the call after the write was sent: a write the ledger does not know
- * would let its echo start a chain of its own.
+ * would let its echo start a chain of its own. `keep` replaces the ledger
+ * alone with everything the host keeps of a write, the ledger among it.
  */
-export function ledgeredAdapters(adapters: HostAdapters, run: { teamId: TeamId; runId: string; settings?: LoopSettings }): HostAdapters {
+export function ledgeredAdapters(
+  adapters: HostAdapters,
+  run: {
+    teamId: TeamId;
+    runId: string;
+    settings?: LoopSettings;
+    keep?: (write: { adapterType: string; recordType: string; externalId: string; at: string }) => Promise<void>;
+  },
+): HostAdapters {
   const instances = new Map<string, { adapterType: string; rehearsed: boolean }>();
-  const keep = writeKeeper(run);
+  const keep = run.keep ?? writeKeeper(run);
   return {
     async resolve(resolution: Scoped<AdapterResolution>): Promise<ResolvedAdapter> {
       const resolved = await adapters.resolve(resolution);

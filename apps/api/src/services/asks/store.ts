@@ -384,6 +384,26 @@ export function askTableKv(teamId: TeamId, options: { callbackUrl?: string | nul
   };
 }
 
+/**
+ * Record on a question the run that asked it, and that run's automation, as
+ * the platform's engine host learns it raised the question. The module's
+ * write knows neither, and the run's wait on the question goes when the run
+ * does, so without this a settled question names nobody. A question that
+ * already names a run keeps it.
+ */
+export async function recordAsker(ask: { teamId: TeamId; askId: string; runId: string; automationId?: string }): Promise<void> {
+  const parsed = askIdSchema.safeParse(ask.askId);
+  if (!parsed.success) return;
+  const asker = { runId: ask.runId, ...(ask.automationId !== undefined ? { movementId: ask.automationId } : {}) };
+  await getAsksQb(['ask'])
+    .updateTable('ask')
+    .set({ provenance: sql`provenance || ${JSON.stringify(asker)}::jsonb` as never })
+    .where('id', '=', parsed.data)
+    .where('team_id', '=', ask.teamId)
+    .where(sql<boolean>`provenance->>'runId' is null`)
+    .execute();
+}
+
 /** The module's records for one team, on the platform. */
 export function platformAskRecords(teamId: TeamId, options: { callbackUrl?: string | null } = {}): AskRecords {
   return { kv: askTableKv(teamId, options), answerUrl: askUrl };

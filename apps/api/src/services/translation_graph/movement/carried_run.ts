@@ -45,7 +45,7 @@ import { notifyWork } from '../../work/drain';
 import { recordRunEngineOnRow } from '../../movement_engine/run_engine_record';
 import { RunLeaseLost } from '../../movement_engine/run_lease';
 import { teamCredentials } from '../../credentials/credential_ownership';
-import { writeKeeper } from '../../inbound/loop_breaker';
+import { runWriteKeeper } from '../../movement_engine/run_writes';
 import { askUrl } from '../../asks/store';
 import { mutationDelivery } from '../../knowledge/mutation_outbox/delivery_mode';
 import { moduleHostFor } from '../adapters/builtin_modules';
@@ -118,7 +118,7 @@ export function runPlatformFor(input: {
     // cap. Upgrading the pin is how it gets both.
     asCarriedRelease: true,
   });
-  const keep = input.triggerRunId !== undefined ? writeKeeper({ teamId: input.teamId, runId: input.triggerRunId }) : undefined;
+  const keep = input.triggerRunId !== undefined ? runWriteKeeper({ teamId: input.teamId, runId: input.triggerRunId }) : undefined;
   return {
     modules: modulePlatform(),
     recordEngine: recordRunEngineOnRow,
