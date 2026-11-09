@@ -241,6 +241,11 @@ export interface MintConnectLinkResult {
   expiresAt: Date;
 }
 
+/** Whether the asker may use this connection; one that does not exist is refused alike. */
+async function mayUse(connectionId: string): Promise<boolean> {
+  return accessTo(currentPrincipal(), { target: { thing: 'connection', id: connectionId }, verb: 'use' });
+}
+
 /**
  * Mint a single-use, TTL'd connect link for an adapter. Returns the URL the
  * authoring agent relays to the user, or an `{ error }` describing why the
@@ -310,8 +315,13 @@ export async function mintConnectLink(
       .selectFrom('external_service_credentials')
       .where('team_id', '=', input.teamId)
       .where('type', '=', serviceType)
-      .select(['name'])
+      .select(['id', 'name'])
       .executeTakeFirst();
+    // The same refusal as connecting the team from the app: a connection the
+    // asker may not use is neither named nor reused.
+    if (existing !== undefined && !(await mayUse(existing.id))) {
+      return { error: "The team's Telegram connection is one you may not use." };
+    }
     credentialName =
       existing?.name ?? (input.credentialName?.trim() || SHARED_TELEGRAM_CREDENTIAL_NAME);
   } else if (input.credentialName?.trim()) {
@@ -323,10 +333,7 @@ export async function mintConnectLink(
       .where('name', '=', credentialName)
       .select(['id'])
       .executeTakeFirst();
-    if (
-      named !== undefined &&
-      !(await accessTo(currentPrincipal(), { target: { thing: 'connection', id: named.id }, verb: 'use' }))
-    ) {
+    if (named !== undefined && !(await mayUse(named.id))) {
       return { error: `The name "${credentialName}" is taken by a connection you may not use; choose another name.` };
     }
   } else {

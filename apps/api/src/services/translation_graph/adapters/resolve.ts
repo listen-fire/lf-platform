@@ -33,6 +33,7 @@ import {
 import { MCP_ADAPTER_TYPE } from '@listen-fire/mcp/manifest';
 import { MCP_DISABLED_MESSAGE } from './mcp/enabled';
 import { getRemoteAdapter, rowToManifest } from './remote/store';
+import { noInstallSecret } from './remote/install_secret';
 import { hostedDocumentStore } from '../engine/files/retrieve';
 import { RemoteAdapterCredentialPayload, type RemoteAdapterManifestFile } from './remote/manifest';
 import {
@@ -142,7 +143,7 @@ async function remoteInstallOf(input: { adapterType: string; slug: string; teamI
     );
   }
   if (!row.credentials_id) {
-    throw new Error(`Remote adapter "${input.adapterType}" has no credential configured (credentials_id is null).`);
+    throw noInstallSecret(input.adapterType);
   }
   const install = await loadRemoteInstallPayload(row.credentials_id, input.teamId, row.adapter_type);
   return { row, manifestFile: rowToManifest(row), install, installCredentialsId: row.credentials_id };

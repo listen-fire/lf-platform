@@ -37,7 +37,10 @@ import type { AdapterIntrospection } from 'module-kit/adapter/name_resolution';
 import { selectMember } from './narrowing';
 import { ADAPTER_META_TYPE_ID, makeMetaPosition, positionLabel } from 'movement-engine/public/catalog';
 import { resolveAdapter } from '../adapters/resolve';
-import { getAdapterManifest } from '../adapters/registry';
+import { noInstallSecret } from '../adapters/remote/install_secret';
+import { getAdapterManifest, hasAdapter, resolveAdapterSlug } from '../adapters/registry';
+import { accessTo } from '../../access/decide';
+import type { CatalogAudience } from './audience';
 import { getRemoteAdapter, rowToManifest } from '../adapters/remote/store';
 import {
   instanceSchemaFromDescriptors,
@@ -499,6 +502,8 @@ async function membersAtPath(input: {
 export async function cachedAdapterInstance(input: {
   adapterType: string;
   teamId: TeamId;
+  /** Who is reading. A person reads a remote module with its own install secret only if they may use it. */
+  audience: CatalogAudience;
   credentialsId?: string;
   /** Non-credential construction args — they pick the instance's POSITION, so
    *  they're part of the cache key and flow to construction. */
@@ -506,6 +511,8 @@ export async function cachedAdapterInstance(input: {
   forceRefresh?: boolean;
   types?: readonly string[];
 }): Promise<CachedAdapterInstance> {
+  // Ahead of the cache: what someone who may use the secret introspected is not served to someone who may not.
+  if (!(await mayReadWithInstallSecret(input))) throw noInstallSecret(input.adapterType);
   const key = cacheKey(input);
   if (input.forceRefresh) states.delete(key);
 
@@ -741,6 +748,27 @@ export async function cachedAdapterInstance(input: {
   };
 }
 
+/**
+ * Whether this read may authenticate with the remote module's install secret.
+ * It does when the secret is the read's own credential (no connection named,
+ * or the install's own row named) and the audience may use it, or when the
+ * audience is a run. Anyone else reads the module as one with no secret, as
+ * the catalog reports it (`needs-secret`). A connection naming another
+ * provider credential is decided by that credential, not here.
+ */
+async function mayReadWithInstallSecret(input: {
+  adapterType: string;
+  teamId: TeamId;
+  audience: CatalogAudience;
+  credentialsId?: string;
+}): Promise<boolean> {
+  if (input.audience.for === 'run' || hasAdapter(input.adapterType)) return true;
+  const row = await getRemoteAdapter({ teamId: input.teamId, adapterType: resolveAdapterSlug(input.adapterType) });
+  if (row === null || row.credentials_id === null) return true;
+  if (input.credentialsId !== undefined && input.credentialsId !== row.credentials_id) return true;
+  return accessTo(input.audience.for, { target: { thing: 'connection', id: row.credentials_id }, verb: 'use' });
+}
+
 async function supportsInPlaceUpdateFor(input: {
   adapterType: string;
   teamId: TeamId;
@@ -759,6 +787,7 @@ async function supportsInPlaceUpdateFor(input: {
 export async function introspectAdapterInstanceCached(input: {
   adapterType: string;
   teamId: TeamId;
+  audience: CatalogAudience;
   credentialsId?: string;
   constructionArgs?: Record<string, string>;
   forceRefresh?: boolean;

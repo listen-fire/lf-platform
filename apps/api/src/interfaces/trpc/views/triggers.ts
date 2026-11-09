@@ -67,7 +67,7 @@ import ExternalServiceType from '../../../generated/kysely/automations/ExternalS
 import { reportedFailureReason } from '../../../services/translation_graph/runs/trigger_run';
 import { UserService } from '../../../services/user';
 import { actingPrincipal, userProcedure as sharedUserProcedure } from '../procedures';
-import { EXEMPT, decidesEach, readableAmong, unseen, type Decision } from '../../access_route';
+import { EXEMPT, connectionUnseen, decidesEach, readableAmong, unseen, usableAmong, type Decision } from '../../access_route';
 import { callerAudience } from '../../../services/translation_graph/movement/audience';
 import { cannotChange } from '../access';
 import { Whose } from '../../../services/access/whose';
@@ -247,13 +247,15 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
 
         if (!trigger) throw new Error(`Trigger ${input.id} not found`);
 
+        const bound = (trigger.credentials_id as unknown as string | null) ?? null;
         return {
           id: trigger.id as unknown as string,
           name: trigger.name,
           kind: trigger.kind,
           kindLabel: kindToLabel(trigger.kind),
           config: trigger.config,
-          credentialsId: (trigger.credentials_id as unknown as string | null) ?? null,
+          // A connection the caller may not use is not named to them.
+          credentialsId: bound !== null && !(await connectionUnseen(bound)) ? bound : null,
           provisionedBySetupAgent: trigger.provisioned_by_setup_agent,
           createdAt: trigger.created_at,
           updatedAt: trigger.updated_at,
@@ -405,6 +407,9 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
           (trigger.credentials_id as unknown as string | null) ?? null;
         let credentialOptions: Array<{ id: string; name: string }> = [];
         let boundCredentialName: string | null = null;
+        // A bound connection the caller may not use still reads as bound, but
+        // names nothing: neither its id nor its name.
+        let visibleCredentialsId: string | null = null;
         if (requiredCredentialType) {
           const credRows = await getAutomationsQb(['external_service_credentials'])
             .selectFrom('external_service_credentials')
@@ -413,12 +418,17 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
             .select(['id', 'name'])
             .orderBy('name', 'asc')
             .execute();
-          credentialOptions = credRows.map((r) => ({
+          const usableRows = await usableAmong(credRows, {
+            connectionOf: (r) => r.id as unknown as string,
+            teamIds: [teamId],
+          });
+          credentialOptions = usableRows.map((r) => ({
             id: r.id as unknown as string,
             name: r.name,
           }));
-          boundCredentialName =
-            credentialOptions.find((o) => o.id === boundCredentialsId)?.name ?? null;
+          const bound = credentialOptions.find((o) => o.id === boundCredentialsId);
+          boundCredentialName = bound?.name ?? null;
+          visibleCredentialsId = bound?.id ?? null;
         }
 
         return {
@@ -451,11 +461,12 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
             // routing kind ('WEB') to the canonical slug ('web') so the
             // branch editor's field resolution matches.
             adapterKind: resolveAdapterSlug(trigger.kind),
-            credentialsId: boundCredentialsId,
+            credentialsId: visibleCredentialsId,
           },
           connection: {
             requiredCredentialType,
-            credentialsId: boundCredentialsId,
+            bound: boundCredentialsId !== null,
+            credentialsId: visibleCredentialsId,
             credentialName: boundCredentialName,
             options: credentialOptions,
           },
@@ -729,6 +740,8 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
           if (!requiredType) {
             throw new Error('This automation’s source needs no connection.');
           }
+          // Ahead of the read: a connection the caller may not use is as missing as one that is not there.
+          if (await connectionUnseen(input.credentialsId)) throw new Error('That connection was not found.');
           const cred = await getAutomationsQb(['external_service_credentials'])
             .selectFrom('external_service_credentials')
             .where('id', '=', input.credentialsId as never)
@@ -831,19 +844,23 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
         // the trigger interprets events with.
         const triggerKind = source.adapterType;
 
-        // Attach an existing credential of the source's required type when
-        // the team has one; otherwise leave it null (the user wires the
+        // Attach the newest connection of the source's required type the
+        // caller may use, when there is one; otherwise leave it null (the user wires the
         // connection up later from the detail page / Connections).
         let credentialsId: ExternalServiceCredentialsId | null = null;
         if (source.requiredCredentialType !== null) {
-          const cred = await getAutomationsQb(['external_service_credentials'])
+          const creds = await getAutomationsQb(['external_service_credentials'])
             .selectFrom('external_service_credentials')
             .where('team_id', '=', teamId)
             .where('type', '=', source.requiredCredentialType as ExternalServiceType)
             .orderBy('created_at', 'desc')
             .select(['id'])
-            .executeTakeFirst();
-          credentialsId = (cred?.id as ExternalServiceCredentialsId | undefined) ?? null;
+            .execute();
+          const [newestUsable] = await usableAmong(creds, {
+            connectionOf: (r) => r.id as unknown as string,
+            teamIds: [teamId],
+          });
+          credentialsId = newestUsable?.id ?? null;
         }
 
         const triggerId = randomUUID();
@@ -1027,9 +1044,12 @@ export interface AutomationDetail {
   /** The source's credential binding. `requiredCredentialType` is null when
    *  the source needs no connection (the UI hides the control then).
    *  Otherwise the UI shows the bound credential (or "not connected") and
-   *  lets the user pick from `options` (the team's connections of that type). */
+   *  lets the user pick from `options` (the connections of that type the caller
+   *  may use). `bound` is true when the source has a connection at all; the id
+   *  and name are null when the caller may not use the one it has. */
   connection: {
     requiredCredentialType: ExternalServiceType | null;
+    bound: boolean;
     credentialsId: string | null;
     credentialName: string | null;
     options: Array<{ id: string; name: string }>;

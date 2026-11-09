@@ -418,9 +418,12 @@ export interface AutomationDetail {
     /** The source's credential binding. `requiredCredentialType` is null when
      *  the source needs no connection (the UI hides the control then).
      *  Otherwise the UI shows the bound credential (or "not connected") and
-     *  lets the user pick from `options` (the team's connections of that type). */
+     *  lets the user pick from `options` (the connections of that type the caller
+     *  may use). `bound` is true when the source has a connection at all; the id
+     *  and name are null when the caller may not use the one it has. */
     connection: {
         requiredCredentialType: ExternalServiceType | null;
+        bound: boolean;
         credentialsId: string | null;
         credentialName: string | null;
         options: Array<{

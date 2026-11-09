@@ -160,7 +160,7 @@ jest.mock('../../adapters/registry', () => ({
 
 import { cachedAdapterInstance, clearIntrospectionCache } from '../instance_cache';
 
-const base = { adapterType: 'airtable', teamId: 'team-1' as TeamId };
+const base = { adapterType: 'airtable', teamId: 'team-1' as TeamId, audience: { for: 'run' } as const };
 
 beforeEach(() => {
   clearIntrospectionCache();

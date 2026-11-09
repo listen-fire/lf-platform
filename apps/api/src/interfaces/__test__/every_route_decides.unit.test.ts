@@ -101,8 +101,12 @@ const mockState: {
   connections: Table;
   subscriptions: Table;
   installs: Table;
+  /** The connection the seeded listen is bound to, and the kind of source that needs one. */
+  listenCredentialsId: string | null;
   /** Every table a route inserted into, updated or deleted from. */
   writes: string[];
+  /** What each insert or update was given to store. */
+  stored: { table: string; values: unknown }[];
 } = {
   things: new Map(),
   members: new Map(),
@@ -114,7 +118,9 @@ const mockState: {
   connections: [],
   subscriptions: [],
   installs: [],
+  listenCredentialsId: null,
   writes: [],
+  stored: [],
 };
 
 jest.mock('../../services/access/statement', () => {
@@ -218,9 +224,9 @@ jest.mock('../../lib/kysely', () => {
         team_id: mockTeam,
         movement_id: mockSeeded.automationId,
         name: 'Deals',
-        kind: 'manual',
+        kind: mockState.listenCredentialsId === null ? 'manual' : 'attio',
         config: {},
-        credentials_id: null,
+        credentials_id: mockState.listenCredentialsId,
         run_mode: 'live',
         created_at: new Date(0),
         updated_at: new Date(0),
@@ -247,15 +253,23 @@ jest.mock('../../lib/kysely', () => {
   });
   const stub = (): unknown => {
     let rows: unknown[] = [];
+    let table = '';
     const chain: object = new Proxy(
       {},
       {
         get: (_target, prop) => {
           if (prop === 'then') return undefined;
           if (prop === 'selectFrom' || prop === 'updateTable' || prop === 'deleteFrom' || prop === 'insertInto') {
-            return (table: string) => {
-              if (prop !== 'selectFrom') mockState.writes.push(table);
-              rows = tables()[table] ?? [];
+            return (name: string) => {
+              table = name;
+              if (prop !== 'selectFrom') mockState.writes.push(name);
+              rows = tables()[name] ?? [];
+              return chain;
+            };
+          }
+          if (prop === 'values' || prop === 'set') {
+            return (values: unknown) => {
+              mockState.stored.push({ table, values });
               return chain;
             };
           }
@@ -716,7 +730,9 @@ beforeEach(() => {
       updated_at: new Date(0),
     },
   ];
+  mockState.listenCredentialsId = CONNECTION.connectionId;
   mockState.writes = [];
+  mockState.stored = [];
   mockState.asked = 0;
 });
 
@@ -727,6 +743,7 @@ function withoutConnection(): void {
   mockState.subscriptions = [];
   // The install stays; it holds no secret.
   mockState.installs = mockState.installs.map((install) => ({ ...install, credentials_id: null }));
+  mockState.listenCredentialsId = null;
 }
 
 // ---------------------------------------------------------------------------
@@ -1133,6 +1150,7 @@ describe('as a write member, on an automation whose statements name only someone
     if (how === undefined) throw new Error(`no call for ${key}`);
     const seen = await callRest(handler, how.call(SEEDED));
     expect(mockState.asked).toBeGreaterThan(0);
+    expect(mentionsConnection(seen)).toBe(false);
     if (how.list) {
       expect(seen.status).toBe(200);
       expect(mentionsSeeded(seen)).toBe(false);
@@ -1151,6 +1169,7 @@ describe('as a write member, on an automation whose statements name only someone
     if (how === undefined) throw new Error(`no call for ${name}`);
     const seen = await callTrpc(name, how.input(SEEDED));
     expect(mockState.asked).toBeGreaterThan(0);
+    expect(mentionsConnection(seen)).toBe(false);
     if (how.list) {
       expect(seen.status).toBe(200);
       expect(mentionsSeeded(seen)).toBe(false);
@@ -1182,6 +1201,8 @@ describe('as a write member who may only read the automation', () => {
     if (how === undefined) throw new Error(`no call for ${key}`);
     const seen = await callRest(handler, how.call(SEEDED));
     expect(seen.status).not.toBe(500);
+    // Reading the automation is not using the connections it is bound to.
+    expect(mentionsConnection(seen)).toBe(false);
     if (verbOf(key) === 'write') {
       expect(seen.status).toBe(403);
       expect(JSON.stringify(seen.body)).toContain(READ_ONLY_MESSAGE);
@@ -1197,6 +1218,7 @@ describe('as a write member who may only read the automation', () => {
     const how = TRPC_CALLS[name];
     if (how === undefined) throw new Error(`no call for ${name}`);
     const seen = await callTrpc(name, how.input(SEEDED));
+    expect(mentionsConnection(seen)).toBe(false);
     if (verbOf(name) === 'write') {
       expect(seen).toEqual({ status: 'thrown', body: { code: 'FORBIDDEN', message: READ_ONLY_MESSAGE } });
       expect(effectsReached()).toEqual([]);
@@ -1205,6 +1227,66 @@ describe('as a write member who may only read the automation', () => {
     } else {
       expect(seen).not.toEqual(await missingAnswer(() => callTrpc(name, how.input(MISSING))));
     }
+  });
+});
+
+describe('an automation bound to a connection the caller may not use', () => {
+  beforeEach(() => {
+    for (const verb of ['read', 'write'] as const) {
+      mockState.rows.push({ teamId: TEAM, target: { thing: 'automation', id: SEEDED.automationId }, verb, grantee: { kind: 'user', userId: ALICE } });
+    }
+  });
+
+  const detail = () => callTrpc('views.triggers.getAutomationDetail', { id: SEEDED.listenId });
+  const connectionOf = (outcome: Outcome) => (outcome.body as { connection: Record<string, unknown> }).connection;
+
+  it('shows its detail as bound, naming neither the connection nor its id, and offers no choice of it', async () => {
+    const seen = await detail();
+    expect(seen.status).toBe(200);
+    expect(connectionOf(seen)).toMatchObject({ bound: true, credentialsId: null, credentialName: null, options: [] });
+    expect(mentionsConnection(seen)).toBe(false);
+    expect(mentionsConnection(await callTrpc('views.triggers.get', { id: SEEDED.listenId }))).toBe(false);
+  });
+
+  it('shows the connection to someone who may use it', async () => {
+    mockState.rows.push({ teamId: TEAM, target: FINANCE, verb: 'use', grantee: { kind: 'user', userId: ALICE } });
+    const seen = await detail();
+    expect(connectionOf(seen)).toMatchObject({
+      bound: true,
+      credentialsId: CONNECTION.connectionId,
+      credentialName: CONNECTION.connectionName,
+      options: [{ id: CONNECTION.connectionId, name: CONNECTION.connectionName }],
+    });
+  });
+
+  it('refuses to bind it, as it refuses a connection that is not there', async () => {
+    const attach = (refs: ConnectionRefs) => callTrpc('views.triggers.setTriggerCredential', { triggerId: SEEDED.listenId, credentialsId: refs.connectionId });
+    const refused = await attach(CONNECTION);
+    expect(refused).toEqual({ status: 'thrown', body: { code: 'INTERNAL_SERVER_ERROR', message: 'That connection was not found.' } });
+    expect(refused).toEqual(asIf(await attach(NO_CONNECTION), { from: NO_CONNECTION, to: CONNECTION }));
+    expect(mockState.writes).toEqual([]);
+  });
+
+  it('binds it for someone who may use it', async () => {
+    mockState.rows.push({ teamId: TEAM, target: FINANCE, verb: 'use', grantee: { kind: 'user', userId: ALICE } });
+    await callTrpc('views.triggers.setTriggerCredential', { triggerId: SEEDED.listenId, credentialsId: CONNECTION.connectionId });
+    expect(mockState.writes).toContain('trigger');
+  });
+
+  /** The connection a new automation of Attio's kind was given. */
+  async function attachedToNew(): Promise<unknown> {
+    await callTrpc('views.triggers.createAutomation', { name: 'New', sourceKind: 'attio' });
+    const inserted = mockState.stored.find((entry) => entry.table === 'trigger');
+    return (inserted?.values as { credentials_id?: unknown } | undefined)?.credentials_id;
+  }
+
+  it('is not attached to a new automation by the caller who may not use it', async () => {
+    expect(await attachedToNew()).toBeNull();
+  });
+
+  it('is attached to a new automation by one who may use it', async () => {
+    mockState.rows.push({ teamId: TEAM, target: FINANCE, verb: 'use', grantee: { kind: 'user', userId: ALICE } });
+    expect(await attachedToNew()).toBe(CONNECTION.connectionId);
   });
 });
 

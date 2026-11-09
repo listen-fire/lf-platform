@@ -56,13 +56,23 @@ export interface ExplorerInstance {
   remote: boolean;
 }
 
-export async function enumerateSystems(teamId: TeamId): Promise<ExplorerInstance[]> {
-  const credentials = await getAutomationsQb(['external_service_credentials'])
-    .selectFrom('external_service_credentials')
-    .where('team_id', '=', teamId)
-    .select(['id', 'name', 'type', 'created_at'])
-    .orderBy('created_at', 'desc')
-    .execute();
+/**
+ * `usable` keeps the connections the asker may use, and runs ahead of picking
+ * each system's newest: a newest connection they may not use must not hide an
+ * older one they may.
+ */
+export async function enumerateSystems(
+  teamId: TeamId,
+  options: { usable: <T extends { id: string }>(connections: T[]) => Promise<T[]> },
+): Promise<ExplorerInstance[]> {
+  const credentials = await options.usable(
+    await getAutomationsQb(['external_service_credentials'])
+      .selectFrom('external_service_credentials')
+      .where('team_id', '=', teamId)
+      .select(['id', 'name', 'type', 'created_at'])
+      .orderBy('created_at', 'desc')
+      .execute(),
+  );
   const newestByType = new Map<string, { id: string; name: string; type: string }>();
   for (const row of credentials) {
     if (!newestByType.has(row.type)) {

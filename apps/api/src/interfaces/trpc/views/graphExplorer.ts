@@ -43,6 +43,7 @@ import {
   SYSTEM_FOOTNOTES,
 } from '../../../services/translation_graph/graph_explorer/build';
 import { walkedNodeFrom, type WalkedNode } from '../../../services/translation_graph/movement/walk';
+import { callerAudience } from '../../../services/translation_graph/movement/audience';
 import { userProcedure as sharedUserProcedure } from '../procedures';
 import { EXEMPT, USE_CONNECTION, connectionUnseen, decidesEach, usableAmong } from '../../access_route';
 
@@ -113,9 +114,8 @@ const graphExplorerRouter = (procedure: typeof trpc.procedure) => {
       .input(z.object({ teamId: z.string().optional() }).optional())
       .query(async ({ input }): Promise<GraphExplorerInstance[]> => {
         const teamId = resolveTeamId(input?.teamId);
-        const systems = await usableAmong(await enumerateSystems(teamId), {
-          connectionOf: (s) => s.credential?.id ?? null,
-          teamIds: [teamId],
+        const systems = await enumerateSystems(teamId, {
+          usable: (connections) => usableAmong(connections, { connectionOf: (c) => c.id, teamIds: [teamId] }),
         });
         return systems.map((s) => ({
           adapterType: s.adapterType,
@@ -168,6 +168,7 @@ const graphExplorerRouter = (procedure: typeof trpc.procedure) => {
             cachedAdapterInstance({
               adapterType: input.adapterType,
               teamId,
+              audience: callerAudience(),
               types: [],
               ...(input.credentialsId !== undefined ? { credentialsId: input.credentialsId } : {}),
               ...(input.forceRefresh ? { forceRefresh: true } : {}),

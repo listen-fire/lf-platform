@@ -285,7 +285,9 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
           // shows exactly what the language resolves, the team's own modules
           // (`#acme_crm`) among them.
           teamAdapterManifests(teamId, []),
-          loadCredentialRows(teamId, callerAudience()),
+          // Only names the rows below; the one filter on what the page lists is `usableAmong`, and a
+          // row's import name is its own, so a row left out here is never looked up.
+          loadCredentialRows(teamId, { for: 'run' }),
           listRemoteAdapters({ teamId }),
         ]);
       // The page shows the connections the caller may use, and the listens of

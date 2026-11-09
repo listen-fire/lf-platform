@@ -46,7 +46,7 @@ async function main() {
   const depth = Number(
     process.argv.includes('--depth') ? process.argv[process.argv.indexOf('--depth') + 1] : 0,
   );
-  const systems = await enumerateSystems(teamId as TeamId);
+  const systems = await enumerateSystems(teamId as TeamId, { usable: async (connections) => connections });
 
   for (const system of systems) {
     const seen: string[] = [];

@@ -55,12 +55,12 @@ afterEach(() => {
 describe('introspectAdapterInstanceCached', () => {
   it('introspects once per key within the TTL', async () => {
     const first = await introspectAdapterInstanceCached({
-      adapterType: 'attio',
+      audience: { for: 'run' }, adapterType: 'attio',
       teamId: TEAM,
       credentialsId: 'cred-1',
     });
     const second = await introspectAdapterInstanceCached({
-      adapterType: 'attio',
+      audience: { for: 'run' }, adapterType: 'attio',
       teamId: TEAM,
       credentialsId: 'cred-1',
     });
@@ -75,11 +75,11 @@ describe('introspectAdapterInstanceCached', () => {
   });
 
   it('keys on (teamId, adapter, credentialsId) — each axis isolates', async () => {
-    await introspectAdapterInstanceCached({ adapterType: 'attio', teamId: TEAM, credentialsId: 'c1' });
-    await introspectAdapterInstanceCached({ adapterType: 'attio', teamId: TEAM, credentialsId: 'c2' });
-    await introspectAdapterInstanceCached({ adapterType: 'slack', teamId: TEAM, credentialsId: 'c1' });
-    await introspectAdapterInstanceCached({ adapterType: 'attio', teamId: OTHER_TEAM, credentialsId: 'c1' });
-    await introspectAdapterInstanceCached({ adapterType: 'attio', teamId: TEAM }); // credential-free slot
+    await introspectAdapterInstanceCached({ audience: { for: 'run' }, adapterType: 'attio', teamId: TEAM, credentialsId: 'c1' });
+    await introspectAdapterInstanceCached({ audience: { for: 'run' }, adapterType: 'attio', teamId: TEAM, credentialsId: 'c2' });
+    await introspectAdapterInstanceCached({ audience: { for: 'run' }, adapterType: 'slack', teamId: TEAM, credentialsId: 'c1' });
+    await introspectAdapterInstanceCached({ audience: { for: 'run' }, adapterType: 'attio', teamId: OTHER_TEAM, credentialsId: 'c1' });
+    await introspectAdapterInstanceCached({ audience: { for: 'run' }, adapterType: 'attio', teamId: TEAM }); // credential-free slot
     expect(resolveAdapterMock).toHaveBeenCalledTimes(5);
   });
 
@@ -90,8 +90,8 @@ describe('introspectAdapterInstanceCached', () => {
       await gate;
       return fakeAdapter(adapterType);
     });
-    const a = introspectAdapterInstanceCached({ adapterType: 'attio', teamId: TEAM, credentialsId: 'c1' });
-    const b = introspectAdapterInstanceCached({ adapterType: 'attio', teamId: TEAM, credentialsId: 'c1' });
+    const a = introspectAdapterInstanceCached({ audience: { for: 'run' }, adapterType: 'attio', teamId: TEAM, credentialsId: 'c1' });
+    const b = introspectAdapterInstanceCached({ audience: { for: 'run' }, adapterType: 'attio', teamId: TEAM, credentialsId: 'c1' });
     release();
     expect(await a).toStrictEqual(await b);
     expect(resolveAdapterMock).toHaveBeenCalledTimes(1);
@@ -102,19 +102,19 @@ describe('introspectAdapterInstanceCached', () => {
   // that is bounded by `describeConnection`, which always forces a fresh
   // read (see the `forceRefresh` test below), not by keeping the TTL short.
   it('expires entries after the TTL', async () => {
-    await introspectAdapterInstanceCached({ adapterType: 'attio', teamId: TEAM, credentialsId: 'c1' });
+    await introspectAdapterInstanceCached({ audience: { for: 'run' }, adapterType: 'attio', teamId: TEAM, credentialsId: 'c1' });
     jest.advanceTimersByTime(2.5 * 60 * 1000);
-    await introspectAdapterInstanceCached({ adapterType: 'attio', teamId: TEAM, credentialsId: 'c1' });
+    await introspectAdapterInstanceCached({ audience: { for: 'run' }, adapterType: 'attio', teamId: TEAM, credentialsId: 'c1' });
     expect(resolveAdapterMock).toHaveBeenCalledTimes(1); // still fresh at 2.5min
     jest.advanceTimersByTime(1 * 60 * 1000);
-    await introspectAdapterInstanceCached({ adapterType: 'attio', teamId: TEAM, credentialsId: 'c1' });
+    await introspectAdapterInstanceCached({ audience: { for: 'run' }, adapterType: 'attio', teamId: TEAM, credentialsId: 'c1' });
     expect(resolveAdapterMock).toHaveBeenCalledTimes(2); // stale past 3min
   });
 
   it('forceRefresh drops the entry and re-introspects', async () => {
-    await introspectAdapterInstanceCached({ adapterType: 'attio', teamId: TEAM, credentialsId: 'c1' });
+    await introspectAdapterInstanceCached({ audience: { for: 'run' }, adapterType: 'attio', teamId: TEAM, credentialsId: 'c1' });
     await introspectAdapterInstanceCached({
-      adapterType: 'attio',
+      audience: { for: 'run' }, adapterType: 'attio',
       teamId: TEAM,
       credentialsId: 'c1',
       forceRefresh: true,
@@ -125,10 +125,10 @@ describe('introspectAdapterInstanceCached', () => {
   it('does not cache failures — the next caller retries', async () => {
     resolveAdapterMock.mockRejectedValueOnce(new Error('workspace unreachable'));
     await expect(
-      introspectAdapterInstanceCached({ adapterType: 'attio', teamId: TEAM, credentialsId: 'c1' }),
+      introspectAdapterInstanceCached({ audience: { for: 'run' }, adapterType: 'attio', teamId: TEAM, credentialsId: 'c1' }),
     ).rejects.toThrow('workspace unreachable');
     const retried = await introspectAdapterInstanceCached({
-      adapterType: 'attio',
+      audience: { for: 'run' }, adapterType: 'attio',
       teamId: TEAM,
       credentialsId: 'c1',
     });

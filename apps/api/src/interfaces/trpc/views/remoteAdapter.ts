@@ -1,3 +1,5 @@
+import { isDeepStrictEqual } from 'node:util';
+
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -6,7 +8,7 @@ import type { UserId } from '../../../generated/kysely/core/User';
 
 import { currentContext } from '../../../services/context';
 import { trpc } from '../trpc';
-import { RemoteAdapterManifestInput } from '../../../services/translation_graph/adapters/remote/manifest';
+import { RemoteAdapterManifestInput, type RemoteAdapterManifestFile } from '../../../services/translation_graph/adapters/remote/manifest';
 import {
   deleteRemoteAdapter,
   getRemoteAdapter,
@@ -88,6 +90,29 @@ const ModuleCredentialTarget = z.object({
   name: z.string().trim(),
 });
 
+/**
+ * A manifest saved back with no secret keeps the secret the install holds,
+ * rather than clearing it: the form never sees a secret its member may not use.
+ * That secret authenticates to the install's server, so a member who may not
+ * use it cannot repoint the install at another one.
+ */
+async function keepingInstallSecret(input: {
+  teamId: TeamId;
+  submitted: RemoteAdapterManifestInput;
+  replacing: boolean;
+}): Promise<RemoteAdapterManifestInput> {
+  const { submitted } = input;
+  if (input.replacing || submitted.credentialsId !== undefined) return submitted;
+  const held = await getRemoteAdapter({ teamId: input.teamId, adapterType: submitted.adapterType });
+  if (held === null || held.credentials_id === null) return submitted;
+  const heldId = held.credentials_id as unknown as string;
+  const sameServer = held.base_url === submitted.baseUrl && isDeepStrictEqual(held.auth_strategy, submitted.authStrategy);
+  if (!sameServer && (await connectionUnseen(heldId))) {
+    throw new TRPCError({ code: 'CONFLICT', message: 'This module is connected with a connection you may not use, so its address and sign-in cannot change.' });
+  }
+  return { ...submitted, credentialsId: heldId };
+}
+
 const remoteAdapterRouter = (procedure: typeof trpc.procedure) => {
   const userProcedure = sharedUserProcedure(procedure);
 
@@ -124,7 +149,7 @@ const remoteAdapterRouter = (procedure: typeof trpc.procedure) => {
      */
     get: userProcedure
       .input(z.object({ adapterType: z.string() }))
-      .query(async ({ input }) => {
+      .query(async ({ input }): Promise<RemoteAdapterManifestFile | null> => {
         const ctx = currentContext();
         const row = await getRemoteAdapter({
           teamId: ctx.user.teamId as TeamId,
@@ -138,7 +163,10 @@ const remoteAdapterRouter = (procedure: typeof trpc.procedure) => {
             message: `The stored manifest for "${input.adapterType}" is no longer valid: ${stored.reason}`,
           });
         }
-        return stored.manifest;
+        // As in `list`, an install's secret the caller may not use reads as no secret. A form saving this back
+        // omits it, and `upsertFromManifest` keeps what the install holds.
+        const { credentialsId, ...unconnected } = stored.manifest;
+        return credentialsId === undefined || !(await connectionUnseen(credentialsId)) ? stored.manifest : unconnected;
       }),
 
     /**
@@ -179,7 +207,7 @@ const remoteAdapterRouter = (procedure: typeof trpc.procedure) => {
         return installRemoteAdapterFromManifest({
           teamId: ctx.user.teamId as TeamId,
           userId: ctx.user.id as UserId,
-          manifest,
+          manifest: await keepingInstallSecret({ teamId: ctx.user.teamId as TeamId, submitted: manifest, replacing: secret !== undefined }),
           ...(secret !== undefined ? { secret } : {}),
         });
       }),

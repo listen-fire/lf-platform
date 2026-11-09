@@ -830,7 +830,12 @@ async function assembleTeamCatalog(
     pairs.map(async ({ slug, credentialsId }) => {
       try {
         const key = schemaKey(slug, credentialsId);
-        const base = { adapterType: slug, teamId, ...(credentialsId !== undefined ? { credentialsId } : {}) };
+        const base = {
+          adapterType: slug,
+          teamId,
+          audience: options.audience,
+          ...(credentialsId !== undefined ? { credentialsId } : {}),
+        };
         let instance: CachedAdapterInstance;
         let projection: AdapterSchemaProjection;
         if (options.source === undefined) {
@@ -1041,6 +1046,7 @@ async function assembleTeamCatalog(
         const positionedBase = {
           adapterType: t.slug,
           teamId,
+          audience: options.audience,
           ...(t.credentialsId !== undefined ? { credentialsId: t.credentialsId } : {}),
           constructionArgs: t.constructionArgs,
         };
@@ -1922,6 +1928,7 @@ export async function describeMovementInstance(input: {
     const base = {
       adapterType,
       teamId: input.teamId,
+      audience: input.audience,
       ...(credentialsId !== undefined ? { credentialsId } : {}),
       ...(input.forceRefresh !== undefined ? { forceRefresh: input.forceRefresh } : {}),
     };
@@ -2048,6 +2055,7 @@ export async function describeMovementLandings(input: {
   const instance = await cachedAdapterInstance({
     adapterType: input.adapter,
     teamId: input.teamId,
+    audience: input.audience,
     ...(target.credentialsId !== undefined ? { credentialsId: target.credentialsId } : {}),
     types: input.types,
   });
