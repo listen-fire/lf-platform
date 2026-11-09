@@ -68,6 +68,7 @@ import { reportedFailureReason } from '../../../services/translation_graph/runs/
 import { UserService } from '../../../services/user';
 import { actingPrincipal, userProcedure as sharedUserProcedure } from '../procedures';
 import { EXEMPT, decidesEach, readableAmong, unseen, type Decision } from '../../access_route';
+import { callerAudience } from '../../../services/translation_graph/movement/audience';
 import { cannotChange } from '../access';
 import { Whose } from '../../../services/access/whose';
 import { nothingToRun } from '../../../services/translation_graph/movement/run_now';
@@ -658,6 +659,7 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
         if (!owned) throw new Error(`Automation ${input.triggerId} not found`);
         return runMovementTestRun({
           teamId,
+          audience: callerAudience(),
           triggerId: input.triggerId,
           ...(input.seed !== undefined ? { seed: input.seed } : {}),
         });

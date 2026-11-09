@@ -1,3 +1,4 @@
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import type { ConnectMethod } from '../../../services/credentials/connect_link';
@@ -51,8 +52,13 @@ import { UserId } from '../../../generated/kysely/core/User';
 import { ExternalServiceCredentialsId } from '../../../generated/kysely/automations/ExternalServiceCredentials';
 import ExternalServiceType from '../../../generated/kysely/automations/ExternalServiceType';
 import { reportedFailureReason } from '../../../services/translation_graph/runs/trigger_run';
-import { EXEMPT, decidesEach, unseen } from '../../access_route';
+import { EXEMPT, USE_CONNECTION, connectionUnseen, decidesEach, unseen, usableAmong } from '../../access_route';
 import { Whose } from '../../../services/access/whose';
+
+/** A connection the caller may not use is answered as one that does not exist. */
+function connectionNotFound(id: string): TRPCError {
+  return new TRPCError({ code: 'NOT_FOUND', message: `No connection ${id}.` });
+}
 
 function maybeFakeCreds<T extends Record<string, unknown>>(creds: T, serviceType: string): T {
   const ctx = currentContext();
@@ -118,7 +124,8 @@ const credentialsRouter = (procedure: typeof trpc.procedure) => {
         .orderBy('name', 'asc')
         .execute();
 
-      return credentials.map((c) => ({
+      const usable = await usableAmong(credentials, { connectionOf: (c) => c.id, teamIds: [ctx.user.teamId] });
+      return usable.map((c) => ({
         id: c.id,
         name: c.name,
         type: c.type,
@@ -308,13 +315,15 @@ const credentialsRouter = (procedure: typeof trpc.procedure) => {
       )
       .mutation(async ({ input }) => {
         const ctx = currentContext();
+        if (await connectionUnseen(input.id)) throw connectionNotFound(input.id);
 
         const existing = await getAutomationsQb(['external_service_credentials'])
           .selectFrom('external_service_credentials')
           .where('id', '=', input.id as ExternalServiceCredentialsId)
           .where('team_id', '=', ctx.user.teamId as TeamId)
           .select(['type', 'credentials'])
-          .executeTakeFirstOrThrow();
+          .executeTakeFirst();
+        if (existing === undefined) throw connectionNotFound(input.id);
 
         if (existing.type !== input.type) {
           throw new Error('Cannot change credentials type');
@@ -367,6 +376,7 @@ const credentialsRouter = (procedure: typeof trpc.procedure) => {
       .input(z.object({ id: z.string() }))
       .mutation(async ({ input }) => {
         const ctx = currentContext();
+        if (await connectionUnseen(input.id)) throw connectionNotFound(input.id);
         await deleteCredential({
           teamId: ctx.user.teamId as TeamId,
           id: input.id as ExternalServiceCredentialsId,
@@ -473,6 +483,7 @@ const credentialsRouter = (procedure: typeof trpc.procedure) => {
         if (!input.credentialsId) {
           return [];
         }
+        if (await connectionUnseen(input.credentialsId)) throw connectionNotFound(input.credentialsId);
 
         const credentials = await getAutomationsQb(['external_service_credentials'])
           .selectFrom('external_service_credentials')
@@ -516,11 +527,12 @@ const credentialsRouter = (procedure: typeof trpc.procedure) => {
         if (!adapterType || !hasAdapter(adapterType)) {
           return { entries: [], runtimeCapabilities: null, supportedTriggers: [] };
         }
+        const credentialsId = input.credentialsId ?? credentialsIdFromRef(input.ref) ?? undefined;
+        if (credentialsId !== undefined && (await connectionUnseen(credentialsId))) throw connectionNotFound(credentialsId);
         const adapter = await resolveAdapter({
           adapterType,
           teamId: ctx.user.teamId as TeamId,
-          credentialsId:
-            input.credentialsId ?? credentialsIdFromRef(input.ref) ?? undefined,
+          credentialsId,
         });
         return {
           entries: await adapter.listEntryPoints(),
@@ -549,11 +561,12 @@ const credentialsRouter = (procedure: typeof trpc.procedure) => {
         const adapterType = adapterTypeForRef(input.ref);
         if (!adapterType || !hasAdapter(adapterType) || input.typeIds.length === 0)
           return {};
+        const credentialsId = input.credentialsId ?? credentialsIdFromRef(input.ref) ?? undefined;
+        if (credentialsId !== undefined && (await connectionUnseen(credentialsId))) throw connectionNotFound(credentialsId);
         const adapter = await resolveAdapter({
           adapterType,
           teamId: ctx.user.teamId as TeamId,
-          credentialsId:
-            input.credentialsId ?? credentialsIdFromRef(input.ref) ?? undefined,
+          credentialsId,
         });
         const out: Record<string, SchemaTypeDescriptor> = {};
         await Promise.all(
@@ -610,21 +623,21 @@ const credentialsRouter = (procedure: typeof trpc.procedure) => {
 
 // A firing's detail is a run's: it is read on the run's automation.
 decidesEach('credentials', {
-  getCredentials: EXEMPT.connection,
-  addCredential: EXEMPT.connection,
-  updateCredential: EXEMPT.connection,
-  deleteCredential: EXEMPT.connection,
-  connectMethods: EXEMPT.connection,
-  slackConnectUrl: EXEMPT.connection,
-  airtableConnectUrl: EXEMPT.connection,
-  attioConnectUrl: EXEMPT.connection,
-  googleConnectUrl: EXEMPT.connection,
-  gmailConnectPolicy: EXEMPT.connection,
-  gmailConnectUrl: EXEMPT.connection,
-  dropboxConnectUrl: EXEMPT.connection,
-  attioListObjects: EXEMPT.connection,
-  listEntryPoints: EXEMPT.connection,
-  describeTypes: EXEMPT.connection,
+  getCredentials: USE_CONNECTION,
+  addCredential: EXEMPT.newConnection,
+  updateCredential: USE_CONNECTION,
+  deleteCredential: USE_CONNECTION,
+  connectMethods: EXEMPT.deploymentConnects,
+  slackConnectUrl: EXEMPT.newConnection,
+  airtableConnectUrl: EXEMPT.newConnection,
+  attioConnectUrl: EXEMPT.newConnection,
+  googleConnectUrl: EXEMPT.newConnection,
+  gmailConnectPolicy: EXEMPT.deploymentConnects,
+  gmailConnectUrl: EXEMPT.newConnection,
+  dropboxConnectUrl: EXEMPT.newConnection,
+  attioListObjects: USE_CONNECTION,
+  listEntryPoints: USE_CONNECTION,
+  describeTypes: USE_CONNECTION,
   getTgRun: { thing: 'automation', verb: 'read' },
 });
 

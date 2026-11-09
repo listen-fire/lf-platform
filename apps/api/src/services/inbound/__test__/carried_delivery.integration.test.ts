@@ -301,7 +301,7 @@ describe('one door, two versions (real Postgres)', () => {
 
     it('a save under 0.12 keeps one row per listen in production\'s shape, and the deploy check keeps them', async () => {
       const id = await movementOn('0.12.13', ECHO);
-      const saved = await saveMovement({ teamId, id, source: ECHO });
+      const saved = await saveMovement({ audience: { for: 'run' }, teamId, id, source: ECHO });
       expect(saved.ok).toBe(true);
       const rows = await getAutomationsQb(['trigger']).selectFrom('trigger').where('movement_id', '=', id as MovementId).select(['id', 'kind', 'config', 'fired_movement_name']).execute();
       expect(rows.map((row) => [row.kind, row.fired_movement_name])).toEqual([['manual', 'echo']]);

@@ -20,6 +20,7 @@
  */
 
 
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import type { UserId } from '../../../generated/kysely/core/User';
@@ -36,6 +37,7 @@ import { resolveAdapterSlug } from '../../../services/translation_graph/adapters
 import { teamAdapterManifests } from '../../../services/translation_graph/adapters/team_manifests';
 import { listRemoteAdapters } from '../../../services/translation_graph/adapters/remote/store';
 import { loadCredentialRows } from '../../../services/translation_graph/movement/catalog';
+import { callerAudience } from '../../../services/translation_graph/movement/audience';
 import { credentialImportNames } from 'movement-engine/public/catalog';
 import { connectWrittenAs } from '../../../services/translation_graph/adapters/builtin_modules';
 import { inboundRoutingAddress } from '@listen-fire/email';
@@ -46,7 +48,7 @@ import {
   mintTelegramToken,
   telegramStartUrl,
 } from '../../../services/translation_graph/adapters/telegram/handshake';
-import { EXEMPT, decidesEach } from '../../access_route';
+import { USE_CONNECTION, connectionUnseen, decidesEach, readableAmong, usableAmong } from '../../access_route';
 
 
 /** Hide seed labels that leaked into the dev-loop DB before U1's seed rename. */
@@ -266,7 +268,7 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
       const isProd = process.env.NODE_ENV === 'production';
 
       // Pull the tables in parallel — none depend on each other.
-      const [credentialRows, triggerRows, manifests, catalogCredentialRows, remoteInstalls] =
+      const [teamCredentialRows, teamTriggerRows, manifests, catalogCredentialRows, remoteInstalls] =
         await Promise.all([
           getAutomationsQb(['external_service_credentials'])
             .selectFrom('external_service_credentials')
@@ -277,15 +279,19 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
           getAutomationsQb(['trigger'])
             .selectFrom('trigger')
             .where('team_id', '=', teamId)
-            .select(['id', 'name', 'kind', 'config', 'credentials_id'])
+            .select(['id', 'name', 'kind', 'config', 'credentials_id', 'movement_id'])
             .execute(),
           // The catalog's own manifests and credential rows, so the page
           // shows exactly what the language resolves, the team's own modules
           // (`#acme_crm`) among them.
           teamAdapterManifests(teamId, []),
-          loadCredentialRows(teamId),
+          loadCredentialRows(teamId, callerAudience()),
           listRemoteAdapters({ teamId }),
         ]);
+      // The page shows the connections the caller may use, and the listens of
+      // the automations they may read.
+      const credentialRows = await usableAmong(teamCredentialRows, { connectionOf: (c) => c.id, teamIds: [teamId] });
+      const triggerRows = await readableAmong(teamTriggerRows, { automationOf: (t) => t.movement_id, teamIds: [teamId] });
 
       // Movement import names for each credential row — the identifier a
       // program writes in `import { … } from credentials`. Reuses the
@@ -404,15 +410,18 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
         const teamId = ctx.user.teamId as TeamId;
         const credentialId = input.id as ExternalServiceCredentialsId;
 
-        // Ownership gate: the id must be one of this team's credentials.
-        // Everything below filters by credentials_id alone, which is safe
-        // only once we know the credential belongs to the caller's team.
-        await getAutomationsQb(['external_service_credentials'])
+        // Ownership gate: the id must be one of this team's credentials, and
+        // one the caller may use. Everything below filters by credentials_id
+        // alone, which is safe only once we know both.
+        const owned = await getAutomationsQb(['external_service_credentials'])
           .selectFrom('external_service_credentials')
           .where('id', '=', credentialId)
           .where('team_id', '=', teamId)
           .select(['id'])
-          .executeTakeFirstOrThrow();
+          .executeTakeFirst();
+        if (owned === undefined || (await connectionUnseen(input.id))) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: `No connection ${input.id}.` });
+        }
 
         const [
           credentialRows,
@@ -422,7 +431,7 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
           webhookRows,
           remoteAdapterRows,
         ] = await Promise.all([
-          loadCredentialRows(teamId),
+          loadCredentialRows(teamId, callerAudience()),
           teamAdapterManifests(teamId, []),
           getAutomationsQb(['movement'])
             .selectFrom('movement')
@@ -433,7 +442,7 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
             .selectFrom('trigger')
             .where('team_id', '=', teamId)
             .where('credentials_id', '=', credentialId)
-            .select(['id', 'name'])
+            .select(['id', 'name', 'movement_id'])
             .orderBy('name', 'asc')
             .execute(),
           getAutomationsQb(['webhook_subscription'])
@@ -461,8 +470,11 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
           .filter(([, row]) => row.id === (credentialId as unknown as string))
           .map(([name]) => name);
 
+        // Only what the caller may read is counted or named.
+        const readableMovements = await readableAmong(movementRows, { automationOf: (m) => m.id, teamIds: [teamId] });
+        const readableTriggers = await readableAmong(triggerRows, { automationOf: (t) => t.movement_id, teamIds: [teamId] });
         const movements = movementsImportingCredential(
-          movementRows.map((m) => ({
+          readableMovements.map((m) => ({
             id: m.id as unknown as string,
             name: m.name,
             validityStatus: m.validity_status,
@@ -474,7 +486,7 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
         return {
           importNames,
           movements,
-          automations: triggerRows.map((t) => ({
+          automations: readableTriggers.map((t) => ({
             id: t.id as unknown as string,
             name: t.name,
           })),
@@ -526,20 +538,26 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
     connectTelegramTeam: userProcedure.mutation(
       async (): Promise<{ id: string; name: string; created: boolean }> => {
         const ctx = currentContext();
-        return ensureSharedTelegramTeamCredential({
+        const ensured = await ensureSharedTelegramTeamCredential({
           teamId: ctx.user.teamId as TeamId,
           userId: ctx.user.id as UserId,
         });
+        // A team holds one shared Telegram connection: one the caller may not
+        // use is not handed to them, and no second is made beside it.
+        if (!ensured.created && (await connectionUnseen(ensured.id))) {
+          throw new TRPCError({ code: 'CONFLICT', message: "The team's Telegram connection is one you may not use." });
+        }
+        return ensured;
       },
     ),
   });
 };
 
 decidesEach('connections', {
-  getAll: EXEMPT.connection,
-  credentialDependents: EXEMPT.connection,
-  connectTelegram: EXEMPT.connection,
-  connectTelegramTeam: EXEMPT.connection,
+  getAll: USE_CONNECTION,
+  credentialDependents: USE_CONNECTION,
+  connectTelegram: { exempt: "links the caller's own Telegram account, no connection" },
+  connectTelegramTeam: USE_CONNECTION,
 });
 
 export { connectionsRouter };

@@ -52,7 +52,7 @@ describe('a question a run raises names the run that asked it', () => {
   });
 
   it('records the run and its automation on the question, so it stays the automation’s once the run is done', async () => {
-    const saved = await saveMovement({ teamId: teamId as string, source: SOURCE, name: 'asker-probe' });
+    const saved = await saveMovement({ audience: { for: 'run' }, teamId: teamId as string, source: SOURCE, name: 'asker-probe' });
     if (!saved.ok) throw new Error(`test: the probe movement did not save: ${JSON.stringify(saved)}`);
     const queued = await runMovementAsync({ teamId: teamId as string, movementId: saved.movementId, text: 'go' });
     if (!queued.ok) throw new Error(queued.errors.join('; '));

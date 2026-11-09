@@ -50,7 +50,25 @@ const MISSING: Refs = {
 
 /** The same name in a second team, which the caller may read: a lookup must find it. */
 const SECOND_DEALS = 'd0000000-0000-4000-8000-000000000002';
-const FINANCE: Target<'connection'> = { thing: 'connection', id: 'c0000000-0000-4000-8000-000000000001' };
+
+/** What a connection route is asked about: the seeded connection's, or names that exist nowhere. */
+type ConnectionRefs = { connectionId: string; connectionName: string; subscriptionId: string };
+
+const mockConnection: ConnectionRefs = {
+  connectionId: 'c0000000-0000-4000-8000-000000000001',
+  connectionName: 'Finance',
+  subscriptionId: '90000000-0000-4000-8000-000000000001',
+};
+
+const CONNECTION = mockConnection;
+
+const NO_CONNECTION: ConnectionRefs = {
+  connectionId: 'c0000000-0000-4000-8000-00000000dead',
+  connectionName: 'Nowhere',
+  subscriptionId: '90000000-0000-4000-8000-00000000dead',
+};
+
+const FINANCE: Target<'connection'> = { thing: 'connection', id: CONNECTION.connectionId };
 
 type Row = { teamId: string; target: Target; verb: Verb; grantee: Grantee };
 
@@ -63,7 +81,14 @@ const mockEffects = {
   replayThroughListen: jest.fn(async () => ({ outcome: 'replayed', runIds: [mockSeeded.runId] })),
   resumeListen: jest.fn(async () => ({ resumed: true, held: 0 })),
   cancelAskAndWake: jest.fn(async () => ({ ok: false, reason: 'not_found' })),
+  deleteCredential: jest.fn(async () => undefined),
+  grantSpreadsheet: jest.fn(async () => undefined),
+  revokeSpreadsheet: jest.fn(async () => undefined),
+  registerSubscription: jest.fn(async () => ({ externalId: 'hook', secret: 'secret' })),
 };
+
+/** A table's rows, as the stubbed query builder serves them to every query of it. */
+type Table = Record<string, unknown>[];
 
 const mockState: {
   things: Map<string, string>;
@@ -73,6 +98,11 @@ const mockState: {
   teams: string[];
   automations: { id: string; teamId: string; name: string }[];
   activity: EventEmitter;
+  connections: Table;
+  subscriptions: Table;
+  installs: Table;
+  /** Every table a route inserted into, updated or deleted from. */
+  writes: string[];
 } = {
   things: new Map(),
   members: new Map(),
@@ -81,6 +111,10 @@ const mockState: {
   teams: [TEAM],
   automations: [],
   activity: new EventEmitter(),
+  connections: [],
+  subscriptions: [],
+  installs: [],
+  writes: [],
 };
 
 jest.mock('../../services/access/statement', () => {
@@ -174,7 +208,10 @@ jest.mock('../rest/v1/team_scope', () => ({
 
 /** Rows for the routes that read tables directly; each answers every query, so only a decision keeps the automation out. */
 jest.mock('../../lib/kysely', () => {
-  const tables: Record<string, unknown[]> = {
+  const tables = (): Record<string, unknown[]> => ({
+    external_service_credentials: mockState.connections,
+    webhook_subscription: mockState.subscriptions,
+    remote_adapter: mockState.installs,
     trigger: [
       {
         id: mockSeeded.listenId,
@@ -207,7 +244,7 @@ jest.mock('../../lib/kysely', () => {
       },
     ],
     movement: [{ id: mockSeeded.automationId, name: 'Deals' }],
-  };
+  });
   const stub = (): unknown => {
     let rows: unknown[] = [];
     const chain: object = new Proxy(
@@ -217,7 +254,8 @@ jest.mock('../../lib/kysely', () => {
           if (prop === 'then') return undefined;
           if (prop === 'selectFrom' || prop === 'updateTable' || prop === 'deleteFrom' || prop === 'insertInto') {
             return (table: string) => {
-              rows = tables[table] ?? [];
+              if (prop !== 'selectFrom') mockState.writes.push(table);
+              rows = tables()[table] ?? [];
               return chain;
             };
           }
@@ -411,17 +449,203 @@ jest.mock('../../lib/message_queue', () => {
   return { ...actual, mq: { ...actual.mq, triggerRunActivity: exchange, triggerRuns: exchange } };
 });
 
+// What the connection routes reach beyond the tables: nothing here talks to a
+// provider, so describing a usable connection says its introspection failed,
+// which is all a test needs to tell it from a missing one.
+jest.mock('../../services/translation_graph/movement/instance_cache', () => ({
+  ...jest.requireActual('../../services/translation_graph/movement/instance_cache'),
+  cachedAdapterInstance: async () => {
+    throw new Error('no network in this test');
+  },
+  introspectAdapterInstanceCached: async () => {
+    throw new Error('no network in this test');
+  },
+  adapterInstanceIsWarm: () => false,
+}));
+
+jest.mock('../../lib/credentials', () => ({
+  ...jest.requireActual('../../lib/credentials'),
+  decryptToken: async () => JSON.stringify({ accessToken: 'token', refreshToken: 'refresh', expiresAt: 0, secret: 'module_secret' }),
+  encryptToken: async () => 'sealed',
+}));
+
+jest.mock('../../adapters/attio/apiClient', () => ({
+  ...jest.requireActual('../../adapters/attio/apiClient'),
+  getAttioClient: () => ({ listObjects: async () => [{ api_slug: 'deals' }] }),
+}));
+
+jest.mock('../../adapters/registry', () => {
+  const actual = jest.requireActual('../../adapters/registry');
+  const google = { authClient: { getGoogleClient: () => ({ getAccessToken: async () => ({ token: 'google_token' }) }) } };
+  return { ...actual, services: { ...actual.services, google } };
+});
+
+jest.mock('../../services/translation_graph/adapters/resolve', () => ({
+  ...jest.requireActual('../../services/translation_graph/adapters/resolve'),
+  resolveAdapter: async () => ({
+    listEntryPoints: async () => [{ id: 'deals' }],
+    runtimeCapabilities: () => null,
+    supportedTriggers: () => [],
+    describe: async (typeId: string) => ({ id: typeId }),
+  }),
+}));
+
+jest.mock('../../services/credentials/delete_credential', () => ({
+  ...jest.requireActual('../../services/credentials/delete_credential'),
+  deleteCredential: () => mockEffects.deleteCredential(),
+}));
+
+jest.mock('../../services/translation_graph/adapters/google_sheets/grants', () => ({
+  ...jest.requireActual('../../services/translation_graph/adapters/google_sheets/grants'),
+  grantSpreadsheet: () => mockEffects.grantSpreadsheet(),
+  revokeSpreadsheet: () => mockEffects.revokeSpreadsheet(),
+  listGrantedSpreadsheets: async () => [{ spreadsheetId: 'sheet', name: 'Ledger' }],
+}));
+
+jest.mock('../../services/webhook_sync/providers', () => {
+  const actual = jest.requireActual('../../services/webhook_sync/providers');
+  const provider = {
+    defaultEventTypes: ['record.created'],
+    canRegisterViaApi: true,
+    registerSubscription: () => mockEffects.registerSubscription(),
+  };
+  return { ...actual, getWebhookProvider: () => provider };
+});
+
+jest.mock('../../services/credentials/remote_module_connect', () => ({
+  ...jest.requireActual('../../services/credentials/remote_module_connect'),
+  listRemoteModuleCredentials: async () => ({
+    declarations: [
+      {
+        name: 'api',
+        fields: [],
+        kind: 'static',
+        credentials: mockState.connections.map((row) => ({ id: row.id, name: row.name })),
+      },
+    ],
+  }),
+}));
+
+// The sign-in routes' key client is an ES module jest does not load; no route here signs anyone in.
+jest.mock('jwks-rsa', () => ({ __esModule: true, default: () => ({}) }));
+
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+// An install asks its server for the manifest with the secret it names.
+jest.mock('movement-engine/public/modules', () => ({
+  ...jest.requireActual('movement-engine/public/modules'),
+  fetchRemoteManifest: async () => ({}),
+}));
+
 import { automationConnectorOptions } from '../mcp/connectors/automation';
+import { publicRouter, privateRouter } from '../rest';
 import { automationRouter } from '../rest/v1/automation';
 import { asksRouter } from '../rest/v1/asks';
 import { viewsRouter } from '../trpc/views';
-import { READ_ONLY_MESSAGE, registeredDecisions, restRoute, type Decision } from '../access_route';
+import { EXEMPT, READ_ONLY_MESSAGE, registeredDecisions, restRoute } from '../access_route';
 
-/** The REST routers that reach automations, runs, arrivals or questions, where they are mounted. */
-const REST_TREES = [
-  { base: '/v1/automation', router: automationRouter },
-  { base: '/v1/asks', router: asksRouter },
+/**
+ * How the walk treats a surface mounted on a REST root: it walks a router that
+ * reaches automations, runs, questions or connections, so each of its routes
+ * must decide; it passes over one exempt with its reason.
+ */
+type Surface = { walk: unknown } | { exempt: string };
+
+const SIGNED_DOOR = 'a door whose provider signature or sender is the authority, no caller to decide for';
+const TOKEN_LINK = 'a link whose token in the URL is the authority';
+const MIDDLEWARE = 'middleware, which answers no route of its own';
+
+/** What is mounted on the two REST roots (`rest/index.ts`), by route or by mount path. */
+const ROOTS: { base: string; router: unknown; surfaces: Record<string, Surface> }[] = [
+  {
+    base: '/api/public',
+    router: publicRouter,
+    surfaces: {
+      'GET /document/:/data': { exempt: 'a team document, no automation or connection' },
+      'GET /icon': { exempt: 'an icon, no automation or connection' },
+      'GET /feature_flags/:': { exempt: 'feature flags, no automation or connection' },
+      'GET /integrations': { exempt: 'the integrations the platform offers, no connection' },
+      'POST /integrations/suggest': { exempt: 'a suggestion to the operator, no automation or connection' },
+      'POST /save_click_event': { exempt: 'analytics that answers nothing' },
+      'GET /page_view': { exempt: 'analytics that answers nothing' },
+      '/whatsapp': { exempt: SIGNED_DOOR },
+      '/auth': { exempt: "sign-in, and the OAuth callbacks that finish a connect, whose signed state is the authority" },
+    },
+  },
+  {
+    base: '/api',
+    router: privateRouter,
+    surfaces: {
+      'GET /authenticated': { exempt: 'whether the caller is signed in' },
+      'POST /mailgun/callback': { exempt: SIGNED_DOOR },
+      'POST /email/callback': { exempt: SIGNED_DOOR },
+      'POST /resend/callback': { exempt: SIGNED_DOOR },
+      'POST /auth/impersonate': EXEMPT.platformAdmin,
+      'POST /auth/stop-impersonate': EXEMPT.platformAdmin,
+      '/webhook': { exempt: "the mail provider's delivery events, signed by the provider" },
+      '/v1/automation': { walk: automationRouter },
+      '/v1': { exempt: "the caller's own identity" },
+      '/v1/system': { exempt: "the system scope: the platform's operators and lf's runtime slots, acting for a tenant as a run does" },
+      '/v1/knowledge': { exempt: 'the knowledge graph, no automation or connection' },
+      '/v1/valuations': { exempt: 'valuation data, no automation or connection' },
+      '/v1/asks': { walk: asksRouter },
+    },
+  },
 ];
+
+/**
+ * What `server.ts` mounts on the app itself, by the first thing each mount
+ * names. The app is built inside the server's boot, so the walk cannot reach
+ * it; this list is held to the server's text instead.
+ */
+const APP_MOUNTS: Record<string, string> = {
+  "'/'": 'the root page, no automation or connection',
+  'express.static': 'static files',
+  HEALTH_CHECK_ENDPOINT: 'a health probe',
+  WORKERS_HEALTH_ENDPOINT: 'a health probe',
+  expressLogger: MIDDLEWARE,
+  cookieParser: MIDDLEWARE,
+  customHeadersExtractor: MIDDLEWARE,
+  jsonBodyParser: MIDDLEWARE,
+  urlencodedBodyParser: MIDDLEWARE,
+  cors: MIDDLEWARE,
+  contextInjector: MIDDLEWARE,
+  createAuthenticationHandler: MIDDLEWARE,
+  authorisationHandler: MIDDLEWARE,
+  sentryScopeHandler: MIDDLEWARE,
+  contextTransactionHandler: MIDDLEWARE,
+  'Sentry.setupExpressErrorHandler': MIDDLEWARE,
+  'http.createServer': 'the server itself',
+  "'/api/resend'": "the inbound mail door's body parser, no route",
+  // Undecided: it reads every connection of the key's team. Deciding use there needs a new connection to carry a statement (Task 6) first.
+  "'/api/public/lf-secrets'": "lf's secrets slot, held undecided until a new connection carries a statement; and its OAuth relay, whose signed state is the authority",
+  "'/api/public/webhook-sync'": SIGNED_DOOR,
+  "'/api/public/adapter'": "a remote module's push doors: the credential it presents is the authority",
+  "'/api/public/telegram'": SIGNED_DOOR,
+  "'/api/public/slack'": SIGNED_DOOR,
+  "'/api/public/slack-actions'": SIGNED_DOOR,
+  "'/api/files'": TOKEN_LINK,
+  "'/api/story'": `${TOKEN_LINK}; the picture is drawn with the connections the automation runs on`,
+  "'/api/connect'": `${TOKEN_LINK}, minted only after the use decision`,
+  "'/api/asks'": `${TOKEN_LINK}: the human answer door`,
+  "'/api/cb'": TOKEN_LINK,
+  createOAuthRouter: 'MCP sign-in: the authorization server, no automation or connection',
+  createProtectedResourceRouter: 'MCP sign-in: its metadata, no automation or connection',
+  MCP_BASE_PATH: "MCP sign-in: its challenge to a request with no credential",
+  mountMcpConnectors: "each product's MCP connector: the automation tools call the REST routes walked here",
+  "'/api/public'": 'walked: the public root, and ahead of it what this deployment runs, before sign-in',
+  "'/api/trpc'": 'walked: every tRPC procedure',
+  "'/api'": 'walked: the private root',
+};
+
+/** The first thing each of the server's mounts names: a path, or the middleware or router it mounts. */
+function appMounts(): string[] {
+  const text = readFileSync(join(__dirname, '..', '..', 'server.ts'), 'utf8');
+  const onApp = [...text.matchAll(/\bapp\.(?:use|get|post|put|patch|delete|all)\(\s*('[^']*'|[A-Za-z_$][\w$.]*)/g)];
+  const givenApp = [...text.matchAll(/([A-Za-z_$][\w$.]*)\(app\)/g)];
+  return [...new Set([...onApp, ...givenApp].flatMap((match) => (match[1] === undefined ? [] : [match[1]])))];
+}
 
 function statesOnly(automationId: string, teamId: string, grantee: Grantee): void {
   const target: Target = { thing: 'automation', id: automationId };
@@ -443,8 +667,67 @@ beforeEach(() => {
   statesOnly(SEEDED.automationId, TEAM, { kind: 'user', userId: BOB });
   mockState.things.set(`connection:${FINANCE.id}`, TEAM);
   mockState.rows.push({ teamId: TEAM, target: FINANCE, verb: 'use', grantee: { kind: 'user', userId: BOB } });
+  mockState.connections = [
+    {
+      id: CONNECTION.connectionId,
+      team_id: TEAM,
+      name: CONNECTION.connectionName,
+      type: 'ATTIO',
+      credentials: 'sealed',
+      // The module it may serve as an install's secret.
+      app_id: 'acme_crm',
+      declared_credential: null,
+      created_at: new Date(1),
+      updated_at: new Date(1),
+    },
+  ];
+  mockState.subscriptions = [
+    {
+      id: CONNECTION.subscriptionId,
+      team_id: TEAM,
+      provider: 'ATTIO',
+      credentials_id: CONNECTION.connectionId,
+      external_webhook_id: null,
+      webhook_secret: 'secret',
+      status: 'active',
+      subscriptions: [],
+      created_at: new Date(0),
+    },
+  ];
+  // A module install whose own secret is the connection.
+  mockState.installs = [
+    {
+      id: 'e1000000-0000-4000-8000-000000000001',
+      team_id: TEAM,
+      adapter_type: 'acme_crm',
+      base_url: 'https://adapter.example.com',
+      auth_strategy: { kind: 'bearer' },
+      credentials_id: CONNECTION.connectionId,
+      manifest: {
+        protocolVersion: 2,
+        adapterType: 'acme_crm',
+        baseUrl: 'https://adapter.example.com',
+        authStrategy: { kind: 'bearer' },
+        supportedTriggers: [],
+        runtimeCapabilities: { traversal: { incoming: false, edgeProperties: false }, resources: false },
+        methods: [],
+      },
+      created_at: new Date(0),
+      updated_at: new Date(0),
+    },
+  ];
+  mockState.writes = [];
   mockState.asked = 0;
 });
+
+/** The world with no such connection: nothing names it, and nothing it owns is left. */
+function withoutConnection(): void {
+  mockState.things.delete(`connection:${FINANCE.id}`);
+  mockState.connections = [];
+  mockState.subscriptions = [];
+  // The install stays; it holds no secret.
+  mockState.installs = mockState.installs.map((install) => ({ ...install, credentials_id: null }));
+}
 
 // ---------------------------------------------------------------------------
 // The walk
@@ -452,7 +735,7 @@ beforeEach(() => {
 
 type ExpressLayer = {
   name: string;
-  regexp: { fast_slash?: boolean };
+  regexp: RegExp & { fast_slash?: boolean };
   handle: { stack?: ExpressLayer[] };
   route?: { path: string; methods: Record<string, boolean>; stack: { handle: RequestHandler }[] };
 };
@@ -488,14 +771,63 @@ function walkRest(router: unknown, base: string): { routes: { key: string; handl
   return { routes, unread };
 }
 
+/**
+ * Every surface on a REST root, as the walk finds it: a route, or a router or
+ * middleware mounted at a path. A mount is known by the shortest listed path
+ * its pattern takes, since a mount at `/v1` also takes `/v1/automation`.
+ */
+function walkRoots(): { trees: { base: string; router: unknown }[]; unlisted: string[]; unread: string[] } {
+  const trees: { base: string; router: unknown }[] = [];
+  const unlisted: string[] = [];
+  const unread: string[] = [];
+  for (const root of ROOTS) {
+    const listed = Object.entries(root.surfaces);
+    for (const layer of (root.router as { stack: ExpressLayer[] }).stack) {
+      const route = layer.route;
+      if (route !== undefined) {
+        for (const method of Object.keys(route.methods)) {
+          const key = restRoute(method, route.path);
+          if (root.surfaces[key] === undefined) unlisted.push(`${root.base} ${key}`);
+        }
+        continue;
+      }
+      const pattern = layer.regexp;
+      const at = listed
+        .map(([path]) => path)
+        .filter((path) => path.startsWith('/') && pattern.test(path))
+        .sort((a, b) => a.length - b.length)[0];
+      const surface = at === undefined ? undefined : root.surfaces[at];
+      if (at === undefined || surface === undefined) {
+        unlisted.push(`${root.base}: ${layer.handle.stack === undefined ? `middleware ${layer.name}` : 'a router'} at ${pattern}`);
+      } else if ('walk' in surface) {
+        if (surface.walk === layer.handle) trees.push({ base: at, router: layer.handle });
+        else unread.push(`${root.base}${at}: not the router listed to walk`);
+      }
+    }
+  }
+  return { trees, unlisted, unread };
+}
+
 const procedureNames = Object.keys(viewsRouter._def.procedures).map((name) => `views.${name}`);
-const restWalk = REST_TREES.map((tree) => walkRest(tree.router, tree.base));
+const roots = walkRoots();
+const restWalk = roots.trees.map((tree) => walkRest(tree.router, tree.base));
 const restRoutes = restWalk.flatMap((walked) => walked.routes);
-const decided = (decision: Decision | undefined): boolean => decision !== undefined && !('exempt' in decision);
 
 describe('the registry', () => {
+  it('lists every surface mounted on the REST roots, walked or exempt with its reason', () => {
+    expect(roots.unlisted).toEqual([]);
+    expect(roots.trees.map((tree) => tree.base)).toEqual(['/v1/automation', '/v1/asks']);
+  });
+
+  it('lists every mount the server makes on the app itself', () => {
+    const mounted = appMounts();
+    expect(mounted).toEqual(expect.arrayContaining(["'/api'", "'/api/story'", "'/api/public/lf-secrets'"]));
+    expect(mounted.filter((mount) => APP_MOUNTS[mount] === undefined)).toEqual([]);
+    expect(Object.keys(APP_MOUNTS).filter((mount) => !mounted.includes(mount))).toEqual([]);
+  });
+
   it('reads every layer of the REST trees', () => {
-    expect(restWalk.flatMap((walked) => walked.unread)).toEqual([]);
+    expect([...roots.unread, ...restWalk.flatMap((walked) => walked.unread)]).toEqual([]);
   });
 
   it('has a decision or an exemption for every REST route under /v1/automation and /v1/asks', () => {
@@ -601,6 +933,80 @@ const TRPC_CALLS: Record<string, { input: (refs: Refs) => unknown; list?: true }
   'views.credentials.getTgRun': { input: (r) => ({ runId: r.runId }) },
 };
 
+/** What a granted call changes: an effect by name, or a table written. */
+type Effect = keyof typeof mockEffects | `write:${string}`;
+
+/**
+ * How to ask a connection route about the refs. `list` routes take none and
+ * must leave the connection out. `effect` is what the route changes, which a
+ * caller who may use the connection reaches and one who may not never does.
+ * `refusal` is for the one route whose refusal is its own answer rather than
+ * the missing one's, by ruling: a connect link under a name a hidden
+ * connection holds says the name is taken, which reveals only that it exists.
+ */
+type ConnectionCall<Ask> = { ask: (refs: ConnectionRefs) => Ask; list?: true; effect?: Effect; refusal?: RegExp };
+
+const programOn = (refs: ConnectionRefs) => `import { ${refs.connectionName} } from credentials\n`;
+const attioRef = { kind: 'adapter', adapterType: 'attio' };
+
+const REST_CONNECTION_CALLS: Record<string, ConnectionCall<RestCall>> = {
+  'GET /v1/automation/connections': { ask: () => ({}), list: true },
+  'POST /v1/automation/connections/describe': {
+    ask: (c) => ({ body: { system: 'attio', connection: c.connectionName, detail: 'full' } }),
+  },
+  'POST /v1/automation/connections/connect': {
+    ask: (c) => ({ body: { system: 'affinity', connection: c.connectionName } }),
+    effect: 'write:connect_token',
+    refusal: /taken by a connection you may not use/,
+  },
+  'POST /v1/automation/connections/grant-access': {
+    ask: (c) => ({ body: { system: 'google_sheets', connection: c.connectionName } }),
+    effect: 'write:connect_token',
+  },
+};
+
+const TRPC_CONNECTION_CALLS: Record<string, ConnectionCall<unknown>> = {
+  'views.connections.getAll': { ask: () => undefined, list: true },
+  'views.connections.credentialDependents': { ask: (c) => ({ id: c.connectionId }) },
+  // One shared Telegram connection per team: a hidden one is refused, and no second is made.
+  'views.connections.connectTelegramTeam': { ask: () => undefined, refusal: /Telegram connection is one you may not use/ },
+  'views.credentials.getCredentials': { ask: () => undefined, list: true },
+  'views.credentials.updateCredential': {
+    ask: (c) => ({ id: c.connectionId, name: c.connectionName, type: 'ATTIO', credentials: { accessToken: 'rotated' } }),
+    effect: 'write:external_service_credentials',
+  },
+  'views.credentials.deleteCredential': { ask: (c) => ({ id: c.connectionId }), effect: 'deleteCredential' },
+  'views.credentials.attioListObjects': { ask: (c) => ({ credentialsId: c.connectionId }) },
+  'views.credentials.listEntryPoints': { ask: (c) => ({ ref: attioRef, credentialsId: c.connectionId }) },
+  'views.credentials.describeTypes': { ask: (c) => ({ ref: attioRef, credentialsId: c.connectionId, typeIds: ['deals'] }) },
+  'views.googleSheets.pickerToken': { ask: (c) => ({ credentialsId: c.connectionId }) },
+  'views.googleSheets.grant': { ask: (c) => ({ credentialsId: c.connectionId, spreadsheetId: 'sheet' }), effect: 'grantSpreadsheet' },
+  'views.googleSheets.listGrants': { ask: (c) => ({ credentialsId: c.connectionId }) },
+  'views.googleSheets.revoke': { ask: (c) => ({ credentialsId: c.connectionId, spreadsheetId: 'sheet' }), effect: 'revokeSpreadsheet' },
+  'views.graphExplorer.listInstances': { ask: () => undefined, list: true },
+  'views.graphExplorer.walk': { ask: (c) => ({ adapterType: 'attio', credentialsId: c.connectionId }) },
+  'views.movement.catalog': { ask: () => undefined, list: true },
+  'views.movement.catalogForSource': { ask: (c) => ({ source: programOn(c) }) },
+  'views.movement.describeInstance': { ask: (c) => ({ adapter: 'attio', credentialName: c.connectionName }) },
+  'views.remoteAdapter.list': { ask: () => undefined, list: true },
+  'views.remoteAdapter.credentials': { ask: () => ({ adapterType: 'acme_crm' }), list: true },
+  'views.remoteAdapter.upsertFromManifest': {
+    ask: (c) => ({
+      adapterType: 'acme_crm',
+      baseUrl: 'https://adapter.example.com',
+      authStrategy: { kind: 'bearer' },
+      supportedTriggers: [],
+      runtimeCapabilities: { traversal: { incoming: false, edgeProperties: false }, resources: false },
+      methods: [],
+      credentialsId: c.connectionId,
+    }),
+    effect: 'write:remote_adapter',
+  },
+  'views.webhookSubscriptions.list': { ask: () => undefined, list: true },
+  'views.webhookSubscriptions.create': { ask: (c) => ({ credentialsId: c.connectionId, provider: 'attio' }), effect: 'registerSubscription' },
+  'views.webhookSubscriptions.delete': { ask: (c) => ({ id: c.subscriptionId }), effect: 'write:webhook_subscription' },
+};
+
 /** A route's answer, as something two calls can be compared by. */
 type Outcome = { status: number | 'thrown'; body: unknown };
 
@@ -672,24 +1078,40 @@ async function settled(answer: unknown): Promise<unknown> {
 }
 
 /** The answer about the missing names, written as if it were about the seeded ones. */
-function asIfSeeded(outcome: Outcome): Outcome {
+function asIf<R extends Record<string, string>>(outcome: Outcome, names: { from: R; to: R }): Outcome {
   let text = JSON.stringify(outcome);
-  for (const key of Object.keys(MISSING) as (keyof Refs)[]) text = text.split(MISSING[key]).join(SEEDED[key]);
+  for (const key of Object.keys(names.from)) text = text.split(names.from[key] ?? '').join(names.to[key] ?? '');
   return JSON.parse(text);
 }
+
+const asIfSeeded = (outcome: Outcome): Outcome => asIf(outcome, { from: MISSING, to: SEEDED });
 
 function mentionsSeeded(outcome: Outcome): boolean {
   const text = JSON.stringify(outcome.body ?? null);
   return [SEEDED.automationId, SEEDED.automationName, SEEDED.runId, SEEDED.listenId, SEEDED.askId].some((ref) => text.includes(ref));
 }
 
-/** The effects a refused call reached, by name. */
-function effectsReached(): string[] {
-  return Object.entries(mockEffects).flatMap(([name, effect]) => (effect.mock.calls.length > 0 ? [name] : []));
+function mentionsConnection(outcome: Outcome): boolean {
+  const text = JSON.stringify(outcome.body ?? null);
+  return [CONNECTION.connectionId, CONNECTION.connectionName].some((ref) => text.includes(ref));
 }
 
-const restDecided = restRoutes.filter((route) => decided(registeredDecisions().get(route.key)));
-const trpcDecided = procedureNames.filter((name) => decided(registeredDecisions().get(name)));
+/** The effects a call reached, by name, and the tables it wrote. */
+function effectsReached(): Effect[] {
+  const called = Object.entries(mockEffects).flatMap(([name, effect]) => (effect.mock.calls.length > 0 ? [name] : []));
+  const written = mockState.writes.map((table) => `write:${table}`);
+  return [...new Set([...called, ...written])].filter((name): name is Effect => name in mockEffects || name.startsWith('write:'));
+}
+
+function thingOf(route: string): 'automation' | 'connection' | undefined {
+  const decision = registeredDecisions().get(route);
+  return decision === undefined || 'exempt' in decision ? undefined : decision.thing;
+}
+
+const restDecided = restRoutes.filter((route) => thingOf(route.key) === 'automation');
+const trpcDecided = procedureNames.filter((name) => thingOf(name) === 'automation');
+const restUses = restRoutes.filter((route) => thingOf(route.key) === 'connection');
+const trpcUses = procedureNames.filter((name) => thingOf(name) === 'connection');
 
 function verbOf(route: string): 'read' | 'write' | 'use' | undefined {
   const decision = registeredDecisions().get(route);
@@ -698,8 +1120,12 @@ function verbOf(route: string): 'read' | 'write' | 'use' | undefined {
 
 describe('as a write member, on an automation whose statements name only someone else', () => {
   it('knows how to call every route that decides', () => {
+    expect(restRoutes.filter((route) => thingOf(route.key) !== undefined).length).toBe(restDecided.length + restUses.length);
+    expect(procedureNames.filter((name) => thingOf(name) !== undefined).length).toBe(trpcDecided.length + trpcUses.length);
     expect(restDecided.map((r) => r.key).filter((key) => REST_CALLS[key] === undefined)).toEqual([]);
     expect(trpcDecided.filter((name) => TRPC_CALLS[name] === undefined)).toEqual([]);
+    expect(restUses.map((r) => r.key).filter((key) => REST_CONNECTION_CALLS[key] === undefined)).toEqual([]);
+    expect(trpcUses.filter((name) => TRPC_CONNECTION_CALLS[name] === undefined)).toEqual([]);
   });
 
   it.each(restDecided.map((r) => [r.key, r.handler] as const))('%s refuses it as it refuses a missing name, or leaves it out', async (key, handler) => {
@@ -779,6 +1205,71 @@ describe('as a write member who may only read the automation', () => {
     } else {
       expect(seen).not.toEqual(await missingAnswer(() => callTrpc(name, how.input(MISSING))));
     }
+  });
+});
+
+describe('as a write member, on a connection whose statements name only someone else', () => {
+  /** The route's answer about the seeded connection, then what it must equal: its answer about a missing one. */
+  async function refused(call: (refs: ConnectionRefs) => Promise<Outcome>, how: ConnectionCall<unknown>): Promise<void> {
+    const seen = await call(CONNECTION);
+    expect(mockState.asked).toBeGreaterThan(0);
+    expect(seen.status).not.toBe(500);
+    expect(effectsReached()).toEqual([]);
+    if (how.list) {
+      expect(seen.status).toBe(200);
+      expect(mentionsConnection(seen)).toBe(false);
+    } else if (how.refusal !== undefined) {
+      expect(JSON.stringify(seen.body)).toMatch(how.refusal);
+    } else {
+      withoutConnection();
+      const missing = await call(NO_CONNECTION);
+      expect(seen).toEqual(asIf(missing, { from: NO_CONNECTION, to: CONNECTION }));
+      if (seen.status === 'thrown') expect(JSON.stringify(seen.body)).toMatch(/not[\s_]found/i);
+    }
+  }
+
+  it.each(restUses.map((r) => [r.key, r.handler] as const))('%s refuses it as it refuses a missing one, or leaves it out', async (key, handler) => {
+    const how = REST_CONNECTION_CALLS[key];
+    if (how === undefined) throw new Error(`no call for ${key}`);
+    await refused((refs) => callRest(handler, how.ask(refs)), how);
+  });
+
+  it.each(trpcUses)('%s refuses it as it refuses a missing one, or leaves it out', async (name) => {
+    const how = TRPC_CONNECTION_CALLS[name];
+    if (how === undefined) throw new Error(`no call for ${name}`);
+    await refused((refs) => callTrpc(name, how.ask(refs)), how);
+  });
+});
+
+describe('as a write member who may use the connection', () => {
+  beforeEach(() => {
+    mockState.rows.push({ teamId: TEAM, target: FINANCE, verb: 'use', grantee: { kind: 'user', userId: ALICE } });
+  });
+
+  /** The route works on the connection: it lists it, answers otherwise than for a missing one, and reaches what it changes. */
+  async function granted(call: (refs: ConnectionRefs) => Promise<Outcome>, how: ConnectionCall<unknown>): Promise<void> {
+    const seen = await call(CONNECTION);
+    expect(seen.status).toBe(200);
+    const reached = effectsReached();
+    if (how.effect !== undefined) expect(reached).toContain(how.effect);
+    if (how.list) {
+      expect(mentionsConnection(seen)).toBe(true);
+      return;
+    }
+    withoutConnection();
+    expect(seen).not.toEqual(asIf(await call(NO_CONNECTION), { from: NO_CONNECTION, to: CONNECTION }));
+  }
+
+  it.each(restUses.map((r) => [r.key, r.handler] as const))('%s works on it', async (key, handler) => {
+    const how = REST_CONNECTION_CALLS[key];
+    if (how === undefined) throw new Error(`no call for ${key}`);
+    await granted((refs) => callRest(handler, how.ask(refs)), how);
+  });
+
+  it.each(trpcUses)('%s works on it', async (name) => {
+    const how = TRPC_CONNECTION_CALLS[name];
+    if (how === undefined) throw new Error(`no call for ${name}`);
+    await granted((refs) => callTrpc(name, how.ask(refs)), how);
   });
 });
 

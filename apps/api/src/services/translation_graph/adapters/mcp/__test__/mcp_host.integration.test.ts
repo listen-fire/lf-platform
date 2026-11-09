@@ -80,7 +80,7 @@ afterAll(async () => {
 });
 
 it('types each MCP connection by its own server’s tools', async () => {
-  const catalog = await movementCatalogForTeam(teamId, { source: TRIAGE });
+  const catalog = await movementCatalogForTeam(teamId, { audience: { for: 'run' }, source: TRIAGE });
 
   const schemaOf = (credentialName: string) => catalog.instanceSchemas.find((entry) => entry.adapter === 'mcp' && entry.credentialName === credentialName)?.schema;
   const tracker = schemaOf('linear');
@@ -99,12 +99,13 @@ it('types each MCP connection by its own server’s tools', async () => {
 });
 
 it('refuses at save a write whose argument has the wrong type, and a tool of the other server', async () => {
-  const wrongType = await saveMovement({ teamId, source: TRIAGE.replace('team: "ENG" }', 'team: "ENG", priority: "high" }') });
+  const wrongType = await saveMovement({ audience: { for: 'run' }, teamId, source: TRIAGE.replace('team: "ENG" }', 'team: "ENG", priority: "high" }') });
   expect(wrongType.ok).toBe(false);
   expect(wrongType.ok === false && wrongType.needsConfirmation).toBe(true);
   expect(wrongType.ok === false ? wrongType.errors : []).toEqual([expect.stringMatching(/'priority' on tracker\.create_issue is number, but this expression produces text/)]);
 
   const otherServer = await saveMovement({
+    audience: { for: 'run' },
     teamId,
     source: TRIAGE.replace('write customers-[:add_note]-> { customer: "acme", body: "filed', 'write customers-[:create_issue]-> { customer: "acme", body: "filed'),
   });
@@ -114,6 +115,7 @@ it('refuses at save a write whose argument has the wrong type, and a tool of the
 
 it('refuses a connection whose server is not at a public address before any request', async () => {
   const catalog = await movementCatalogForTeam(teamId, {
+    audience: { for: 'run' },
     source: `probe = connect \`@lf/mcp\` using metadata
 `,
   });
@@ -126,7 +128,7 @@ it('refuses a connection whose server is not at a public address before any requ
 });
 
 it('runs a saved, release-pinned movement through the platform: writes call the tools, the result and a read are readable', async () => {
-  const saved = await saveMovement({ teamId, source: TRIAGE });
+  const saved = await saveMovement({ audience: { for: 'run' }, teamId, source: TRIAGE });
   if (!saved.ok) throw new Error(`save refused: ${(saved.errors ?? []).join('; ')}`);
   const row = await getAutomationsQb(['movement'])
     .selectFrom('movement')

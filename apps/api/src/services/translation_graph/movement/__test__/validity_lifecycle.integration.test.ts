@@ -104,7 +104,7 @@ describe('movement validity lifecycle (real save gate + firings + live remote so
   it('drives broken → consent → fire-fail → issue → fix → resolve → drift', async () => {
     // [1] Broken save: unknown edge → the consent gate withholds it.
     const broken = sourceWithEdge('Companyy');
-    const r1 = await saveMovement({ teamId: teamId as string, source: broken, name: NAME });
+    const r1 = await saveMovement({ audience: { for: 'run' }, teamId: teamId as string, source: broken, name: NAME });
     expect(r1.ok).toBe(false);
     if (r1.ok) return;
     expect(r1.needsConfirmation).toBe(true);
@@ -113,6 +113,7 @@ describe('movement validity lifecycle (real save gate + firings + live remote so
 
     // [2] Save anyway: ships invalid, consent recorded, listener derived.
     const r2 = await saveMovement({
+      audience: { for: 'run' },
       teamId: teamId as string,
       source: broken,
       id: movementId,
@@ -142,6 +143,7 @@ describe('movement validity lifecycle (real save gate + firings + live remote so
 
     // [5] Fix the edge → clean save flips validity to valid.
     const r5 = await saveMovement({
+      audience: { for: 'run' },
       teamId: teamId as string,
       source: sourceWithEdge(FAKE_CRM_COMPANY_TYPE),
       id: movementId,

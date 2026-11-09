@@ -127,7 +127,7 @@ movement m() {
 
 describe('movementCatalogSnapshotForTeam — the skeleton (no source)', () => {
   it('introspects NOTHING and carries no schemas', async () => {
-    const { snapshot } = await movementCatalogSnapshotForTeam(TEAM);
+    const { snapshot } = await movementCatalogSnapshotForTeam(TEAM, { audience: { for: 'run' } });
     expect(resolveAdapterMock).not.toHaveBeenCalled();
     expect(snapshot.adapters.google_sheets.schemas).toEqual({});
   });
@@ -139,7 +139,7 @@ describe('movementCatalogSnapshotForTeam — typed for one program', () => {
     // EDITOR does — rebuild a Catalog and instantiate the construction as
     // written. Asserting on the raw `schemas` keys instead would pass even if
     // the checker could never find them.
-    const { snapshot } = await movementCatalogSnapshotForTeam(TEAM, { source: POSITIONED_SOURCE });
+    const { snapshot } = await movementCatalogSnapshotForTeam(TEAM, { audience: { for: 'run' }, source: POSITIONED_SOURCE });
     const schema = fromCatalogSnapshot(snapshot).instantiate('google_sheets', {
       credentials: 'Sheets Probe',
       spreadsheet: '"LP Commitments"',
@@ -160,7 +160,7 @@ movement m() {
   write board-[:\`Costs (table)\`]-> { \`LP Name\`: "Rent" }
 }
 `;
-    const { snapshot } = await movementCatalogSnapshotForTeam(TEAM, { source });
+    const { snapshot } = await movementCatalogSnapshotForTeam(TEAM, { audience: { for: 'run' }, source });
     const catalog = fromCatalogSnapshot(snapshot);
     const at = (spreadsheet: string) =>
       Object.keys(
@@ -189,7 +189,7 @@ movement m() {
   write sheets-[:Spreadsheet]-> { \`LP Name\`: "Acme" }
 }
 `;
-    const { snapshot } = await movementCatalogSnapshotForTeam(TEAM, { source });
+    const { snapshot } = await movementCatalogSnapshotForTeam(TEAM, { audience: { for: 'run' }, source });
     const schema = fromCatalogSnapshot(snapshot).instantiate('google_sheets', {
       credentials: 'Sheets Probe',
     });

@@ -177,6 +177,7 @@ async function main() {
   });
 
   const movement = await saveMovement({
+    audience: { for: 'run' },
     teamId: seed.teamId,
     source: evertraceFile({
       ...(listScope !== undefined ? { list: listScope } : {}),

@@ -87,6 +87,7 @@ async function main() {
 
   const meter = countUpstreamCalls();
   const result = await describeMovementInstance({
+    audience: { for: 'run' },
     teamId: teamId as TeamId,
     adapter: system,
     ...(connection !== undefined ? { credentialName: connection } : {}),

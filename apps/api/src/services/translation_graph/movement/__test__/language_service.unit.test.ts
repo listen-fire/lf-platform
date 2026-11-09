@@ -92,7 +92,7 @@ const skeleton = movementCatalogSnapshotForTeam as jest.MockedFunction<typeof mo
 beforeEach(() => {
   assembled.mockReset();
   skeleton.mockReset();
-  assembled.mockImplementation(async (_teamId, options = {}) => {
+  assembled.mockImplementation(async (_teamId, options) => {
     if (options.source !== undefined) parseProgram(options.source, { languageVersion: options.languageVersion ?? LANGUAGE_VERSION });
     return {
       catalog: fromCatalogSnapshot(SNAPSHOT),
@@ -127,7 +127,7 @@ describe('the editor language service for a release pin', () => {
   it("completes after `crm.` on a line that does not parse with the binding's items", async () => {
     const [text, at] = typed(PROGRAM, '    unique by (Name)', '    x = crm.');
     expect(() => parseProgram(text, OPTIONS)).toThrow();
-    const found = answerOf(await completeAt({ teamId: freshTeam(), source: text, offset: at }));
+    const found = answerOf(await completeAt({ audience: { for: 'run' }, teamId: freshTeam(), source: text, offset: at }));
     const binding = completionsAt(text, at, SNAPSHOT, OPTIONS);
     expect(binding.items.length).toBeGreaterThan(0);
     expect(asSet(found.items)).toEqual(asSet(binding.items));
@@ -139,7 +139,7 @@ describe('the editor language service for a release pin', () => {
 
   it('offers the adapter\'s connect action after the dot', async () => {
     const [text, at] = typed(PROGRAM, '    unique by (Name)', '    x = crm.');
-    const found = answerOf(await completeAt({ teamId: freshTeam(), source: text, offset: at }));
+    const found = answerOf(await completeAt({ audience: { for: 'run' }, teamId: freshTeam(), source: text, offset: at }));
     expect(found.items.filter((i) => i.connectAction !== undefined)).toEqual([
       {
         label: '+ Connect a list',
@@ -154,7 +154,7 @@ describe('the editor language service for a release pin', () => {
 
   it('hovers a field with the markdown card', async () => {
     const offset = after(PROGRAM, 'go.Te');
-    const card = answerOf(await hoverAt({ teamId: freshTeam(), source: PROGRAM, offset }));
+    const card = answerOf(await hoverAt({ audience: { for: 'run' }, teamId: freshTeam(), source: PROGRAM, offset }));
     expect(card).toEqual(hoverInWasm(PROGRAM, offset, SNAPSHOT, OPTIONS));
     expect(card?.markdown.length).toBeGreaterThan(0);
     expect(PROGRAM.slice(card?.from, card?.to)).toBe('Text');
@@ -162,7 +162,7 @@ describe('the editor language service for a release pin', () => {
 
   it('defines a library declaration as offsets into its text', async () => {
     const offset = after(PROGRAM, 'Name: gre');
-    const found = answerOf(await defineAt({ teamId: freshTeam(), source: PROGRAM, offset }));
+    const found = answerOf(await defineAt({ audience: { for: 'run' }, teamId: freshTeam(), source: PROGRAM, offset }));
     if (found === null || 'module' in found) throw new Error(`not a place in a file: ${JSON.stringify(found)}`);
     expect(found.file).toBe('lib/greet');
     expect(LIBRARY.slice(found.from)).toMatch(/^export function greet/);
@@ -171,13 +171,13 @@ describe('the editor language service for a release pin', () => {
 
   it('defines an imported adapter as its module', async () => {
     const offset = after(PROGRAM, 'connect att');
-    expect(answerOf(await defineAt({ teamId: freshTeam(), source: PROGRAM, offset }))).toEqual({
+    expect(answerOf(await defineAt({ audience: { for: 'run' }, teamId: freshTeam(), source: PROGRAM, offset }))).toEqual({
       module: { namespace: 'adapters', name: 'attio' },
     });
   });
 
   it('answers a pin nothing reads with empty answers and assembles no catalog', async () => {
-    const request = { teamId: freshTeam(), source: PROGRAM, offset: 10, languageVersion: '0.14.0' };
+    const request = { teamId: freshTeam(), audience: { for: 'run' } as const, source: PROGRAM, offset: 10, languageVersion: '0.14.0' };
     expect(answerOf(await completeAt(request))).toEqual({ from: 10, to: 10, items: [] });
     expect(answerOf(await hoverAt(request))).toBeNull();
     expect(answerOf(await defineAt(request))).toBeNull();
@@ -186,7 +186,7 @@ describe('the editor language service for a release pin', () => {
   });
 
   it('refuses a legacy pin: its language service is the browser\'s', async () => {
-    const request = { teamId: freshTeam(), source: PROGRAM, offset: 10, languageVersion: '4' };
+    const request = { teamId: freshTeam(), audience: { for: 'run' } as const, source: PROGRAM, offset: 10, languageVersion: '4' };
     expect(await completeAt(request)).toEqual({ kind: 'legacy-presentation', pin: '4' });
     expect(await hoverAt(request)).toEqual({ kind: 'legacy-presentation', pin: '4' });
     expect(await defineAt(request)).toEqual({ kind: 'legacy-presentation', pin: '4' });
@@ -196,10 +196,10 @@ describe('the editor language service for a release pin', () => {
   it('assembles once for two completions on one line', async () => {
     const teamId = freshTeam();
     const [first, at] = typed(PROGRAM, '    unique by (Name)', '    x = crm.');
-    await completeAt({ teamId, source: first, offset: at });
+    await completeAt({ audience: { for: 'run' }, teamId, source: first, offset: at });
     const calls = assembled.mock.calls.length;
     const [second, there] = typed(PROGRAM, '    unique by (Name)', '    x = crm.Comp');
-    const found = answerOf(await completeAt({ teamId, source: second, offset: there }));
+    const found = answerOf(await completeAt({ audience: { for: 'run' }, teamId, source: second, offset: there }));
     expect(assembled.mock.calls.length).toBe(calls);
     expect(asSet(found.items)).toEqual(asSet(completionsAt(second, there, SNAPSHOT, OPTIONS).items));
   });
@@ -208,7 +208,7 @@ describe('the editor language service for a release pin', () => {
 describe("the agent's completions", () => {
   it("a release pin's are the wasm's over the run snapshot", async () => {
     const [text, at] = typed(PROGRAM, '    unique by (Name)', '    x = crm.');
-    const found = await agentCompletionsAt({ teamId: freshTeam(), source: text, offset: at, pin: LANGUAGE_VERSION });
+    const found = await agentCompletionsAt({ audience: { for: 'run' }, teamId: freshTeam(), source: text, offset: at, pin: LANGUAGE_VERSION });
     const binding = completionsAt(text, at, SNAPSHOT, OPTIONS).items.map((i) => ({
       label: i.label,
       kind: i.kind,
@@ -222,7 +222,7 @@ describe("the agent's completions", () => {
   it("a legacy pin's are legacy-lang's over the skeleton", async () => {
     const source = 'import { attio } from adapters\nimport { acme_main } from credentials\ncrm = attio(credentials: acme_main)\n';
     const offset = source.length;
-    const found = await agentCompletionsAt({ teamId: freshTeam(), source, offset, pin: '4' });
+    const found = await agentCompletionsAt({ audience: { for: 'run' }, teamId: freshTeam(), source, offset, pin: '4' });
     const legacy = getMovementCompletions(source, offset, SNAPSHOT, { languageVersion: '4' }).items.map((i) => ({
       label: i.label,
       kind: i.kind,
@@ -235,7 +235,7 @@ describe("the agent's completions", () => {
   });
 
   it('a pin nothing reads gets the note and no catalog', async () => {
-    const found = await agentCompletionsAt({ teamId: freshTeam(), source: PROGRAM, offset: 10, pin: '0.14.0' });
+    const found = await agentCompletionsAt({ audience: { for: 'run' }, teamId: freshTeam(), source: PROGRAM, offset: 10, pin: '0.14.0' });
     expect(found.completions).toEqual([]);
     expect(found.note).toContain('0.14.0');
     expect(assembled).not.toHaveBeenCalled();

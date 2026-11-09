@@ -59,6 +59,7 @@ import {
   type DescribedInstance,
   type TeamCatalogSnapshot,
 } from '../../../services/translation_graph/movement/catalog';
+import { callerAudience } from '../../../services/translation_graph/movement/audience';
 import {
   deleteMovement,
   getMovement,
@@ -112,7 +113,7 @@ import { reportedFailureReason } from '../../../services/translation_graph/runs/
 import { UserService } from '../../../services/user';
 import { movementEventsImpl, type MovementEventItem } from '../../../services/inbound/arrival_ledger';
 import { userProcedure as sharedUserProcedure } from '../procedures';
-import { EXEMPT, decidesEach, readableAmong, unseen, type Decision } from '../../access_route';
+import { EXEMPT, USE_CONNECTION, decidesEach, readableAmong, unseen, type Decision } from '../../access_route';
 import { cannotChange } from '../access';
 import { Whose } from '../../../services/access/whose';
 
@@ -397,6 +398,7 @@ async function refuseUnseen(id: string | undefined): Promise<void> {
 function editorRequestOf(input: z.infer<typeof editorPositionInput>) {
   return {
     teamId: currentContext().user.teamId,
+    audience: callerAudience(),
     source: input.source,
     offset: input.offset,
     ...(input.id !== undefined ? { id: input.id } : {}),
@@ -411,7 +413,7 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
     catalog: userProcedure.query(async (): Promise<MovementCatalogResponse> => {
       const ctx = currentContext();
       const teamId = ctx.user.teamId as TeamId;
-      const skeleton = await movementCatalogSnapshotForTeam(teamId);
+      const skeleton = await movementCatalogSnapshotForTeam(teamId, { audience: callerAudience() });
       // What a new movement is pinned to.
       return { ...skeleton, installed: { pin: LANGUAGE_VERSION } };
     }),
@@ -436,6 +438,7 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
         const ctx = currentContext();
         const checked = await checkMovementSource({
           teamId: ctx.user.teamId,
+          audience: callerAudience(),
           source: input.source,
           ...(input.id !== undefined ? { id: input.id } : {}),
           ...(input.languageVersion !== undefined ? { languageVersion: input.languageVersion } : {}),
@@ -511,7 +514,7 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
       .mutation(async ({ input }) => {
         const ctx = currentContext();
         const teamId = ctx.user.teamId as TeamId;
-        return movementCatalogSnapshotForTeam(teamId, { source: input.source });
+        return movementCatalogSnapshotForTeam(teamId, { audience: callerAudience(), source: input.source });
       }),
 
     describeInstance: userProcedure
@@ -559,6 +562,7 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
         const ctx = currentContext();
         return describeMovementInstance({
           teamId: ctx.user.teamId as TeamId,
+          audience: callerAudience(),
           adapter: input.adapter,
           ...(input.credentialName !== undefined
             ? { credentialName: input.credentialName }
@@ -589,9 +593,11 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
       .mutation(async ({ input }): Promise<SaveMovementResponse> => {
         const ctx = currentContext();
         const teamId = ctx.user.teamId;
+        const audience = callerAudience();
         const result = await saveMovement({
           teamId,
           source: input.source,
+          audience,
           userId: ctx.user.id,
           ...(input.id !== undefined ? { id: input.id } : {}),
           ...(input.name !== undefined ? { name: input.name } : {}),
@@ -610,7 +616,7 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
         const dependentChecks = await checkMovementDependents({
           teamId,
           name: result.movementName,
-          validate: validateMovementForTeam,
+          validate: (dependent) => validateMovementForTeam({ ...dependent, audience }),
         });
         return { ...result, dependentChecks };
       }),
@@ -791,14 +797,14 @@ const WRITES: Decision = { thing: 'automation', verb: 'write' };
 
 // An editor question names the saved movement whose pin it reads, when it names one.
 decidesEach('movement', {
-  catalog: EXEMPT.teamCatalog,
+  catalog: USE_CONNECTION,
   check: READS,
   complete: READS,
   hover: READS,
   definition: READS,
   outline: READS,
-  catalogForSource: EXEMPT.teamCatalog,
-  describeInstance: EXEMPT.connection,
+  catalogForSource: USE_CONNECTION,
+  describeInstance: USE_CONNECTION,
   save: EXEMPT.savedPerTarget,
   get: READS,
   story: READS,

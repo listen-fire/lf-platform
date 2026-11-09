@@ -69,7 +69,7 @@ beforeAll(async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .values({ id: teamId, name: `engine-switch-${teamId.slice(0, 8)}` } as any)
     .execute();
-  const saved = await saveMovement({ teamId, source: SOURCE, name: 'hello' });
+  const saved = await saveMovement({ audience: { for: 'run' }, teamId, source: SOURCE, name: 'hello' });
   if (!saved.ok) throw new Error(`test: the probe movement did not save: ${JSON.stringify(saved)}`);
   const trigger = await getAutomationsQb(['trigger'])
     .selectFrom('trigger')

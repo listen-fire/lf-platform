@@ -86,7 +86,7 @@ describe('queued runs: Run now answers, a worker runs the movement', () => {
       .values({ id: teamId, name: `queued-${teamId.slice(0, 8)}` } as any)
       .execute();
 
-    const saved = await saveMovement({ teamId: teamId as string, source: SOURCE, name: 'queued-probe' });
+    const saved = await saveMovement({ audience: { for: 'run' }, teamId: teamId as string, source: SOURCE, name: 'queued-probe' });
     if (!saved.ok) throw new Error(`test: the probe movement did not save: ${JSON.stringify(saved)}`);
     movementId = saved.movementId;
     const trigger = await getAutomationsQb(['trigger'])

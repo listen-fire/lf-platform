@@ -52,9 +52,10 @@ beforeEach(() => {
 describe('describeConnection, compact', () => {
   it('spells one position: its fields, then each edge with what it lands on', async () => {
     describeMock.mockResolvedValue(companiesFull);
-    const text = await describeConnectionCompact({ teamId: TEAM, system: 'attio', position: '-[:Companies]->' });
+    const text = await describeConnectionCompact({ audience: { for: 'run' }, teamId: TEAM, system: 'attio', position: '-[:Companies]->' });
 
     expect(describeMock).toHaveBeenCalledWith({
+      audience: { for: 'run' },
       teamId: TEAM,
       adapter: 'attio',
       forceRefresh: true,
@@ -77,7 +78,7 @@ describe('describeConnection, compact', () => {
 
   it('is a fraction of the full JSON it replaces', async () => {
     describeMock.mockResolvedValue(companiesFull);
-    const text = await describeConnectionCompact({ teamId: TEAM, system: 'attio', position: '-[:Companies]->' });
+    const text = await describeConnectionCompact({ audience: { for: 'run' }, teamId: TEAM, system: 'attio', position: '-[:Companies]->' });
     const full = JSON.stringify(companiesFull);
     expect(full.length).toBeGreaterThan(6_000);
     expect(text.length).toBeLessThan(full.length / 3);
@@ -95,7 +96,7 @@ describe('describeConnection, compact', () => {
         edges: attioRoot.node!.edges.map((e) => (objects.has(e.name) ? { ...e, writable: true } : e)),
       },
     });
-    const text = await describeConnectionCompact({ teamId: TEAM, system: 'attio' });
+    const text = await describeConnectionCompact({ audience: { for: 'run' }, teamId: TEAM, system: 'attio' });
 
     expect(text).toContain('### attio — `` connect `@lf/attio` using `Dev Loop Attio` ``');
     expect(text).toContain('- What a listen fires on: ');
@@ -112,7 +113,7 @@ describe('describeConnection, compact', () => {
       batchFull.connections.find((c) => c.system === adapter),
     );
     const blocks = await Promise.all(
-      ['attio', 'gmail', 'slack'].map((system) => describeConnectionCompact({ teamId: TEAM, system })),
+      ['attio', 'gmail', 'slack'].map((system) => describeConnectionCompact({ audience: { for: 'run' }, teamId: TEAM, system })),
     );
     const text = blocks.join('\n\n');
     const full = JSON.stringify(batchFull);

@@ -27,6 +27,7 @@ import type { CheckingLane, EditorRequest as CarriedEditorRequest } from '@liste
 import type { TeamId } from '../../../generated/kysely/core/Team';
 
 import { movementCatalogForTeam, movementCatalogSnapshotForTeam, type TeamMovementCatalog } from './catalog';
+import { audienceKey, type CatalogAudience } from './audience';
 import { editorTeamFactsOf } from './carried_check';
 import { routeOf } from './language_route';
 import { getMovementRow } from './store';
@@ -73,12 +74,13 @@ const editorSnapshots = new LRUCache<string, Promise<CatalogSnapshot>>({ max: 10
  */
 function editorSnapshotOf(input: {
   teamId: string;
+  audience: CatalogAudience;
   source: string;
   pin: LanguageVersion;
   offset: number;
 }): Promise<CatalogSnapshot> {
   const blanked = withCursorLineBlanked(input.source, input.offset);
-  const key = JSON.stringify([input.teamId, input.pin, blanked]);
+  const key = JSON.stringify([input.teamId, audienceKey(input.audience), input.pin, blanked]);
   const cached = editorSnapshots.get(key);
   if (cached !== undefined) return cached;
   const assembling = assembleEditorSnapshot({ ...input, blanked });
@@ -89,15 +91,16 @@ function editorSnapshotOf(input: {
 
 async function assembleEditorSnapshot(input: {
   teamId: string;
+  audience: CatalogAudience;
   source: string;
   blanked: string;
   pin: LanguageVersion;
 }): Promise<CatalogSnapshot> {
   const teamId = input.teamId as TeamId;
   const teamCatalog =
-    (await scannedCatalog(teamId, input.source, input.pin)) ??
-    (await scannedCatalog(teamId, input.blanked, input.pin)) ??
-    (await movementCatalogForTeam(teamId, { types: [] }));
+    (await scannedCatalog(teamId, { source: input.source, pin: input.pin, audience: input.audience })) ??
+    (await scannedCatalog(teamId, { source: input.blanked, pin: input.pin, audience: input.audience })) ??
+    (await movementCatalogForTeam(teamId, { audience: input.audience, types: [] }));
   if (teamCatalog.runSnapshot === undefined) throw new Error('a release pin is served against its run snapshot');
   return teamCatalog.runSnapshot();
 }
@@ -105,11 +108,10 @@ async function assembleEditorSnapshot(input: {
 /** The catalog scoped to `source`, or null when `source` does not scan. */
 async function scannedCatalog(
   teamId: TeamId,
-  source: string,
-  pin: LanguageVersion,
+  scanned: { source: string; pin: LanguageVersion; audience: CatalogAudience },
 ): Promise<TeamMovementCatalog | null> {
   try {
-    return await movementCatalogForTeam(teamId, { source, languageVersion: pin });
+    return await movementCatalogForTeam(teamId, { audience: scanned.audience, source: scanned.source, languageVersion: scanned.pin });
   } catch (e) {
     if (e instanceof BridgeError || e instanceof MovementParseError) return null;
     throw e;
@@ -127,6 +129,8 @@ export type EditorAnswer<T> =
 
 interface EditorRequest {
   teamId: string;
+  /** The editing caller: the editor offers only the connections they may use. */
+  audience: CatalogAudience;
   source: string;
   /** A UTF-16 offset into `source`. */
   offset: number;
@@ -150,11 +154,11 @@ async function answerAt<T>(request: EditorRequest, ask: Ask<T>, askCarried: AskC
       // this release does not read, so the empty snapshot is never read.
       return { kind: 'answer', answer: ask(request.source, request.offset, EMPTY_CATALOG_SNAPSHOT, { languageVersion: pin }) };
     case 'installed': {
-      const snapshot = await editorSnapshotOf({ teamId: request.teamId, source: request.source, pin, offset: request.offset });
+      const snapshot = await editorSnapshotOf({ teamId: request.teamId, audience: request.audience, source: request.source, pin, offset: request.offset });
       return { kind: 'answer', answer: ask(request.source, request.offset, snapshot, { languageVersion: pin }) };
     }
     case 'carried': {
-      const [lane, team] = await Promise.all([route.lane(), editorTeamFactsOf(request.teamId)]);
+      const [lane, team] = await Promise.all([route.lane(), editorTeamFactsOf(request.teamId, request.audience)]);
       return { kind: 'answer', answer: await askCarried(lane, { source: request.source, offset: request.offset, pin: route.pin, team }) };
     }
     default: {
@@ -189,6 +193,7 @@ interface AgentCompletions {
  */
 export async function agentCompletionsAt(input: {
   teamId: string;
+  audience: CatalogAudience;
   source: string;
   offset: number;
   pin: LanguageVersion;
@@ -201,12 +206,12 @@ export async function agentCompletionsAt(input: {
       return { completions: items.map(itemOf) };
     }
     case 'carried': {
-      const [lane, team] = await Promise.all([route.lane(), editorTeamFactsOf(input.teamId)]);
+      const [lane, team] = await Promise.all([route.lane(), editorTeamFactsOf(input.teamId, input.audience)]);
       const { items } = await lane.completionsAt({ source: input.source, offset: input.offset, pin: route.pin, team });
       return { completions: items.map(itemOf) };
     }
     case 'legacy': {
-      const { snapshot } = await movementCatalogSnapshotForTeam(input.teamId as TeamId);
+      const { snapshot } = await movementCatalogSnapshotForTeam(input.teamId as TeamId, { audience: input.audience });
       const { items } = getMovementCompletions(input.source, input.offset, snapshot, { languageVersion: input.pin });
       return { completions: items.map(itemOf) };
     }

@@ -12,6 +12,8 @@ const ctxPrincipal = {
   scopes: ['*'],
   pinnedTeamId: null,
 };
+jest.mock('../../../../services/access/decide', () => jest.requireActual('../../../../test/access_defaults').teamDefaults());
+
 jest.mock('../../../../services/context', () => ({
   currentContext: () => ({ user: ctxUser, principal: ctxPrincipal }),
 }));

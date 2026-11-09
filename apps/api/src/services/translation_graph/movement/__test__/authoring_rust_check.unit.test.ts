@@ -136,7 +136,7 @@ describe('validation by the checker the run is held to', () => {
     });
     checkers.rust = 0;
     checkers.typescript = 0;
-    const validation = await validateMovementForTeam({ teamId: 'team-1', source: programs['an unresolved name'] ?? '' });
+    const validation = await validateMovementForTeam({ audience: { for: 'run' }, teamId: 'team-1', source: programs['an unresolved name'] ?? '' });
     expect(checkers).toEqual({ rust: 1, typescript: 0 });
     expect(validation.ok).toBe(false);
     expect(validation.diagnostics.map((d) => d.code)).toContain('MOV_NAME_UNRESOLVED');

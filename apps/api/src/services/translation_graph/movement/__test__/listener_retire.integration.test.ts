@@ -120,6 +120,7 @@ describe('listener retirement on re-save (real Postgres + live adapter socket)',
   /** Save under a name of this test's own, so each case owns its movement row. */
   const save = async (input: { name: string; source: string; id?: string }) => {
     const result = await saveMovement({
+      audience: { for: 'run' },
       teamId: teamId as string,
       source: input.source,
       name: input.name,

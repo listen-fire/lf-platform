@@ -187,7 +187,7 @@ async function main() {
   ];
   const movements = [];
   for (const program of programs) {
-    movements.push(await saveMovement({ teamId: seed.teamId, source: program.source }));
+    movements.push(await saveMovement({ audience: { for: 'run' }, teamId: seed.teamId, source: program.source }));
   }
 
   console.log(

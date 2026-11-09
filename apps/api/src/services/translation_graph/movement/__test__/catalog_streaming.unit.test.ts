@@ -202,7 +202,7 @@ beforeEach(() => {
 
 describe('movementCatalogSnapshotForTeam (skeleton)', () => {
   it('returns adapters/credentials/plugins with NO external introspection', async () => {
-    const { snapshot, notes } = await movementCatalogSnapshotForTeam(TEAM);
+    const { snapshot, notes } = await movementCatalogSnapshotForTeam(TEAM, { audience: { for: 'run' } });
 
     expect(resolveAdapterMock).not.toHaveBeenCalled();
     // acme_crm is the installed REMOTE adapter (2026-07-05) — remote installs
@@ -258,7 +258,7 @@ describe('movementCatalogSnapshotForTeam (skeleton)', () => {
   });
 
   it('an adapter whose required credential the team lacks carries the reason IN the snapshot', async () => {
-    const { snapshot } = await movementCatalogSnapshotForTeam(TEAM);
+    const { snapshot } = await movementCatalogSnapshotForTeam(TEAM, { audience: { for: 'run' } });
     expect(snapshot.adapters.hubspot.schemaNotes).toEqual({
       '': ['hubspot: no HUBSPOT credential on this team — instance untyped'],
     });
@@ -275,7 +275,7 @@ describe('describeMovementInstance — the default connection', () => {
   // where they don't yet know a connection's stored name.
 
   it('falls back to the sole connection for the system when none is named', async () => {
-    const result = await describeMovementInstance({ teamId: TEAM, adapter: 'slack' });
+    const result = await describeMovementInstance({ audience: { for: 'run' }, teamId: TEAM, adapter: 'slack' });
 
     expect(result.schema?.positions['slack:thing']).toBeDefined();
     expect(resolveAdapterMock).toHaveBeenCalledWith(
@@ -285,14 +285,14 @@ describe('describeMovementInstance — the default connection', () => {
 
   it('reads a narrowing in the current language, `&&` included, unless a pin says otherwise', async () => {
     const narrow = { type: 'thing', where: '`kind` == "a" && `kind` != "b"' };
-    const current = await describeMovementInstance({ teamId: TEAM, adapter: 'slack', narrow });
+    const current = await describeMovementInstance({ audience: { for: 'run' }, teamId: TEAM, adapter: 'slack', narrow });
     expect(current.notes.join('\n')).not.toContain('could not parse');
-    const pinned = await describeMovementInstance({ teamId: TEAM, adapter: 'slack', narrow, languageVersion: '4' });
+    const pinned = await describeMovementInstance({ audience: { for: 'run' }, teamId: TEAM, adapter: 'slack', narrow, languageVersion: '4' });
     expect(pinned.notes.join('\n')).toContain('could not parse');
   });
 
   it('prefers the connection named for the system over its siblings', async () => {
-    const result = await describeMovementInstance({ teamId: TEAM, adapter: 'notion' });
+    const result = await describeMovementInstance({ audience: { for: 'run' }, teamId: TEAM, adapter: 'notion' });
 
     expect(result.schema?.positions['notion:thing']).toBeDefined();
     expect(resolveAdapterMock).toHaveBeenCalledWith(
@@ -301,7 +301,7 @@ describe('describeMovementInstance — the default connection', () => {
   });
 
   it('reports the choice rather than guessing when several connections could serve', async () => {
-    const result = await describeMovementInstance({ teamId: TEAM, adapter: 'attio' });
+    const result = await describeMovementInstance({ audience: { for: 'run' }, teamId: TEAM, adapter: 'attio' });
 
     // Guessing would describe the wrong workspace silently.
     expect(resolveAdapterMock).not.toHaveBeenCalled();
@@ -311,7 +311,7 @@ describe('describeMovementInstance — the default connection', () => {
   });
 
   it('says the team has no such connection rather than naming an empty one', async () => {
-    const result = await describeMovementInstance({ teamId: TEAM, adapter: 'hubspot' });
+    const result = await describeMovementInstance({ audience: { for: 'run' }, teamId: TEAM, adapter: 'hubspot' });
 
     expect(result.schema).toBeNull();
     expect(result.notes).toEqual([
@@ -321,6 +321,7 @@ describe('describeMovementInstance — the default connection', () => {
 
   it('names the reachable connections when the one asked for is unknown', async () => {
     const result = await describeMovementInstance({
+      audience: { for: 'run' },
       teamId: TEAM,
       adapter: 'attio',
       credentialName: 'Nope',
@@ -336,7 +337,7 @@ describe('describeMovementInstance — the default connection', () => {
     // The array form never forwarded a credential name at all, so batch
     // describe failed for every credentialed system.
     const results = await Promise.all(
-      ['slack', 'notion'].map((adapter) => describeMovementInstance({ teamId: TEAM, adapter })),
+      ['slack', 'notion'].map((adapter) => describeMovementInstance({ audience: { for: 'run' }, teamId: TEAM, adapter })),
     );
 
     expect(results.map((r) => r.schema !== null)).toEqual([true, true]);
@@ -346,6 +347,7 @@ describe('describeMovementInstance — the default connection', () => {
 describe('describeMovementInstance', () => {
   it('introspects the pair behind the credential import name', async () => {
     const result = await describeMovementInstance({
+      audience: { for: 'run' },
       teamId: TEAM,
       adapter: 'attio',
       credentialName: 'Dev Loop Attio',
@@ -373,6 +375,7 @@ describe('describeMovementInstance', () => {
     }));
 
     const result = await describeMovementInstance({
+      audience: { for: 'run' },
       teamId: TEAM,
       adapter: 'attio',
       credentialName: 'Dev Loop Attio',
@@ -393,6 +396,7 @@ describe('describeMovementInstance', () => {
 
   it('surfaces the identity note derived from the manifest — the needs-an-account gate from the flag alone, no hand-written prose', async () => {
     const result = await describeMovementInstance({
+      audience: { for: 'run' },
       teamId: TEAM,
       adapter: 'slack',
       credentialName: 'Dev Loop Slack',
@@ -405,7 +409,7 @@ describe('describeMovementInstance', () => {
   });
 
   it('credential-free adapters describe without a credential name', async () => {
-    const result = await describeMovementInstance({ teamId: TEAM, adapter: 'email' });
+    const result = await describeMovementInstance({ audience: { for: 'run' }, teamId: TEAM, adapter: 'email' });
     expect(result.schema?.positions['email:thing']).toBeDefined();
     expect(resolveAdapterMock).toHaveBeenCalledWith(
       expect.objectContaining({ adapterType: 'email', credentialsId: undefined }),
@@ -413,15 +417,16 @@ describe('describeMovementInstance', () => {
   });
 
   it('unknown adapter / unresolvable or mismatched credential → untyped (null), no introspection', async () => {
-    expect((await describeMovementInstance({ teamId: TEAM, adapter: 'nope' })).schema).toBeNull();
+    expect((await describeMovementInstance({ audience: { for: 'run' }, teamId: TEAM, adapter: 'nope' })).schema).toBeNull();
     expect(
-      (await describeMovementInstance({ teamId: TEAM, adapter: 'attio', credentialName: 'missing' }))
+      (await describeMovementInstance({ audience: { for: 'run' }, teamId: TEAM, adapter: 'attio', credentialName: 'missing' }))
         .schema,
     ).toBeNull();
     // A slack credential can't introspect an attio instance.
     expect(
       (
         await describeMovementInstance({
+          audience: { for: 'run' },
           teamId: TEAM,
           adapter: 'attio',
           credentialName: 'Dev Loop Slack',
@@ -434,6 +439,7 @@ describe('describeMovementInstance', () => {
   it('introspection failure degrades to untyped with a note', async () => {
     resolveAdapterMock.mockRejectedValueOnce(new Error('workspace unreachable'));
     const result = await describeMovementInstance({
+      audience: { for: 'run' },
       teamId: TEAM,
       adapter: 'attio',
       credentialName: 'Dev Loop Attio',
@@ -459,7 +465,7 @@ movement m(item: inbox.\`email:thing\`) {
 
 describe('movementCatalogForTeam with a source (referenced-set compile catalog)', () => {
   it('introspects ONLY the pairs the source constructs', async () => {
-    const catalog = await movementCatalogForTeam(TEAM, { source: SOURCE });
+    const catalog = await movementCatalogForTeam(TEAM, { audience: { for: 'run' }, source: SOURCE });
 
     const introspected = resolveAdapterMock.mock.calls.map((c) => c[0]);
     expect(introspected).toHaveLength(2);
@@ -486,8 +492,8 @@ describe('movementCatalogForTeam with a source (referenced-set compile catalog)'
   });
 
   it('shares the TTL cache with describeInstance — one introspection per pair across both paths', async () => {
-    await describeMovementInstance({ teamId: TEAM, adapter: 'attio', credentialName: 'Dev Loop Attio' });
-    await movementCatalogForTeam(TEAM, { source: SOURCE });
+    await describeMovementInstance({ audience: { for: 'run' }, teamId: TEAM, adapter: 'attio', credentialName: 'Dev Loop Attio' });
+    await movementCatalogForTeam(TEAM, { audience: { for: 'run' }, source: SOURCE });
     const attioCalls = resolveAdapterMock.mock.calls.filter((c) => c[0].adapterType === 'attio');
     expect(attioCalls).toHaveLength(1);
   });
@@ -497,6 +503,7 @@ describe('movementCatalogForTeam with a source (referenced-set compile catalog)'
     // (named == identified); the program aliases it locally. Detection must
     // hand the compile catalog the ORIGINAL name or the pair is skipped.
     const catalog = await movementCatalogForTeam(TEAM, {
+      audience: { for: 'run' },
       source: `import { attio } from adapters
 import { \`Dev Loop Attio\` as AttioCred } from credentials
 
@@ -521,6 +528,7 @@ attioTarget = attio(credentials: AttioCred)
     // name — a coincidence, not a guarantee. The gap is the `unverified`
     // signal, so the save can never come back clean unchecked.
     const catalog = await movementCatalogForTeam(TEAM, {
+      audience: { for: 'run' },
       source: 'crm = attio(credentials: who_dis)\n',
     });
     expect(resolveAdapterMock).not.toHaveBeenCalled();
@@ -532,6 +540,7 @@ attioTarget = attio(credentials: AttioCred)
 
   it('a credential naming a connection for a DIFFERENT system is a gap too', async () => {
     const catalog = await movementCatalogForTeam(TEAM, {
+      audience: { for: 'run' },
       source: 'crm = attio(credentials: `Dev Loop Slack`)\n',
     });
     expect(catalog.gaps).toContainEqual(expect.objectContaining({ adapter: 'attio' }));
@@ -544,6 +553,7 @@ attioTarget = attio(credentials: AttioCred)
     // this assessed `valid` on a movement whose every field, edge and write
     // shape went unchecked.
     const bad = await movementCatalogForTeam(TEAM, {
+      audience: { for: 'run' },
       source: 'crm = attio(credentials: who_dis)\n',
     });
     expect(assessMovementValidity({ diagnostics: [], gaps: bad.gaps }).status).toBe('unverified');
@@ -551,6 +561,7 @@ attioTarget = attio(credentials: AttioCred)
 
   it('a RESOLVING credential leaves no gap — the working path stays clean', async () => {
     const catalog = await movementCatalogForTeam(TEAM, {
+      audience: { for: 'run' },
       source: `import { attio } from adapters
 import { \`Dev Loop Attio\` as AttioCred } from credentials
 
@@ -563,7 +574,7 @@ crm = attio(credentials: AttioCred)
   });
 
   it('without a source, sweeps every credential of every manifest (dev CLI path)', async () => {
-    await movementCatalogForTeam(TEAM);
+    await movementCatalogForTeam(TEAM, { audience: { for: 'run' } });
     const introspected = resolveAdapterMock.mock.calls.map((c) => c[0]);
     // attio×2 creds, notion×2, slack×1, email credential-free, kg
     // (credential-free), acme_crm (remote, credential-free — the install
@@ -578,7 +589,7 @@ crm = attio(credentials: AttioCred)
 
 describe('remote adapters in the per-team catalog', () => {
   it('the skeleton snapshot lists a remote install as a credential-free introspected adapter', async () => {
-    const { snapshot, notes } = await movementCatalogSnapshotForTeam(TEAM);
+    const { snapshot, notes } = await movementCatalogSnapshotForTeam(TEAM, { audience: { for: 'run' } });
     const remote = snapshot.adapters['acme_crm'];
     expect(remote).toBeDefined();
     expect(credentialArgOf(remote)).toBeUndefined(); // credential bound at install, not a construction arg
@@ -593,7 +604,7 @@ crm = acme_crm()
 movement m(x: <crm-[:\`acme_crm:thing\`]->>) {
   write crm-[:\`acme_crm:thing\`]-> { name: x.name }
 }`;
-    const teamCatalog = await movementCatalogForTeam(TEAM, { source });
+    const teamCatalog = await movementCatalogForTeam(TEAM, { audience: { for: 'run' }, source });
     expect(teamCatalog.catalog.adapter('acme_crm')).toBeDefined();
     const schema = teamCatalog.catalog.instantiate('acme_crm', {});
     expect(schema).toBeDefined();
@@ -672,7 +683,7 @@ describe('describeMovementInstance — the walk', () => {
   });
 
   it('with no position, the call lands on the ROOT — the root is not a special case', async () => {
-    const result = await describeMovementInstance({ teamId: TEAM, adapter: 'email' });
+    const result = await describeMovementInstance({ audience: { for: 'run' }, teamId: TEAM, adapter: 'email' });
     expect(result.node?.position).toBe('');
     expect(result.node?.name).toBe('Email');
     // A root with no readable edge still describes itself: the agent reads
@@ -681,7 +692,7 @@ describe('describeMovementInstance — the walk', () => {
   });
 
   it('the root hop already carries the landing — an agent can author without a second call', async () => {
-    const result = await describeMovementInstance({ teamId: TEAM, adapter: 'email' });
+    const result = await describeMovementInstance({ audience: { for: 'run' }, teamId: TEAM, adapter: 'email' });
     const [edge] = result.node!.edges;
     expect(edge.name).toBe('Email');
     expect(edge.listenable).toBe(true);
@@ -692,10 +703,10 @@ describe('describeMovementInstance — the walk', () => {
   });
 
   it('echoing an edge\'s address walks it, and the withheld edges are there', async () => {
-    const root = await describeMovementInstance({ teamId: TEAM, adapter: 'email' });
+    const root = await describeMovementInstance({ audience: { for: 'run' }, teamId: TEAM, adapter: 'email' });
     const address = root.node!.edges[0]!.position!;
 
-    const hop = await describeMovementInstance({ teamId: TEAM, adapter: 'email', position: address });
+    const hop = await describeMovementInstance({ audience: { for: 'run' }, teamId: TEAM, adapter: 'email', position: address });
 
     expect(hop.node?.name).toBe('Email');
     expect(hop.node?.position).toBe(address);
@@ -710,7 +721,7 @@ describe('describeMovementInstance — the walk', () => {
     // container. A uniform adapter has none — so the day it learned to walk,
     // its positions came back with no properties, no error, and nobody
     // noticed. Two different facts; only one of them justifies refusing.
-    const result = await describeMovementInstance({ teamId: TEAM, adapter: 'email' });
+    const result = await describeMovementInstance({ audience: { for: 'run' }, teamId: TEAM, adapter: 'email' });
     const position = result.schema?.positions.Email;
     expect(position?.undescribed).toBeUndefined();
     expect(Object.keys(position?.properties ?? {})).toContain('Subject');
@@ -721,7 +732,7 @@ describe('describeMovementInstance — the walk', () => {
       ...walkingAdapter(),
       walksContainers: true,
     }));
-    const result = await describeMovementInstance({ teamId: TEAM, adapter: 'email' });
+    const result = await describeMovementInstance({ audience: { for: 'run' }, teamId: TEAM, adapter: 'email' });
     // Refused, so the properties are NOT paid for up front. The walk is how
     // you get them, one hop at a time.
     expect(result.schema?.positions.Email?.undescribed).toBe(true);
@@ -729,6 +740,7 @@ describe('describeMovementInstance — the walk', () => {
 
   it('a position that walks nowhere is reported, not silently answered from the root', async () => {
     const result = await describeMovementInstance({
+      audience: { for: 'run' },
       teamId: TEAM,
       adapter: 'email',
       position: '-[:`Nonexistent`]->',

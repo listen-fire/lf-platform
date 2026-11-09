@@ -160,7 +160,7 @@ describe('an upgrade held where it is', () => {
     const upgraded = await getMovementRow({ teamId: TEAM, id: movementId });
     if (upgraded === null) throw new Error('test: no movement');
     const renamed = upgraded.source.replaceAll('nap', 'doze');
-    expect(await saveMovement({ teamId: TEAM, id: movementId, source: renamed })).toMatchObject({ ok: true });
+    expect(await saveMovement({ audience: { for: 'run' }, teamId: TEAM, id: movementId, source: renamed })).toMatchObject({ ok: true });
     expect(await runOf(runId)).toMatchObject({ status: 'parked', failure_reason: null });
     expect(await triggerOf(triggerId)).toMatchObject({ run_mode: 'off', config: { leftoverForUnfinishedRuns: true } });
     expect((await listDerivedTriggerRows(movementId)).map((row) => row.firedMovementName)).toEqual(['doze']);
@@ -169,7 +169,7 @@ describe('an upgrade held where it is', () => {
     expect(await runOf(runId)).toMatchObject({ status: 'success' });
     expect(await written()).toEqual(['written before the park: timer']);
 
-    expect(await saveMovement({ teamId: TEAM, id: movementId, source: renamed.replaceAll('doze', 'rest') })).toMatchObject({ ok: true });
+    expect(await saveMovement({ audience: { for: 'run' }, teamId: TEAM, id: movementId, source: renamed.replaceAll('doze', 'rest') })).toMatchObject({ ok: true });
     expect(await triggerOf(triggerId)).toBeUndefined();
   });
 

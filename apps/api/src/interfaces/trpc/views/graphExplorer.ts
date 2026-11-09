@@ -44,7 +44,7 @@ import {
 } from '../../../services/translation_graph/graph_explorer/build';
 import { walkedNodeFrom, type WalkedNode } from '../../../services/translation_graph/movement/walk';
 import { userProcedure as sharedUserProcedure } from '../procedures';
-import { EXEMPT, decidesEach } from '../../access_route';
+import { EXEMPT, USE_CONNECTION, connectionUnseen, decidesEach, usableAmong } from '../../access_route';
 
 export type GraphExplorerInstance = {
   adapterType: string;
@@ -113,7 +113,10 @@ const graphExplorerRouter = (procedure: typeof trpc.procedure) => {
       .input(z.object({ teamId: z.string().optional() }).optional())
       .query(async ({ input }): Promise<GraphExplorerInstance[]> => {
         const teamId = resolveTeamId(input?.teamId);
-        const systems = await enumerateSystems(teamId);
+        const systems = await usableAmong(await enumerateSystems(teamId), {
+          connectionOf: (s) => s.credential?.id ?? null,
+          teamIds: [teamId],
+        });
         return systems.map((s) => ({
           adapterType: s.adapterType,
           displayName: s.displayName,
@@ -147,6 +150,11 @@ const graphExplorerRouter = (procedure: typeof trpc.procedure) => {
           ...(footnote !== undefined ? { footnote } : {}),
           elapsedMs: Date.now() - started,
         });
+
+        // The guard refuses a connection that does not exist as it refuses one the caller may not use.
+        if (input.credentialsId !== undefined && (await connectionUnseen(input.credentialsId))) {
+          return done({ note: `no connection ${input.credentialsId}` });
+        }
 
         const steps = at ? parseTraversalPath(at) : [];
         if (steps === undefined) {
@@ -185,8 +193,8 @@ const graphExplorerRouter = (procedure: typeof trpc.procedure) => {
 
 decidesEach('graphExplorer', {
   listTeams: EXEMPT.ownTeams,
-  listInstances: EXEMPT.connection,
-  walk: EXEMPT.connection,
+  listInstances: USE_CONNECTION,
+  walk: USE_CONNECTION,
 });
 
 export { graphExplorerRouter };

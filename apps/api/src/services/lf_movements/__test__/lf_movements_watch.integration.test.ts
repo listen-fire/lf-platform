@@ -81,7 +81,7 @@ async function dropTeam(teamId: TeamId): Promise<void> {
 }
 
 async function ship(name: string, source: string = MANUAL(name.replaceAll('/', '_'))): Promise<string> {
-  const saved = await saveMovement({ teamId: team, source, name });
+  const saved = await saveMovement({ audience: { for: 'run' }, teamId: team, source, name });
   if (!saved.ok) throw new Error(`test: ${name} did not ship: ${JSON.stringify(saved)}`);
   return saved.movementId;
 }
@@ -182,7 +182,7 @@ describe('movements.watch on the platform', () => {
     expect(changed.events).toEqual([{ kind: 'changed', path: 'lib/greet.mvt', version: await versionOf('lib/greet.mvt') }]);
 
     const elsewhere = answerFor({ tenant: other }, { isLfEngineTeam: () => true });
-    await saveMovement({ teamId: other, source: MANUAL('theirs'), name: 'theirs' });
+    await saveMovement({ audience: { for: 'run' }, teamId: other, source: MANUAL('theirs'), name: 'theirs' });
     expect(await elsewhere('movements.list', {}, {})).toHaveLength(1);
     expect(await watchOn(watcher)({ cursor: changed.cursor, waitMs: 1_500 })).toEqual({ cursor: changed.cursor, events: [] });
   });

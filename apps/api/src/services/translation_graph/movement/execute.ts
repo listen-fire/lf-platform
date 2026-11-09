@@ -104,6 +104,7 @@ async function interpretMovementFiring(input: {
       return runCarriedSegment({
         lane: carried,
         teamId: input.teamId,
+        audience: { for: 'run' },
         source: input.version.source,
         pin: input.version.languageVersion,
         ...(input.movementName !== undefined ? { movementName: input.movementName } : {}),
@@ -127,6 +128,7 @@ async function interpretMovementFiring(input: {
     source: input.version.source,
     languageVersion: input.version.languageVersion,
     imports: 'shipped',
+    audience: { for: 'run' },
   });
   return runMovement({
     source: input.version.source,
@@ -271,6 +273,8 @@ async function refreshValidityOnContradiction(input: {
     const validation = await validateMovementForTeam({
       teamId: input.teamId as unknown as string,
       source: fresh.source,
+      // The automation's validity is its own: judged on every connection it runs on.
+      audience: { for: 'run' },
       languageVersion: fresh.languageVersion,
     });
     const assessment = assessMovementValidity({
@@ -704,6 +708,7 @@ async function resumeOnThisRelease(
     source: input.pinnedSource,
     languageVersion,
     imports: 'shipped',
+    audience: { for: 'run' },
   });
   const commonInput = {
     source: input.pinnedSource,

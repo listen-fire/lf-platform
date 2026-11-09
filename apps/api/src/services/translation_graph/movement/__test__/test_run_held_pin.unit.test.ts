@@ -34,7 +34,7 @@ it('a test run of a pin no carried version runs is refused by the registry, with
   jest.mocked(getMovementRow).mockResolvedValue({ id: 'movement-1', source: ECHO_012, languageVersion: '0.13.0' } as never);
   const invent = jest.fn();
 
-  const result = await runMovementTestRun({ teamId: 'team-1' as TeamId, triggerId: 'trigger-1', invent });
+  const result = await runMovementTestRun({ audience: { for: 'run' }, teamId: 'team-1' as TeamId, triggerId: 'trigger-1', invent });
 
   expect(result).toEqual({ ok: false, error: runRefusal('0.13.0') });
   expect(invent).not.toHaveBeenCalled();
@@ -49,7 +49,7 @@ it("a 0.12 test run rehearses its manual listen on 0.12's own run host, from the
   const invent = jest.fn();
   const { runCarriedSegment } = jest.requireMock('../carried_run') as { runCarriedSegment: jest.Mock };
 
-  const result = await runMovementTestRun({ teamId: 'team-1' as TeamId, triggerId: 'trigger-1', seed: 'a note', invent });
+  const result = await runMovementTestRun({ audience: { for: 'run' }, teamId: 'team-1' as TeamId, triggerId: 'trigger-1', seed: 'a note', invent });
 
   expect(result).toMatchObject({ ok: true, writes: [], event: { text: 'a note' } });
   expect(runCarriedSegment).toHaveBeenCalledWith(

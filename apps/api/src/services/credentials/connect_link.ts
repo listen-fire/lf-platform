@@ -35,6 +35,7 @@
 //      team-bound under the desired name, consumes the token, shows a clean
 //      confirmation page.
 
+import { currentPrincipal } from 'principal';
 import { randomBytes } from 'node:crypto';
 
 import type { PickerActionKind } from './picker_spec';
@@ -58,6 +59,7 @@ import {
   SHARED_TELEGRAM_CREDENTIAL_NAME,
 } from '../translation_graph/adapters/telegram/handshake';
 import ExternalServiceType from '../../generated/kysely/automations/ExternalServiceType';
+import { accessTo, readableIds } from '../access/decide';
 
 
 // ---------------------------------------------------------------------------
@@ -314,6 +316,19 @@ export async function mintConnectLink(
       existing?.name ?? (input.credentialName?.trim() || SHARED_TELEGRAM_CREDENTIAL_NAME);
   } else if (input.credentialName?.trim()) {
     credentialName = input.credentialName.trim();
+    // A link under an existing connection's name reconnects it, which needs use of it.
+    const named = await getAutomationsQb(['external_service_credentials'])
+      .selectFrom('external_service_credentials')
+      .where('team_id', '=', input.teamId)
+      .where('name', '=', credentialName)
+      .select(['id'])
+      .executeTakeFirst();
+    if (
+      named !== undefined &&
+      !(await accessTo(currentPrincipal(), { target: { thing: 'connection', id: named.id }, verb: 'use' }))
+    ) {
+      return { error: `The name "${credentialName}" is taken by a connection you may not use; choose another name.` };
+    }
   } else {
     const memberLabel = await resolveMemberLabel(input.userId);
     const baseName = humanCredentialName({ memberLabel, adapterDisplayName: displayName });
@@ -371,8 +386,11 @@ export async function mintItemPickerLink(input: {
     .where('type', '=', ExternalServiceType.GOOGLE)
     .select(['id', 'name'])
     .execute();
+  // Only a connection the asker may use can be granted items, or named.
+  const usable = await readableIds(currentPrincipal(), { thing: 'connection', teamIds: [input.teamId] });
   const wanted = input.credentialName?.trim();
-  const matches = wanted ? rows.filter((r) => r.name === wanted) : rows;
+  const candidates = rows.filter((r) => usable.has(r.id));
+  const matches = wanted ? candidates.filter((r) => r.name === wanted) : candidates;
   if (matches.length === 0) {
     return {
       error: wanted

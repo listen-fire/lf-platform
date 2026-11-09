@@ -466,7 +466,7 @@ function triggerRows() {
 
 describe('saveMovement — listener derivation', () => {
   it('clean save: canonical row + one derived trigger per listen, valid, no object code', async () => {
-    const result = await saveMovement({ teamId: TEAM, source: SOURCE_V1, userId: 'user-1' });
+    const result = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: SOURCE_V1, userId: 'user-1' });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -519,7 +519,7 @@ describe('saveMovement — listener derivation', () => {
   });
 
   it('round-trip: getMovement returns the exact saved source + listeners', async () => {
-    const saved = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
+    const saved = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: SOURCE_V1 });
     expect(saved.ok).toBe(true);
     if (!saved.ok) return;
 
@@ -541,7 +541,7 @@ describe('saveMovement — listener derivation', () => {
   });
 
   it('multi-listen: one derived trigger per listen, in file order', async () => {
-    const result = await saveMovement({ teamId: TEAM, source: MULTI_LISTEN });
+    const result = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: MULTI_LISTEN });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -557,12 +557,12 @@ describe('saveMovement — listener derivation', () => {
   });
 
   it('inserting a movement ahead of colliding-key listens: originals keep their trigger ids AND movement', async () => {
-    const first = await saveMovement({ teamId: TEAM, source: TWO_SHARED });
+    const first = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: TWO_SHARED });
     if (!first.ok) throw new Error(`first save should be live: ${JSON.stringify(first)}`);
     expect(triggerRows()).toHaveLength(2);
     const before = new Map(triggerRows().map((t) => [t.fired_movement_name, t.id]));
 
-    const second = await saveMovement({ teamId: TEAM, id: first.movementId, source: THREE_SHARED });
+    const second = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, id: first.movementId, source: THREE_SHARED });
     expect(second.ok).toBe(true);
     if (!second.ok) return;
 
@@ -579,10 +579,10 @@ describe('saveMovement — listener derivation', () => {
   });
 
   it('identity: an unchanged listen keeps its trigger id (and run history) across saves', async () => {
-    const first = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
+    const first = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: SOURCE_V1 });
     if (!first.ok) throw new Error('first save should be live');
 
-    const second = await saveMovement({ teamId: TEAM, id: first.movementId, source: SOURCE_V2 });
+    const second = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, id: first.movementId, source: SOURCE_V2 });
     expect(second.ok).toBe(true);
     if (!second.ok) return;
 
@@ -592,11 +592,11 @@ describe('saveMovement — listener derivation', () => {
   });
 
   it('an unambiguous config change updates the row in place (same trigger id)', async () => {
-    const first = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
+    const first = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: SOURCE_V1 });
     if (!first.ok) throw new Error('first save should be live');
 
     const rekeyed = SOURCE_V1.replace('e.Key == "deals"', 'e.Key == "renamed-deals"');
-    const second = await saveMovement({ teamId: TEAM, id: first.movementId, source: rekeyed });
+    const second = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, id: first.movementId, source: rekeyed });
     expect(second.ok).toBe(true);
     if (!second.ok) return;
 
@@ -609,7 +609,7 @@ describe('saveMovement — listener derivation', () => {
   });
 
   it('removed listens retire their rows', async () => {
-    const first = await saveMovement({ teamId: TEAM, source: MULTI_LISTEN });
+    const first = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: MULTI_LISTEN });
     if (!first.ok) throw new Error('first save should be live');
     expect(triggerRows()).toHaveLength(2);
 
@@ -617,7 +617,7 @@ describe('saveMovement — listener derivation', () => {
       'listen to inbox-[e:Emails WHERE e.Key == "intros"]-> fire digest\n',
       '',
     );
-    const second = await saveMovement({ teamId: TEAM, id: first.movementId, source: oneListen });
+    const second = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, id: first.movementId, source: oneListen });
     expect(second.ok).toBe(true);
     if (!second.ok) return;
 
@@ -628,10 +628,10 @@ describe('saveMovement — listener derivation', () => {
   });
 
   it('zero listens (library): every derived row retired, links cleared, info surfaced', async () => {
-    const first = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
+    const first = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: SOURCE_V1 });
     if (!first.ok) throw new Error('first save should be live');
 
-    const second = await saveMovement({ teamId: TEAM, id: first.movementId, source: NO_LISTEN });
+    const second = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, id: first.movementId, source: NO_LISTEN });
     expect(second.ok).toBe(true);
     if (!second.ok) return;
 
@@ -647,10 +647,11 @@ describe('saveMovement — listener derivation', () => {
   });
 
   it('check errors: unconsented save needs confirmation; consented save SHIPS broken (no draft limbo)', async () => {
-    const first = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
+    const first = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: SOURCE_V1 });
     if (!first.ok) throw new Error('first save should be live');
 
     const second = await saveMovement({
+      audience: { for: 'run' },
       teamId: TEAM,
       id: first.movementId,
       source: SOURCE_BROKEN,
@@ -677,6 +678,7 @@ describe('saveMovement — listener derivation', () => {
 
     // Consent SHIPS it: the broken source is what runs now (fires-and-fails).
     const consented = await saveMovement({
+      audience: { for: 'run' },
       teamId: TEAM,
       id: first.movementId,
       source: SOURCE_BROKEN,
@@ -688,7 +690,7 @@ describe('saveMovement — listener derivation', () => {
     expect(db.__tables.movement[0].validity_consented_at).toBeTruthy();
 
     // A clean re-save goes live again with the SAME identity.
-    const third = await saveMovement({ teamId: TEAM, id: first.movementId, source: SOURCE_V2 });
+    const third = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, id: first.movementId, source: SOURCE_V2 });
     expect(third.ok).toBe(true);
     if (!third.ok) return;
     expect(third.validity.status).toBe('valid');
@@ -696,7 +698,7 @@ describe('saveMovement — listener derivation', () => {
   });
 
   it('run_mode is NEVER touched by reconciliation after creation', async () => {
-    const first = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
+    const first = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: SOURCE_V1 });
     if (!first.ok) throw new Error('first save should be live');
 
     // Operator pauses the listener (the one hand-editable field).
@@ -704,7 +706,7 @@ describe('saveMovement — listener derivation', () => {
 
     // Re-save with a config change — the row updates in place…
     const rekeyed = SOURCE_V1.replace('e.Key == "deals"', 'e.Key == "other"');
-    const second = await saveMovement({ teamId: TEAM, id: first.movementId, source: rekeyed });
+    const second = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, id: first.movementId, source: rekeyed });
     expect(second.ok).toBe(true);
     if (!second.ok) return;
 
@@ -716,13 +718,13 @@ describe('saveMovement — listener derivation', () => {
   it('a nested movement declaration refuses the save with the wasm checker\'s reason (consent gate)', async () => {
     // On a current pin the wasm checker refuses the nested declaration (its
     // spelling is `function`); the engine scan serves legacy ids only.
-    const first = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
+    const first = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: SOURCE_V1 });
     if (!first.ok) throw new Error('first save should be live');
     const withNested = SOURCE_V1.replace(
       '# version one',
       ['movement nested(x: <inbox-[:message]->>) {', '    y = x.`a`', '  }'].join('\n'),
     );
-    const result = await saveMovement({ teamId: TEAM, source: withNested, id: first.movementId });
+    const result = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: withNested, id: first.movementId });
     // Engine-unsupported is a check error now — consent gate, not a hard error.
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error('expected failure');
@@ -736,7 +738,7 @@ describe('saveMovement — listener derivation', () => {
 
   it('a manual listen on the installed language ships and derives one manual listener', async () => {
     const source = 'function echo(run: <manual-[:Invocations]->>) {\n  return 1\n}\nlisten to manual-[:Invocations]-> fire echo\n';
-    const result = await saveMovement({ teamId: TEAM, source });
+    const result = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source });
     if (!result.ok) throw new Error(`save failed: ${(result.errors ?? []).join('; ')}`);
     expect(result.validity.status).toBe('valid');
     expect(result.listeners).toHaveLength(1);
@@ -747,7 +749,7 @@ describe('saveMovement — listener derivation', () => {
   });
 
   it('listen alias: trigger name equals the lane alias when present', async () => {
-    const result = await saveMovement({ teamId: TEAM, source: ALIASED_LANES });
+    const result = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: ALIASED_LANES });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -793,7 +795,7 @@ function intake(m: <inbox-[:message]->>) {
 
 listen to inbox-[e:Emails WHERE e.Key == "deals"]-> fire intake
 `;
-    const result = await saveMovement({ teamId: TEAM, source: staged });
+    const result = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: staged });
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('expected live save');
     expect(result.validity.status).toBe('valid');
@@ -807,11 +809,11 @@ listen to inbox-[e:Emails WHERE e.Key == "deals"]-> fire intake
   });
 
   it('editing the declaration keeps the stored name (durable) — only the fire target follows', async () => {
-    const first = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
+    const first = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: SOURCE_V1 });
     if (!first.ok) throw new Error('first save should be live');
 
     const edited = SOURCE_V1.replace(/\bintake\b/g, 'intake_v2');
-    const second = await saveMovement({ teamId: TEAM, id: first.movementId, source: edited });
+    const second = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, id: first.movementId, source: edited });
 
     expect(second.ok).toBe(true);
     if (!second.ok) return;
@@ -831,11 +833,12 @@ listen to inbox-[e:Emails WHERE e.Key == "deals"]-> fire intake
   });
 
   it('rename via an explicit name updates the row in place and is durable', async () => {
-    const first = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
+    const first = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: SOURCE_V1 });
     if (!first.ok) throw new Error('first save should be live');
 
     // An explicit name (a rename from the breadcrumb / the MCP) takes effect.
     const renamed = await saveMovement({
+      audience: { for: 'run' },
       teamId: TEAM,
       id: first.movementId,
       source: SOURCE_V1,
@@ -846,13 +849,14 @@ listen to inbox-[e:Emails WHERE e.Key == "deals"]-> fire intake
     expect(db.__tables.movement[0].name).toBe('My Intake');
 
     // …and survives a later save that passes no name (the web's normal save).
-    const resaved = await saveMovement({ teamId: TEAM, id: first.movementId, source: SOURCE_V1 });
+    const resaved = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, id: first.movementId, source: SOURCE_V1 });
     expect(resaved.ok).toBe(true);
     expect(db.__tables.movement[0].name).toBe('My Intake');
   });
 
   it('no declaration + no name: nothing saved, actionable error', async () => {
     const result = await saveMovement({
+      audience: { for: 'run' },
       teamId: TEAM,
       source: '# just a comment\n',
       userId: 'user-1',
@@ -890,40 +894,40 @@ describe('saveMovement — a shipped schedule is armed promptly', () => {
   });
 
   it('a new cron listener asks for a poll reconcile due now', async () => {
-    const result = await saveMovement({ teamId: TEAM, source: cronSource('0 9 * * *') });
+    const result = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: cronSource('0 9 * * *') });
     expect(result.ok).toBe(true);
     expect(reconcileCalls()).toEqual(ASKED);
   });
 
   it('a changed schedule asks again; an unchanged re-save does not', async () => {
-    const first = await saveMovement({ teamId: TEAM, source: cronSource('0 9 * * *') });
+    const first = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: cronSource('0 9 * * *') });
     if (!first.ok) throw new Error('first save should ship');
     workStore.enqueueWork.mockClear();
 
-    await saveMovement({ teamId: TEAM, id: first.movementId, source: cronSource('0 9 * * *') });
+    await saveMovement({ audience: { for: 'run' }, teamId: TEAM, id: first.movementId, source: cronSource('0 9 * * *') });
     expect(reconcileCalls()).toEqual([]);
 
-    await saveMovement({ teamId: TEAM, id: first.movementId, source: cronSource('0 10 * * *') });
+    await saveMovement({ audience: { for: 'run' }, teamId: TEAM, id: first.movementId, source: cronSource('0 10 * * *') });
     expect(reconcileCalls()).toEqual(ASKED);
   });
 
   it('removing the cron listener asks too, so its work row goes', async () => {
-    const first = await saveMovement({ teamId: TEAM, source: cronSource('0 9 * * *') });
+    const first = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: cronSource('0 9 * * *') });
     if (!first.ok) throw new Error('first save should ship');
     workStore.enqueueWork.mockClear();
 
-    await saveMovement({ teamId: TEAM, id: first.movementId, source: NO_LISTEN });
+    await saveMovement({ audience: { for: 'run' }, teamId: TEAM, id: first.movementId, source: NO_LISTEN });
     expect(reconcileCalls()).toEqual(ASKED);
   });
 
   it('a new listener on any other edge asks too', async () => {
-    const result = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
+    const result = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: SOURCE_V1 });
     expect(result.ok).toBe(true);
     expect(reconcileCalls()).toEqual(ASKED);
   });
 
   it('a file without listens asks for nothing', async () => {
-    await saveMovement({ teamId: TEAM, source: NO_LISTEN });
+    await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: NO_LISTEN });
     expect(reconcileCalls()).toEqual([]);
   });
 });
@@ -934,7 +938,7 @@ describe('saveMovement — journey milestone MCP gate (monotonicity)', () => {
     // spelled out here for clarity since this test's whole point is the gate.
     contextMock.unsafeCurrentContext.mockReturnValue(undefined);
 
-    const result = await saveMovement({ teamId: TEAM, source: SOURCE_V1, userId: 'user-1' });
+    const result = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: SOURCE_V1, userId: 'user-1' });
 
     expect(result.ok).toBe(true);
     expect(journey.recordUserMilestone).not.toHaveBeenCalled();
@@ -949,7 +953,7 @@ describe('saveMovement — journey milestone MCP gate (monotonicity)', () => {
       authenticated: false,
     });
 
-    const result = await saveMovement({ teamId: TEAM, source: SOURCE_V1, userId: 'user-1' });
+    const result = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: SOURCE_V1, userId: 'user-1' });
 
     expect(result.ok).toBe(true);
     expect(journey.recordUserMilestone).toHaveBeenCalledWith('user-1', {
@@ -967,7 +971,7 @@ describe('saveMovement — journey milestone MCP gate (monotonicity)', () => {
       authenticated: false,
     });
 
-    const result = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
+    const result = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: SOURCE_V1 });
 
     expect(result.ok).toBe(true);
     expect(journey.recordUserMilestone).not.toHaveBeenCalled();
@@ -979,7 +983,7 @@ describe('saveMovement — journey milestone MCP gate (monotonicity)', () => {
 
 describe('listMovements / deleteMovement', () => {
   it('lists listeners + first channel; delete removes every derived row', async () => {
-    const saved = await saveMovement({ teamId: TEAM, source: MULTI_LISTEN });
+    const saved = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: MULTI_LISTEN });
     if (!saved.ok) throw new Error('save should be live');
 
     const list = await listMovements(TEAM);
@@ -1006,6 +1010,7 @@ describe('listMovements / deleteMovement', () => {
 describe('saveMovement — file imports (movement libraries)', () => {
   it('a consumer importing from a saved library checks through the resolver and goes live', async () => {
     const result = await saveMovement({
+      audience: { for: 'run' },
       teamId: TEAM,
       source: WITH_FILE_IMPORT,
       userId: 'user-1',
@@ -1018,6 +1023,7 @@ describe('saveMovement — file imports (movement libraries)', () => {
 
   it('an unresolvable import path needs confirmation with MOV_IMPORT_FILE_UNRESOLVED', async () => {
     const result = await saveMovement({
+      audience: { for: 'run' },
       teamId: TEAM,
       source: WITH_BAD_FILE_IMPORT,
       userId: 'user-1',
@@ -1188,7 +1194,7 @@ describe('saveMovement — versioning (movement_version)', () => {
       .sort((a, b) => (a.version_number as number) - (b.version_number as number));
 
   it('clean save mints v1 and points current_version_id at it', async () => {
-    const result = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
+    const result = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: SOURCE_V1 });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -1207,13 +1213,13 @@ describe('saveMovement — versioning (movement_version)', () => {
   });
 
   it('re-saving identical source is deduped — no new version, pin unchanged', async () => {
-    const first = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
+    const first = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: SOURCE_V1 });
     expect(first.ok).toBe(true);
     if (!first.ok) return;
     const movementId = first.movementId;
     const v1Id = (db.__tables.movement.find((m) => m.id === movementId) ?? {}).current_version_id;
 
-    await saveMovement({ teamId: TEAM, id: movementId, source: SOURCE_V1 });
+    await saveMovement({ audience: { for: 'run' }, teamId: TEAM, id: movementId, source: SOURCE_V1 });
 
     expect(versionsFor(movementId)).toHaveLength(1);
     expect(
@@ -1222,12 +1228,12 @@ describe('saveMovement — versioning (movement_version)', () => {
   });
 
   it('a changed source mints v2 and repins; both snapshots are retained', async () => {
-    const first = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
+    const first = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: SOURCE_V1 });
     expect(first.ok).toBe(true);
     if (!first.ok) return;
     const movementId = first.movementId;
 
-    await saveMovement({ teamId: TEAM, id: movementId, source: SOURCE_V2 });
+    await saveMovement({ audience: { for: 'run' }, teamId: TEAM, id: movementId, source: SOURCE_V2 });
 
     const versions = versionsFor(movementId);
     expect(versions).toHaveLength(2);
@@ -1241,7 +1247,7 @@ describe('saveMovement — versioning (movement_version)', () => {
   });
 
   it('a draft (failed gate) mints NO version — only runnable snapshots are versioned', async () => {
-    const result = await saveMovement({ teamId: TEAM, source: SOURCE_BROKEN });
+    const result = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: SOURCE_BROKEN });
     // SOURCE_BROKEN writes to an unresolvable adapter → not a clean 'live' save.
     expect(result.ok).toBe(false);
     const movement = db.__tables.movement[0];
@@ -1259,7 +1265,7 @@ describe('saveMovement — versioning (movement_version)', () => {
 // what getMovement's `revision` field feeds.
 describe('saveMovement — expectedRevision (agent-facing optimistic concurrency)', () => {
   it('getMovement carries `revision` as the content hash of the current source', async () => {
-    const saved = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
+    const saved = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: SOURCE_V1 });
     if (!saved.ok) throw new Error('save should be live');
 
     const detail = await getMovement({ teamId: TEAM, id: saved.movementId });
@@ -1267,12 +1273,13 @@ describe('saveMovement — expectedRevision (agent-facing optimistic concurrency
   });
 
   it('a matching expectedRevision saves normally', async () => {
-    const first = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
+    const first = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: SOURCE_V1 });
     if (!first.ok) throw new Error('first save should be live');
     const detail = await getMovement({ teamId: TEAM, id: first.movementId });
     const revision = detail!.revision;
 
     const second = await saveMovement({
+      audience: { for: 'run' },
       teamId: TEAM,
       id: first.movementId,
       source: SOURCE_V2,
@@ -1285,12 +1292,13 @@ describe('saveMovement — expectedRevision (agent-facing optimistic concurrency
   });
 
   it('a stale expectedRevision is rejected with an actionable conflict, and does NOT overwrite', async () => {
-    const first = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
+    const first = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: SOURCE_V1 });
     if (!first.ok) throw new Error('first save should be live');
     const staleRevision = movementSourceHash(SOURCE_V1);
 
     // Someone else's save lands in between — the stored source moves on.
     const landedInBetween = await saveMovement({
+      audience: { for: 'run' },
       teamId: TEAM,
       id: first.movementId,
       source: SOURCE_V2,
@@ -1300,6 +1308,7 @@ describe('saveMovement — expectedRevision (agent-facing optimistic concurrency
     // The stale-copy holder now tries to save its own (still-V1-based) edit.
     const staleEdit = SOURCE_V1.replace('# version one', '# a stale edit');
     const result = await saveMovement({
+      audience: { for: 'run' },
       teamId: TEAM,
       id: first.movementId,
       source: staleEdit,
@@ -1321,14 +1330,15 @@ describe('saveMovement — expectedRevision (agent-facing optimistic concurrency
   });
 
   it('omitting expectedRevision preserves today\'s behaviour: overwrites regardless', async () => {
-    const first = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
+    const first = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: SOURCE_V1 });
     if (!first.ok) throw new Error('first save should be live');
 
-    await saveMovement({ teamId: TEAM, id: first.movementId, source: SOURCE_V2 });
+    await saveMovement({ audience: { for: 'run' }, teamId: TEAM, id: first.movementId, source: SOURCE_V2 });
 
     // A third save with no expectedRevision at all still succeeds, even
     // though the caller's hypothetical copy would be stale.
     const third = await saveMovement({
+      audience: { for: 'run' },
       teamId: TEAM,
       id: first.movementId,
       source: SOURCE_V1,
@@ -1339,6 +1349,7 @@ describe('saveMovement — expectedRevision (agent-facing optimistic concurrency
 
   it('expectedRevision is ignored on the creation path (no existing automation)', async () => {
     const result = await saveMovement({
+      audience: { for: 'run' },
       teamId: TEAM,
       source: SOURCE_V1,
       expectedRevision: 'anything-at-all',
@@ -1425,7 +1436,7 @@ describe('saveMovement — backtick credential args (provision-path)', () => {
 
   it('direct backtick cred: trigger provisions with the correct credentials_id (non-null)', async () => {
     catalogMock.movementCatalogForTeam.mockResolvedValueOnce(makeAttioTeamCatalog());
-    const result = await saveMovement({ teamId: TEAM, source: DIRECT_BACKTICK_SOURCE });
+    const result = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: DIRECT_BACKTICK_SOURCE });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -1440,7 +1451,7 @@ describe('saveMovement — backtick credential args (provision-path)', () => {
   it('aliased cred and direct backtick cred produce the same credentials_id (parity)', async () => {
     // Aliased path (the previously working form).
     catalogMock.movementCatalogForTeam.mockResolvedValueOnce(makeAttioTeamCatalog());
-    const aliasResult = await saveMovement({ teamId: TEAM, source: ALIASED_SOURCE });
+    const aliasResult = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: ALIASED_SOURCE });
     expect(aliasResult.ok).toBe(true);
     if (!aliasResult.ok) return;
     const aliasCredId = aliasResult.listeners[0].credentialsId;
@@ -1450,7 +1461,7 @@ describe('saveMovement — backtick credential args (provision-path)', () => {
 
     // Direct backtick path (the previously broken form).
     catalogMock.movementCatalogForTeam.mockResolvedValueOnce(makeAttioTeamCatalog());
-    const directResult = await saveMovement({ teamId: TEAM, source: DIRECT_BACKTICK_SOURCE });
+    const directResult = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: DIRECT_BACKTICK_SOURCE });
     expect(directResult.ok).toBe(true);
     if (!directResult.ok) return;
     const directCredId = directResult.listeners[0].credentialsId;
@@ -1464,7 +1475,7 @@ describe('saveMovement — backtick credential args (provision-path)', () => {
 // the version every save validates under (recorded as `checked_against`).
 describe('the language version pin', () => {
   it('a first save stamps the current version and records the check under it', async () => {
-    const saved = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
+    const saved = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: SOURCE_V1 });
     expect(saved.ok).toBe(true);
     const [row] = db.__tables.movement;
     expect(row.language_version).toBe(LANGUAGE_VERSION);
@@ -1475,12 +1486,12 @@ describe('the language version pin', () => {
   });
 
   it('a re-save keeps an older pin and validates under it', async () => {
-    const first = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
+    const first = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: SOURCE_V1 });
     if (!first.ok) throw new Error('first save failed');
     // A movement saved on an earlier release this one reads (its compatibility key).
     db.__tables.movement[0].language_version = SAME_LINE;
 
-    const again = await saveMovement({ teamId: TEAM, id: first.movementId, source: SOURCE_V2 });
+    const again = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, id: first.movementId, source: SOURCE_V2 });
     expect(again.ok).toBe(true);
     const [row] = db.__tables.movement;
     expect(row.source).toBe(SOURCE_V2);
@@ -1492,11 +1503,11 @@ describe('the language version pin', () => {
   });
 
   it('a movement pinned to a version this release does not support is refused, not saved as current', async () => {
-    const first = await saveMovement({ teamId: TEAM, source: SOURCE_V1 });
+    const first = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: SOURCE_V1 });
     if (!first.ok) throw new Error('first save failed');
     db.__tables.movement[0].language_version = '99';
 
-    const again = await saveMovement({ teamId: TEAM, id: first.movementId, source: SOURCE_V2 });
+    const again = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, id: first.movementId, source: SOURCE_V2 });
     expect(again.ok).toBe(false);
     const [row] = db.__tables.movement;
     expect(row.language_version).toBe('99');
@@ -1546,7 +1557,7 @@ listen to inbox-[e:Emails WHERE e.Key == "deals"]-> fire intake
 
   /** A movement as a version 4 save left it: the row, and its snapshot. */
   async function savedUnderFour(): Promise<string> {
-    const first = await saveMovement({ teamId: TEAM, source: NEW });
+    const first = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: NEW });
     if (!first.ok) throw new Error(`first save failed: ${(first.errors ?? []).join('; ')}`);
     const [row] = db.__tables.movement;
     Object.assign(row, { source: OLD, language_version: '4' });

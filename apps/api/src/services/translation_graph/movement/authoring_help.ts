@@ -8,6 +8,7 @@ import { LANGUAGE_VERSION, languageVersionDiagnostic, type LanguageVersion } fro
 import { helpingOf, isCurrent, type CarriedHandbook, type HelpLane } from '@listen-fire/language-versions';
 
 import type { AutomationsBook } from '../../../lib/knowledge/library';
+import type { CatalogAudience } from './audience';
 
 import { deploymentFacts, teamFactsOf } from './carried_check';
 import { neverAsAny } from 'movement-engine/public/types';
@@ -93,9 +94,9 @@ async function modulePlatformNow() {
 }
 
 /** The catalog view a program on a carried version is written against. */
-export async function catalogUnderCarried(lane: () => Promise<HelpLane>, teamId: string) {
-  const [help, team] = await Promise.all([lane(), teamFactsOf(teamId)]);
-  return help.catalogOf(team);
+export async function catalogUnderCarried(lane: () => Promise<HelpLane>, team: { teamId: string; audience: CatalogAudience }) {
+  const [help, facts] = await Promise.all([lane(), teamFactsOf(team.teamId, { audience: team.audience })]);
+  return help.catalogOf(facts);
 }
 
 /** Options a describe takes under the current version that a carried version's
@@ -105,9 +106,9 @@ const NOT_CARRIED = ['types', 'position', 'narrow', 'detail'] as const;
 /** Systems as compact text, in a carried version's own words. */
 export async function describeUnderCarried(
   route: Extract<HelpRoute, { kind: 'carried' }>,
-  input: { teamId: string; systems: readonly string[]; connection?: string; asked: Partial<Record<(typeof NOT_CARRIED)[number], unknown>> },
+  input: { teamId: string; audience: CatalogAudience; systems: readonly string[]; connection?: string; asked: Partial<Record<(typeof NOT_CARRIED)[number], unknown>> },
 ): Promise<string> {
-  const [help, team, modules] = await Promise.all([route.lane(), teamFactsOf(input.teamId), modulePlatformNow()]);
+  const [help, team, modules] = await Promise.all([route.lane(), teamFactsOf(input.teamId, { audience: input.audience }), modulePlatformNow()]);
   const blocks = await Promise.all(
     input.systems.map((system) =>
       help.describeSystem({
@@ -128,7 +129,7 @@ export async function describeUnderCarried(
 }
 
 /** The first read under a carried version: its systems, as it reads them. */
-export async function digestUnderCarried(lane: () => Promise<HelpLane>, teamId: string): Promise<string> {
-  const [help, team, modules] = await Promise.all([lane(), teamFactsOf(teamId), modulePlatformNow()]);
-  return help.connectionsDigest({ team, teamId, modules });
+export async function digestUnderCarried(lane: () => Promise<HelpLane>, asked: { teamId: string; audience: CatalogAudience }): Promise<string> {
+  const [help, team, modules] = await Promise.all([lane(), teamFactsOf(asked.teamId, { audience: asked.audience }), modulePlatformNow()]);
+  return help.connectionsDigest({ team, teamId: asked.teamId, modules });
 }

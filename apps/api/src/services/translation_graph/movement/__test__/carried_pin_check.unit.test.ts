@@ -77,7 +77,7 @@ beforeEach(() => jest.clearAllMocks());
 
 describe("a 0.12 pin's check", () => {
   it('reads 0.12 syntax clean under 0.12, and never assembles this release\'s catalog', async () => {
-    const validation = await validateMovementForTeam({ teamId: TEAM, source: ECHO_012, languageVersion: '0.12.13' });
+    const validation = await validateMovementForTeam({ audience: { for: 'run' }, teamId: TEAM, source: ECHO_012, languageVersion: '0.12.13' });
     expect(validation.diagnostics).toEqual([]);
     expect(validation.ok).toBe(true);
     expect(validation.firedMovements).toEqual(['echo']);
@@ -96,7 +96,7 @@ describe("a 0.12 pin's check", () => {
   });
 
   it("reports a construct only 0.13 and later read, by 0.12's checker", async () => {
-    const validation = await validateMovementForTeam({ teamId: TEAM, source: ECHO_015, languageVersion: '0.12.13' });
+    const validation = await validateMovementForTeam({ audience: { for: 'run' }, teamId: TEAM, source: ECHO_015, languageVersion: '0.12.13' });
     expect(validation.ok).toBe(false);
     expect(validation.diagnostics).toEqual([
       expect.objectContaining({ code: 'MOV_PARSE', severity: 'error', message: expect.stringContaining("Expected 'fire' after 'listen to manual'") }),
@@ -114,7 +114,7 @@ describe("a 0.12 pin's check", () => {
     const source =
       'import { attio } from adapters\nimport { acme_main } from credentials\ncrm = connect attio using acme_main\n' +
       'function f(go: <manual-[:Invocation]->>) {\n  write crm-[:Companies]-> {\n    unique by (Name)\n    Name: go.Text\n  }\n}\nlisten to manual fire f\n';
-    const validation = await validateMovementForTeam({ teamId: TEAM, source, languageVersion: '0.12.13' });
+    const validation = await validateMovementForTeam({ audience: { for: 'run' }, teamId: TEAM, source, languageVersion: '0.12.13' });
     expect(validation.ok).toBe(true);
     expect(validation.gaps).toEqual([{ adapter: 'attio', detail: expect.stringContaining('was checked') }]);
   });
@@ -124,7 +124,7 @@ describe("a 0.12 pin's check", () => {
       row({ id: 'lib', name: 'lib', source: 'export function shout(t: <text>) {\n  return t\n}\n', languageVersion: '0.15.1' }),
     ]);
     const importer = 'import { shout } from "lib"\n' + ECHO_012.replace('return run.Text', 'return shout(run.Text)');
-    const validation = await validateMovementForTeam({ teamId: TEAM, source: importer, languageVersion: '0.12.13' });
+    const validation = await validateMovementForTeam({ audience: { for: 'run' }, teamId: TEAM, source: importer, languageVersion: '0.12.13' });
     const across = validation.diagnostics.find((d) => d.code === 'MOV_IMPORT_LANGUAGE_VERSION');
     expect(across).toMatchObject({ severity: 'error', line: 1, sourceLine: 'import { shout } from "lib"' });
     expect(across?.message).toContain('0.12.13');
@@ -153,7 +153,7 @@ describe("a 0.12 pin's editor", () => {
   it("completes from 0.12's language service, on the server", async () => {
     jest.mocked(getMovementRow).mockResolvedValue(row({}));
     const offset = ECHO_012.indexOf('run.Text') + 'run.'.length;
-    const answer = await completeAt({ teamId: TEAM, id: 'movement-1', source: ECHO_012, offset });
+    const answer = await completeAt({ audience: { for: 'run' }, teamId: TEAM, id: 'movement-1', source: ECHO_012, offset });
     expect(answer.kind).toBe('answer');
     if (answer.kind !== 'answer') return;
     expect(answer.answer.items.map((item) => item.label)).toEqual(['Fired at', 'Run by (email)', 'Run by (name)', 'Text', 'Content']);

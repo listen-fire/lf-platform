@@ -162,6 +162,7 @@ async function main() {
   });
 
   const movement = await saveMovement({
+    audience: { for: 'run' },
     teamId: seed.teamId,
     source: gmailFile({ ...(query !== undefined ? { query } : {}), mode }),
   });

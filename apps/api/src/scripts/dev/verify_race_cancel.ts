@@ -107,7 +107,7 @@ async function main() {
   await ensureDevLoopSlackCredential(seed.teamId);
 
   for (const source of [RACE_CANCEL, LANG_SURFACE]) {
-    const result = await saveMovement({ teamId: seed.teamId, source });
+    const result = await saveMovement({ audience: { for: 'run' }, teamId: seed.teamId, source });
     console.log(JSON.stringify(result, null, 2));
     if (!result.ok) process.exit(1);
   }

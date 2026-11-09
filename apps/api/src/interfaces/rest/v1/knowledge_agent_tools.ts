@@ -68,6 +68,7 @@ import {
   movementCatalogSnapshotForTeam,
   toAgentCatalogView,
 } from '../../../services/translation_graph/movement/catalog';
+import { callerAudience } from '../../../services/translation_graph/movement/audience';
 import {
   getMovement,
   listMovements,
@@ -125,6 +126,7 @@ import { registerRoute } from '../../mcp/registry';
 import {
   EXEMPT,
   READ_ONLY_MESSAGE,
+  USE_CONNECTION,
   decidingRouter,
   readableAmong,
   refusalOn,
@@ -579,9 +581,9 @@ const listCatalogHandler: RequestHandler = async (req, res) => {
     if ('error' in help) return res.status(400).json(help);
     const resolvedTeam = help.teamId ?? (await resolveToolTeam(team));
     if (help.route.kind === 'carried') {
-      return res.status(200).json({ ...(await catalogUnderCarried(help.route.lane, resolvedTeam)), language: languageOf(help.route) });
+      return res.status(200).json({ ...(await catalogUnderCarried(help.route.lane, { teamId: resolvedTeam, audience: callerAudience() })), language: languageOf(help.route) });
     }
-    const catalog = await movementCatalogSnapshotForTeam(resolvedTeam as TeamId);
+    const catalog = await movementCatalogSnapshotForTeam(resolvedTeam as TeamId, { audience: callerAudience() });
     return res.status(200).json(toAgentCatalogView(catalog));
   } catch (err) {
     return internalError(res, err);
@@ -636,6 +638,7 @@ const describeInstanceHandler: RequestHandler = async (req, res) => {
     if (help.route.kind === 'carried') {
       const text = await describeUnderCarried(help.route, {
         teamId,
+        audience: callerAudience(),
         systems: Array.isArray(input.system) ? input.system : [input.system],
         ...(input.connection !== undefined ? { connection: input.connection } : {}),
         asked: { types: input.types, position: input.position, narrow: input.narrow, detail: input.detail === 'full' ? input.detail : undefined },
@@ -651,6 +654,7 @@ const describeInstanceHandler: RequestHandler = async (req, res) => {
       systems.map((system) =>
         describeConnectionCompact({
           teamId,
+          audience: callerAudience(),
           system,
           ...(scoped && input.connection !== undefined ? { connection: input.connection } : {}),
           ...(scoped && input.types !== undefined ? { types: input.types } : {}),
@@ -679,13 +683,14 @@ async function describeInstanceFull(teamId: TeamId, input: z.infer<typeof descri
     const connections = await Promise.all(
       input.system.map(async (system) => ({
         system,
-        ...(await describeMovementInstance({ teamId, adapter: system, forceRefresh: true })),
+        ...(await describeMovementInstance({ teamId, audience: callerAudience(), adapter: system, forceRefresh: true })),
       })),
     );
     return { connections };
   }
   return describeMovementInstance({
     teamId,
+    audience: callerAudience(),
     adapter: input.system,
     forceRefresh: true,
     ...(input.connection !== undefined ? { credentialName: input.connection } : {}),
@@ -913,7 +918,7 @@ const getStartedHandler: RequestHandler = async (req, res) => {
         : parsed.data.team === undefined && teams.length > 1
           ? null
           : ((await resolveToolTeam(parsed.data.team)) as TeamId);
-    const text = await renderGetStarted({ teams, teamId, ...(help.route.kind === 'carried' ? { carried: help.route } : {}) });
+    const text = await renderGetStarted({ teams, teamId, audience: callerAudience(), ...(help.route.kind === 'carried' ? { carried: help.route } : {}) });
     return res.status(200).type('text/markdown').send(text);
   } catch (err) {
     return internalError(res, err);
@@ -1043,6 +1048,7 @@ async function validateAutomationText(input: {
   const validation = await validateMovementForTeam({
     teamId: input.teamId,
     source: input.source,
+    audience: callerAudience(),
     ...(languageVersion !== undefined ? { languageVersion } : {}),
     ...(upgradingFrom !== undefined ? { upgradingFrom } : {}),
   });
@@ -1209,7 +1215,7 @@ const completionsAtHandler: RequestHandler = jsonHandler(
       if (!row || (await unseen(row.id))) return { error: `No automation '${input.automation}' in this team.` };
       languageVersion = row.languageVersion;
     }
-    return agentCompletionsAt({ teamId, source: fullSource, offset, pin: languageVersion ?? LANGUAGE_VERSION });
+    return agentCompletionsAt({ teamId, audience: callerAudience(), source: fullSource, offset, pin: languageVersion ?? LANGUAGE_VERSION });
   },
 );
 
@@ -1254,6 +1260,7 @@ const saveMovementHandler: RequestHandler = jsonHandler(saveMovementSchema, 'bod
   const result = await saveMovement({
     teamId,
     source: input.source,
+    audience: callerAudience(),
     changeSource: 'agent',
     ...(input.name !== undefined ? { name: input.name } : {}),
     ...(input.description !== undefined ? { description: input.description } : {}),
@@ -1416,6 +1423,7 @@ const editAutomationHandler: RequestHandler = async (req, res) => {
       teamId: ref.teamId,
       id: ref.movementId,
       source: spliced.source,
+      audience: callerAudience(),
       changeSource: 'agent',
       ...(input.expectedRevision !== undefined ? { expectedRevision: input.expectedRevision } : {}),
       ...(input.acknowledgeErrors !== undefined ? { acknowledgeErrors: input.acknowledgeErrors } : {}),
@@ -1832,10 +1840,10 @@ function mountAutomationToolRoutes(router: ReturnType<typeof Router>): void {
   route.post('/language/example', READS, showExampleHandler);
 
   // catalog.read
-  route.get('/connections', EXEMPT.connection, listCatalogHandler);
-  route.post('/connections/describe', EXEMPT.connection, describeInstanceHandler);
-  route.post('/connections/connect', EXEMPT.connection, connectCredentialHandler);
-  route.post('/connections/grant-access', EXEMPT.connection, grantAccessHandler);
+  route.get('/connections', USE_CONNECTION, listCatalogHandler);
+  route.post('/connections/describe', USE_CONNECTION, describeInstanceHandler);
+  route.post('/connections/connect', USE_CONNECTION, connectCredentialHandler);
+  route.post('/connections/grant-access', USE_CONNECTION, grantAccessHandler);
 
   // whatsapp number linking (verification code loop)
   const ownNumber: Decision = { exempt: "the caller's own phone number, no automation" };

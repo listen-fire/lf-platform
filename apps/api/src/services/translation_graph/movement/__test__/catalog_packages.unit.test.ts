@@ -80,7 +80,7 @@ const reading = (connect: string, field: string) =>
   `crm = ${connect} using acme_main\nfunction tidy(go: <manual-[:Invocations]->>) {\n  crm-[c:Companies]-> {\n    write c { ${field}: go.Text }\n  }\n}\nlisten to manual-[:Invocations]-> fire tidy\n`;
 
 async function verdictOf(source: string) {
-  const team = await movementCatalogForTeam(TEAM, { source, languageVersion: LANGUAGE_VERSION });
+  const team = await movementCatalogForTeam(TEAM, { audience: { for: 'run' }, source, languageVersion: LANGUAGE_VERSION });
   return diagnoseMovementSource(source, {
     catalog: team.catalog,
     resolveCredentialId: team.resolveCredentialId,

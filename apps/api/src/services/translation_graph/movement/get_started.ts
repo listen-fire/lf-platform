@@ -10,6 +10,7 @@ import type { TeamId } from '../../../generated/kysely/core/Team';
 import { renderFrontPage } from '../../../lib/knowledge/movement_handbook';
 import { carriedAutomationsBook, digestUnderCarried, type HelpRoute } from './authoring_help';
 import { describeMovementInstance, movementCatalogSnapshotForTeam } from './catalog';
+import type { CatalogAudience } from './audience';
 import { renderConnectionsDigest, type SystemDigestInput } from './connection_digest';
 import { connectionsFor, resolveStubLandings, within } from './describe_connection';
 
@@ -26,8 +27,8 @@ const SYSTEM_TIMEOUT_MS = 12_000;
  * described too. A system that needs a connection the
  * team lacks is only named, so the agent knows to connect it.
  */
-export async function connectedSystemsDigest(teamId: TeamId): Promise<string> {
-  const { snapshot, remoteConnections } = await movementCatalogSnapshotForTeam(teamId);
+export async function connectedSystemsDigest(teamId: TeamId, audience: CatalogAudience): Promise<string> {
+  const { snapshot, remoteConnections } = await movementCatalogSnapshotForTeam(teamId, { audience });
   const connected: Array<Pick<SystemDigestInput, 'system' | 'spec' | 'connections'>> = [];
   const builtIn: typeof connected = [];
   const notConnected: string[] = [];
@@ -53,6 +54,7 @@ export async function connectedSystemsDigest(teamId: TeamId): Promise<string> {
         const described = await within(
           describeMovementInstance({
             teamId,
+            audience,
             adapter: entry.system,
             ...(connection !== undefined ? { credentialName: connection } : {}),
           }),
@@ -66,6 +68,7 @@ export async function connectedSystemsDigest(teamId: TeamId): Promise<string> {
         // builder writes to, so describe them too, inside the system's budget.
         const node = await resolveStubLandings({
           teamId,
+          audience,
           system: entry.system,
           ...(connection !== undefined ? { connection } : {}),
           node: described.node,
@@ -110,13 +113,15 @@ const EXTRACT_CACHE_TIP =
 export async function renderGetStarted(input: {
   teams: TeamRef[];
   teamId: TeamId | null;
+  /** The reader: the systems shown are the connections they may use. */
+  audience: CatalogAudience;
   /** The automation's own version, when it is not the current one: its
    *  systems and its front page answer instead. */
   carried?: Extract<HelpRoute, { kind: 'carried' }>;
 }): Promise<string> {
   const { carried } = input;
   if (carried !== undefined) {
-    const systems = input.teamId === null ? null : await digestUnderCarried(carried.lane, input.teamId);
+    const systems = input.teamId === null ? null : await digestUnderCarried(carried.lane, { teamId: input.teamId, audience: input.audience });
     const { book } = await carriedAutomationsBook(carried.lane);
     return [
       teamSection(input),
@@ -125,7 +130,7 @@ export async function renderGetStarted(input: {
       book.frontPage,
     ].join('\n\n');
   }
-  const systems = input.teamId === null ? null : await connectedSystemsDigest(input.teamId);
+  const systems = input.teamId === null ? null : await connectedSystemsDigest(input.teamId, input.audience);
   return [
     teamSection(input),
     ...(systems !== null ? ['## Systems', systems, EXTRACT_CACHE_TIP] : []),

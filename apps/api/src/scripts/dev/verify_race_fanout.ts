@@ -96,7 +96,7 @@ async function main() {
     secret: { botToken: 'dev-loop-telegram-token' },
   });
 
-  const result = await saveMovement({ teamId: seed.teamId, source: MOVEMENT });
+  const result = await saveMovement({ audience: { for: 'run' }, teamId: seed.teamId, source: MOVEMENT });
   console.log(JSON.stringify(result, null, 2));
   if (!result.ok) process.exit(1);
 }

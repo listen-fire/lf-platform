@@ -29,6 +29,7 @@ import { resolveAdapterSlug } from '../adapters/registry';
 import { resolveAdapter } from '../adapters/resolve';
 import { loadTriggerById } from '../storage/tg_table';
 import { runCatalogSnapshotForTeam } from './catalog';
+import type { CatalogAudience } from './audience';
 import { productionEngineHost } from './engine_host';
 import { tenantOfTeam } from './tenant';
 import { inMemoryRawTextStore } from './raw_text_store';
@@ -66,6 +67,8 @@ export type MovementTestRunResult =
 
 export interface MovementTestRunInput {
   teamId: TeamId;
+  /** A test run reads the live systems, so it runs on only the connections its person may use. */
+  audience: CatalogAudience;
   /** The `automations.trigger` row to test (already team-scoped by the caller). */
   triggerId: string;
   /** Optional natural-language scenario bias for the synthetic event. */
@@ -108,7 +111,7 @@ export async function runMovementTestRun(
   // A pin a carried version runs is rehearsed by that version (its manual
   // listen); this release's catalog and model never read its text.
   if ((await carriedRunLaneOf(movementRow.languageVersion)) !== undefined) {
-    return runCarriedTestRun({ teamId: input.teamId, movementId: movementRow.id, ...(input.seed !== undefined ? { text: input.seed } : {}) });
+    return runCarriedTestRun({ teamId: input.teamId, audience: input.audience, movementId: movementRow.id, ...(input.seed !== undefined ? { text: input.seed } : {}) });
   }
   // A pin this build does not run is refused before anything reads the
   // program: no introspection of its source, no model inventing an event.
@@ -167,6 +170,7 @@ export async function runMovementTestRun(
   let teamCatalog: Awaited<ReturnType<typeof runCatalogSnapshotForTeam>>;
   try {
     teamCatalog = await runCatalogSnapshotForTeam(input.teamId, {
+      audience: input.audience,
       source: movementRow.source,
       languageVersion: movementRow.languageVersion,
       imports: 'live',
@@ -320,6 +324,7 @@ function parseJsonObject(text: string): Record<string, unknown> | null {
  */
 export async function runCarriedTestRun(input: {
   teamId: TeamId;
+  audience: CatalogAudience;
   movementId: string;
   text?: string;
 }): Promise<MovementTestRunResult> {
@@ -346,6 +351,7 @@ export async function runCarriedTestRun(input: {
     await runCarriedSegment({
       lane,
       teamId: input.teamId,
+      audience: input.audience,
       source: row.source,
       pin: row.languageVersion,
       movementName,

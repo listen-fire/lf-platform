@@ -286,7 +286,7 @@ async function main() {
     // ── Seeding. No Context is established here, and none is needed. ──────
     const seed = await seedTeam('run');
     const other = await seedTeam('other');
-    const saved = await saveMovement({ teamId: seed.teamId, userId: seed.userId, source: PROGRAM });
+    const saved = await saveMovement({ audience: { for: 'run' }, teamId: seed.teamId, userId: seed.userId, source: PROGRAM });
     if (!saved.ok || saved.movementId === undefined) {
       console.error(JSON.stringify(saved, null, 2));
       throw new Error('the probe movement did not save');

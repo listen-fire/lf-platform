@@ -88,7 +88,7 @@ beforeAll(async () => {
     status: 'claimed',
   });
 
-  const saved = await saveMovement({ teamId: TEAM as string, source: SOURCE, name: 'deal-intake' });
+  const saved = await saveMovement({ audience: { for: 'run' }, teamId: TEAM as string, source: SOURCE, name: 'deal-intake' });
   if (!saved.ok) throw new Error(`test: the movement did not save: ${JSON.stringify(saved)}`);
   const trigger = await getAutomationsQb(['trigger'])
     .selectFrom('trigger')

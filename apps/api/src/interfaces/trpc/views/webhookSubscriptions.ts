@@ -16,7 +16,7 @@ import {
   listWebhookProviders,
 } from '../../../services/webhook_sync/providers';
 import { buildWebhookTargetUrl as buildTargetUrl } from '../../../services/webhook_sync/urls';
-import { EXEMPT, decidesEach } from '../../access_route';
+import { USE_CONNECTION, connectionUnseen, decidesEach, usableAmong } from '../../access_route';
 
 const webhookSubscriptionsRouter = (procedure: typeof trpc.procedure) => {
   const userProcedure = sharedUserProcedure(procedure);
@@ -45,7 +45,8 @@ const webhookSubscriptionsRouter = (procedure: typeof trpc.procedure) => {
         ])
         .orderBy('webhook_subscription.created_at', 'desc')
         .execute();
-      return rows.map((row) => {
+      const usable = await usableAmong(rows, { connectionOf: (row) => row.credentials_id, teamIds: [ctx.user.teamId] });
+      return usable.map((row) => {
         const meta = getWebhookProviderMeta(row.provider);
         return {
           id: row.id,
@@ -85,6 +86,7 @@ const webhookSubscriptionsRouter = (procedure: typeof trpc.procedure) => {
         const ctx = currentContext();
         const teamId = ctx.user.teamId as TeamId;
         const providerKey = input.provider.toUpperCase();
+        if (await connectionUnseen(input.credentialsId)) throw new Error(`Connection ${input.credentialsId} not found`);
 
         const provider = getWebhookProvider(providerKey);
         if (!provider) {
@@ -173,7 +175,9 @@ const webhookSubscriptionsRouter = (procedure: typeof trpc.procedure) => {
           ])
           .executeTakeFirst();
 
-        if (!sub) throw new Error('Subscription not found');
+        if (!sub || (sub.credentials_id !== null && (await connectionUnseen(sub.credentials_id)))) {
+          throw new Error('Subscription not found');
+        }
 
         // Deregister via the provider when (a) we know the source's id
         // (auto-registered) and (b) the provider implements deregistration.
@@ -201,10 +205,10 @@ const webhookSubscriptionsRouter = (procedure: typeof trpc.procedure) => {
 };
 
 decidesEach('webhookSubscriptions', {
-  listProviders: EXEMPT.connection,
-  list: EXEMPT.connection,
-  create: EXEMPT.connection,
-  delete: EXEMPT.connection,
+  listProviders: { exempt: 'the webhook providers this deployment offers, no connection' },
+  list: USE_CONNECTION,
+  create: USE_CONNECTION,
+  delete: USE_CONNECTION,
 });
 
 export { webhookSubscriptionsRouter };

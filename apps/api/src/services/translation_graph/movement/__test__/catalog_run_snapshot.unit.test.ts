@@ -90,20 +90,20 @@ const LEGACY = { languageVersion: '2' } as const;
 
 describe('runCatalogSnapshotForTeam', () => {
   it('carries exactly the import closure, not every saved movement', async () => {
-    const { snapshot } = await runCatalogSnapshotForTeam(TEAM, { source: PROGRAM, ...LEGACY, imports: 'live' });
+    const { snapshot } = await runCatalogSnapshotForTeam(TEAM, { audience: { for: 'run' }, source: PROGRAM, ...LEGACY, imports: 'live' });
 
     expect(snapshot.files).toEqual({ helpers: { source: LIBRARY } });
     expect(listMovementRows).not.toHaveBeenCalled();
   });
 
   it('carries no library on another version: a current program importing a legacy library resolves nothing', async () => {
-    const { snapshot } = await runCatalogSnapshotForTeam(TEAM, { source: PROGRAM, imports: 'live' });
+    const { snapshot } = await runCatalogSnapshotForTeam(TEAM, { audience: { for: 'run' }, source: PROGRAM, imports: 'live' });
 
     expect(snapshot.files).toEqual({});
   });
 
   it('hands the host the credential ids by import name', async () => {
-    const { snapshot, credentialIds } = await runCatalogSnapshotForTeam(TEAM, { source: PROGRAM, ...LEGACY, imports: 'live' });
+    const { snapshot, credentialIds } = await runCatalogSnapshotForTeam(TEAM, { audience: { for: 'run' }, source: PROGRAM, ...LEGACY, imports: 'live' });
 
     expect(credentialIds).toEqual({ 'Dev Loop Attio': 'cred-attio-1' });
     expect(Object.keys(snapshot.credentials)).toEqual(['Dev Loop Attio']);
@@ -114,14 +114,14 @@ describe('a check for a move up', () => {
   const CURRENT = jest.requireActual<typeof import('movement-lang')>('movement-lang').LANGUAGE_VERSION;
 
   it('an ordinary check under the current version refuses the legacy library, naming its pin', async () => {
-    const catalog = await movementCatalogForTeam(TEAM, { source: PROGRAM, languageVersion: CURRENT });
+    const catalog = await movementCatalogForTeam(TEAM, { audience: { for: 'run' }, source: PROGRAM, languageVersion: CURRENT });
 
     expect(catalog.importsAcrossVersions).toEqual(new Map([['helpers', '2']]));
     expect(catalog.runSnapshot?.().files).toEqual({});
   });
 
   it("reads a library on the movement's own version under the target: the upgrade moves them together", async () => {
-    const catalog = await movementCatalogForTeam(TEAM, { source: PROGRAM, languageVersion: CURRENT, upgradingFrom: '2' });
+    const catalog = await movementCatalogForTeam(TEAM, { audience: { for: 'run' }, source: PROGRAM, languageVersion: CURRENT, upgradingFrom: '2' });
 
     expect(catalog.importsAcrossVersions).toBeUndefined();
     expect(catalog.runSnapshot?.().files).toEqual({ helpers: { source: LIBRARY } });
@@ -130,6 +130,7 @@ describe('a check for a move up', () => {
   it("resolves a group member to its text as moved, not the saved one", async () => {
     const moved = 'export function tidy(t: <text>) {\n  return t\n}\n';
     const catalog = await movementCatalogForTeam(TEAM, {
+      audience: { for: 'run' },
       source: PROGRAM,
       languageVersion: CURRENT,
       upgradingFrom: '2',
@@ -142,7 +143,7 @@ describe('a check for a move up', () => {
 
 describe('movementCatalogSnapshotForTeam (the editor form)', () => {
   it('lists every saved movement on its version and carries no credential ids', async () => {
-    const editor = await movementCatalogSnapshotForTeam(TEAM, { source: PROGRAM, ...LEGACY });
+    const editor = await movementCatalogSnapshotForTeam(TEAM, { audience: { for: 'run' }, source: PROGRAM, ...LEGACY });
 
     // A legacy id is on 0.12's version, so a 0.12 library is offered; a
     // current one is not.
@@ -151,7 +152,7 @@ describe('movementCatalogSnapshotForTeam (the editor form)', () => {
   });
 
   it('offers a current program only the current files', async () => {
-    const editor = await movementCatalogSnapshotForTeam(TEAM, {});
+    const editor = await movementCatalogSnapshotForTeam(TEAM, { audience: { for: 'run' } });
 
     expect(Object.keys(editor.snapshot.files ?? {})).toEqual(['current_helpers']);
   });

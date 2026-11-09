@@ -90,7 +90,7 @@ async function connect(url: string): Promise<void> {
 
 async function setup(): Promise<void> {
   const seed = await ensureDevLoopTeam();
-  const saved = await saveMovement({ teamId: seed.teamId, source: PROBE });
+  const saved = await saveMovement({ audience: { for: 'run' }, teamId: seed.teamId, source: PROBE });
   console.log(JSON.stringify(saved.ok ? { ok: true, movementId: saved.movementId, validity: saved.validity.status } : saved, null, 2));
 }
 

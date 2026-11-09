@@ -40,8 +40,9 @@ import {
   type GrantedSpreadsheet,
 } from '../../../services/translation_graph/adapters/google_sheets/grants';
 import { resolveCredentialIdByImportName } from '../../../services/translation_graph/movement/catalog';
+import { callerAudience } from '../../../services/translation_graph/movement/audience';
 import { userProcedure as sharedUserProcedure } from '../procedures';
-import { EXEMPT, decidesEach } from '../../access_route';
+import { USE_CONNECTION, connectionUnseen, decidesEach } from '../../access_route';
 
 /** Identify a credential either by raw id (credential UI) or by the movement
  *  import name the editor/chat hold (resolved against google_sheets). */
@@ -61,11 +62,12 @@ async function resolveCredentialId(ref: CredentialRef, teamId: TeamId): Promise<
       .where('team_id', '=', teamId)
       .select(['id'])
       .executeTakeFirst();
-    if (!row) throw new Error('Google credential not found for this team.');
+    if (!row || (await connectionUnseen(row.id))) throw new Error('Google credential not found for this team.');
     return row.id;
   }
   const id = await resolveCredentialIdByImportName({
     teamId,
+    audience: callerAudience(),
     adapter: GOOGLE_SHEETS_ADAPTER_TYPE,
     credentialName: ref.credentialName,
   });
@@ -158,11 +160,12 @@ const googleSheetsRouter = (procedure: typeof trpc.procedure) => {
   });
 };
 
+// Each names its connection, which `resolveCredentialId` decides.
 decidesEach('googleSheets', {
-  pickerToken: EXEMPT.connection,
-  grant: EXEMPT.connection,
-  listGrants: EXEMPT.connection,
-  revoke: EXEMPT.connection,
+  pickerToken: USE_CONNECTION,
+  grant: USE_CONNECTION,
+  listGrants: USE_CONNECTION,
+  revoke: USE_CONNECTION,
 });
 
 export { googleSheetsRouter };

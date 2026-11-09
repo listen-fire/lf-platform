@@ -255,7 +255,7 @@ describe('a firing runs the shipped text, not a draft (real DB)', () => {
   it('an unconfirmed invalid edit of a shipped movement never changes what fires', async () => {
     const { triggerId, versionId } = await shipped(spelled(ANNOUNCE('SHIPPED')));
 
-    const edit = await saveMovement({ teamId, source: BROKEN_EDIT('DRAFT'), name: 'Announce' });
+    const edit = await saveMovement({ audience: { for: 'run' }, teamId, source: BROKEN_EDIT('DRAFT'), name: 'Announce' });
     expect(edit).toMatchObject({ ok: false, needsConfirmation: true });
     const row = await getAutomationsQb(['movement'])
       .selectFrom('movement')
@@ -278,6 +278,7 @@ describe('a firing runs the shipped text, not a draft (real DB)', () => {
       source: spelled(ANNOUNCE('SHIPPED')),
       languageVersion: LANGUAGE_VERSION,
       imports: 'shipped',
+      audience: { for: 'run' },
     });
   });
 
@@ -305,7 +306,7 @@ describe('a firing runs the shipped text, not a draft (real DB)', () => {
       .where('team_id', '=', teamId)
       .execute();
 
-    const result = await runMovementTestRun({ teamId, triggerId, invent: async () => ({ action: 'record.created' }) });
+    const result = await runMovementTestRun({ audience: { for: 'run' }, teamId, triggerId, invent: async () => ({ action: 'record.created' }) });
 
     if (!result.ok) throw new Error(`test: the test run failed: ${result.error}`);
     expect(JSON.stringify(result.writes)).toContain('EDITING');
@@ -315,6 +316,7 @@ describe('a firing runs the shipped text, not a draft (real DB)', () => {
       source: spelled(ANNOUNCE('EDITING')),
       languageVersion: LANGUAGE_VERSION,
       imports: 'live',
+      audience: { for: 'run' },
     });
   });
 });
@@ -363,14 +365,14 @@ describe("a firing's file imports resolve to the imported file's shipped text (r
 
   it('an import whose target has an unshipped edit resolves to the shipped text', async () => {
     await library();
-    const edit = await saveMovement({ teamId, source: `${LIBRARY('DRAFT')}\nexport function half_written(`, name: 'lib/words' });
+    const edit = await saveMovement({ audience: { for: 'run' }, teamId, source: `${LIBRARY('DRAFT')}\nexport function half_written(`, name: 'lib/words' });
     expect(edit).toMatchObject({ ok: false, needsConfirmation: true });
 
-    const firing = await actualCatalog(teamId, { source: ROOT, languageVersion: LANGUAGE_VERSION, imports: 'shipped' });
+    const firing = await actualCatalog(teamId, { audience: { for: 'run' }, source: ROOT, languageVersion: LANGUAGE_VERSION, imports: 'shipped' });
     expect(firing.snapshot.files?.['lib/words']?.source).toBe(LIBRARY('SHIPPED'));
 
     // The editor's test run reads the drafts, as the editor does.
-    const editing = await actualCatalog(teamId, { source: ROOT, languageVersion: LANGUAGE_VERSION, imports: 'live' });
+    const editing = await actualCatalog(teamId, { audience: { for: 'run' }, source: ROOT, languageVersion: LANGUAGE_VERSION, imports: 'live' });
     expect(editing.snapshot.files?.['lib/words']?.source).toBe(`${LIBRARY('DRAFT')}\nexport function half_written(`);
   });
 
@@ -381,7 +383,7 @@ describe("a firing's file imports resolve to the imported file's shipped text (r
       .values({ id: randomUUID(), team_id: teamId, name: 'lib/words', source: LIBRARY('NEVER'), language_version: LANGUAGE_VERSION } as any)
       .execute();
 
-    const firing = await actualCatalog(teamId, { source: ROOT, languageVersion: LANGUAGE_VERSION, imports: 'shipped' });
+    const firing = await actualCatalog(teamId, { audience: { for: 'run' }, source: ROOT, languageVersion: LANGUAGE_VERSION, imports: 'shipped' });
     expect(firing.snapshot.files?.['lib/words']).toBeUndefined();
   });
 });

@@ -7,6 +7,7 @@
 
 const mintMock = jest.fn();
 
+jest.mock('../../../../services/access/decide', () => jest.requireActual('../../../../test/access_defaults').teamDefaults());
 jest.mock('../../../../services/translation_graph/adapters/telegram/handshake', () => {
   const actual = jest.requireActual(
     '../../../../services/translation_graph/adapters/telegram/handshake',

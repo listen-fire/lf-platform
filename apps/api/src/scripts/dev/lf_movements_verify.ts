@@ -90,7 +90,7 @@ function writeFileIn(root: string, path: string, text: string): void {
 }
 
 async function ship(teamId: string, name: string, source: string): Promise<void> {
-  const saved = await saveMovement({ teamId, source, name });
+  const saved = await saveMovement({ audience: { for: 'run' }, teamId, source, name });
   if (!saved.ok) throw new Error(`${name} did not ship: ${saved.needsConfirmation ? 'needs confirmation: ' : ''}${(saved.errors ?? []).join('; ')}`);
   console.log(`[lf-movements-verify] shipped ${name}`);
 }

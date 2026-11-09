@@ -81,6 +81,7 @@ import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
 import type { TeamFacts } from '@listen-fire/language-versions';
 import { movementCatalogForTeam, type ImportedFile } from './catalog';
+import type { CatalogAudience } from './audience';
 
 import { getAutomationsQb } from '../../../lib/kysely';
 import { listenPauses } from '../../inbound/listen_pause';
@@ -869,6 +870,13 @@ function releaseAppliedReason(
 
 // ── The real dependencies ───────────────────────────────────────────────────
 
+/**
+ * An upgrade checks and saves an automation as it already runs: it adds no
+ * connection, so it needs write alone (a deploy sweep has no person at all),
+ * and it is checked against every connection the automation runs on.
+ */
+const UPGRADE_AUDIENCE: CatalogAudience = { for: 'run' };
+
 /** Validate against the team's live catalog, inside the team. `teamFacts`
  *  is how a carried pin's check reads the team; absent reads it each time. */
 export function liveValidation(teamFacts?: (teamId: string) => Promise<TeamFacts>): ValidateUnder {
@@ -877,6 +885,7 @@ export function liveValidation(teamFacts?: (teamId: string) => Promise<TeamFacts
       validateMovementForTeam({
         teamId: movement.teamId,
         source: source ?? movement.source,
+        audience: UPGRADE_AUDIENCE,
         languageVersion,
         // Reaches imported library files too: the checker checks them under the
         // importer's version and move, and surfaces their warnings.
@@ -996,6 +1005,7 @@ export const advanceLive: Advance = async ({ movement, to, source, movingWith })
   }
   const teamCatalog = await withTeamContext(movement.teamId as TeamId, () =>
     movementCatalogForTeam(movement.teamId as TeamId, {
+      audience: UPGRADE_AUDIENCE,
       source,
       languageVersion: to,
       ...(movingWith.size > 0 ? { movingWith } : {}),
@@ -1008,6 +1018,7 @@ export const advanceLive: Advance = async ({ movement, to, source, movingWith })
       teamId: movement.teamId,
       id: movement.id,
       source,
+      audience: UPGRADE_AUDIENCE,
       languageUpgrade: { to, movedAt },
       inTransaction: { teamCatalog },
     });

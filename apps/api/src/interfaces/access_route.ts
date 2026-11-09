@@ -24,11 +24,15 @@ type Decision =
 /** The exemptions more than one router shares, worded once. */
 const EXEMPT = {
   teamCatalog: { exempt: 'team catalog, no automation' },
-  connection: { exempt: 'connection access, Task 4' },
+  newConnection: { exempt: "starts a new connection, which no one may use yet; its statement is Task 6's" },
+  deploymentConnects: { exempt: 'how this deployment connects a system, no connection' },
   savedPerTarget: { exempt: 'decided per target in runSave (Task 5)' },
   ownTeams: { exempt: "the caller's own teams, no automation" },
   platformAdmin: { exempt: 'platform admins only, across teams' },
 } satisfies Record<string, Decision>;
+
+/** The decision of every route that reads, changes or lists connections. */
+const USE_CONNECTION = { thing: 'connection', verb: 'use' } satisfies Decision;
 
 const decisions = new Map<string, Decision>();
 
@@ -142,6 +146,27 @@ async function readableOwned<T>(
   );
 }
 
+/**
+ * Whether the caller may not use this connection, so a route answers as if it
+ * did not exist. A connection that does not exist is refused the same way.
+ */
+async function connectionUnseen(connectionId: string): Promise<boolean> {
+  return !(await accessTo(currentPrincipal(), { target: { thing: 'connection', id: connectionId }, verb: 'use' }));
+}
+
+/** The items whose connection the caller may use. An item of no connection stays. */
+async function usableAmong<T>(
+  items: readonly T[],
+  options: { connectionOf: (item: T) => string | null; teamIds: readonly string[] },
+): Promise<T[]> {
+  if (items.length === 0) return [];
+  const usable = await readableIds(currentPrincipal(), { thing: 'connection', teamIds: options.teamIds });
+  return items.filter((item) => {
+    const connectionId = options.connectionOf(item);
+    return connectionId === null || usable.has(connectionId);
+  });
+}
+
 export {
   decides,
   decidesEach,
@@ -152,6 +177,9 @@ export {
   unseen,
   readableAmong,
   readableOwned,
+  connectionUnseen,
+  usableAmong,
+  USE_CONNECTION,
   EXEMPT,
   READ_ONLY_MESSAGE,
   type Decision,

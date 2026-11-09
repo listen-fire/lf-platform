@@ -37,6 +37,9 @@ import { parseTraversalPath, referencedConstructions, scanInstanceChains, surfac
 
 import type { Expression } from 'movement-lang/expression/types';
 import type { TeamId } from '../../../generated/kysely/core/Team';
+import type { CatalogAudience } from './audience';
+
+import { readableIds } from '../../access/decide';
 import type { AdapterManifest } from 'movement-engine/public/adapter';
 
 import { neverAsAny } from 'movement-engine/public/types';
@@ -622,13 +625,15 @@ function optionLabelOf(pos: Position): string | undefined {
 
 export async function movementCatalogForTeam(
   teamId: TeamId,
-  options: TeamCatalogOptions = {},
+  options: TeamCatalogOptions,
 ): Promise<TeamMovementCatalog> {
   const assembled = await assembleTeamCatalog(teamId, options);
   return { ...assembled.catalog, runSnapshot: () => runSnapshotOf(assembled, options).snapshot };
 }
 
 interface TeamCatalogOptions {
+  /** Which connections the catalog holds. */
+  audience: CatalogAudience;
   /** When given, introspect only the (adapter, credential) pairs this
    *  program constructs instead of the whole workspace. */
   source?: string;
@@ -712,7 +717,7 @@ async function assembleTeamCatalog(
   const manifests = await teamAdapterManifests(teamId, notes);
   const manifestBySlug = indexManifestsByName(manifests);
 
-  const credentialRows = await loadCredentialRows(teamId);
+  const credentialRows = await loadCredentialRows(teamId, options.audience);
   const credentialsByName = credentialImportNames({ rows: credentialRows, manifests });
 
   // File-import closure: libraries construct their OWN instances, so their
@@ -1506,7 +1511,7 @@ function credentialsOf(
  */
 export async function runCatalogSnapshotForTeam(
   teamId: TeamId,
-  options: { source: string; languageVersion?: LanguageVersion; imports: ImportText },
+  options: { source: string; languageVersion?: LanguageVersion; imports: ImportText; audience: CatalogAudience },
 ): Promise<RunCatalogSnapshot> {
   const refusal = mcpDisabledRefusal(options.source);
   if (refusal !== undefined) throw new Error(refusal);
@@ -1564,12 +1569,14 @@ export async function movementCatalogSnapshotForTeam(
     source?: string;
     /** `source`'s language-version pin — absent means the current version. */
     languageVersion?: LanguageVersion;
-  } = {},
+    /** Which connections the snapshot holds. */
+    audience: CatalogAudience;
+  },
 ): Promise<TeamCatalogSnapshot> {
   const notes: string[] = [];
 
   const manifests = await teamAdapterManifests(teamId, notes);
-  const credentialRows = await loadCredentialRows(teamId);
+  const credentialRows = await loadCredentialRows(teamId, options.audience);
   const credentialsByName = credentialImportNames({ rows: credentialRows, manifests });
 
   const adapters = skeletonAdapters({ manifests, credentialRows, notes });
@@ -1579,6 +1586,7 @@ export async function movementCatalogSnapshotForTeam(
   let gaps: CatalogGap[] = [];
   if (options.source !== undefined) {
     const live = await movementCatalogForTeam(teamId, {
+      audience: options.audience,
       source: options.source,
       ...(options.languageVersion !== undefined ? { languageVersion: options.languageVersion } : {}),
     });
@@ -1604,11 +1612,15 @@ export async function movementCatalogSnapshotForTeam(
   }
 
   // Remote-adapter connection status: 'connected' once the install carries a
-  // credential FK, else 'needs-secret'. Keyed by slug; agent-view only.
+  // credential FK, else 'needs-secret'. Keyed by slug; agent-view only. The
+  // install's secret is a connection like any other: one this audience may
+  // not use reads as no secret at all.
+  const loadedIds = new Set(credentialRows.map((row) => row.id));
   const remoteConnections: Record<string, 'connected' | 'needs-secret'> = {};
   try {
     for (const row of await listRemoteAdapters({ teamId })) {
-      remoteConnections[row.adapter_type] = row.credentials_id ? 'connected' : 'needs-secret';
+      const secretId = row.credentials_id;
+      remoteConnections[row.adapter_type] = secretId !== null && loadedIds.has(secretId) ? 'connected' : 'needs-secret';
     }
   } catch {
     // A listing failure is already surfaced via `notes` by teamAdapterManifests.
@@ -1852,6 +1864,7 @@ async function walkFor(input: {
  */
 export async function describeMovementInstance(input: {
   teamId: TeamId;
+  audience: CatalogAudience;
   adapter: string;
   credentialName?: string;
   /** Scope the (expensive) per-type describes to just these type names —
@@ -1977,6 +1990,7 @@ export async function describeMovementInstance(input: {
  */
 async function resolveDescribeTarget(input: {
   teamId: TeamId;
+  audience: CatalogAudience;
   adapter: string;
   credentialName?: string;
 }): Promise<
@@ -1999,7 +2013,7 @@ async function resolveDescribeTarget(input: {
   };
 
   if (!manifest.requiredCredentialType) return { about };
-  const credentialRows = await loadCredentialRows(input.teamId);
+  const credentialRows = await loadCredentialRows(input.teamId, input.audience);
   const credentialsByName = credentialImportNames({ rows: credentialRows, manifests });
   const resolved = resolveDescribeConnection({
     candidates: Object.values(credentialsByName).filter((c) => c.adapters.includes(adapterType)),
@@ -2023,6 +2037,7 @@ async function resolveDescribeTarget(input: {
  */
 export async function describeMovementLandings(input: {
   teamId: TeamId;
+  audience: CatalogAudience;
   adapter: string;
   credentialName?: string;
   types: readonly string[];
@@ -2058,11 +2073,12 @@ export async function describeMovementLandings(input: {
  */
 export async function resolveCredentialIdByImportName(input: {
   teamId: TeamId;
+  audience: CatalogAudience;
   adapter: string;
   credentialName: string;
 }): Promise<string | null> {
   const manifests = await teamAdapterManifests(input.teamId, []);
-  const credentialRows = await loadCredentialRows(input.teamId);
+  const credentialRows = await loadCredentialRows(input.teamId, input.audience);
   const credentialsByName = credentialImportNames({ rows: credentialRows, manifests });
   const row = credentialsByName[input.credentialName];
   if (!row || !row.adapters.includes(input.adapter)) return null;
@@ -2071,7 +2087,11 @@ export async function resolveCredentialIdByImportName(input: {
 
 // ── DB helpers ──────────────────────────────────────────────────────────────
 
-export async function loadCredentialRows(teamId: TeamId): Promise<CredentialRow[]> {
+export async function loadCredentialRows(teamId: TeamId, audience: CatalogAudience): Promise<CredentialRow[]> {
+  const usable =
+    audience.for === 'run'
+      ? undefined
+      : await readableIds(audience.for, { thing: 'connection', teamIds: [teamId] });
   const rows = await getAutomationsQb(['external_service_credentials'])
     .selectFrom('external_service_credentials')
     .where('team_id', '=', teamId)
@@ -2083,6 +2103,7 @@ export async function loadCredentialRows(teamId: TeamId): Promise<CredentialRow[
     // — movements run on the "listen-fire" app, so only its Slack credentials are
     // offered here. Non-Slack credentials are unaffected.
     .filter((r) => !(r.type === ExternalServiceType.SLACK && isLegacyApp(r.app_id)))
+    .filter((r) => usable === undefined || usable.has(r.id as unknown as string))
     .map((r) => ({
       id: r.id as unknown as string,
       name: r.name,

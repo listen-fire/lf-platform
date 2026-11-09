@@ -231,7 +231,7 @@ describe('validateMovementForTeam catalog-assembly guard', () => {
       .mockRejectedValueOnce(new BridgeError('Unexpected END', 0))
       .mockResolvedValueOnce(teamCatalogStub);
 
-    const result = await validateMovementForTeam({ teamId: 'team-1', source: CLEAN_SOURCE });
+    const result = await validateMovementForTeam({ audience: { for: 'run' }, teamId: 'team-1', source: CLEAN_SOURCE });
 
     expect(result).toHaveProperty('diagnostics');
     expect(mock).toHaveBeenCalledTimes(2);
@@ -239,7 +239,7 @@ describe('validateMovementForTeam catalog-assembly guard', () => {
     // type-checking, so no schema can inform the diagnostic — and fetching
     // every type of every connected system to report a missing bracket is the
     // whole-graph load this campaign exists to remove.
-    expect(mock.mock.calls[1][1]).toEqual({ types: [] });
+    expect(mock.mock.calls[1][1]).toEqual({ audience: { for: 'run' }, types: [] });
   });
 
   it('never answers a clean ok off the empty catalog — the fallback is UNVERIFIED', async () => {
@@ -247,7 +247,7 @@ describe('validateMovementForTeam catalog-assembly guard', () => {
       .mockRejectedValueOnce(new BridgeError('credential scan blew up', 0))
       .mockResolvedValueOnce(teamCatalogStub);
 
-    const result = await validateMovementForTeam({ teamId: 'team-1', source: CLEAN_SOURCE });
+    const result = await validateMovementForTeam({ audience: { for: 'run' }, teamId: 'team-1', source: CLEAN_SOURCE });
 
     // The source itself is clean, so nothing error-severity fires — which is
     // exactly the case that used to come back a confident `ok` meaning only
@@ -266,7 +266,7 @@ describe('validateMovementForTeam catalog-assembly guard', () => {
   it('a scan that SUCCEEDS records no gap of its own', async () => {
     mock.mockResolvedValueOnce(teamCatalogStub);
 
-    const result = await validateMovementForTeam({ teamId: 'team-1', source: CLEAN_SOURCE });
+    const result = await validateMovementForTeam({ audience: { for: 'run' }, teamId: 'team-1', source: CLEAN_SOURCE });
 
     expect(result.gaps).toEqual([]);
     expect(
@@ -278,7 +278,7 @@ describe('validateMovementForTeam catalog-assembly guard', () => {
     mock.mockRejectedValueOnce(new Error('DB unreachable'));
 
     await expect(
-      validateMovementForTeam({ teamId: 'team-1', source: CLEAN_SOURCE }),
+      validateMovementForTeam({ audience: { for: 'run' }, teamId: 'team-1', source: CLEAN_SOURCE }),
     ).rejects.toThrow('DB unreachable');
     expect(mock).toHaveBeenCalledTimes(1);
   });

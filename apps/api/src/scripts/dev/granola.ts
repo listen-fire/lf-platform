@@ -135,7 +135,7 @@ async function main() {
     payload: { accessToken: 'dev-loop-slack-token' },
   });
 
-  const movement = await saveMovement({ teamId: seed.teamId, source: GRANOLA_MOVEMENT });
+  const movement = await saveMovement({ audience: { for: 'run' }, teamId: seed.teamId, source: GRANOLA_MOVEMENT });
 
   // Surface the granola trigger the listen reconciler derived (its id is what
   // `dev:inject granola` fires the poll against).

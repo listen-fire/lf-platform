@@ -74,7 +74,7 @@ describe('with the MCP switch off (the default)', () => {
 
   it('fails a firing of a movement that imports mcp before it starts, naming the switch', async () => {
     await expect(
-      off.catalog.runCatalogSnapshotForTeam('team' as never, { source: PROGRAM, imports: 'shipped' }),
+      off.catalog.runCatalogSnapshotForTeam('team' as never, { audience: { for: 'run' }, source: PROGRAM, imports: 'shipped' }),
     ).rejects.toThrow(/MCP_CONNECTIONS_ENABLED/);
   });
 

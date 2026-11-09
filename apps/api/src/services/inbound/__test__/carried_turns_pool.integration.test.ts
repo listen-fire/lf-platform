@@ -87,7 +87,7 @@ describe(`schedules under 0.12 at a pool of ${POOL}`, () => {
     for (let n = 0; n < SCHEDULES; n++) {
       const id = randomUUID() as MovementId;
       await at.getAutomationsQb(['movement']).insertInto('movement').values({ id, team_id: teamId, name: `m-${id}`, source: EVERY_MINUTE, language_version: PIN }).execute();
-      const saved = await at.saveMovement({ teamId, id, source: EVERY_MINUTE, acknowledgeErrors: true });
+      const saved = await at.saveMovement({ audience: { for: 'run' }, teamId, id, source: EVERY_MINUTE, acknowledgeErrors: true });
       if (!saved.ok) throw new Error(`the save did not ship: ${JSON.stringify(saved)}`);
       const row = await at.getAutomationsQb(['trigger']).selectFrom('trigger').where('movement_id', '=', id).select('id').executeTakeFirstOrThrow();
       triggers.push(row.id);

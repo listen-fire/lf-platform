@@ -35,6 +35,7 @@ import type { MovementValidityStatus } from './store';
 
 import { listUnsupportedConstructs } from '@listen-fire/legacy-engine/services/movement_engine/interpretable';
 import { movementCatalogForTeam } from './catalog';
+import type { CatalogAudience } from './audience';
 import { checkInstalled, routeOf } from './language_route';
 import { validateUnderCarried } from './carried_check';
 import { importsAcrossVersions } from './imports_across_versions';
@@ -290,6 +291,8 @@ export function assessMovementValidity(input: {
 export async function validateMovementForTeam(input: {
   teamId: string;
   source: string;
+  /** A person checking a text sees only the connections they may use; a run's own check sees all of them. */
+  audience: CatalogAudience;
   /** The language version to validate under — a saved movement's pin, or an
    *  explicit request. Absent ⇒ the current version. */
   languageVersion?: LanguageVersion;
@@ -316,6 +319,7 @@ export async function validateMovementForTeam(input: {
       source: input.source,
       pin: route.pin,
       lane: route.lane,
+      audience: input.audience,
       ...(input.teamFacts !== undefined ? { team: input.teamFacts(input.teamId) } : {}),
     });
   }
@@ -336,6 +340,7 @@ export async function validateMovementForTeam(input: {
 export async function checkMovementSource(input: {
   teamId: string;
   source: string;
+  audience: CatalogAudience;
   id?: string;
   languageVersion?: LanguageVersion;
 }): Promise<{ diagnostics: AuthoringDiagnostic[] } | null> {
@@ -344,6 +349,7 @@ export async function checkMovementSource(input: {
   const validation = await validateMovementForTeam({
     teamId: input.teamId,
     source: input.source,
+    audience: input.audience,
     languageVersion: pin,
   });
   return { diagnostics: validation.diagnostics };
@@ -353,6 +359,7 @@ async function runValidate(
   input: {
     teamId: string;
     source: string;
+    audience: CatalogAudience;
     languageVersion?: LanguageVersion;
     upgradingFrom?: LanguageVersion;
     movingWith?: ReadonlyMap<string, ImportedFile>;
@@ -366,6 +373,7 @@ async function runValidate(
   try {
     teamCatalog = await timer.step('catalog', () =>
       movementCatalogForTeam(input.teamId as TeamId, {
+        audience: input.audience,
         source: input.source,
         ...(input.languageVersion !== undefined ? { languageVersion: input.languageVersion } : {}),
         ...(input.upgradingFrom !== undefined ? { upgradingFrom: input.upgradingFrom } : {}),
@@ -380,7 +388,7 @@ async function runValidate(
     // type of every connected system to report a missing bracket is a
     // whole-graph load bought for nothing.
     teamCatalog = await timer.step('catalog', () =>
-      movementCatalogForTeam(input.teamId as TeamId, { types: [] }),
+      movementCatalogForTeam(input.teamId as TeamId, { audience: input.audience, types: [] }),
     );
   }
   timer.note(teamCatalog.cost ?? {});

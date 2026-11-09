@@ -156,7 +156,7 @@ describe('0.12 listens beside the current version (real Postgres)', () => {
   /** An automation shipped under `pin`, its listens provisioned by a real save. */
   async function shipped(source: string, pin = PIN): Promise<string> {
     const id = await draft(source, pin);
-    const saved = await saveMovement({ teamId, id, source, acknowledgeErrors: true });
+    const saved = await saveMovement({ audience: { for: 'run' }, teamId, id, source, acknowledgeErrors: true });
     if (!saved.ok) throw new Error(`the save did not ship: ${JSON.stringify(saved)}`);
     return id;
   }
@@ -400,7 +400,7 @@ describe('0.12 listens beside the current version (real Postgres)', () => {
       await attioCredential();
       const dry = 'crm = attio(credentials: attio_conn, dry_run: true)\nfunction onChange(e: <crm>) {\n  write crm-[:Companies]-> {\n    unique by (Name)\n    Name: "x"\n  }\n}\nlisten to crm fire onChange\n';
       const id = await draft(dry);
-      const saved = await saveMovement({ teamId, id, source: dry, acknowledgeErrors: true });
+      const saved = await saveMovement({ audience: { for: 'run' }, teamId, id, source: dry, acknowledgeErrors: true });
       expect(saved.ok).toBe(true);
       expect((await triggersOf(id)).map((row) => row.run_mode)).toEqual(['dry_run']);
     });
@@ -430,7 +430,7 @@ describe('0.12 listens beside the current version (real Postgres)', () => {
       const [row] = await triggersOf(id);
       expect(row!.resolved_address).toEqual({ base: 'app1', table: 'tbl1' });
       expect(await webhooks()).toEqual([expect.objectContaining({ provider: 'AIRTABLE', scope: { base: 'app1', table: 'tbl1' } })]);
-      const again = await saveMovement({ teamId, id, source: AIRTABLE('tbl1'), acknowledgeErrors: true });
+      const again = await saveMovement({ audience: { for: 'run' }, teamId, id, source: AIRTABLE('tbl1'), acknowledgeErrors: true });
       expect(again.ok).toBe(true);
       expect((await triggersOf(id)).map((after) => after.id)).toEqual([row!.id]);
     });
@@ -1035,7 +1035,7 @@ describe('0.12 listens beside the current version (real Postgres)', () => {
       const [moved] = await triggersOf(id);
       const [poll] = await pollsOf(moved!.id);
       const movement = await getMovementRow({ teamId, id });
-      const again = await saveMovement({ teamId, id, source: movement!.source, acknowledgeErrors: true });
+      const again = await saveMovement({ audience: { for: 'run' }, teamId, id, source: movement!.source, acknowledgeErrors: true });
       expect(again.ok).toBe(true);
       const [after] = await pollsOf(moved!.id);
       expect(after!.digest).toBe(poll!.digest);

@@ -87,7 +87,7 @@ const CONNECT_READING_TEXT =
   'import { manual } from adapters\nruns = connect manual\nfunction echo(go: <runs-[:Invocations]->>) {\n  return go.Text\n}\nlisten to runs-[:Invocations]-> fire echo\n';
 
 async function verdictOf(source: string) {
-  const team = await movementCatalogForTeam(TEAM, { source, languageVersion: LANGUAGE_VERSION });
+  const team = await movementCatalogForTeam(TEAM, { audience: { for: 'run' }, source, languageVersion: LANGUAGE_VERSION });
   return diagnoseMovementSource(source, {
     catalog: team.catalog,
     resolveCredentialId: team.resolveCredentialId,
@@ -119,6 +119,7 @@ describe("a team's run snapshot and the run host's units", () => {
 
   it("describes manual's Invocation in the snapshot as the handbook's catalog does", async () => {
     const team = await movementCatalogForTeam(TEAM, {
+      audience: { for: 'run' },
       source: BARE_READING_TEXT,
       languageVersion: LANGUAGE_VERSION,
     });
@@ -128,7 +129,7 @@ describe("a team's run snapshot and the run host's units", () => {
   });
 
   it("the static catalog tests check against describes manual as a team's catalog does", async () => {
-    const team = await movementCatalogForTeam(TEAM, { source: BARE_READING_TEXT, languageVersion: LANGUAGE_VERSION });
+    const team = await movementCatalogForTeam(TEAM, { audience: { for: 'run' }, source: BARE_READING_TEXT, languageVersion: LANGUAGE_VERSION });
     const described = team.runSnapshot?.().adapters.manual?.schemas[''];
     const projected = staticCatalogSnapshot().adapters.manual?.schemas[''];
     expect(described?.positions.Invocation).toBeDefined();

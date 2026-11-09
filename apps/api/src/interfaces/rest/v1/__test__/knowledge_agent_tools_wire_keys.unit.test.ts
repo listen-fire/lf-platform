@@ -223,6 +223,7 @@ describe('POST /connections/describe — wire keys `system`/`connection`', () =>
     await call(describeInstanceHandler, { system: 'attio', connection: 'my-attio', team: 'T1' }, res);
 
     expect(describeMovementInstanceMock).toHaveBeenCalledWith({
+      audience: { for: expect.objectContaining({ userId: 'u1' }) },
       teamId: 'T1',
       adapter: 'attio',
       forceRefresh: true,
@@ -239,6 +240,7 @@ describe('POST /connections/describe — wire keys `system`/`connection`', () =>
 
     expect(resolveToolTeamMock).toHaveBeenCalledWith('T1');
     expect(describeMovementInstanceMock).toHaveBeenCalledWith({
+      audience: { for: expect.objectContaining({ userId: 'u1' }) },
       teamId: 'T1',
       adapter: 'attio',
       forceRefresh: true,
@@ -248,13 +250,10 @@ describe('POST /connections/describe — wire keys `system`/`connection`', () =>
 
   it('passes `connection` as `credentialName`', async () => {
     const res = fakeRes();
-    await describeInstanceHandler(
-      fakeReq({ system: 'attio', connection: 'my-attio', team: 'T1', detail: 'full' }),
-      res as never,
-      (() => {}) as never,
-    );
+    await call(describeInstanceHandler, { system: 'attio', connection: 'my-attio', team: 'T1', detail: 'full' }, res);
 
     expect(describeMovementInstanceMock).toHaveBeenCalledWith({
+      audience: { for: expect.objectContaining({ userId: 'u1' }) },
       teamId: 'T1',
       adapter: 'attio',
       forceRefresh: true,
@@ -264,18 +263,16 @@ describe('POST /connections/describe — wire keys `system`/`connection`', () =>
 
   it('batches an array of systems into one call, describing each and labelling by system', async () => {
     const res = fakeRes();
-    await describeInstanceHandler(
-      fakeReq({ system: ['slack', 'attio'], team: 'T1', detail: 'full' }),
-      res as never,
-      (() => {}) as never,
-    );
+    await call(describeInstanceHandler, { system: ['slack', 'attio'], team: 'T1', detail: 'full' }, res);
 
     expect(describeMovementInstanceMock).toHaveBeenCalledWith({
+      audience: { for: expect.objectContaining({ userId: 'u1' }) },
       teamId: 'T1',
       adapter: 'slack',
       forceRefresh: true,
     });
     expect(describeMovementInstanceMock).toHaveBeenCalledWith({
+      audience: { for: expect.objectContaining({ userId: 'u1' }) },
       teamId: 'T1',
       adapter: 'attio',
       forceRefresh: true,

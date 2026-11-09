@@ -266,6 +266,7 @@ describe('runMovementFiring', () => {
     // the runMovement input.
     // The SHIPPED text, never the row's draft, with its imports' shipped text.
     expect(runCatalogSnapshotForTeam).toHaveBeenCalledWith(TEAM, {
+      audience: { for: 'run' },
       source: CLEAN_SOURCE,
       languageVersion: LANGUAGE_VERSION,
       imports: 'shipped',

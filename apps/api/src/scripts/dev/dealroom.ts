@@ -96,6 +96,7 @@ async function main() {
   await ensureDevLoopSlackCredential(seed.teamId);
 
   const movement = await saveMovement({
+    audience: { for: 'run' },
     teamId: seed.teamId,
     source: dealroomFile({
       ...(roundScope !== undefined ? { round: roundScope } : {}),

@@ -247,12 +247,13 @@ async function main() {
   const reprovisioned =
     args.includes('--reprovision') ? await dropSubscriptions(seed.teamId as TeamId) : 0;
 
-  const movement = await saveMovement({ teamId: seed.teamId, source: AIRTABLE_MOVEMENT });
+  const movement = await saveMovement({ audience: { for: 'run' }, teamId: seed.teamId, source: AIRTABLE_MOVEMENT });
 
   // The positioned twin — same table, addressed relative to the instance's
   // POSITION. Its resolved address keys the SAME subscription channel, so no
   // second webhook is registered and one inject fires BOTH movements.
   const positioned = await saveMovement({
+    audience: { for: 'run' },
     teamId: seed.teamId,
     source: AIRTABLE_POSITIONED_MOVEMENT,
   });
@@ -260,8 +261,8 @@ async function main() {
   // A workspace listen on the OTHER table, and one on Deals narrowed by id (an
   // upgraded 0.12 automation's form): both save, and both resolve to this
   // base's one webhook.
-  const other = await saveMovement({ teamId: seed.teamId, source: AIRTABLE_MOVEMENT_OTHER });
-  const byId = await saveMovement({ teamId: seed.teamId, source: AIRTABLE_MOVEMENT_BY_ID });
+  const other = await saveMovement({ audience: { for: 'run' }, teamId: seed.teamId, source: AIRTABLE_MOVEMENT_OTHER });
+  const byId = await saveMovement({ audience: { for: 'run' }, teamId: seed.teamId, source: AIRTABLE_MOVEMENT_BY_ID });
 
   // Surface the webhook_subscription the listen reconciler provisioned (its id
   // keys the inbound callback URL; the external_webhook_id is the fake's

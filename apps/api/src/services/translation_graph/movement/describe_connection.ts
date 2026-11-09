@@ -17,6 +17,7 @@ import {
   movementCatalogSnapshotForTeam,
   type DescribedInstance,
 } from './catalog';
+import type { CatalogAudience } from './audience';
 import { renderConnectionDescription, type SystemDigestInput } from './connection_digest';
 
 /** At most this many stubs are described per node. Writable ones come first;
@@ -56,6 +57,7 @@ function stubsToResolve(node: WalkedNode): WalkedEdge[] {
  */
 export async function resolveStubLandings(input: {
   teamId: TeamId;
+  audience: CatalogAudience;
   system: string;
   connection?: string;
   node: WalkedNode;
@@ -67,6 +69,7 @@ export async function resolveStubLandings(input: {
   const landings = await within(
     describeMovementLandings({
       teamId: input.teamId,
+      audience: input.audience,
       adapter: input.system,
       ...(input.connection !== undefined ? { credentialName: input.connection } : {}),
       types: names,
@@ -99,10 +102,11 @@ export function connectionsFor(
 /** How to construct and listen to `system`, for the root of a description. */
 async function constructionOf(
   teamId: TeamId,
-  system: string,
+  asked: { system: string; audience: CatalogAudience },
 ): Promise<{ spec?: SystemDigestInput['spec']; connections: string[] }> {
+  const { system } = asked;
   try {
-    const { snapshot } = await movementCatalogSnapshotForTeam(teamId);
+    const { snapshot } = await movementCatalogSnapshotForTeam(teamId, { audience: asked.audience });
     const spec = snapshot.adapters[system];
     return { ...(spec !== undefined ? { spec } : {}), connections: connectionsFor(snapshot.credentials, system) };
   } catch {
@@ -117,6 +121,8 @@ async function constructionOf(
  */
 export async function describeConnectionCompact(input: {
   teamId: TeamId;
+  /** The asker: a connection they may not use is described as one that does not exist. */
+  audience: CatalogAudience;
   system: string;
   connection?: string;
   position?: string;
@@ -127,6 +133,7 @@ export async function describeConnectionCompact(input: {
   const [described, construction] = await Promise.all([
     describeMovementInstance({
       teamId: input.teamId,
+      audience: input.audience,
       adapter: input.system,
       // Every describe re-reads the live schema: a field just added in the
       // external workspace must show up on the next call.
@@ -136,12 +143,13 @@ export async function describeConnectionCompact(input: {
       ...(input.position !== undefined ? { position: input.position } : {}),
       ...(input.narrow !== undefined ? { narrow: input.narrow } : {}),
     }),
-    atRoot ? constructionOf(input.teamId, input.system) : Promise.resolve(undefined),
+    atRoot ? constructionOf(input.teamId, { system: input.system, audience: input.audience }) : Promise.resolve(undefined),
   ]);
   const node =
     described.node !== undefined
       ? await resolveStubLandings({
           teamId: input.teamId,
+          audience: input.audience,
           system: input.system,
           ...(input.connection !== undefined ? { connection: input.connection } : {}),
           node: described.node,

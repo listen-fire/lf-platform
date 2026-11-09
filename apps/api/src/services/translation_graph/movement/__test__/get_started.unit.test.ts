@@ -242,7 +242,7 @@ describe('getStarted', () => {
       People: { name: 'People', properties: { Name: text({ required: true }), Email: text() }, unique: [['Email']] },
     });
 
-    const page = await renderGetStarted({ teams: [TEAM], teamId: 'team-1' as TeamId });
+    const page = await renderGetStarted({ audience: { for: 'run' }, teams: [TEAM], teamId: 'team-1' as TeamId });
 
     expect(landingsMock).toHaveBeenCalledWith(
       expect.objectContaining({ adapter: 'attio', credentialName: 'acme', types: ['Companies', 'People', 'VC Deal Flow'] }),
@@ -262,13 +262,13 @@ describe('getStarted', () => {
       notes: [],
     }));
     landingsMock.mockRejectedValue(new Error('rate limited'));
-    const page = await renderGetStarted({ teams: [TEAM], teamId: 'team-1' as TeamId });
+    const page = await renderGetStarted({ audience: { for: 'run' }, teams: [TEAM], teamId: 'team-1' as TeamId });
     expect(page).toContain('- Deals [rw]: fields not loaded — describe it');
   });
 
   it('answers with the team, its systems — connected ones first — and the front page', async () => {
     stubTeamCatalog();
-    const page = await renderGetStarted({ teams: [TEAM], teamId: 'team-1' as TeamId });
+    const page = await renderGetStarted({ audience: { for: 'run' }, teams: [TEAM], teamId: 'team-1' as TeamId });
 
     expect(page.startsWith('## Team: Acme Ventures — `team-1`')).toBe(true);
     expect(page.indexOf('### attio')).toBeLessThan(page.indexOf('### email'));
@@ -280,12 +280,13 @@ describe('getStarted', () => {
 
   it('stays near 3k tokens for a team with the usual systems', async () => {
     stubTeamCatalog();
-    const page = await renderGetStarted({ teams: [TEAM], teamId: 'team-1' as TeamId });
+    const page = await renderGetStarted({ audience: { for: 'run' }, teams: [TEAM], teamId: 'team-1' as TeamId });
     expect(Math.ceil(page.length / 4)).toBeLessThanOrEqual(3_200);
   });
 
   it('lists every team with its id, and no systems, when several span the connection and none is named', async () => {
     const page = await renderGetStarted({
+      audience: { for: 'run' },
       teams: [TEAM, { teamId: 'team-2', name: 'Me', access: 'write', isPersonal: true }],
       teamId: null,
     });

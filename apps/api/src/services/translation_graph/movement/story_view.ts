@@ -45,6 +45,7 @@ import type {
 import { getAdapterManifest } from '../adapters/registry';
 import { resolveEventPhrase } from '../vocabulary';
 import { movementCatalogForTeam, type TeamMovementCatalog } from './catalog';
+import type { CatalogAudience } from './audience';
 import { routeOf } from './language_route';
 import { teamFactsOf } from './carried_check';
 import { storyFromAnalysis } from './story_from_analysis';
@@ -608,6 +609,14 @@ export async function storyViewForMovement(input: {
  * view) and the public link's page. A second implementation of "what does this
  * program do" is exactly how two pictures of one automation start disagreeing.
  */
+/**
+ * A story is a saved automation's own picture, drawn against every connection
+ * it runs on, so every reader (and the public link, which has no person) sees
+ * the same one. Who may see it is the automation's read; it describes no
+ * connection a reader could not already name from the text.
+ */
+const STORY_AUDIENCE: CatalogAudience = { for: 'run' };
+
 export async function projectStoryView(row: {
   id: string;
   teamId: string;
@@ -631,12 +640,13 @@ export async function projectStoryView(row: {
   let teamCatalog: TeamMovementCatalog;
   try {
     teamCatalog = await movementCatalogForTeam(row.teamId as TeamId, {
+      audience: STORY_AUDIENCE,
       source: row.source,
       ...(row.languageVersion !== undefined ? { languageVersion: row.languageVersion } : {}),
     });
   } catch (e) {
     if (!(e instanceof BridgeError || e instanceof MovementParseError)) throw e;
-    teamCatalog = await movementCatalogForTeam(row.teamId as TeamId, { types: [] });
+    teamCatalog = await movementCatalogForTeam(row.teamId as TeamId, { audience: STORY_AUDIENCE, types: [] });
   }
 
   // A release pin's story is the wasm's story analysis against the run
@@ -693,7 +703,7 @@ async function carriedStoryView(input: {
   pin: LanguageVersion;
   lane: () => Promise<CheckingLane>;
 }): Promise<StoryViewResult> {
-  const [lane, team, { modulePlatform }] = await Promise.all([input.lane(), teamFactsOf(input.teamId), import('./carried_run')]);
+  const [lane, team, { modulePlatform }] = await Promise.all([input.lane(), teamFactsOf(input.teamId, { audience: STORY_AUDIENCE }), import('./carried_run')]);
   const drawn = await lane.storyOf({
     source: input.source,
     pin: input.pin,

@@ -56,7 +56,7 @@ async function main() {
   const { teamId } = await ensureDevLoopTeam();
 
   // Tier 1 — the skeleton the editor opens against.
-  const skeleton = await movementCatalogSnapshotForTeam(teamId as TeamId);
+  const skeleton = await movementCatalogSnapshotForTeam(teamId as TeamId, { audience: { for: 'run' } });
   const specs = (skeleton.snapshot as unknown as { adapters?: Record<string, { canFire?: boolean }> })
     .adapters ?? {};
   console.log('  adapter specs from the catalog snapshot (canFire):');
@@ -65,7 +65,7 @@ async function main() {
   // Tier 2 — the snapshot TYPED FOR THIS SOURCE, exactly as the workbench asks
   // for it (`catalogForSource`). One call for the whole program, so positioned
   // instances and narrowings are typed like the compiler types them.
-  const typed = await movementCatalogSnapshotForTeam(teamId as TeamId, { source });
+  const typed = await movementCatalogSnapshotForTeam(teamId as TeamId, { audience: { for: 'run' }, source });
   const snapshot = typed.snapshot;
 
   for (const ref of constructionsOf(source)) {
@@ -81,7 +81,7 @@ async function main() {
     console.log(`  GAP ${gap.adapter}: ${gap.detail}`);
   }
 
-  const checked = await checkMovementSource({ teamId, source });
+  const checked = await checkMovementSource({ audience: { for: 'run' }, teamId, source });
   const diagnostics = checked?.diagnostics ?? [];
   console.log(`\n── diagnostics the editor would show: ${diagnostics.length} ──`);
   for (const d of diagnostics) console.log(`  [${d.severity}] ${d.code} ${d.line}:${d.col}: ${d.message}`);

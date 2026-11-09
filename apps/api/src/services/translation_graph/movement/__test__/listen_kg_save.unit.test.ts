@@ -368,7 +368,7 @@ beforeEach(() => {
 
 describe('a graph listen — trigger derivation', () => {
   it("derives a kg trigger row carrying the listen's plan", async () => {
-    const result = await saveMovement({ teamId: TEAM, source: KG_SOURCE });
+    const result = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: KG_SOURCE });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.validity.status).toBe('valid');
@@ -392,12 +392,13 @@ describe('a graph listen — trigger derivation', () => {
   });
 
   it('an unchanged kg listen keeps its trigger id across saves (run history preserved)', async () => {
-    const first = await saveMovement({ teamId: TEAM, source: KG_SOURCE });
+    const first = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: KG_SOURCE });
     expect(first.ok).toBe(true);
     if (!first.ok) return;
     const id = first.listeners[0].triggerId;
 
     const second = await saveMovement({
+      audience: { for: 'run' },
       teamId: TEAM,
       id: first.movementId,
       source: KG_SOURCE_V2,
@@ -410,10 +411,11 @@ describe('a graph listen — trigger derivation', () => {
   });
 
   it('removing the kg listen retires its trigger row', async () => {
-    const first = await saveMovement({ teamId: TEAM, source: KG_SOURCE });
+    const first = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: KG_SOURCE });
     expect(first.ok).toBe(true);
     if (!first.ok) return;
     const second = await saveMovement({
+      audience: { for: 'run' },
       teamId: TEAM,
       id: first.movementId,
       source: KG_LIBRARY,

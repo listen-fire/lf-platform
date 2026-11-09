@@ -91,6 +91,7 @@ import {
   type MovementFileFacets,
 } from './files';
 import { movementCatalogForTeam, type CatalogGap, type TeamMovementCatalog } from './catalog';
+import type { CatalogAudience } from './audience';
 import {
   deleteMovementRow,
   getMovementRow,
@@ -707,6 +708,7 @@ async function reconcileDerivedTriggers(input: {
  *  module. */
 async function provisionCarriedListeners(input: {
   teamId: TeamId;
+  audience: CatalogAudience;
   movementRow: MovementRow;
   source: string;
   lane: ListeningLane;
@@ -719,7 +721,7 @@ async function provisionCarriedListeners(input: {
   const pin = input.movementRow.languageVersion;
   const { lane } = input;
   const within = <T>(name: string, run: () => Promise<T>): Promise<T> => (input.timer ? input.timer.within(name, run) : run());
-  const team = await teamFactsOf(input.teamId, { imports: 'live' });
+  const team = await teamFactsOf(input.teamId, { imports: 'live', audience: input.audience });
   const credentialOf = (name: string): string | null => team.credentials.find((row) => row.name === name)?.id ?? null;
   // A text its version cannot parse states no listens: answered as the current
   // version's save answers it. The class is that version's own, so it is read by name.
@@ -961,6 +963,8 @@ export interface SaveMovementInput {
   teamId: string;
   /** The movement program text — the canonical artifact. */
   source: string;
+  /** Whose save this is: the connections its check, and its listens, may resolve. */
+  audience: CatalogAudience;
   /** Existing movement row id (the editor's re-save path). */
   id?: string;
   /** The row's name (the `<file>` half of the trigger-name convention).
@@ -1160,7 +1164,7 @@ async function checkForSave({ input, row, timer }: { input: SaveMovementInput; r
   const route = routeOf(row.languageVersion);
   if (route.kind === 'carried') {
     const carried = await timer.step('diagnose', () =>
-      validateUnderCarried({ teamId: input.teamId, source: input.source, pin: route.pin, lane: route.lane }),
+      validateUnderCarried({ teamId: input.teamId, source: input.source, pin: route.pin, lane: route.lane, audience: input.audience }),
     );
     return {
       validation: carried,
@@ -1176,6 +1180,7 @@ async function checkForSave({ input, row, timer }: { input: SaveMovementInput; r
   // assembled before opening it: no provider is read while it is open.
   const teamCatalog = input.inTransaction?.teamCatalog ?? (await timer.step('catalog', () =>
     movementCatalogForTeam(input.teamId as TeamId, {
+      audience: input.audience,
       source: input.source,
       languageVersion: row.languageVersion,
     }),
@@ -1417,6 +1422,7 @@ async function runSave(
     carriedListening?.kind === 'carried'
       ? await provisionCarriedListeners({
           teamId: input.teamId as TeamId,
+          audience: input.audience,
           movementRow: row,
           source: input.source,
           lane: await carriedListening.lane(),

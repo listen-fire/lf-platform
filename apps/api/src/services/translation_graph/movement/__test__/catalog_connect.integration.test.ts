@@ -55,7 +55,7 @@ describe('catalog connect-method (real manifests)', () => {
   });
 
   it('tags each adapter with the same connect method a connect attempt would take', async () => {
-    const { snapshot } = await movementCatalogSnapshotForTeam(teamId);
+    const { snapshot } = await movementCatalogSnapshotForTeam(teamId, { audience: { for: 'run' } });
     const adapters = snapshot.adapters;
 
     // handshake: the connect link hands the user into the system's own
@@ -76,7 +76,7 @@ describe('catalog connect-method (real manifests)', () => {
     // live agent). `triggerExpectation` must be here at DISCOVERY time so
     // the agent can answer "which messages does this capture?" before
     // anything is connected, not after via describeInstance.
-    const { snapshot, notes } = await movementCatalogSnapshotForTeam(teamId);
+    const { snapshot, notes } = await movementCatalogSnapshotForTeam(teamId, { audience: { for: 'run' } });
     const view = toAgentCatalogView({ snapshot, notes });
     const adapters = view.adapters as Record<
       string,
@@ -111,7 +111,7 @@ describe('catalog connect-method (real manifests)', () => {
       // Installed without a secret → the author sees it needs connecting, via a
       // key-entry link — and construction stays credential-free.
       await installRemoteAdapterFromManifest({ teamId, manifest });
-      const needy = toAgentCatalogView(await movementCatalogSnapshotForTeam(teamId)).adapters as Record<
+      const needy = toAgentCatalogView(await movementCatalogSnapshotForTeam(teamId, { audience: { for: 'run' } })).adapters as Record<
         string,
         { connect?: string; requiresCredential: boolean; remoteConnection?: string }
       >;
@@ -121,7 +121,7 @@ describe('catalog connect-method (real manifests)', () => {
 
       // Provision the secret (one-step) → now connected.
       await installRemoteAdapterFromManifest({ teamId, manifest, secret: 'crm-token' });
-      const connected = toAgentCatalogView(await movementCatalogSnapshotForTeam(teamId)).adapters as Record<
+      const connected = toAgentCatalogView(await movementCatalogSnapshotForTeam(teamId, { audience: { for: 'run' } })).adapters as Record<
         string,
         { remoteConnection?: string }
       >;

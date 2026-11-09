@@ -94,7 +94,7 @@ async function dropTeam(teamId: string): Promise<void> {
 }
 
 async function ship(teamId: string, name: string, source: string): Promise<void> {
-  const saved = await saveMovement({ teamId, source, name });
+  const saved = await saveMovement({ audience: { for: 'run' }, teamId, source, name });
   if (!saved.ok) throw new Error(`test: ${name} did not ship: ${JSON.stringify(saved)}`);
 }
 

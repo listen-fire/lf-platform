@@ -52,6 +52,7 @@ async function main() {
     const seen: string[] = [];
     const visit = async (at: string | undefined, hops: number): Promise<void> => {
       const result = await describeMovementInstance({
+        audience: { for: 'run' },
         teamId: teamId as TeamId,
         adapter: system.adapterType,
         ...(at !== undefined ? { position: at } : {}),

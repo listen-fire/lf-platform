@@ -110,6 +110,7 @@ describe('save warnings (real Postgres + live adapter socket)', () => {
     acknowledgeErrors?: boolean;
   }) =>
     saveMovement({
+      audience: { for: 'run' },
       teamId: teamId as string,
       source: input.source,
       name: input.name,

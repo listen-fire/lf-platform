@@ -81,7 +81,7 @@ async function main(): Promise<void> {
     );
 
     // 5. Save the movement (same path the editor uses).
-    const saved = await saveMovement({ teamId, source: REMOTE_MOVEMENT });
+    const saved = await saveMovement({ audience: { for: 'run' }, teamId, source: REMOTE_MOVEMENT });
     if (!saved.movementId || !saved.ok) {
       console.error('[remote-verify] FAIL — movement did not save live:');
       console.error(JSON.stringify(saved, null, 2));

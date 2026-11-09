@@ -46,7 +46,7 @@ async function main() {
   }
   const seed = await ensureDevLoopTeam();
   const credential = await ensureDevLoopDropboxCredential({ teamId: seed.teamId });
-  const movement = await saveMovement({ teamId: seed.teamId, source: proofFile() });
+  const movement = await saveMovement({ audience: { for: 'run' }, teamId: seed.teamId, source: proofFile() });
   console.log(
     JSON.stringify(
       {

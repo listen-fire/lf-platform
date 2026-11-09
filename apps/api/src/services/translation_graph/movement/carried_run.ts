@@ -60,6 +60,7 @@ import { streamFileRef, withFileOwners } from '../engine/files/retrieve';
 import { teamIdSchema } from '../../../lib/team_id';
 import { loadActingUserTrigger, sharedRunServices } from './engine_host';
 import { teamFactsOf } from './carried_check';
+import type { CatalogAudience } from './audience';
 
 /** The carried run host `pin`'s version provides, or undefined when this
  *  release runs `pin` itself or does not run it. */
@@ -253,6 +254,8 @@ function stripCode(message: string, code: string): string {
 export async function runCarriedSegment(input: {
   lane: RunningLane;
   teamId: TeamId;
+  /** A firing sees every connection of its team; a person's test run, only those they may use. */
+  audience: CatalogAudience;
   source: string;
   pin: LanguageVersion;
   movementName?: string;
@@ -270,7 +273,7 @@ export async function runCarriedSegment(input: {
   team?: TeamFacts;
   parks?: CarriedParks;
 }): Promise<MovementRunResult> {
-  const team = input.team ?? (await teamFactsOf(input.teamId, { imports: input.imports }));
+  const team = input.team ?? (await teamFactsOf(input.teamId, { imports: input.imports, audience: input.audience }));
   const outcome = await input.lane.runSegment(
     {
       source: input.source,
@@ -308,7 +311,7 @@ export async function resumeCarriedSegment(input: {
   lease?: { isLost(): boolean };
   parks: CarriedParks;
 }): Promise<MovementRunResult> {
-  const team = await teamFactsOf(input.teamId, { imports: 'shipped' });
+  const team = await teamFactsOf(input.teamId, { imports: 'shipped', audience: { for: 'run' } });
   const outcome = await input.lane.resumeSegment(
     { ...input.request, team },
     runPlatformFor({

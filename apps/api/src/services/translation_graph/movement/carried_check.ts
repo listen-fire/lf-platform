@@ -20,6 +20,7 @@ import { MCP_CONNECTIONS_ENABLED } from '../adapters/mcp/enabled';
 import { WHATSAPP_MOVEMENTS_NUMBER } from '../adapters/whatsapp/shared_app';
 import { dedupeDiagnostics, toAuthoringDiagnostic } from './authoring_diagnostic';
 import { loadCredentialRows } from './catalog';
+import { audienceKey, type CatalogAudience } from './audience';
 import { listMovementRows } from './store';
 import { listRemoteAdapters } from '../adapters/remote/store';
 import { listShippedFiles } from './version_store';
@@ -36,10 +37,14 @@ export function deploymentFacts(): DeploymentFacts {
 
 /** What the platform knows of the team, read now. Its files are their live
  *  text (what an edit checks and a test run imports), or their shipped text
- *  (what a firing imports: a file that never shipped is not there). */
-export async function teamFactsOf(teamId: string, options: { imports?: 'live' | 'shipped' } = {}): Promise<TeamFacts> {
+ *  (what a firing imports: a file that never shipped is not there). Its
+ *  connections are the ones `audience` may see. */
+export async function teamFactsOf(
+  teamId: string,
+  options: { imports?: 'live' | 'shipped'; audience: CatalogAudience },
+): Promise<TeamFacts> {
   const [credentials, files, remotes] = await Promise.all([
-    loadCredentialRows(teamId as TeamId),
+    loadCredentialRows(teamId as TeamId, options.audience),
     teamFilesOf(teamId, options.imports ?? 'live'),
     listRemoteAdapters({ teamId: teamId as TeamId }),
   ]);
@@ -71,7 +76,7 @@ export function teamFactsOncePerTeam(): (teamId: string) => Promise<TeamFacts> {
   return (teamId) => {
     const cached = read.get(teamId);
     if (cached !== undefined) return cached;
-    const reading = teamFactsOf(teamId);
+    const reading = teamFactsOf(teamId, { audience: { for: 'run' } });
     read.set(teamId, reading);
     reading.catch(() => read.delete(teamId));
     return reading;
@@ -82,13 +87,14 @@ export function teamFactsOncePerTeam(): (teamId: string) => Promise<TeamFacts> {
 // version's editor shares its snapshot: typing a word reads the team once.
 const editorFacts = new LRUCache<string, Promise<TeamFacts>>({ max: 100, ttl: 30_000 });
 
-/** The team's facts for an editor request. */
-export function editorTeamFactsOf(teamId: string): Promise<TeamFacts> {
-  const cached = editorFacts.get(teamId);
+/** The team's facts for an editor request, as the editing caller may see them. */
+export function editorTeamFactsOf(teamId: string, audience: CatalogAudience): Promise<TeamFacts> {
+  const key = JSON.stringify([teamId, audienceKey(audience)]);
+  const cached = editorFacts.get(key);
   if (cached !== undefined) return cached;
-  const reading = teamFactsOf(teamId);
-  editorFacts.set(teamId, reading);
-  reading.catch(() => editorFacts.delete(teamId));
+  const reading = teamFactsOf(teamId, { audience });
+  editorFacts.set(key, reading);
+  reading.catch(() => editorFacts.delete(key));
   return reading;
 }
 
@@ -100,8 +106,9 @@ export async function validateUnderCarried(input: {
   pin: LanguageVersion;
   lane: () => Promise<CheckingLane>;
   team?: Promise<TeamFacts>;
+  audience: CatalogAudience;
 }): Promise<TeamMovementValidation> {
-  const [lane, team] = await Promise.all([input.lane(), input.team ?? teamFactsOf(input.teamId)]);
+  const [lane, team] = await Promise.all([input.lane(), input.team ?? teamFactsOf(input.teamId, { audience: input.audience })]);
   // Connected systems are read through the platform's hosting of the
   // version's own modules.
   const { modulePlatform } = await import('./carried_run');

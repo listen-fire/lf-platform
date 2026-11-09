@@ -210,7 +210,7 @@ async function captureByDemand(input: {
   // exist, under the names `instantiate` resolves. `types: []` is the
   // documented "skeleton" scoping — the entry lists come back, nothing is
   // described.
-  const skeleton = await movementCatalogForTeam(input.teamId, { types: [] });
+  const skeleton = await movementCatalogForTeam(input.teamId, { audience: { for: 'run' }, types: [] });
   const connectionByAdapter = new Map<string, string>();
   for (const name of Object.keys(skeleton.credentialsByName).sort()) {
     for (const adapter of skeleton.credentialsByName[name]?.adapters ?? []) {
@@ -231,7 +231,7 @@ async function captureByDemand(input: {
       );
     }
     try {
-      const built = await movementCatalogForTeam(input.teamId, { source });
+      const built = await movementCatalogForTeam(input.teamId, { audience: { for: 'run' }, source });
       for (const instance of built.instanceSchemas) {
         if (input.adapters && !input.adapters.includes(instance.adapter)) continue;
         // The fixture is keyed by ADAPTER, so it can only carry the default
@@ -297,7 +297,7 @@ async function captureFullSurface(input: {
   teamId: TeamId;
   adapters: string[];
 }): Promise<CapturedCatalog> {
-  const { catalog } = await movementCatalogForTeam(input.teamId);
+  const { catalog } = await movementCatalogForTeam(input.teamId, { audience: { for: 'run' } });
   const credentialFor: Record<string, string> = {
     attio: 'Dev Loop Attio',
     slack: 'Dev Loop Slack',
@@ -350,7 +350,7 @@ async function main() {
   if (command === 'snapshot-catalog') await ensureDevLoopTelegramCredential(seed.teamId);
 
   if (command === 'catalog') {
-    const catalog = await movementCatalogForTeam(seed.teamId as TeamId);
+    const catalog = await movementCatalogForTeam(seed.teamId as TeamId, { audience: { for: 'run' } });
     console.log(
       JSON.stringify(
         { credentialsByName: catalog.credentialsByName, notes: catalog.notes },
@@ -575,6 +575,7 @@ async function main() {
     }
   }
   const result = await saveMovement({
+    audience: { for: 'run' },
     teamId: seed.teamId,
     source,
     ...(movementName !== undefined ? { name: movementName } : {}),

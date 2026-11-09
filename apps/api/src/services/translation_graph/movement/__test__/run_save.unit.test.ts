@@ -279,7 +279,7 @@ beforeEach(() => {
 
 describe('saveMovement — a manual listener is the Run-now channel', () => {
   it('a manual listen derives a trigger row and makes the file runnable', async () => {
-    const result = await saveMovement({ teamId: TEAM, source: WITH_MANUAL });
+    const result = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: WITH_MANUAL });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -296,7 +296,7 @@ describe('saveMovement — a manual listener is the Run-now channel', () => {
   });
 
   it('a manual-only file is live and runnable', async () => {
-    const result = await saveMovement({ teamId: TEAM, source: MANUAL_ONLY });
+    const result = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: MANUAL_ONLY });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.validity.status).toBe('valid');
@@ -308,10 +308,11 @@ describe('saveMovement — a manual listener is the Run-now channel', () => {
   });
 
   it('removing the manual listen drops runnable and retires its row', async () => {
-    const first = await saveMovement({ teamId: TEAM, source: WITH_MANUAL });
+    const first = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: WITH_MANUAL });
     if (!first.ok) throw new Error('first save should be live');
 
     const second = await saveMovement({
+      audience: { for: 'run' },
       teamId: TEAM,
       id: first.movementId,
       source: LISTEN_ONLY,
@@ -325,7 +326,7 @@ describe('saveMovement — a manual listener is the Run-now channel', () => {
   });
 
   it('delete removes the derived trigger rows with the movement', async () => {
-    const saved = await saveMovement({ teamId: TEAM, source: WITH_MANUAL });
+    const saved = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: WITH_MANUAL });
     if (!saved.ok) throw new Error('save should be live');
     expect(db.__tables.trigger).toHaveLength(2);
 
@@ -337,7 +338,7 @@ describe('saveMovement — a manual listener is the Run-now channel', () => {
 
 describe('saveMovement — dry_run derives the listener run_mode', () => {
   it("a dry_run movement creates its derived trigger with run_mode 'dry_run'", async () => {
-    const result = await saveMovement({ teamId: TEAM, source: DRY_LISTEN_ONLY });
+    const result = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: DRY_LISTEN_ONLY });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.listeners[0].runMode).toBe('dry_run');
@@ -345,12 +346,12 @@ describe('saveMovement — dry_run derives the listener run_mode', () => {
   });
 
   it('the dry_run⇄live axis follows the text across saves', async () => {
-    const first = await saveMovement({ teamId: TEAM, source: DRY_LISTEN_ONLY });
+    const first = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: DRY_LISTEN_ONLY });
     if (!first.ok) throw new Error('first save should be live');
     expect(db.__tables.trigger[0].run_mode).toBe('dry_run');
 
     // The dry_run flag comes off the construction → back to live.
-    const second = await saveMovement({ teamId: TEAM, id: first.movementId, source: LISTEN_ONLY });
+    const second = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, id: first.movementId, source: LISTEN_ONLY });
     expect(second.ok).toBe(true);
     if (!second.ok) return;
     expect(second.listeners[0].triggerId).toBe(first.listeners[0].triggerId);
@@ -359,12 +360,13 @@ describe('saveMovement — dry_run derives the listener run_mode', () => {
   });
 
   it("an operator's 'off' survives both directions of the dry_run axis", async () => {
-    const first = await saveMovement({ teamId: TEAM, source: LISTEN_ONLY });
+    const first = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: LISTEN_ONLY });
     if (!first.ok) throw new Error('first save should be live');
 
     db.__tables.trigger[0].run_mode = 'off'; // operator pauses
 
     const second = await saveMovement({
+      audience: { for: 'run' },
       teamId: TEAM,
       id: first.movementId,
       source: DRY_LISTEN_ONLY,

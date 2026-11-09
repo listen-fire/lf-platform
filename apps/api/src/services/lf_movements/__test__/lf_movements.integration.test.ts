@@ -138,15 +138,15 @@ describe('the movements module', () => {
   });
 
   it('a draft is never listed: a never-shipped save is absent and an unshipped edit keeps the shipped text and version', async () => {
-    const draft = await saveMovement({ teamId: teamA, source: UNKNOWN_ADAPTER, name: 'draft' });
+    const draft = await saveMovement({ audience: { for: 'run' }, teamId: teamA, source: UNKNOWN_ADAPTER, name: 'draft' });
     expect(draft).toMatchObject({ ok: false, needsConfirmation: true });
     expect(await paths(teamA)).toEqual([]);
     expect(await read(teamA, 'draft.mvt')).toBeNull();
 
     const shipped = MANUAL('hello');
-    const saved = await saveMovement({ teamId: teamA, source: shipped, name: 'hello' });
+    const saved = await saveMovement({ audience: { for: 'run' }, teamId: teamA, source: shipped, name: 'hello' });
     if (!saved.ok) throw new Error(`test: hello did not save: ${JSON.stringify(saved)}`);
-    const edit = await saveMovement({ teamId: teamA, id: saved.movementId, source: UNKNOWN_ADAPTER, name: 'hello' });
+    const edit = await saveMovement({ audience: { for: 'run' }, teamId: teamA, id: saved.movementId, source: UNKNOWN_ADAPTER, name: 'hello' });
     expect(edit).toMatchObject({ ok: false, needsConfirmation: true });
     const live = await getAutomationsQb(['movement'])
       .selectFrom('movement')
@@ -175,8 +175,8 @@ describe('the movements module', () => {
   });
 
   it('a movement whose listener is paused is not listed until it is resumed', async () => {
-    const guarded = await saveMovement({ teamId: teamA, source: MANUAL('guarded'), name: 'guarded' });
-    const off = await saveMovement({ teamId: teamA, source: MANUAL('off'), name: 'off' });
+    const guarded = await saveMovement({ audience: { for: 'run' }, teamId: teamA, source: MANUAL('guarded'), name: 'guarded' });
+    const off = await saveMovement({ audience: { for: 'run' }, teamId: teamA, source: MANUAL('off'), name: 'off' });
     if (!guarded.ok || !off.ok) throw new Error('test: the paused probes did not save');
     expect(await paths(teamA)).toEqual(['guarded.mvt', 'off.mvt']);
 
@@ -220,9 +220,9 @@ describe('the movements module', () => {
   });
 
   it('a paused library a served movement imports is listed; a paused movement nothing imports is not', async () => {
-    const lib = await saveMovement({ teamId: teamA, source: MANUAL('lib'), name: 'lib' });
-    const deeper = await saveMovement({ teamId: teamA, source: MANUAL('deeper'), name: 'deeper' });
-    const alone = await saveMovement({ teamId: teamA, source: MANUAL('alone'), name: 'alone' });
+    const lib = await saveMovement({ audience: { for: 'run' }, teamId: teamA, source: MANUAL('lib'), name: 'lib' });
+    const deeper = await saveMovement({ audience: { for: 'run' }, teamId: teamA, source: MANUAL('deeper'), name: 'deeper' });
+    const alone = await saveMovement({ audience: { for: 'run' }, teamId: teamA, source: MANUAL('alone'), name: 'alone' });
     if (!lib.ok || !deeper.ok || !alone.ok) throw new Error('test: the probes did not save');
     await seed(teamA, 'user', 'import { lib } from "lib"\n\nfunction user() {}\n');
     await seed(teamA, 'paused_user', 'import { deeper } from "deeper"\n\nfunction paused_user() {}\n');

@@ -69,7 +69,7 @@ describe('a 0.12 movement saved (real Postgres)', () => {
   it("keeps its pin, validates under 0.12, and a clean save goes live under it", async () => {
     const id = await seed('echo-012', ECHO_012('Text'), '0.12.13');
 
-    const saved = await saveMovement({ teamId, id, source: ECHO_012('Content') });
+    const saved = await saveMovement({ audience: { for: 'run' }, teamId, id, source: ECHO_012('Content') });
 
     const row = await getMovementRow({ teamId, id });
     expect(row?.languageVersion).toBe('0.12.13');
@@ -86,7 +86,7 @@ describe('a 0.12 movement saved (real Postgres)', () => {
   it("an edit 0.12's checker rejects is held for consent, under 0.12, with 0.12's diagnostic", async () => {
     const id = await seed('typo-012', ECHO_012('Text'), '0.12.13');
 
-    const saved = await saveMovement({ teamId, id, source: ECHO_012('Textt') });
+    const saved = await saveMovement({ audience: { for: 'run' }, teamId, id, source: ECHO_012('Textt') });
 
     expect(saved.ok).toBe(false);
     if (saved.ok) return;
@@ -101,7 +101,7 @@ describe('a 0.12 movement saved (real Postgres)', () => {
   it('an edit in 0.15 spelling is not read as 0.15: the pin stays, and 0.12 reports it', async () => {
     const id = await seed('respelled-012', ECHO_012('Text'), '0.12.13');
 
-    const saved = await saveMovement({ teamId, id, source: ECHO_015 });
+    const saved = await saveMovement({ audience: { for: 'run' }, teamId, id, source: ECHO_015 });
 
     expect(saved.ok).toBe(false);
     if (saved.ok) return;
@@ -111,7 +111,7 @@ describe('a 0.12 movement saved (real Postgres)', () => {
   });
 
   it('a new movement is created on the current version', async () => {
-    const saved = await saveMovement({ teamId, source: ECHO_015, name: 'fresh' });
+    const saved = await saveMovement({ audience: { for: 'run' }, teamId, source: ECHO_015, name: 'fresh' });
     expect(saved.movementId).toBeDefined();
     const row = await getMovementRow({ teamId, id: saved.movementId ?? '' });
     expect(row?.languageVersion).toBe(LANGUAGE_VERSION);
@@ -121,7 +121,7 @@ describe('a 0.12 movement saved (real Postgres)', () => {
     await seed('lib-012', 'export function shout(t: <text>) {\n  return t\n}\n', '0.12.13');
     const importer = 'import { shout } from "lib-012"\n' + ECHO_015.replace('return run.Text', 'return shout(run.Text)');
 
-    const saved = await saveMovement({ teamId, source: importer, name: 'importer' });
+    const saved = await saveMovement({ audience: { for: 'run' }, teamId, source: importer, name: 'importer' });
 
     expect(saved.ok).toBe(false);
     if (saved.ok) return;
