@@ -22,7 +22,7 @@ import { contextInjector } from '../../../lib/middleware/context';
 import { createAuthenticationHandler } from '../../../lib/middleware/authentication';
 import { authorisationHandler } from '../../../lib/middleware/authorisation';
 import { defersToSystemCaller } from '../../../services/system_auth';
-import { upsertMovementRow } from '../../../services/translation_graph/movement/store';
+import { writeMovementRow } from '../../../services/translation_graph/movement/store';
 import { mintMovementVersionIfChanged, movementSourceHash } from '../../../services/translation_graph/movement/version_store';
 import { LANGUAGE_VERSION } from 'movement-lang';
 import { systemRouter } from '../v1/system';
@@ -50,7 +50,7 @@ async function makeOwner(): Promise<{ teamId: TeamId; userId: UserId }> {
 }
 
 async function seed(teamId: string, name: string, source: string): Promise<void> {
-  const row = await upsertMovementRow({ teamId, name, source });
+  const row = await writeMovementRow({ teamId, intent: { kind: 'create' }, name, source });
   await mintMovementVersionIfChanged({ teamId, movementId: row.id, source, languageVersion: LANGUAGE_VERSION });
 }
 

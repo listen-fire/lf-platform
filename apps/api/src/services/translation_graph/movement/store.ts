@@ -205,19 +205,45 @@ export async function listMovementRows(teamId: string): Promise<MovementRow[]> {
   return rows.map(toMovementRow);
 }
 
+/** What a write of the canonical source row is. The caller decides it, once; the write never looks the name up to decide for itself. */
+export type MovementWriteIntent = { kind: 'create' } | { kind: 'overwrite'; id: string };
+
+/** A create met a movement already holding the name in its team. */
+export class MovementNameTakenError extends Error {
+  constructor(readonly movementName: string) {
+    super(`the name "${movementName}" is taken`);
+    this.name = 'MovementNameTakenError';
+  }
+}
+
+/** An overwrite found its row deleted: it is never recreated. */
+export class MovementGoneError extends Error {
+  constructor(readonly movementId: string) {
+    super(`movement ${movementId} is gone`);
+    this.name = 'MovementGoneError';
+  }
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === '23505';
+}
+
 /**
- * Upsert the canonical source row — BEFORE any compile runs, so the text
- * is never lost to a failed compile. Keyed by `id` when provided (the
- * editor's re-save path, which may rename), else by `(team_id, name)`.
+ * Write the canonical source row — BEFORE any compile runs, so the text
+ * is never lost to a failed compile. The caller says whether this creates a
+ * row or overwrites one (the editor's re-save path, which may rename): a
+ * lookup here would decide again after the caller's checks, and a row
+ * deleted, or a name taken, in between would turn a checked overwrite into a
+ * create nobody decided, with no statements.
  *
- * The FIRST save stamps the movement's language version with the current
- * one; an update never touches it, so an edit keeps the movement's pin —
- * except the language upgrade's own save (`languageVersion`), which writes the
- * rewritten text and the version it is written in together.
+ * The create stamps the movement's language version with the current one; an
+ * overwrite never touches it, so an edit keeps the movement's pin — except the
+ * language upgrade's own save (`languageVersion`), which writes the rewritten
+ * text and the version it is written in together.
  */
-export async function upsertMovementRow(input: {
+export async function writeMovementRow(input: {
   teamId: string;
-  id?: string;
+  intent: MovementWriteIntent;
   name: string;
   source: string;
   description?: string;
@@ -226,42 +252,51 @@ export async function upsertMovementRow(input: {
   languageVersion?: LanguageVersion;
 }): Promise<MovementRow> {
   const qb = getAutomationsQb(['movement']);
-  const existing = input.id
-    ? await getMovementRow({ teamId: input.teamId, id: input.id })
-    : await getMovementRowByName({ teamId: input.teamId, name: input.name });
+  const { intent } = input;
 
-  if (existing) {
-    await qb
-      .updateTable('movement')
-      .set({
-        name: input.name,
-        source: input.source,
-        ...(input.description !== undefined ? { description: input.description } : {}),
-        ...(input.languageVersion !== undefined
-          ? { language_version: input.languageVersion, upgrade_diagnostics: null, upgrade_checked_against: input.languageVersion }
-          : {}),
-        updated_at: new Date(),
-      })
-      .where('id', '=', existing.id as MovementId)
-      .execute();
-    const updated = await getMovementRow({ teamId: input.teamId, id: existing.id });
-    if (!updated) throw new Error(`movement ${existing.id} disappeared during upsert`);
+  if (intent.kind === 'overwrite') {
+    try {
+      await qb
+        .updateTable('movement')
+        .set({
+          name: input.name,
+          source: input.source,
+          ...(input.description !== undefined ? { description: input.description } : {}),
+          ...(input.languageVersion !== undefined
+            ? { language_version: input.languageVersion, upgrade_diagnostics: null, upgrade_checked_against: input.languageVersion }
+            : {}),
+          updated_at: new Date(),
+        })
+        .where('id', '=', intent.id as MovementId)
+        .where('team_id', '=', input.teamId)
+        .execute();
+    } catch (error) {
+      if (isUniqueViolation(error)) throw new MovementNameTakenError(input.name);
+      throw error;
+    }
+    const updated = await getMovementRow({ teamId: input.teamId, id: intent.id });
+    if (!updated) throw new MovementGoneError(intent.id);
     return updated;
   }
 
   const id = randomUUID() as MovementId;
-  await qb
-    .insertInto('movement')
-    .values({
-      id,
-      team_id: input.teamId,
-      name: input.name,
-      source: input.source,
-      description: input.description ?? '',
-      language_version: LANGUAGE_VERSION,
-      created_by_user_id: (input.userId ?? null) as UserId | null,
-    })
-    .execute();
+  try {
+    await qb
+      .insertInto('movement')
+      .values({
+        id,
+        team_id: input.teamId,
+        name: input.name,
+        source: input.source,
+        description: input.description ?? '',
+        language_version: LANGUAGE_VERSION,
+        created_by_user_id: (input.userId ?? null) as UserId | null,
+      })
+      .execute();
+  } catch (error) {
+    if (isUniqueViolation(error)) throw new MovementNameTakenError(input.name);
+    throw error;
+  }
   const created = await getMovementRow({ teamId: input.teamId, id: id as unknown as string });
   if (!created) throw new Error(`movement ${id} not found after insert`);
   return created;

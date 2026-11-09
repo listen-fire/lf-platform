@@ -1040,7 +1040,7 @@ async function validateAutomationText(input: {
   let helpNote: { languageHelp?: string } = {};
   if (input.automation !== undefined) {
     const row = await getMovementRow({ teamId: input.teamId, id: input.automation }).catch(() => null);
-    if (!row) return { error: `No automation '${input.automation}' in this team.` };
+    if (!row || (await unseen(row.id))) return { error: `No automation '${input.automation}' in this team.` };
     helpNote = helpNoteOf(row);
     if (languageVersion === undefined) languageVersion = row.languageVersion;
     else if (movesUp(row.languageVersion, languageVersion)) upgradingFrom = row.languageVersion;

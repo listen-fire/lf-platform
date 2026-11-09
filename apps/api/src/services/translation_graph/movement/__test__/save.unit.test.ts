@@ -868,7 +868,7 @@ listen to inbox-[e:Emails WHERE e.Key == "deals"]-> fire intake
     expect(result.errors?.[0]).toContain('movement declaration');
     expect(db.__tables.movement).toHaveLength(0);
 
-    // Journey tap: this returns BEFORE upsertMovementRow — nothing was
+    // Journey tap: this returns BEFORE writeMovementRow — nothing was
     // saved, so neither milestone fires.
     expect(journey.recordUserMilestone).not.toHaveBeenCalled();
     expect(journey.recordTeamMilestone).not.toHaveBeenCalled();

@@ -34,9 +34,10 @@ import { getMovementRowByName, type MovementRow } from './store';
 export type SaveRefusal =
   | { kind: 'read_only' }
   | { kind: 'name_taken'; name: string }
+  | { kind: 'name_gone'; name: string }
   | { kind: 'missing_statement'; missing: StatedVerb<'automation'>[] }
   | { kind: 'statement'; message: string }
-  | { kind: 'connections'; connections: { connection: string; file: string }[] };
+  | { kind: 'connections'; connections: { connection: string; file: string }[]; unreadableFiles: string[] };
 
 /** The person a save is decided for: nobody when a run saves. */
 export function saverOf(audience: CatalogAudience): Principal | undefined {
@@ -60,6 +61,15 @@ export function nameTakenRefusal(name: string): string {
   return `The name "${name}" is taken. Save under another name.`;
 }
 
+/** Statements given to a save that overwrites: they say who may reach a new automation, so they apply only when creating. */
+export const STATEMENTS_ON_OVERWRITE_REFUSAL =
+  'Statements apply only when creating an automation. Change who may read, write or fire this one with setAccess.';
+
+/** A save by name over an automation that was deleted while it was being saved: nothing is created in its place. */
+export function nameGoneRefusal(name: string): string {
+  return `The automation named "${name}" was deleted while you were saving it, so nothing was saved. Save again to create it.`;
+}
+
 const STATED_VERBS = ['read', 'write', 'fire'] as const satisfies readonly StatedVerb<'automation'>[];
 
 /** All three statements a new automation is created with, or the ones it still lacks. */
@@ -81,6 +91,8 @@ type Reach = { connection: string } | { module: string };
 /** A connection one file names, and the row it names when there is one. */
 interface NamedConnection {
   file: string;
+  /** The row of an imported file; undefined for the file being saved. */
+  fileId: string | undefined;
   reach: Reach;
   /** Undefined when nothing by that name exists. */
   id: string | undefined;
@@ -99,9 +111,14 @@ function described(reach: Reach): string {
  */
 export async function connectionsNamed(input: { teamId: string; file: string; source: string }): Promise<NamedConnection[]> {
   const teamId = input.teamId as TeamId;
+  const importedIds = new Map<string, string>();
   const imports = await assembleMovementFileSources({
     rootSource: input.source,
-    load: async (path) => (await getMovementRowByName({ teamId: input.teamId, name: path }))?.source ?? null,
+    load: async (path) => {
+      const row = await getMovementRowByName({ teamId: input.teamId, name: path });
+      if (row !== null) importedIds.set(path, row.id);
+      return row?.source ?? null;
+    },
   });
   const files: [string, string][] = [[input.file, input.source], ...imports];
   const constructed = files.flatMap(([file, source]) => constructionsOf(source).map((ref) => ({ file, ref })));
@@ -111,12 +128,13 @@ export async function connectionsNamed(input: { teamId: string; file: string; so
   const byName = credentialImportNames({ rows: await loadCredentialRows(teamId, { for: 'run' }), manifests });
   const named = new Map<string, NamedConnection>();
   for (const { file, ref } of constructed) {
+    const fileId = importedIds.get(file);
     let found: NamedConnection | undefined;
     if (ref.credential !== undefined) {
-      found = { file, reach: { connection: ref.credential }, id: byName[ref.credential]?.id };
+      found = { file, fileId, reach: { connection: ref.credential }, id: byName[ref.credential]?.id };
     } else if (!hasAdapter(ref.adapter)) {
       const install = await getRemoteAdapter({ teamId, adapterType: resolveAdapterSlug(ref.adapter) });
-      if (install !== null && install.credentials_id !== null) found = { file, reach: { module: ref.adapter }, id: install.credentials_id };
+      if (install !== null && install.credentials_id !== null) found = { file, fileId, reach: { module: ref.adapter }, id: install.credentials_id };
     }
     if (found !== undefined) named.set(`${found.file}\u0000${described(found.reach)}`, found);
   }
@@ -135,12 +153,35 @@ export async function unusableConnections(saver: Principal, named: readonly Name
   return unusable;
 }
 
-export function connectionsRefusal(unusable: readonly NamedConnection[]): { refused: SaveRefusal; message: string } {
-  const connections = unusable.map((c) => ({ connection: described(c.reach), file: c.file }));
-  const listed = connections.map((c) => `"${c.connection}" (named in "${c.file}")`).join(', ');
+/**
+ * The refusal for connections a save may not name. A connection named in a
+ * file the saver may not read is not named: the refusal says only that a file
+ * this imports names one, since naming the connection would show them what
+ * that file reads through.
+ */
+export async function connectionsRefusal(
+  saver: Principal,
+  unusable: readonly NamedConnection[],
+): Promise<{ refused: SaveRefusal; message: string }> {
+  const visible: { connection: string; file: string }[] = [];
+  const unreadableFiles = new Set<string>();
+  for (const c of unusable) {
+    const readable = c.fileId === undefined || (await accessTo(saver, { target: { thing: 'automation', id: c.fileId }, verb: 'read' }));
+    if (readable) visible.push({ connection: described(c.reach), file: c.file });
+    else unreadableFiles.add(c.file);
+  }
+  const sentences: string[] = [];
+  if (visible.length > 0) {
+    const listed = visible.map((c) => `"${c.connection}" (named in "${c.file}")`).join(', ');
+    sentences.push(`This file names connections you may not use, or that do not exist: ${listed}.`);
+  }
+  if (unreadableFiles.size > 0) {
+    sentences.push(`A file this imports names a connection you may not use: ${[...unreadableFiles].join(', ')}.`);
+  }
+  sentences.push('A save may name only connections you may use.');
   return {
-    refused: { kind: 'connections', connections },
-    message: `This file names connections you may not use, or that do not exist: ${listed}. A save may name only connections you may use.`,
+    refused: { kind: 'connections', connections: visible, unreadableFiles: [...unreadableFiles] },
+    message: sentences.join(' '),
   };
 }
 

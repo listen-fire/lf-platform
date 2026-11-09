@@ -17,7 +17,7 @@ import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
 import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
 import { cleanupTeam } from '../../../test/harness/cleanup';
 import { saveMovement } from '../../translation_graph/movement/provision';
-import { upsertMovementRow } from '../../translation_graph/movement/store';
+import { writeMovementRow } from '../../translation_graph/movement/store';
 import {
   mintMovementVersionIfChanged,
   movementSourceHash,
@@ -98,7 +98,7 @@ const paths = async (tenant: string) => (await list(tenant)).map((file) => file.
 
 /** A shipped movement, outside the save gate: the row and its version at `pin`. */
 async function seed(teamId: string, name: string, source: string, pin: string = LANGUAGE_VERSION): Promise<string> {
-  const row = await upsertMovementRow({ teamId, name, source });
+  const row = await writeMovementRow({ teamId, intent: { kind: 'create' }, name, source });
   await mintMovementVersionIfChanged({ teamId, movementId: row.id, source, languageVersion: pin });
   return row.id;
 }
@@ -262,7 +262,7 @@ describe('the movements module', () => {
     expect(await read(teamA, 'versioned.mvt')).toEqual(first);
 
     const changed = `${text}// more\n`;
-    await upsertMovementRow({ teamId: teamA, id, name: 'versioned', source: changed });
+    await writeMovementRow({ teamId: teamA, intent: { kind: 'overwrite', id }, name: 'versioned', source: changed });
     await mintMovementVersionIfChanged({ teamId: teamA, movementId: id, source: changed, languageVersion: LANGUAGE_VERSION });
     const moved = await read(teamA, 'versioned.mvt');
     expect(moved).toEqual({ text: changed, version: movementSourceHash(changed) });

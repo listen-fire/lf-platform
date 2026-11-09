@@ -32,6 +32,9 @@ const mockAccess: {
   stated: { verb: Verb; inTransaction: boolean }[];
 } = { members: new Map(), connections: new Map(), rows: [], inTransaction: false, stated: [] };
 
+/** Something happening to the movements table after a save's checks and before its write: runs once. */
+const mockRace: { beforeWrite?: () => void } = {};
+
 jest.mock('../../../../lib/kysely', () => {
   type Row = Record<string, unknown>;
   const tables: Record<string, Row[]> = {
@@ -60,7 +63,16 @@ jest.mock('../../../../lib/kysely', () => {
     let order: { col: string; dir: string } | undefined;
     const rows = () => tables[table].filter((r) => matches(r, wheres));
     const execute = async (): Promise<Row[]> => {
+      if (table === 'movement' && (mode === 'insert' || mode === 'update') && mockRace.beforeWrite !== undefined) {
+        const race = mockRace.beforeWrite;
+        delete mockRace.beforeWrite;
+        race();
+      }
       if (mode === 'insert') {
+        // The database's own `movement_team_name_unique`.
+        if (table === 'movement' && tables.movement.some((r) => r.team_id === values.team_id && r.name === values.name)) {
+          throw Object.assign(new Error('duplicate key value violates unique constraint "movement_team_name_unique"'), { code: '23505' });
+        }
         tables[table].push({ created_at: new Date(), updated_at: new Date(), ...values });
         return [];
       }
@@ -288,7 +300,7 @@ jest.mock('../../storage/tg_table', () => ({ saveTriggerEntriesForTrigger: jest.
 
 import { getRemoteAdapter } from '../../adapters/remote/store';
 import { saveMovement, type SaveMovementInput } from '../provision';
-import { accessWarnings } from '../save_access';
+import { STATEMENTS_ON_OVERWRITE_REFUSAL, accessWarnings } from '../save_access';
 
 const db = jest.requireMock('../../../../lib/kysely') as {
   __tables: Record<string, Array<Record<string, unknown>>>;
@@ -404,6 +416,7 @@ beforeEach(() => {
   ]);
   mockAccess.rows = [];
   mockAccess.stated = [];
+  delete mockRace.beforeWrite;
   // Only Bob may use Finance; the team may use Sales.
   stated({ thing: 'connection', id: FINANCE }, 'use', [user(BOB)]);
   stated({ thing: 'connection', id: SALES }, 'use', [team]);
@@ -536,10 +549,28 @@ describe('every connection the file and its imports name needs use', () => {
     expect(JSON.stringify(hidden)).toBe(JSON.stringify(nowhere).split('Nowhere').join('Finance'));
   });
 
-  it('refuses a file whose import names one, naming the imported file', async () => {
-    await existing(LIBRARY, {}, 'helpers');
+  it('refuses a file whose import names one, naming the connection and the imported file when the saver can read it', async () => {
+    await existing(LIBRARY, { read: [user(ALICE)] }, 'helpers');
     const refused = await asAlice({ source: importsLibrary('deals'), statements: STATEMENTS, acknowledgeErrors: true });
-    expect(refused).toMatchObject({ ok: false, refused: { kind: 'connections', connections: [{ connection: 'Finance', file: 'helpers' }] } });
+    expect(refused).toMatchObject({
+      ok: false,
+      refused: { kind: 'connections', connections: [{ connection: 'Finance', file: 'helpers' }], unreadableFiles: [] },
+      errors: [expect.stringContaining('"Finance" (named in "helpers")')],
+    });
+  });
+
+  it('names only the imported file, never its connection, when the saver may not read that file', async () => {
+    await existing(LIBRARY, { read: [user(BOB)] }, 'helpers');
+    const before = stored();
+    const refused = await asAlice({ source: importsLibrary('deals'), statements: STATEMENTS, acknowledgeErrors: true });
+    expect(refused).toEqual({
+      ok: false,
+      errors: ['A file this imports names a connection you may not use: helpers. A save may name only connections you may use.'],
+      catalogNotes: [],
+      refused: { kind: 'connections', connections: [], unreadableFiles: ['helpers'] },
+    });
+    expect(JSON.stringify(refused)).not.toContain('Finance');
+    expect(stored()).toEqual(before);
   });
 
   it("asks for use on a remote module's own connection when a construction names none", async () => {
@@ -566,6 +597,70 @@ describe('every connection the file and its imports name needs use', () => {
 
     expect(refused).toMatchObject({ ok: false, refused: { kind: 'connections' } });
     expect(stored()).toEqual(before);
+  });
+});
+
+describe('statements apply only when creating', () => {
+  it('refuses a save that overwrites, by id or by name, telling the author to use setAccess, and stores nothing', async () => {
+    const deals = await existing(manualOnly('deals'), { read: [user(ALICE)], write: [user(ALICE)] });
+    const before = stored();
+    const refusal = {
+      ok: false,
+      errors: [STATEMENTS_ON_OVERWRITE_REFUSAL],
+      catalogNotes: [],
+      refused: { kind: 'statement', message: STATEMENTS_ON_OVERWRITE_REFUSAL },
+    };
+    expect(STATEMENTS_ON_OVERWRITE_REFUSAL).toMatch(/only when creating.*setAccess/);
+
+    expect(await asAlice({ id: deals, source: manualOnly('deals'), statements: STATEMENTS })).toEqual(refusal);
+    expect(await asAlice({ source: manualOnly('deals'), statements: STATEMENTS })).toEqual(refusal);
+    expect(stored()).toEqual(before);
+    expect(await asAlice({ id: deals, source: manualOnly('deals') })).toMatchObject({ ok: true, movementId: deals });
+  });
+
+  it('is told a reader\'s refusal first, so the statements show nothing of what she may not change', async () => {
+    const deals = await existing(manualOnly('deals'), { read: [user(ALICE)], write: [user(BOB)] });
+    expect(await asAlice({ id: deals, source: manualOnly('deals'), statements: STATEMENTS })).toMatchObject({ refused: { kind: 'read_only' } });
+  });
+});
+
+describe('what the checks decided is what the write does', () => {
+  it('never recreates a row deleted after the name was checked, by name or by id', async () => {
+    const deals = await existing(manualOnly('deals'), { read: [user(ALICE)], write: [user(ALICE)] });
+    const gone = () => {
+      db.__tables.movement = db.__tables.movement.filter((row) => row.id !== deals);
+    };
+
+    mockRace.beforeWrite = gone;
+    const byName = await asAlice({ source: manualOnly('deals') });
+    expect(byName).toMatchObject({ ok: false, refused: { kind: 'name_gone', name: 'deals' } });
+    expect(db.__tables.movement).toEqual([]);
+    expect(mockAccess.stated).toEqual([]);
+
+    const again = await existing(manualOnly('deals'), { read: [user(ALICE)], write: [user(ALICE)] });
+    mockRace.beforeWrite = () => {
+      db.__tables.movement = db.__tables.movement.filter((row) => row.id !== again);
+    };
+    const byId = await asAlice({ id: again, source: manualOnly('deals') });
+    expect(byId).toEqual({ ok: false, errors: [`movement ${again} not found`], catalogNotes: [] });
+    expect(db.__tables.movement).toEqual([]);
+  });
+
+  it('answers a name taken after the check as taken, and overwrites nothing and states nothing', async () => {
+    // Another creator, or a run's save, lands first.
+    mockRace.beforeWrite = () => {
+      db.__tables.movement.push({ id: 'rival', team_id: TEAM, name: 'fresh', source: 'the rival text', created_at: new Date(), updated_at: new Date() });
+    };
+    const result = await asAlice({ source: manualOnly('fresh'), statements: STATEMENTS });
+
+    expect(result).toEqual({
+      ok: false,
+      errors: ['The name "fresh" is taken. Save under another name.'],
+      catalogNotes: [],
+      refused: { kind: 'name_taken', name: 'fresh' },
+    });
+    expect(db.__tables.movement.map((row) => ({ id: row.id, source: row.source }))).toEqual([{ id: 'rival', source: 'the rival text' }]);
+    expect(mockAccess.stated).toEqual([]);
   });
 });
 

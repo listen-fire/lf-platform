@@ -53,7 +53,7 @@ jest.mock('../../../access/decide', () => ({ accessTo: jest.fn(async () => true)
 jest.mock('../save_access', () => ({
   connectionsNamed: jest.fn(async () => []),
   unusableConnections: jest.fn(async () => []),
-  connectionsRefusal: (unusable: { file: string }[]) => ({ message: `names connections you may not use (in ${unusable.map((u) => u.file).join(', ')})` }),
+  connectionsRefusal: async (_saver: unknown, unusable: { file: string }[]) => ({ message: `names connections you may not use (in ${unusable.map((u) => u.file).join(', ')})` }),
 }));
 
 import { LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalog, mockCatalogSnapshot, type LanguageVersion, type PluginOutput, type PluginSpec, type ResolveFile } from 'movement-lang';
@@ -66,6 +66,7 @@ import { getMovementRow, listMovementRows, lockMovementRow, recordUpgradeCheck, 
 import { saveMovement } from '../provision';
 import { bringUpListensLater } from '../listens_up';
 import { accessTo } from '../../../access/decide';
+import { holdsOnMoving } from '../upgrade_holds';
 import { connectionsNamed, unusableConnections } from '../save_access';
 import {
   runDeployCheck,
@@ -1534,6 +1535,7 @@ describe('a person upgrading needs write on what moves', () => {
   beforeEach(() => {
     advance.mockClear();
     jest.mocked(accessTo).mockReset().mockResolvedValue(true);
+    jest.mocked(holdsOnMoving).mockReset().mockResolvedValue([]);
     jest.mocked(connectionsNamed).mockClear();
     jest.mocked(unusableConnections).mockReset().mockResolvedValue([]);
     jest.mocked(assessMovementValidity).mockReturnValue({ status: 'valid', reason: null } as never);
@@ -1549,6 +1551,21 @@ describe('a person upgrading needs write on what moves', () => {
     expect(result).toEqual(expect.objectContaining({ status: 'blocked', detail: expect.stringContaining('that you may not change') }));
     expect(JSON.stringify(result)).not.toContain('"lib"');
     expect(advance).not.toHaveBeenCalled();
+  });
+
+  it('names no member in a hold either, when one it moves with may not be changed by them', async () => {
+    jest.mocked(getMovementRow).mockResolvedValueOnce(rows[1]);
+    jest.mocked(listMovementRows).mockResolvedValueOnce(rows);
+    jest.mocked(accessTo).mockImplementation(async (_principal, asked) => asked.target.id !== 'lib');
+    jest.mocked(holdsOnMoving).mockResolvedValue(['a run is in flight on lib']);
+
+    const result = await upgradeMovement({ teamId: 'team-1', id: 'app', acknowledge: true, by, validate, advance });
+
+    expect(result).toEqual(expect.objectContaining({ status: 'blocked', detail: expect.stringContaining('that you may not change') }));
+    expect(result).not.toHaveProperty('movesWith');
+    expect(JSON.stringify(result)).not.toContain('"lib"');
+    expect(JSON.stringify(result)).not.toContain('in flight');
+    expect(holdsOnMoving).not.toHaveBeenCalled();
   });
 
   it('needs write alone for its own rewrites, and use on the connections the texts name under applyAllFixes', async () => {

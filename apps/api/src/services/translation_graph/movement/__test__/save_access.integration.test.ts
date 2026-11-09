@@ -18,6 +18,7 @@ import { userPrincipal } from '../../../principal';
 import { ProvisioningService } from '../../../provisioning';
 import { saveMovement } from '../provision';
 import { inOneTransaction } from '../save_access';
+import { MovementGoneError, MovementNameTakenError, writeMovementRow } from '../store';
 
 jest.mock('../../../credentials/credential_lifecycle', () => ({ credentialLifecycle: () => undefined }));
 jest.mock('../../../../lib/slack', () => ({ sendSlackNotification: async () => undefined }));
@@ -88,6 +89,30 @@ describe('the save rule (real Postgres)', () => {
         }),
       ),
     ).rejects.toThrow();
+    expect(await movements()).toEqual([]);
+  });
+
+  it('answers a second creation of a name as taken, from the database\'s own constraint, and leaves the first alone', async () => {
+    const first = await writeMovementRow({ teamId, intent: { kind: 'create' }, name: 'Deals', source: 'first' });
+    await expect(writeMovementRow({ teamId, intent: { kind: 'create' }, name: 'Deals', source: 'second' })).rejects.toBeInstanceOf(
+      MovementNameTakenError,
+    );
+    expect(await movements()).toEqual([expect.objectContaining({ id: first.id, source: 'first' })]);
+
+    const principal = asAlice();
+    const statements = { read: [{ kind: 'team' }], write: [{ kind: 'user', userId: alice }], fire: [{ kind: 'anyone' }] } as const;
+    const raced = await Promise.all([1, 2].map(() => runWithPrincipal(principal, () => saveMovement({ teamId, source: RUN_NOW, name: 'Raced', audience: { for: principal }, userId: alice, statements }))));
+    expect(raced.filter((r) => r.ok)).toHaveLength(1);
+    expect(raced.filter((r) => !r.ok)).toEqual([expect.objectContaining({ refused: { kind: 'name_taken', name: 'Raced' } })]);
+    expect((await movements()).filter((row) => row.name === 'Raced')).toHaveLength(1);
+  });
+
+  it('never recreates the row it was asked to overwrite once it is deleted', async () => {
+    const row = await writeMovementRow({ teamId, intent: { kind: 'create' }, name: 'Deals', source: 'first' });
+    await getAutomationsQb(['movement']).deleteFrom('movement').where('id', '=', row.id as MovementId).execute();
+    await expect(writeMovementRow({ teamId, intent: { kind: 'overwrite', id: row.id }, name: 'Deals', source: 'second' })).rejects.toBeInstanceOf(
+      MovementGoneError,
+    );
     expect(await movements()).toEqual([]);
   });
 });

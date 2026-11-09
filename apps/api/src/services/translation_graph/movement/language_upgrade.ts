@@ -1243,6 +1243,22 @@ export async function upgradeMovement(input: {
   const group = importGroupOf(movement, await listMovementRows(input.teamId));
   const holdsDetail = (found: readonly string[]): string =>
     `${found.join('; ')}${group.length > 1 ? '; it moves together with the automations and libraries it shares imports with, so nothing moved' : ''}`;
+  const by = input.by;
+  if (by !== undefined) {
+    const writable = await Promise.all(
+      group.map((member) => accessTo(by, { target: { thing: 'automation', id: member.id }, verb: 'write' })),
+    );
+    // Before any hold: a hold names the members it moves with, and a member the
+    // upgrader may not see must not be named.
+    if (writable.some((may) => !may)) {
+      return {
+        status: 'blocked',
+        ...base,
+        diagnostics: [],
+        detail: 'it moves together with automations or libraries it shares imports with that you may not change, so nothing moved',
+      };
+    }
+  }
   const holds = await holdsOnMoving(group);
   if (holds.length > 0) {
     const others = group.filter((member) => member.id !== movement.id);
@@ -1253,21 +1269,6 @@ export async function upgradeMovement(input: {
       diagnostics: [],
       detail: holdsDetail(holds),
     };
-  }
-  const by = input.by;
-  if (by !== undefined) {
-    const writable = await Promise.all(
-      group.map((member) => accessTo(by, { target: { thing: 'automation', id: member.id }, verb: 'write' })),
-    );
-    // Not named: a member the upgrader may not see stays unseen.
-    if (writable.some((may) => !may)) {
-      return {
-        status: 'blocked',
-        ...base,
-        diagnostics: [],
-        detail: 'it moves together with automations or libraries it shares imports with that you may not change, so nothing moved',
-      };
-    }
   }
   const movingWith = new Map<string, ImportedFile>();
   const checked: CheckedMember[] = [];
@@ -1306,7 +1307,7 @@ export async function upgradeMovement(input: {
         ),
       )
     ).flat();
-    if (unusable.length > 0) return { status: 'blocked', ...shown, diagnostics, detail: connectionsRefusal(unusable).message };
+    if (unusable.length > 0) return { status: 'blocked', ...shown, diagnostics, detail: (await connectionsRefusal(by, unusable)).message };
   }
   if (checked.some((member) => member.held)) {
     return { status: 'blocked', ...shown, diagnostics, ...(own.held ? {} : { detail: heldDetail(heldBy) }) };

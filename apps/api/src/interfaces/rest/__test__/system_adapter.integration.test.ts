@@ -26,7 +26,7 @@ import { contextInjector } from '../../../lib/middleware/context';
 import { createAuthenticationHandler } from '../../../lib/middleware/authentication';
 import { authorisationHandler } from '../../../lib/middleware/authorisation';
 import { defersToSystemCaller } from '../../../services/system_auth';
-import { upsertMovementRow } from '../../../services/translation_graph/movement/store';
+import { writeMovementRow } from '../../../services/translation_graph/movement/store';
 import { settleRun, startRun } from '../../../services/lf_store/runs';
 import { noteUnjudged } from '../../../services/lf_store/records_door';
 import { DEPRECATED_VERSION, RELEASE_APPLIED, RUN_PAUSED, VALIDATION_ISSUE } from '@listen-fire/system';
@@ -81,7 +81,7 @@ beforeAll(async () => {
   teamA = await makeOwner();
   teamB = await makeOwner();
   knowledgeKey = (await ApiKeyService.createForOwner({ name: 'reader', scopes: ['knowledge'], teamId: teamA.teamId, createdBy: teamA.userId })).key;
-  syncMovementId = (await upsertMovementRow({ teamId: teamA.teamId, name: 'Nightly Sync', source: 'function sync() {}\n' })).id;
+  syncMovementId = (await writeMovementRow({ teamId: teamA.teamId, intent: { kind: 'create' }, name: 'Nightly Sync', source: 'function sync() {}\n' })).id;
   const app = express();
   app.use(jsonBodyParser);
   app.use(contextInjector);

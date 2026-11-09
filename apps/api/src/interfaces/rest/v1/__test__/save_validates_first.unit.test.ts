@@ -6,7 +6,15 @@
 import type { AuthoringDiagnostic, TeamMovementValidation } from '../../../../services/translation_graph/movement/authoring';
 
 const validateMock = jest.fn<Promise<TeamMovementValidation>, [unknown]>();
-jest.mock('../../../../services/access/decide', () => jest.requireActual('../../../../test/access_defaults').teamDefaults());
+const mockHidden = new Set<string>();
+jest.mock('../../../../services/access/decide', () => {
+  const defaults = jest.requireActual('../../../../test/access_defaults').teamDefaults();
+  return {
+    ...defaults,
+    accessTo: (principal: unknown, asked: { target: { id: string } }) =>
+      mockHidden.has(asked.target.id) ? Promise.resolve(false) : defaults.accessTo(principal, asked),
+  };
+});
 jest.mock('../../../../services/translation_graph/movement/authoring', () => ({
   ...jest.requireActual('../../../../services/translation_graph/movement/authoring'),
   validateMovementForTeam: (input: unknown) => validateMock(input),
@@ -116,6 +124,7 @@ beforeEach(() => {
   saveMovementMock.mockReset().mockResolvedValue(shipped);
   getMovementMock.mockReset();
   getMovementRowMock.mockReset();
+  mockHidden.clear();
 });
 
 describe('saveAutomation validates first', () => {
@@ -166,6 +175,22 @@ describe('saveAutomation validates first', () => {
     validateMock.mockResolvedValue(validation({}));
     await call(saveMovementHandler, { body: { source: 'clean', id: 'm1' } });
     expect(validateMock).toHaveBeenCalledWith(expect.objectContaining({ source: 'clean', languageVersion: '1' }));
+  });
+
+  it('answers an automation the caller may not read exactly as it answers one that is not there', async () => {
+    const hidden = { id: 'hidden', languageVersion: '0.12.13', validityStatus: 'valid', validityCheckedAgainst: '0.12.13' };
+    getMovementRowMock.mockImplementation(async ({ id }: { id: string }) => (id === 'hidden' ? hidden : null));
+    mockHidden.add('hidden');
+    validateMock.mockResolvedValue(validation({ diagnostics: [diagnostic('error')] }));
+
+    const seenAsMissing = await call(saveMovementHandler, { body: { source: 'broken', id: 'missing' } });
+    const asked = await call(saveMovementHandler, { body: { source: 'broken', id: 'hidden' } });
+
+    expect(seenAsMissing.body).toEqual({ error: "No automation 'missing' in this team." });
+    expect(JSON.stringify(asked.body)).toEqual(JSON.stringify(seenAsMissing.body).replace('missing', 'hidden'));
+    expect(asked.statusCode).toBe(seenAsMissing.statusCode);
+    expect(validateMock).not.toHaveBeenCalled();
+    expect(saveMovementMock).not.toHaveBeenCalled();
   });
 
   it('ships text with errors when the user consented, without the refusal', async () => {

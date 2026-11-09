@@ -19,7 +19,7 @@ import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
 import { getDatabaseUrl } from '../../../prisma';
 import { cleanupTeam } from '../../../test/harness/cleanup';
 import { saveMovement } from '../../translation_graph/movement/provision';
-import { deleteMovementRow, upsertMovementRow } from '../../translation_graph/movement/store';
+import { deleteMovementRow, getMovementRowByName, writeMovementRow } from '../../translation_graph/movement/store';
 import { mintMovementVersionIfChanged } from '../../translation_graph/movement/version_store';
 import { clearGuardPaused, setGuardPaused } from '../../loop_guard/pause';
 import { persistCredential } from '../../credentials/persist_credential';
@@ -88,7 +88,8 @@ async function ship(name: string, source: string = MANUAL(name.replaceAll('/', '
 
 /** A shipped movement outside the save gate (no listener). */
 async function seed(name: string, source: string): Promise<string> {
-  const row = await upsertMovementRow({ teamId: team, name, source });
+  const held = await getMovementRowByName({ teamId: team, name });
+  const row = await writeMovementRow({ teamId: team, intent: held === null ? { kind: 'create' } : { kind: 'overwrite', id: held.id }, name, source });
   await mintMovementVersionIfChanged({ teamId: team, movementId: row.id, source, languageVersion: LANGUAGE_VERSION });
   return row.id;
 }

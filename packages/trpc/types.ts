@@ -1200,6 +1200,9 @@ export type SaveRefusal = {
     kind: 'name_taken';
     name: string;
 } | {
+    kind: 'name_gone';
+    name: string;
+} | {
     kind: 'missing_statement';
     missing: StatedVerb<'automation'>[];
 } | {
@@ -1211,6 +1214,7 @@ export type SaveRefusal = {
         connection: string;
         file: string;
     }[];
+    unreadableFiles: string[];
 };
 
 /** Why a listen runs nothing until a person resumes it. */

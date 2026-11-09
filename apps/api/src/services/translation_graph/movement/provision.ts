@@ -1,6 +1,6 @@
 // Text-canonical movement persistence + listener reconciliation.
 //
-// `saveMovement` is the public entry point: it upserts the canonical
+// `saveMovement` is the public entry point: it writes the canonical
 // `automations.movement` row FIRST (the program text survives any failed
 // gate), then provisions the file's DERIVED trigger rows and records the
 // legacy first-listener link on the row.
@@ -95,12 +95,14 @@ import type { CatalogAudience } from './audience';
 import { checkCreation, stateCreation, StatementRefusedError, type CreationStatements } from '../../access/decide';
 import {
   READ_ONLY_REFUSAL,
+  STATEMENTS_ON_OVERWRITE_REFUSAL,
   accessWarnings,
   connectionsNamed,
   connectionsRefusal,
   creationStatements,
   inOneTransaction,
   missingStatementRefusal,
+  nameGoneRefusal,
   nameTakenRefusal,
   overwriteRefusal,
   saverOf,
@@ -121,8 +123,11 @@ import {
   pendingUpgradeDiagnostics,
   recordDerivedTriggerLink,
   recordValidityOutcome,
-  upsertMovementRow,
+  writeMovementRow,
+  MovementGoneError,
+  MovementNameTakenError,
   type DerivedTriggerRow,
+  type MovementWriteIntent,
   type MovementRow,
   type MovementValidityStatus,
 } from './store';
@@ -1159,7 +1164,7 @@ async function movementNameCollisionWarnings(input: {
 }
 
 /**
- * Save a movement file: upsert the canonical source row FIRST, then gate +
+ * Save a movement file: write the canonical source row FIRST, then gate +
  * reconcile the derived listeners. The gate is the runtime-validity
  * consent gate (decision 3b) — execution reads THIS text through the
  * movement engine:
@@ -1249,7 +1254,13 @@ function onceCommitted(tell: () => void): void {
  * starts anything. Its next ordinary save ships it, under the new pin.
  */
 export async function moveNeverShippedPin(input: { teamId: string; id: string; name: string; source: string; to: LanguageVersion }): Promise<void> {
-  const row = await upsertMovementRow({ teamId: input.teamId, id: input.id, name: input.name, source: input.source, languageVersion: input.to });
+  const row = await writeMovementRow({
+    teamId: input.teamId,
+    intent: { kind: 'overwrite', id: input.id },
+    name: input.name,
+    source: input.source,
+    languageVersion: input.to,
+  });
   onceCommitted(() => emitMovementChange({ teamId: input.teamId, movementId: row.id, action: 'saveMovement' }));
 }
 
@@ -1359,13 +1370,14 @@ async function runSave(
     };
   }
 
-  // A person's save, decided before anything is stored: a save by name over an
-  // automation overwrites it, so it is a write on it like a save by id; one
-  // that names nothing there creates it, with its statements.
+  // What this write is, decided once here and handed to the store as it is: a
+  // save by name over an automation overwrites it, so it is a write on it like
+  // a save by id; one that names nothing there creates it, with its statements.
+  const over = existing ?? (await getMovementRowByName({ teamId: input.teamId, name }));
+  const intent: MovementWriteIntent = over === null ? { kind: 'create' } : { kind: 'overwrite', id: over.id };
   let creating: CreationStatements | undefined;
   let named: Awaited<ReturnType<typeof connectionsNamed>> = [];
   if (saver !== undefined) {
-    const over = existing ?? (await getMovementRowByName({ teamId: input.teamId, name }));
     if (over !== null && existing === null) {
       const refusal = await overwriteRefusal(saver, over);
       // A name is unique in its team, so one held by an automation the saver may
@@ -1373,6 +1385,9 @@ async function runSave(
       // what holds it.
       if (refusal === 'unseen') return refused({ kind: 'name_taken', name }, nameTakenRefusal(name));
       if (refusal === 'read_only') return refused({ kind: 'read_only' }, READ_ONLY_REFUSAL);
+    }
+    if (over !== null && input.statements !== undefined) {
+      return refused({ kind: 'statement', message: STATEMENTS_ON_OVERWRITE_REFUSAL }, STATEMENTS_ON_OVERWRITE_REFUSAL);
     }
     if (over === null) {
       const given = creationStatements(input.statements);
@@ -1390,15 +1405,15 @@ async function runSave(
     named = await timer.step('connections', () => connectionsNamed({ teamId: input.teamId, file: name, source: input.source }));
     const unusable = await unusableConnections(saver, named);
     if (unusable.length > 0) {
-      const refusal = connectionsRefusal(unusable);
+      const refusal = await connectionsRefusal(saver, unusable);
       return refused(refusal.refused, refusal.message);
     }
   }
 
   const persist = (): Promise<MovementRow> =>
-    upsertMovementRow({
+    writeMovementRow({
       teamId: input.teamId,
-      ...(input.id !== undefined ? { id: input.id } : {}),
+      intent,
       name,
       source: input.source,
       ...(input.description !== undefined ? { description: input.description } : {}),
@@ -1406,17 +1421,28 @@ async function runSave(
       ...(input.languageUpgrade !== undefined ? { languageVersion: input.languageUpgrade.to } : {}),
     });
   const statements = creating;
-  const row = await timer.step('persist', () =>
-    saver === undefined || statements === undefined
-      ? persist()
-      : // The automation and what it states commit together: a save never
-        // leaves one with no statement, which would admit nobody.
-        inOneTransaction(async () => {
-          const created = await persist();
-          await stateCreation(saver, { target: { thing: 'automation', id: created.id }, statements });
-          return created;
-        }),
-  );
+  let row: MovementRow;
+  try {
+    row = await timer.step('persist', () =>
+      saver === undefined || statements === undefined
+        ? persist()
+        : // The automation and what it states commit together: a save never
+          // leaves one with no statement, which would admit nobody.
+          inOneTransaction(async () => {
+            const created = await persist();
+            await stateCreation(saver, { target: { thing: 'automation', id: created.id }, statements });
+            return created;
+          }),
+    );
+  } catch (error) {
+    // Between the checks above and the write, the name was taken or the row
+    // deleted. Neither is repaired by writing something nobody decided.
+    if (error instanceof MovementNameTakenError) return refused({ kind: 'name_taken', name }, nameTakenRefusal(name));
+    if (error instanceof MovementGoneError) {
+      return input.id !== undefined ? missing(input.id) : refused({ kind: 'name_gone', name }, nameGoneRefusal(name));
+    }
+    throw error;
+  }
   const warned = async (listeners: readonly ProvisionedListener[]): Promise<string[]> =>
     saver === undefined ? [] : accessWarnings({ teamId: input.teamId, automationId: row.id, named, listeners });
 

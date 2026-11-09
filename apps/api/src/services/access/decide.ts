@@ -293,9 +293,6 @@ async function setStatement<T extends Thing>(
   stated: { target: Target<T>; verb: StatedVerb<T>; grantees: readonly Grantee[] },
 ): Promise<void> {
   const { target, verb, grantees } = stated;
-  if (grantees.length === 0) {
-    throw new StatementRefusedError('empty', `The ${verb} list can't be emptied: name the team, or someone on it.`);
-  }
   const teamId = await StatementStore.teamOf(target);
   if (teamId === undefined) {
     throw new StatementRefusedError('not_found', `There is no such ${target.thing}.`);
