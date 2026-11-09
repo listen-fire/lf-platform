@@ -11,6 +11,7 @@ import { userProcedure as sharedUserProcedure } from '../procedures';
 import { UserService } from '../../../services/user';
 import { WHATSAPP_MOVEMENTS_NUMBER } from '../../../services/translation_graph/adapters/whatsapp';
 import { LISTEN_FIRE_VERSION } from '../../../constants';
+import { decidesEach, type Decision } from '../../access_route';
 
 const userSettingsRouter = (procedure: typeof trpc.procedure) => {
   const userProcedure = sharedUserProcedure(procedure);
@@ -103,5 +104,17 @@ const userSettingsRouter = (procedure: typeof trpc.procedure) => {
       }),
   });
 };
+
+const EXEMPTION: Decision = { exempt: "a person's own settings, no automation" };
+
+decidesEach('userSettings', {
+  getDeployment: EXEMPTION,
+  getPhoneNumber: EXEMPTION,
+  updatePhoneNumber: EXEMPTION,
+  startPhoneVerification: EXEMPTION,
+  confirmPhoneVerification: EXEMPTION,
+  getEmails: EXEMPTION,
+  updateUsername: EXEMPTION,
+});
 
 export { userSettingsRouter };

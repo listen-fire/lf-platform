@@ -39,6 +39,8 @@ import { describeSource } from '../../../lib/automation/describe';
 import { resolveAutomationName } from '../../../lib/automation/naming';
 import { listAskRecordsForTeam } from '../../../services/interaction/ask_records';
 import { userProcedure as sharedUserProcedure } from '../procedures';
+import { decidesEach, readableAmong } from '../../access_route';
+import { Whose } from '../../../services/access/whose';
 
 /**
  * Tri-state discriminator. Drives which sections the page renders.
@@ -142,7 +144,7 @@ const homeRouter = (procedure: typeof trpc.procedure) => {
         .limit(1)
         .executeTakeFirst();
 
-      const triggers = await getAutomationsQb(['trigger'])
+      const listed = await getAutomationsQb(['trigger'])
         .selectFrom('trigger')
         .where('team_id', '=', teamId)
         .where(notLeftover)
@@ -150,7 +152,7 @@ const homeRouter = (procedure: typeof trpc.procedure) => {
         .orderBy('created_at', 'desc')
         .execute();
 
-      if (!nodeRow && triggers.length === 0) {
+      if (!nodeRow && listed.length === 0) {
         return {
           kind: 'empty',
           automations: [],
@@ -159,6 +161,13 @@ const homeRouter = (procedure: typeof trpc.procedure) => {
           stats: EMPTY_STATS,
         };
       }
+
+      // Only what the caller may read is shown or counted. Whether the team has
+      // made anything at all (above) is the team's, so it reads every listen.
+      const triggers = await readableAmong(listed, {
+        automationOf: (t) => (t.movement_id === null ? null : String(t.movement_id)),
+        teamIds: [teamId],
+      });
 
       // ---- Liveness ---------------------------------------------------
       // A trigger is a movement's `listen` dispatch index — it carries no
@@ -338,8 +347,13 @@ const homeRouter = (procedure: typeof trpc.procedure) => {
         });
 
       // ---- Things waiting on you -------------------------------------
-      const openAsks = (await listAskRecordsForTeam(teamId)).filter(
-        (record) => record.state === 'open',
+      const openRecords = (await listAskRecordsForTeam(teamId)).filter((record) => record.state === 'open');
+      const askOwners = await Whose.automationsOfAsks({ askIds: openRecords.map((r) => r.askId), teamIds: [teamId] });
+      const openAsks = (
+        await readableAmong(openRecords, {
+          automationOf: (r) => askOwners.get(r.askId)?.automationId ?? null,
+          teamIds: [teamId],
+        })
       ).length;
 
       const thingsWaiting: DashboardThingWaiting[] = [];
@@ -476,5 +490,7 @@ function titleCase(value: string): string {
     .replace(/[-_]/g, ' ')
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
+
+decidesEach('home', { getDashboard: { thing: 'automation', verb: 'read' } });
 
 export { homeRouter };

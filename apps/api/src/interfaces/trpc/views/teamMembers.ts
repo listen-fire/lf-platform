@@ -26,6 +26,7 @@ import { trpc } from '../trpc';
 import { UserService } from '../../../services/user';
 import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
 import { userProcedure as sharedUserProcedure } from '../procedures';
+import { decidesEach, type Decision } from '../../access_route';
 import { neverAsAny } from 'movement-engine/public/types';
 
 /** Throw unless the acting user holds write access on the team. */
@@ -409,5 +410,20 @@ const teamMembersRouter = (procedure: typeof trpc.procedure) => {
       }),
   });
 };
+
+const EXEMPTION: Decision = { exempt: 'team membership, no automation' };
+
+decidesEach('teamMembers', {
+  overview: EXEMPTION,
+  invite: EXEMPTION,
+  revokeInvite: EXEMPTION,
+  remove: EXEMPTION,
+  addMember: EXEMPTION,
+  createServiceAccount: EXEMPTION,
+  setAccess: EXEMPTION,
+  rename: EXEMPTION,
+  addEmail: EXEMPTION,
+  addPhone: EXEMPTION,
+});
 
 export { teamMembersRouter };

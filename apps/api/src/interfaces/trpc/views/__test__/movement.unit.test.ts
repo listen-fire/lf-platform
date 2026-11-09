@@ -17,6 +17,8 @@
  * `getCoreQb` are unused by the code under test but still stubbed (empty)
  * so an accidental call fails loudly instead of picking up stale rows.
  */
+jest.mock('../../../../services/access/decide', () => jest.requireActual('../../../../test/access_defaults').teamDefaults());
+
 function makeQbStub(rowsByTable: Record<string, unknown[]>) {
   const stub: any = {
     where: () => stub,

@@ -18,7 +18,6 @@ import { Router, type RequestHandler } from 'express';
 import { z } from 'zod';
 import { currentPrincipal } from 'principal';
 
-import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { AskId } from '../../../generated/kysely/asks/Ask';
 
 import { answerForTeam, listOpenAsksForTeam } from '../../../services/interaction/answer_surfaces';
@@ -30,6 +29,9 @@ import OpsEventType from '../../../generated/kysely/public/OpsEventType';
 import OpsSeverity from '../../../generated/kysely/public/OpsSeverity';
 import { UserService } from '../../../services/user';
 import { requireScope } from './require_scope';
+import { decidingRouter, readableAmong, refusalOn } from '../../access_route';
+import { Whose } from '../../../services/access/whose';
+import { teamIdSchema } from '../../../lib/team_id';
 
 const AUTOMATION_SCOPE = 'automation';
 
@@ -59,7 +61,7 @@ const listAsksHandler: RequestHandler = async (_req, res) => {
     const names = await teamNames(teams);
     const perTeam = await Promise.all(
       teams.map(async (t) =>
-        (await listOpenAsksForTeam(t as unknown as TeamId)).map((a) => ({
+        (await readableAsks(t)).map((a) => ({
           requestId: a.requestId,
           interactionType: a.interactionType,
           resultType: a.resultType,
@@ -76,6 +78,13 @@ const listAsksHandler: RequestHandler = async (_req, res) => {
   }
 };
 
+/** The team's open asks whose automation the caller may read. */
+async function readableAsks(teamId: string) {
+  const asks = await listOpenAsksForTeam(teamIdSchema.parse(teamId));
+  const owners = await Whose.automationsOfAsks({ askIds: asks.map((a) => String(a.requestId)), teamIds: [teamId] });
+  return readableAmong(asks, { automationOf: (a) => owners.get(String(a.requestId))?.automationId ?? null, teamIds: [teamId] });
+}
+
 const answerAskSchema = z.object({
   answer: z.unknown().optional(),
 });
@@ -87,20 +96,18 @@ const answerAskHandler: RequestHandler = async (req, res) => {
   }
 
   const requestId = req.params.id as unknown as AskId;
-  // Resolve the ask across every team the connection covers — answer it in
-  // whichever team owns it. `not_found` in one team just means it lives in
-  // another; only surface the final miss.
-  const teams = await teamSetForReads();
-  let lastOutcome: Awaited<ReturnType<typeof answerForTeam>> | undefined;
-  for (const t of teams) {
-    lastOutcome = await answerForTeam({
-      teamId: t as unknown as TeamId,
-      requestId,
-      answer: parseResult.data.answer,
-    });
-    if (lastOutcome.ok || lastOutcome.reason !== 'not_found') break;
+  // Answered in whichever of the connection's teams owns the ask. Answering
+  // needs read on the automation that asked; one the caller may not read is
+  // not found, as an ask that is not there.
+  const owner = await Whose.automationOfAsk({ askId: String(requestId), teamIds: await teamSetForReads() });
+  if (owner === undefined || (await refusalOn({ automationId: owner.automationId, verb: 'read' })) !== undefined) {
+    return res.status(404).json({ error: 'not_found' });
   }
-  const outcome = lastOutcome!;
+  const outcome = await answerForTeam({
+    teamId: teamIdSchema.parse(owner.teamId),
+    requestId,
+    answer: parseResult.data.answer,
+  });
   if (!outcome.ok) {
     const status = outcome.reason === 'not_found' ? 404 : outcome.reason === 'already_resolved' ? 409 : 400;
     return res.status(status).json({ error: outcome.reason, message: outcome.message });
@@ -173,12 +180,14 @@ const automationRouter: ReturnType<typeof Router> = Router();
 
 automationRouter.use(requireScope(AUTOMATION_SCOPE));
 
-// asks
-automationRouter.get('/reviews', listAsksHandler);
-automationRouter.post('/reviews/:id/answer', answerAskHandler);
+const route = decidingRouter(automationRouter, '/v1/automation');
+
+// asks: answering one needs read on the automation that asked it
+route.get('/reviews', { thing: 'automation', verb: 'read' }, listAsksHandler);
+route.post('/reviews/:id/answer', { thing: 'automation', verb: 'read' }, answerAskHandler);
 
 // feedback → ops feed
-automationRouter.post('/feedback', feedbackHandler);
+route.post('/feedback', { exempt: 'a report to the operator, no automation' }, feedbackHandler);
 
 // public inboxes — inbound keys a team has opened to mail from anyone
 mountPublicInboxRoutes(automationRouter);

@@ -735,6 +735,17 @@ async function buildInvocation(input: RunMovementNowInput): Promise<ManualInvoca
  * `movementId` the SAVED source is the gate: it must parse and listen to the
  * manual unit, and that listen must be provisioned.
  */
+/**
+ * What a run of something that is not there answers. A route that may not
+ * show the caller the automation answers the same, so the name is not
+ * confirmed.
+ */
+export function nothingToRun(asked: { movementId: string } | { triggerId: string }): MovementRunNowFailure {
+  return 'triggerId' in asked
+    ? { ok: false, errors: [`trigger ${asked.triggerId} is no manual listen of this team: nothing to run`] }
+    : { ok: false, errors: [`movement ${asked.movementId} not found`] };
+}
+
 async function resolveManualListen(
   input: RunMovementNowInput,
   /** The movement `movementId` names, when the caller read it already. */
@@ -743,7 +754,7 @@ async function resolveManualListen(
   if (input.triggerId !== undefined) {
     const listen = await savedListenOf(input.triggerId as TriggerId);
     if (listen === null || listen.teamId !== input.teamId || listen.plan.adapter !== MANUAL_ADAPTER_TYPE) {
-      return { ok: false, errors: [`trigger ${input.triggerId} is no manual listen of this team: nothing to run`] };
+      return nothingToRun({ triggerId: input.triggerId });
     }
     return listen;
   }
@@ -753,7 +764,7 @@ async function resolveManualListen(
 
   const row = read !== undefined ? read : await getMovementRow({ teamId: input.teamId, id: input.movementId });
   if (!row) {
-    return { ok: false, errors: [`movement ${input.movementId} not found`] };
+    return nothingToRun({ movementId: input.movementId });
   }
   // A pin this build does not run is refused before this release's parser
   // reads its text.

@@ -1,6 +1,7 @@
 import { trpc } from '../trpc';
 import { userProcedure as sharedUserProcedure } from '../procedures';
 import { queryValuations, valuationQueryInput } from '../../../lib/valuations/query';
+import { decidesEach, type Decision } from '../../access_route';
 
 /**
  * The valuation query surface: one query over the roll-up's leaf lots, filtered
@@ -25,5 +26,11 @@ const valuationsRouter = (procedure: typeof trpc.procedure) => {
     query: userProcedure.input(valuationQueryInput).query(({ input }) => queryValuations(input)),
   });
 };
+
+const EXEMPTION: Decision = { exempt: 'valuation data, no automation' };
+
+decidesEach('valuations', {
+  query: EXEMPTION,
+});
 
 export { valuationsRouter };

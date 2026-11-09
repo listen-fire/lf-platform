@@ -74,4 +74,4 @@ function platformAdminProcedure(procedure: typeof trpc.procedure) {
   });
 }
 
-export { userProcedure, platformAdminProcedure };
+export { userProcedure, platformAdminProcedure, actingPrincipal };

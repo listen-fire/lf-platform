@@ -6,6 +6,7 @@
 import type { AuthoringDiagnostic, TeamMovementValidation } from '../../../../services/translation_graph/movement/authoring';
 
 const validateMock = jest.fn<Promise<TeamMovementValidation>, [unknown]>();
+jest.mock('../../../../services/access/decide', () => jest.requireActual('../../../../test/access_defaults').teamDefaults());
 jest.mock('../../../../services/translation_graph/movement/authoring', () => ({
   ...jest.requireActual('../../../../services/translation_graph/movement/authoring'),
   validateMovementForTeam: (input: unknown) => validateMock(input),
@@ -233,6 +234,7 @@ describe('validateAutomation takes the version as a string or, this release, an 
 
 describe('listAutomations / getAutomation views carry the pin as a string', () => {
   it('getAutomation answers languageVersion and checkedAgainst as strings', async () => {
+    getMovementRowMock.mockResolvedValue({ id: 'm1', teamId: 'team-1', languageVersion: '0.12.0' });
     getMovementMock.mockResolvedValue({ id: 'm1', languageVersion: '0.12.0', validityCheckedAgainst: '4' });
     const res = await call(getMovementHandler, { body: {}, params: { idOrName: 'm1' } });
     expect(res.body).toMatchObject({ languageVersion: '0.12.0', checkedAgainst: '4' });

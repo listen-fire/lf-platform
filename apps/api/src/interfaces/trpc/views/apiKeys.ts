@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { trpc } from '../trpc';
 import { ApiKeyService } from '../../../services/api_key';
+import { decidesEach, type Decision } from '../../access_route';
 
 const apiKeysRouter = (procedure: typeof trpc.procedure) => {
   return trpc.router({
@@ -42,5 +43,13 @@ const apiKeysRouter = (procedure: typeof trpc.procedure) => {
       }),
   });
 };
+
+const EXEMPTION: Decision = { exempt: "a person's own keys" };
+
+decidesEach('apiKeys', {
+  list: EXEMPTION,
+  create: EXEMPTION,
+  revoke: EXEMPTION,
+});
 
 export { apiKeysRouter };

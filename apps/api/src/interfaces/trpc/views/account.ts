@@ -16,6 +16,7 @@ import {
   verifyPassword,
   isPasswordAcceptable,
 } from '../../../services/auth/password';
+import { decidesEach, type Decision } from '../../access_route';
 
 /** The stored `scrypt$...` string for the acting user, or null if social-only. */
 async function currentPasswordHash(userId: UserId): Promise<string | null> {
@@ -96,5 +97,14 @@ const accountRouter = (procedure: typeof trpc.procedure) => {
     }),
   });
 };
+
+const EXEMPTION: Decision = { exempt: "a person's own account, no automation" };
+
+decidesEach('account', {
+  getPasswordStatus: EXEMPTION,
+  setPassword: EXEMPTION,
+  changePassword: EXEMPTION,
+  removePassword: EXEMPTION,
+});
 
 export { accountRouter };

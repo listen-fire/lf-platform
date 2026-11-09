@@ -22,7 +22,7 @@ import type { UserId } from '../../../generated/kysely/core/User';
 import type { NodeId } from '../../../generated/kysely/knowledge/Node';
 import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
 
-import { getAutomationsQb, getKnowledgeQb } from '../../../lib/kysely';
+import { getKnowledgeQb } from '../../../lib/kysely';
 import { teamIdSchema } from '../../../lib/team_id';
 import { mintConnectLink } from '../../../services/credentials/connect_link';
 import { mintGrantAccessLink } from '../../../services/credentials/grant_access';
@@ -123,6 +123,16 @@ import { MovementEngineError } from 'movement-engine/public/errors';
 import { UserService } from '../../../services/user';
 import { registerRoute } from '../../mcp/registry';
 import {
+  EXEMPT,
+  READ_ONLY_MESSAGE,
+  decidingRouter,
+  readableAmong,
+  refusalOn,
+  unseen,
+  type Decision,
+} from '../../access_route';
+import { Whose } from '../../../services/access/whose';
+import {
   ToolTeamError,
   listAccessibleTeams,
   resolveToolTeam,
@@ -185,6 +195,12 @@ class Conflict {
   constructor(readonly message: string) {}
 }
 
+/** A handler's answer that the caller may see the automation but not change it:
+ *  answered 403. One they may not see is answered as missing, never this. */
+class Forbidden {
+  readonly message = READ_ONLY_MESSAGE;
+}
+
 function jsonHandler<I>(
   schema: z.ZodType<I>,
   source: 'body' | 'query' | 'params',
@@ -199,6 +215,7 @@ function jsonHandler<I>(
     try {
       const result = await run(parsed.data);
       if (result instanceof Conflict) return res.status(409).json({ error: result.message });
+      if (result instanceof Forbidden) return res.status(403).json({ error: result.message });
       if (result && typeof result === 'object' && 'error' in result && Object.keys(result).length <= 2) {
         const message = String((result as { error: unknown }).error);
         const status = /not found|no .*found|unknown|not exist/i.test(message) ? 404 : 400;
@@ -253,15 +270,46 @@ async function helpFor(input: {
 
 async function rowByIdOrName(input: { idOrName: string; team?: string | undefined }): Promise<MovementRow | null> {
   const teams = input.team !== undefined ? [await resolveToolTeam(input.team)] : await teamSetForReads();
-  for (const teamId of teams) {
-    const byId = await getMovementRow({ teamId, id: input.idOrName }).catch(() => null);
+  return findAutomation({ idOrName: input.idOrName, teams });
+}
+
+/**
+ * The automation an id or exact name names in these teams: an id first, then
+ * a name, team by team. An automation the caller may not read is passed over,
+ * so it is answered exactly as one that does not exist, and the same name in a
+ * later team is still found.
+ */
+async function findAutomation(input: { idOrName: string; teams: readonly string[] }): Promise<MovementRow | null> {
+  const readable = async (row: MovementRow | null) =>
+    row !== null && (await refusalOn({ automationId: row.id, verb: 'read' })) === undefined ? row : null;
+  for (const teamId of input.teams) {
+    const byId = await readable(await getMovementRow({ teamId, id: input.idOrName }).catch(() => null));
     if (byId) return byId;
   }
-  for (const teamId of teams) {
-    const named = await getMovementRowByName({ teamId, name: input.idOrName });
+  for (const teamId of input.teams) {
+    const named = await readable(await getMovementRowByName({ teamId, name: input.idOrName }));
     if (named) return named;
   }
   return null;
+}
+
+/**
+ * What a change answers when the caller may not make it: `missing` (the
+ * route's answer for a name that does not exist) when they may not see the
+ * automation, Forbidden when they may only read it. Null when they may.
+ */
+async function refusedChange<T>(asked: { automationId: string | null; missing: T }): Promise<T | Forbidden | null> {
+  const refusal = await refusalOn({ automationId: asked.automationId, verb: 'write' });
+  switch (refusal) {
+    case undefined:
+      return null;
+    case 'unseen':
+      return asked.missing;
+    case 'read_only':
+      return new Forbidden();
+    default:
+      return neverAsAny(refusal);
+  }
 }
 
 const readBookSchema = z.object({
@@ -884,7 +932,7 @@ const listMovementsHandler: RequestHandler = async (_req, res) => {
     const names = await teamNames(teams);
     const perTeam = await Promise.all(
       teams.map(async (t) =>
-        (await listMovements(t)).map((m) => ({
+        (await readableAmong(await listMovements(t), { automationOf: (m) => m.id, teamIds: [t] })).map((m) => ({
           ...m,
           teamId: t,
           teamName: names.get(t) ?? t,
@@ -915,19 +963,11 @@ const getMovementSchema = z.object({ idOrName: z.string() });
 export const getMovementHandler: RequestHandler = jsonHandler(getMovementSchema, 'params', async (input) => {
   // Look across every team the connection spans, so an id/name from any of the
   // user's teams resolves.
-  const teams = await teamSetForReads();
-  for (const team of teams) {
-    const byId = await getMovement({ teamId: team, id: input.idOrName }).catch(() => null);
-    if (byId) return withStoryUrl(team, byId);
-  }
-  for (const team of teams) {
-    const named = (await listMovements(team)).find((m) => m.name === input.idOrName);
-    if (named) {
-      const found = await getMovement({ teamId: team, id: named.id });
-      return found ? withStoryUrl(team, found) : { error: `No automation '${input.idOrName}'.` };
-    }
-  }
-  return { error: `No automation '${input.idOrName}'.` };
+  const missing = { error: `No automation '${input.idOrName}'.` };
+  const row = await findAutomation({ idOrName: input.idOrName, teams: await teamSetForReads() });
+  if (row === null) return missing;
+  const found = await getMovement({ teamId: row.teamId, id: row.id });
+  return found ? withStoryUrl(row.teamId, found) : missing;
 });
 
 /**
@@ -1060,6 +1100,9 @@ const validateMovementHandler: RequestHandler = jsonHandler(
   async (input) => {
     const pin = input.languageVersion !== undefined ? pinFromInput(input.languageVersion) : undefined;
     if (pin !== undefined && 'error' in pin) return pin;
+    if (input.automation !== undefined && (await unseen(input.automation))) {
+      return { error: `No automation '${input.automation}' in this team.` };
+    }
     return validateAutomationText({
       teamId: await resolveToolTeam(input.team),
       source: input.source,
@@ -1163,7 +1206,7 @@ const completionsAtHandler: RequestHandler = jsonHandler(
     let languageVersion = pin?.pin;
     if (languageVersion === undefined && input.automation !== undefined) {
       const row = await getMovementRow({ teamId, id: input.automation }).catch(() => null);
-      if (!row) return { error: `No automation '${input.automation}' in this team.` };
+      if (!row || (await unseen(row.id))) return { error: `No automation '${input.automation}' in this team.` };
       languageVersion = row.languageVersion;
     }
     return agentCompletionsAt({ teamId, source: fullSource, offset, pin: languageVersion ?? LANGUAGE_VERSION });
@@ -1438,7 +1481,7 @@ const grepAutomationsHandler: RequestHandler = jsonHandler(
     let truncated = false;
 
     teamLoop: for (const teamId of teams) {
-      const rows = await listMovementRows(teamId);
+      const rows = await readableAmong(await listMovementRows(teamId), { automationOf: (row) => row.id, teamIds: [teamId] });
       for (const row of rows) {
         const lines = row.source.split('\n');
         for (let i = 0; i < lines.length; i++) {
@@ -1474,10 +1517,10 @@ const deleteMovementSchema = z.object({
 // delete, so it's destructive-annotated on the tool. Returns { deleted: false }
 // when no automation with that id lives in the resolved team, rather than erroring.
 const deleteMovementHandler: RequestHandler = jsonHandler(deleteMovementSchema, 'body', async (input) => {
-  const deleted = await deleteMovement({
-    teamId: await resolveToolTeam(input.team),
-    id: input.automation,
-  });
+  const teamId = await resolveToolTeam(input.team);
+  const refused = await refusedChange({ automationId: input.automation, missing: { deleted: false, automation: input.automation } });
+  if (refused !== null) return refused;
+  const deleted = await deleteMovement({ teamId, id: input.automation });
   return { deleted, automation: input.automation };
 });
 
@@ -1519,6 +1562,8 @@ const runMovementHandler: RequestHandler = jsonHandler(runMovementSchema, 'body'
   // string against a uuid column, which surfaced as a 500.
   const movementId = await resolveMovementIdInTeam({ teamId, idOrName: input.automation });
   if (movementId === null) return { error: `No automation '${input.automation}'.` };
+  const refused = await refusedChange({ automationId: movementId, missing: { error: `No automation '${input.automation}'.` } });
+  if (refused !== null) return refused;
   const result = await runMovementAsync({
     teamId,
     movementId,
@@ -1553,12 +1598,9 @@ const getMovementRunHandler: RequestHandler = jsonHandler(
   getMovementRunSchema,
   'body',
   async (input) => {
-    const teams = await teamSetForReads();
-    for (const team of teams) {
-      const status = await getMovementRunStatus({ teamId: team, runId: input.runId });
-      if (!('error' in status)) return status;
-    }
-    return { error: `run ${input.runId} not found` };
+    const owner = await Whose.automationOfRun({ runId: input.runId, teamIds: await teamSetForReads() });
+    if (owner === undefined || (await unseen(owner.automationId))) return { error: `run ${input.runId} not found` };
+    return getMovementRunStatus({ teamId: owner.teamId, runId: input.runId });
   },
 );
 
@@ -1566,10 +1608,7 @@ async function resolveMovementIdInTeam(input: {
   teamId: string;
   idOrName: string;
 }): Promise<string | null> {
-  const byId = await getMovement({ teamId: input.teamId, id: input.idOrName }).catch(() => null);
-  if (byId) return byId.id;
-  const named = (await listMovements(input.teamId)).find((m) => m.name === input.idOrName);
-  return named?.id ?? null;
+  return (await findAutomation({ idOrName: input.idOrName, teams: [input.teamId] }))?.id ?? null;
 }
 
 // Resolve a movement reference (id or exact name) to its (teamId, movementId)
@@ -1578,16 +1617,8 @@ async function resolveMovementIdInTeam(input: {
 async function resolveMovementRef(
   idOrName: string,
 ): Promise<{ teamId: string; movementId: string } | null> {
-  const teams = await teamSetForReads();
-  for (const team of teams) {
-    const byId = await getMovement({ teamId: team, id: idOrName }).catch(() => null);
-    if (byId) return { teamId: team, movementId: byId.id };
-  }
-  for (const team of teams) {
-    const named = (await listMovements(team)).find((m) => m.name === idOrName);
-    if (named) return { teamId: team, movementId: named.id };
-  }
-  return null;
+  const row = await findAutomation({ idOrName, teams: await teamSetForReads() });
+  return row === null ? null : { teamId: row.teamId, movementId: row.id };
 }
 
 // List a movement's recent runs, newest first — the discovery surface that
@@ -1619,12 +1650,9 @@ const inspectRunHandler: RequestHandler = jsonHandler(
   inspectRunSchema,
   'body',
   async (input) => {
-    const teams = await teamSetForReads();
-    for (const team of teams) {
-      const detail = await inspectMovementRun({ teamId: team, runId: input.runId });
-      if (!('error' in detail)) return detail;
-    }
-    return { error: `run ${input.runId} not found` };
+    const owner = await Whose.automationOfRun({ runId: input.runId, teamIds: await teamSetForReads() });
+    if (owner === undefined || (await unseen(owner.automationId))) return { error: `run ${input.runId} not found` };
+    return inspectMovementRun({ teamId: owner.teamId, runId: input.runId });
   },
 );
 
@@ -1651,20 +1679,21 @@ const cancelRunHandler: RequestHandler = jsonHandler(cancelRunSchema, 'body', as
   const cancelledBy = actingUserId();
   const user = cancelledBy === undefined ? undefined : await UserService.getById(cancelledBy);
   const abortedBy = user?.username ?? user?.email ?? undefined;
-  const teams = await teamSetForReads();
-  for (const team of teams) {
-    try {
-      return await abortRun({
-        runId: input.runId,
-        teamId: team as TeamId,
-        ...(abortedBy !== undefined ? { abortedBy } : {}),
-      });
-    } catch (err) {
-      if (err instanceof MovementEngineError && /not found/i.test(err.message)) continue;
-      throw err;
-    }
+  const missing = { error: `run ${input.runId} not found` };
+  const owner = await Whose.automationOfRun({ runId: input.runId, teamIds: await teamSetForReads() });
+  if (owner === undefined) return missing;
+  const refused = await refusedChange({ automationId: owner.automationId, missing });
+  if (refused !== null) return refused;
+  try {
+    return await abortRun({
+      runId: input.runId,
+      teamId: teamIdSchema.parse(owner.teamId),
+      ...(abortedBy !== undefined ? { abortedBy } : {}),
+    });
+  } catch (err) {
+    if (err instanceof MovementEngineError && /not found/i.test(err.message)) return missing;
+    throw err;
   }
-  return { error: `run ${input.runId} not found` };
 });
 
 const resumeRunSchema = z.object({ runId: z.string(), team: z.string().optional() });
@@ -1673,18 +1702,19 @@ const resumeRunSchema = z.object({ runId: z.string(), team: z.string().optional(
 // Same search-across-teams as cancel: "not found" means try the next team; a
 // run that is found but not paused at a limit is reported as such.
 const resumeRunHandler: RequestHandler = jsonHandler(resumeRunSchema, 'body', async (input) => {
-  const teams = await teamSetForReads();
-  for (const team of teams) {
-    try {
-      return await resumeRun({ runId: input.runId, teamId: team as TeamId });
-    } catch (err) {
-      if (err instanceof RunBusy) return new Conflict(err.message);
-      if (err instanceof MovementEngineError && /not found/i.test(err.message)) continue;
-      if (err instanceof MovementEngineError) return { error: err.message.replace(/^MOVENG_RUNTIME: /, '') };
-      throw err;
-    }
+  const missing = { error: `run ${input.runId} not found` };
+  const owner = await Whose.automationOfRun({ runId: input.runId, teamIds: await teamSetForReads() });
+  if (owner === undefined) return missing;
+  const refused = await refusedChange({ automationId: owner.automationId, missing });
+  if (refused !== null) return refused;
+  try {
+    return await resumeRun({ runId: input.runId, teamId: teamIdSchema.parse(owner.teamId) });
+  } catch (err) {
+    if (err instanceof RunBusy) return new Conflict(err.message);
+    if (err instanceof MovementEngineError && /not found/i.test(err.message)) return missing;
+    if (err instanceof MovementEngineError) return { error: err.message.replace(/^MOVENG_RUNTIME: /, '') };
+    throw err;
   }
-  return { error: `run ${input.runId} not found` };
 });
 
 // ---------------------------------------------------------------------------
@@ -1725,21 +1755,19 @@ const replayDeliverySchema = z.object({
 
 const replayDeliveryHandler: RequestHandler = jsonHandler(replayDeliverySchema, 'body', async (input) => {
   const teams = input.team !== undefined ? [await resolveToolTeam(input.team)] : await teamSetForReads();
-  const owner = await getAutomationsQb(['trigger'])
-    .selectFrom('trigger')
-    .where('id', '=', input.listen as TriggerId)
-    .where('team_id', 'in', teams)
-    .select(['team_id', 'movement_id'])
-    .executeTakeFirst();
-  if (owner === undefined) return { error: `listen ${input.listen} not found` };
+  const missing = { error: `listen ${input.listen} not found` };
+  const owner = await Whose.automationOfListen({ triggerId: input.listen, teamIds: teams });
+  if (owner === undefined) return missing;
+  const refused = await refusedChange({ automationId: owner.automationId, missing });
+  if (refused !== null) return refused;
   // A replay judges by the current version's listen plan. A listen on another
   // version has none, so saying "no such listen" would be untrue.
-  const movement = owner.movement_id !== null ? await getMovementRow({ teamId: owner.team_id, id: owner.movement_id }) : null;
+  const movement = owner.automationId !== null ? await getMovementRow({ teamId: owner.teamId, id: owner.automationId }) : null;
   if (movement && !isCurrent(movement.languageVersion)) {
     return { error: `'${movement.name}' is written in language ${movement.languageVersion}, and this platform replays a delivery only through a listen on ${LANGUAGE_VERSION}. Upgrade it (upgradeAutomation) to replay through it.` };
   }
   const outcome = await replayThroughListen({
-    teamId: teamIdSchema.parse(owner.team_id),
+    teamId: teamIdSchema.parse(owner.teamId),
     triggerId: input.listen as TriggerId,
     deliveryId: input.deliveryId,
     ...(input.force !== undefined ? { force: input.force } : {}),
@@ -1754,15 +1782,17 @@ const resumeListenSchema = z.object({ listen: z.string(), team: z.string().optio
 
 const resumeListenHandler: RequestHandler = jsonHandler(resumeListenSchema, 'body', async (input) => {
   const teams = input.team !== undefined ? [await resolveToolTeam(input.team)] : await teamSetForReads();
-  for (const team of teams) {
-    const resumed = await resumeListen({
-      teamId: teamIdSchema.parse(team),
-      triggerId: input.listen as TriggerId,
-      resumedBy: actingUserId() ?? 'an API key',
-    });
-    if (resumed !== null) return resumed;
-  }
-  return { error: `listen ${input.listen} not found` };
+  const missing = { error: `listen ${input.listen} not found` };
+  const owner = await Whose.automationOfListen({ triggerId: input.listen, teamIds: teams });
+  if (owner === undefined) return missing;
+  const refused = await refusedChange({ automationId: owner.automationId, missing });
+  if (refused !== null) return refused;
+  const resumed = await resumeListen({
+    teamId: teamIdSchema.parse(owner.teamId),
+    triggerId: input.listen as TriggerId,
+    resumedBy: actingUserId() ?? 'an API key',
+  });
+  return resumed ?? missing;
 });
 
 // ---------------------------------------------------------------------------
@@ -1777,51 +1807,63 @@ const resumeListenHandler: RequestHandler = jsonHandler(resumeListenSchema, 'bod
 //     edits, the ontology (model), recipes, and `/teams`.
 // `/teams` is shared — both connections list the teams they can act in.
 
-/** Automation connector routes: movements, catalog, handbook, connect, teams. */
+/** Who decides what, for the routes below: the automation each names, where it names one. */
+const READS: Decision = { thing: 'automation', verb: 'read' };
+const WRITES: Decision = { thing: 'automation', verb: 'write' };
+
+/**
+ * Automation connector routes: movements, catalog, handbook, connect, teams.
+ * The handbook, language and getStarted routes answer for a named
+ * automation's version, so they read it: one the caller may not read is not
+ * found.
+ */
 function mountAutomationToolRoutes(router: ReturnType<typeof Router>): void {
+  const route = decidingRouter(router, '/v1/automation');
+
   // teams (shared with the knowledge connector)
-  router.get('/teams', listTeamsHandler);
+  route.get('/teams', EXEMPT.ownTeams, listTeamsHandler);
 
   // the first read of a build: the handbook's front page, the team, its systems
-  router.get('/get-started', getStartedHandler);
+  route.get('/get-started', READS, getStartedHandler);
 
   // library.read — the authoring handbook
-  router.post('/handbook', readBookHandler);
-  router.post('/language/search', searchLanguageHandler);
-  router.post('/language/example', showExampleHandler);
+  route.post('/handbook', READS, readBookHandler);
+  route.post('/language/search', READS, searchLanguageHandler);
+  route.post('/language/example', READS, showExampleHandler);
 
   // catalog.read
-  router.get('/connections', listCatalogHandler);
-  router.post('/connections/describe', describeInstanceHandler);
-  router.post('/connections/connect', connectCredentialHandler);
-  router.post('/connections/grant-access', grantAccessHandler);
+  route.get('/connections', EXEMPT.connection, listCatalogHandler);
+  route.post('/connections/describe', EXEMPT.connection, describeInstanceHandler);
+  route.post('/connections/connect', EXEMPT.connection, connectCredentialHandler);
+  route.post('/connections/grant-access', EXEMPT.connection, grantAccessHandler);
 
   // whatsapp number linking (verification code loop)
-  router.post('/whatsapp/verify/start', startWhatsappVerificationHandler);
-  router.post('/whatsapp/verify/confirm', confirmWhatsappVerificationHandler);
+  const ownNumber: Decision = { exempt: "the caller's own phone number, no automation" };
+  route.post('/whatsapp/verify/start', ownNumber, startWhatsappVerificationHandler);
+  route.post('/whatsapp/verify/confirm', ownNumber, confirmWhatsappVerificationHandler);
 
   // movements
-  router.get('/automations', listMovementsHandler);
+  route.get('/automations', READS, listMovementsHandler);
   // `/automations/grep` must be registered before the `:idOrName` param route
   // below, or it would resolve as an automation named "grep".
-  router.get('/automations/grep', grepAutomationsHandler);
-  router.get('/automations/:idOrName/runs', listRunsHandler);
-  router.get('/automations/:idOrName/source', readAutomationHandler);
-  router.post('/automations/:idOrName/edit', editAutomationHandler);
-  router.get('/automations/:idOrName', getMovementHandler);
-  router.post('/automations/validate', validateMovementHandler);
-  router.post('/automations/upgrade', upgradeMovementHandler);
-  router.post('/automations/completions', completionsAtHandler);
-  router.post('/automations/save', saveMovementHandler);
-  router.post('/automations/delete', deleteMovementHandler);
-  router.post('/automations/run', runMovementHandler);
-  router.post('/automations/run-status', getMovementRunHandler);
-  router.post('/automations/inspect-run', inspectRunHandler);
-  router.post('/automations/cancel-run', cancelRunHandler);
-  router.post('/automations/resume-run', resumeRunHandler);
-  router.get('/automations/:idOrName/arrivals', listArrivalsHandler);
-  router.post('/automations/replay-delivery', replayDeliveryHandler);
-  router.post('/automations/resume-listen', resumeListenHandler);
+  route.get('/automations/grep', READS, grepAutomationsHandler);
+  route.get('/automations/:idOrName/runs', READS, listRunsHandler);
+  route.get('/automations/:idOrName/source', READS, readAutomationHandler);
+  route.post('/automations/:idOrName/edit', EXEMPT.savedPerTarget, editAutomationHandler);
+  route.get('/automations/:idOrName', READS, getMovementHandler);
+  route.post('/automations/validate', READS, validateMovementHandler);
+  route.post('/automations/upgrade', EXEMPT.savedPerTarget, upgradeMovementHandler);
+  route.post('/automations/completions', READS, completionsAtHandler);
+  route.post('/automations/save', EXEMPT.savedPerTarget, saveMovementHandler);
+  route.post('/automations/delete', WRITES, deleteMovementHandler);
+  route.post('/automations/run', WRITES, runMovementHandler);
+  route.post('/automations/run-status', READS, getMovementRunHandler);
+  route.post('/automations/inspect-run', READS, inspectRunHandler);
+  route.post('/automations/cancel-run', WRITES, cancelRunHandler);
+  route.post('/automations/resume-run', WRITES, resumeRunHandler);
+  route.get('/automations/:idOrName/arrivals', READS, listArrivalsHandler);
+  route.post('/automations/replay-delivery', WRITES, replayDeliveryHandler);
+  route.post('/automations/resume-listen', WRITES, resumeListenHandler);
 }
 
 /** Knowledge connector routes: KG read + validated edits, ontology, recipes, teams. */

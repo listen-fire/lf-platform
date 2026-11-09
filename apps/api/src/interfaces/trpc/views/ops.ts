@@ -13,6 +13,7 @@ import { encodeCursor, decodeCursor } from './cursor';
 import OpsEventType from '../../../generated/kysely/public/OpsEventType';
 import OpsSeverity from '../../../generated/kysely/public/OpsSeverity';
 import OpsRunStatus from '../../../generated/kysely/public/OpsRunStatus';
+import { EXEMPT, decidesEach } from '../../access_route';
 
 // Read-time enrichment shared by listFeed + getEvent: resolves team_id → team
 // name. One helper so the list and the detail can never disagree about what a
@@ -262,5 +263,16 @@ const opsRouter = (procedure: typeof trpc.procedure) => {
       }),
   });
 };
+
+decidesEach('ops', {
+  vapidPublicKey: EXEMPT.platformAdmin,
+  registerDevice: EXEMPT.platformAdmin,
+  summary: EXEMPT.platformAdmin,
+  listFeed: EXEMPT.platformAdmin,
+  listRunThread: EXEMPT.platformAdmin,
+  getEvent: EXEMPT.platformAdmin,
+  setResolved: EXEMPT.platformAdmin,
+  translateEvent: EXEMPT.platformAdmin,
+});
 
 export { opsRouter };

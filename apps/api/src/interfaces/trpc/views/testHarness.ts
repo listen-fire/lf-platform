@@ -15,6 +15,7 @@ import { getTestHarnessConfig } from '../../../lib/recording';
 import { encryptToken } from '../../../lib/credentials';
 import ExternalServiceType from '../../../generated/kysely/automations/ExternalServiceType';
 import { userProcedure as sharedUserProcedure } from '../procedures';
+import { decidesEach, type Decision } from '../../access_route';
 
 const CORPUS_DIR = process.env.TEST_HARNESS_CORPUS_DIR || join(process.cwd(), 'test-harness-data', 'corpus');
 
@@ -194,5 +195,15 @@ const testHarnessRouter = (procedure: typeof trpc.procedure) => {
     }),
   });
 };
+
+const EXEMPTION: Decision = { exempt: 'the test harness, no automation' };
+
+decidesEach('testHarness', {
+  getStats: EXEMPTION,
+  listCorpusFiles: EXEMPTION,
+  readCorpusFile: EXEMPTION,
+  seedFakeCredentials: EXEMPTION,
+  resetKnowledgeGraph: EXEMPTION,
+});
 
 export { testHarnessRouter };

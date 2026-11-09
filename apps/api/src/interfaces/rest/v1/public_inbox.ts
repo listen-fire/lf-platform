@@ -25,6 +25,7 @@ import {
   type PublicInbox,
 } from '../../../services/translation_graph/adapters/email/public_inbox';
 import { listAccessibleTeams, resolveToolTeam, ToolTeamError } from './team_scope';
+import { decidingRouter, type Decision } from '../../access_route';
 
 function failed(res: Response, err: unknown): Response {
   if (err instanceof ToolTeamError) {
@@ -140,9 +141,11 @@ const releaseHandler: RequestHandler = async (req, res) => {
 };
 
 function mountPublicInboxRoutes(router: ReturnType<typeof Router>): void {
-  router.get('/inboxes', listHandler);
-  router.post('/inboxes/claim', claimHandler);
-  router.post('/inboxes/release', releaseHandler);
+  const route = decidingRouter(router, '/v1/automation');
+  const teamInbox: Decision = { exempt: "a team's public inbox address, no automation" };
+  route.get('/inboxes', teamInbox, listHandler);
+  route.post('/inboxes/claim', teamInbox, claimHandler);
+  route.post('/inboxes/release', teamInbox, releaseHandler);
 }
 
 export { mountPublicInboxRoutes };

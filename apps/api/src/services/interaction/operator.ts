@@ -136,6 +136,12 @@ async function readRunStatus(runId: TriggerRunId): Promise<string | undefined> {
   return row?.status;
 }
 
+/** What an operator action on a run that is not the team's throws. A route
+ *  that may not show the caller the run's automation throws the same. */
+export function runNotFound(runId: string): MovementEngineError {
+  return new MovementEngineError('MOVENG_RUNTIME', `run ${runId} not found`);
+}
+
 /** Verify the run belongs to the team; return its branded id and which host
  *  steps it. */
 async function assertOwnedRun(runId: string, teamId: TeamId): Promise<{ runId: TriggerRunId; host: string }> {
@@ -146,7 +152,7 @@ async function assertOwnedRun(runId: string, teamId: TeamId): Promise<{ runId: T
     .select(['id', 'host'])
     .executeTakeFirst();
   if (!row) {
-    throw new MovementEngineError('MOVENG_RUNTIME', `run ${runId} not found`);
+    throw runNotFound(runId);
   }
   return { runId: row.id, host: row.host };
 }

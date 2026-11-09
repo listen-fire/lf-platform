@@ -16,6 +16,7 @@ import {
   listWebhookProviders,
 } from '../../../services/webhook_sync/providers';
 import { buildWebhookTargetUrl as buildTargetUrl } from '../../../services/webhook_sync/urls';
+import { EXEMPT, decidesEach } from '../../access_route';
 
 const webhookSubscriptionsRouter = (procedure: typeof trpc.procedure) => {
   const userProcedure = sharedUserProcedure(procedure);
@@ -198,5 +199,12 @@ const webhookSubscriptionsRouter = (procedure: typeof trpc.procedure) => {
       }),
   });
 };
+
+decidesEach('webhookSubscriptions', {
+  listProviders: EXEMPT.connection,
+  list: EXEMPT.connection,
+  create: EXEMPT.connection,
+  delete: EXEMPT.connection,
+});
 
 export { webhookSubscriptionsRouter };

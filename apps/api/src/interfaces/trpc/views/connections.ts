@@ -46,6 +46,7 @@ import {
   mintTelegramToken,
   telegramStartUrl,
 } from '../../../services/translation_graph/adapters/telegram/handshake';
+import { EXEMPT, decidesEach } from '../../access_route';
 
 
 /** Hide seed labels that leaked into the dev-loop DB before U1's seed rename. */
@@ -533,5 +534,12 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
     ),
   });
 };
+
+decidesEach('connections', {
+  getAll: EXEMPT.connection,
+  credentialDependents: EXEMPT.connection,
+  connectTelegram: EXEMPT.connection,
+  connectTelegramTeam: EXEMPT.connection,
+});
 
 export { connectionsRouter };

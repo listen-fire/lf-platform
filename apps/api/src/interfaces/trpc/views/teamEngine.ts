@@ -12,6 +12,7 @@ import { readTeamEngine, TEAM_ENGINES } from '../../../services/lf_engine/team_e
 import { switchTeamEngine } from '../../../services/lf_engine/switch';
 import { trpc } from '../trpc';
 import { userProcedure as sharedUserProcedure } from '../procedures';
+import { decidesEach, type Decision } from '../../access_route';
 
 const teamEngineRouter = (procedure: typeof trpc.procedure) => {
   const userProcedure = sharedUserProcedure(procedure);
@@ -38,5 +39,12 @@ const teamEngineRouter = (procedure: typeof trpc.procedure) => {
     }),
   });
 };
+
+const EXEMPTION: Decision = { exempt: 'a team setting, no automation' };
+
+decidesEach('teamEngine', {
+  get: EXEMPTION,
+  set: EXEMPTION,
+});
 
 export { teamEngineRouter };

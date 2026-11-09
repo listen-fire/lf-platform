@@ -2,6 +2,7 @@
 // version, through the real handlers: the 0.12 package answers a 0.12 pin, and
 // the current book answers everything else, a new automation included.
 
+jest.mock('../../../../services/access/decide', () => jest.requireActual('../../../../test/access_defaults').teamDefaults());
 jest.mock('../../../../services/translation_graph/movement/store', () => ({
   ...jest.requireActual('../../../../services/translation_graph/movement/store'),
   getMovementRow: jest.fn(),

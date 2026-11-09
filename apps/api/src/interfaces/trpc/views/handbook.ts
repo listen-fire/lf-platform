@@ -2,6 +2,7 @@ import { currentContext } from '../../../services/context';
 import { trpc } from '../trpc';
 import { getLibraryShelf } from '../../../lib/knowledge/library';
 import { userProcedure as sharedUserProcedure } from '../procedures';
+import { decidesEach, type Decision } from '../../access_route';
 
 /**
  * Serves the Library shelf — one handbook per system capability.
@@ -22,5 +23,11 @@ const handbookRouter = (procedure: typeof trpc.procedure) => {
     }),
   });
 };
+
+const EXEMPTION: Decision = { exempt: 'the handbook, no automation' };
+
+decidesEach('handbook', {
+  getShelf: EXEMPTION,
+});
 
 export { handbookRouter };

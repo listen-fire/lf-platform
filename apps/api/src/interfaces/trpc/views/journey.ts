@@ -9,6 +9,7 @@ import { getQb } from '../../../lib/kysely';
 import { JOURNEY_LAUNCH_AT } from '../../../lib/journey';
 import { platformAdminProcedure } from '../procedures';
 import { encodeCursor, decodeCursor } from './cursor';
+import { EXEMPT, decidesEach } from '../../access_route';
 
 const subjectSchema = z.enum(['user', 'team']);
 
@@ -266,5 +267,10 @@ const journeyRouter = (procedure: typeof trpc.procedure) => {
       }),
   });
 };
+
+decidesEach('journey', {
+  funnel: EXEMPT.platformAdmin,
+  list: EXEMPT.platformAdmin,
+});
 
 export { journeyRouter };

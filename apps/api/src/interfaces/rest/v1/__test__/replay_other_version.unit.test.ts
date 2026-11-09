@@ -10,12 +10,10 @@ jest.mock('../../../../services/translation_graph/movement/store', () => ({
   ...jest.requireActual('../../../../services/translation_graph/movement/store'),
   getMovementRow: jest.fn(),
 }));
-jest.mock('../../../../lib/kysely', () => {
-  const chain: Record<string, unknown> = {};
-  for (const method of ['selectFrom', 'where', 'select']) chain[method] = () => chain;
-  chain.executeTakeFirst = async () => ({ team_id: '11111111-2222-3333-4444-555555555555', movement_id: 'movement-1' });
-  return { ...jest.requireActual('../../../../lib/kysely'), getAutomationsQb: () => chain };
-});
+jest.mock('../../../../services/access/whose', () => ({
+  Whose: { automationOfListen: async () => ({ teamId: '11111111-2222-3333-4444-555555555555', automationId: 'movement-1' }) },
+}));
+jest.mock('../../../../services/access/decide', () => jest.requireActual('../../../../test/access_defaults').teamDefaults());
 jest.mock('../team_scope', () => {
   class ToolTeamError extends Error {}
   return {

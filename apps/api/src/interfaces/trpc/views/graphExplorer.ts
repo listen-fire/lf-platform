@@ -44,6 +44,7 @@ import {
 } from '../../../services/translation_graph/graph_explorer/build';
 import { walkedNodeFrom, type WalkedNode } from '../../../services/translation_graph/movement/walk';
 import { userProcedure as sharedUserProcedure } from '../procedures';
+import { EXEMPT, decidesEach } from '../../access_route';
 
 export type GraphExplorerInstance = {
   adapterType: string;
@@ -181,5 +182,11 @@ const graphExplorerRouter = (procedure: typeof trpc.procedure) => {
       }),
   });
 };
+
+decidesEach('graphExplorer', {
+  listTeams: EXEMPT.ownTeams,
+  listInstances: EXEMPT.connection,
+  walk: EXEMPT.connection,
+});
 
 export { graphExplorerRouter };

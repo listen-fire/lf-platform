@@ -30,14 +30,30 @@ import {
   type ParkedRunSummary,
   type TeamRunSummary,
 } from '../../../services/interaction/observability';
-import { abortRun, resumeRun } from '../../../services/interaction/operator';
+import { abortRun, resumeRun, runNotFound } from '../../../services/interaction/operator';
 import { RunBusy } from '../../../services/movement_engine/run_lease';
 import {
   listAskRecordsForTeam,
   answerAskRecordForTeam,
+  questionNotFound,
   type AskRecordSummary,
 } from '../../../services/interaction/ask_records';
 import { userProcedure as sharedUserProcedure } from '../procedures';
+import { decidesEach, readableAmong, unseen, type Decision } from '../../access_route';
+import { cannotChange } from '../access';
+import { Whose } from '../../../services/access/whose';
+
+/** The runs whose automation the caller may read. */
+async function readableRuns<T extends { runId: string }>(runs: T[], teamId: string): Promise<T[]> {
+  const owners = await Whose.automationsOfRuns({ runIds: runs.map((r) => r.runId), teamIds: [teamId] });
+  return readableAmong(runs, { automationOf: (r) => owners.get(r.runId)?.automationId ?? null, teamIds: [teamId] });
+}
+
+/** Refuse an operator action on a run the caller may not change, as for a run that is not there. */
+async function assertChangesRun(runId: string, teamId: string): Promise<void> {
+  const owner = await Whose.automationOfRun({ runId, teamIds: [teamId] });
+  if (owner === undefined || (await cannotChange(owner.automationId))) throw runNotFound(runId);
+}
 
 const controlTowerRouter = (procedure: typeof trpc.procedure) => {
   const userProcedure = sharedUserProcedure(procedure);
@@ -47,14 +63,16 @@ const controlTowerRouter = (procedure: typeof trpc.procedure) => {
      *  when, and how many asks it's still waiting on. */
     listParkedRuns: userProcedure.query(async (): Promise<ParkedRunSummary[]> => {
       const ctx = currentContext();
-      return listParkedRuns(ctx.user.teamId as TeamId);
+      return readableRuns(await listParkedRuns(ctx.user.teamId as TeamId), ctx.user.teamId);
     }),
 
     /** The team's questions on the ask store — open ones (answerable in place)
      *  and recently settled ones. */
     listAskRecords: userProcedure.query(async (): Promise<AskRecordSummary[]> => {
       const ctx = currentContext();
-      return listAskRecordsForTeam(ctx.user.teamId as TeamId);
+      const asks = await listAskRecordsForTeam(ctx.user.teamId as TeamId);
+      const owners = await Whose.automationsOfAsks({ askIds: asks.map((a) => a.askId), teamIds: [ctx.user.teamId] });
+      return readableAmong(asks, { automationOf: (a) => owners.get(a.askId)?.automationId ?? null, teamIds: [ctx.user.teamId] });
     }),
 
     /** Answer a new-store question in place — the same lattice transition every
@@ -64,6 +82,8 @@ const controlTowerRouter = (procedure: typeof trpc.procedure) => {
       .input(z.object({ askId: z.string().min(1), answer: z.unknown().optional() }))
       .mutation(async ({ input }): Promise<{ askId: string; state: string }> => {
         const ctx = currentContext();
+        const owner = await Whose.automationOfAsk({ askId: input.askId, teamIds: [ctx.user.teamId] });
+        if (owner === undefined || (await unseen(owner.automationId))) throw questionNotFound();
         return answerAskRecordForTeam({
           askId: input.askId as unknown as AskId,
           answer: input.answer,
@@ -76,6 +96,7 @@ const controlTowerRouter = (procedure: typeof trpc.procedure) => {
       .input(z.object({ runId: z.string().min(1) }))
       .mutation(async ({ input }): Promise<{ runId: string }> => {
         const ctx = currentContext();
+        await assertChangesRun(input.runId, ctx.user.teamId);
         const user = await UserService.getById(ctx.user.id);
         return abortRun({
           runId: input.runId,
@@ -90,6 +111,7 @@ const controlTowerRouter = (procedure: typeof trpc.procedure) => {
       .input(z.object({ runId: z.string().min(1) }))
       .mutation(async ({ input }): Promise<{ runId: string; resumed: number }> => {
         const ctx = currentContext();
+        await assertChangesRun(input.runId, ctx.user.teamId);
         try {
           return await resumeRun({ runId: input.runId, teamId: ctx.user.teamId as TeamId });
         } catch (err) {
@@ -102,9 +124,22 @@ const controlTowerRouter = (procedure: typeof trpc.procedure) => {
      *  (runs-cancel task 6). */
     listRuns: userProcedure.query(async (): Promise<TeamRunSummary[]> => {
       const ctx = currentContext();
-      return listTeamRuns(ctx.user.teamId as TeamId);
+      return readableRuns(await listTeamRuns(ctx.user.teamId as TeamId), ctx.user.teamId);
     }),
   });
 };
+
+const READS: Decision = { thing: 'automation', verb: 'read' };
+const WRITES: Decision = { thing: 'automation', verb: 'write' };
+
+// Answering a review needs read; stopping or resuming a run needs write.
+decidesEach('controlTower', {
+  listParkedRuns: READS,
+  listAskRecords: READS,
+  answerAskRecord: READS,
+  abortRun: WRITES,
+  resumeRun: WRITES,
+  listRuns: READS,
+});
 
 export { controlTowerRouter };

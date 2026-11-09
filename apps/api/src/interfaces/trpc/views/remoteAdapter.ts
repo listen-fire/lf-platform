@@ -23,6 +23,7 @@ import {
   listRemoteModuleCredentials,
   RemoteModuleCredentialRefused,
 } from '../../../services/credentials/remote_module_connect';
+import { EXEMPT, decidesEach } from '../../access_route';
 
 /**
  * tRPC router for managing remote Translation Graph adapter installs.
@@ -220,5 +221,15 @@ const remoteAdapterRouter = (procedure: typeof trpc.procedure) => {
       }),
   });
 };
+
+decidesEach('remoteAdapter', {
+  list: EXEMPT.connection,
+  get: EXEMPT.connection,
+  upsertFromManifest: EXEMPT.connection,
+  credentials: EXEMPT.connection,
+  createStaticCredential: EXEMPT.connection,
+  beginOAuthCredential: EXEMPT.connection,
+  delete: EXEMPT.connection,
+});
 
 export { remoteAdapterRouter };

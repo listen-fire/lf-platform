@@ -12,6 +12,8 @@
 // handbook content — jest.mock is hoisted file-wide, so mocking the service
 // modules here would silently break those real-content assertions.
 
+jest.mock('../../../../services/access/decide', () => jest.requireActual('../../../../test/access_defaults').teamDefaults());
+
 const readBookMock = jest.fn(async () => ({ shelf: [] }));
 jest.mock('../../../../lib/knowledge/library', () => ({
   readBook: (...args: unknown[]) => readBookMock(...(args as [])),
@@ -64,6 +66,21 @@ jest.mock('../../../../services/translation_graph/movement/provision', () => ({
   getMovement: (input: { teamId: string; id: string }) => getMovementMock(input),
   listMovements: (teamId: string) => listMovementsMock(teamId),
 }));
+// A lookup reads the rows: by id, then by name among the team's.
+jest.mock('../../../../services/translation_graph/movement/store', () => ({
+  ...jest.requireActual('../../../../services/translation_graph/movement/store'),
+  getMovementRow: (input: { teamId: string; id: string }) => getMovementMock(input),
+  getMovementRowByName: async (input: { teamId: string; name: string }) =>
+    (await listMovementsMock(input.teamId)).find((m) => m.name === input.name) ?? null,
+}));
+
+// Which team a run is in, among the accessible ones: by default, the first.
+const automationOfRunMock = jest.fn(async (asked: { runId: string; teamIds: string[] }) =>
+  asked.teamIds.length > 0 ? { teamId: asked.teamIds[0]!, automationId: 'mv-1' } : undefined,
+);
+jest.mock('../../../../services/access/whose', () => ({
+  Whose: { automationOfRun: (asked: { runId: string; teamIds: string[] }) => automationOfRunMock(asked) },
+}));
 
 const upgradeMovementMock = jest.fn(async (_input: unknown) => ({
   status: 'already_current' as const,
@@ -106,7 +123,6 @@ import { runWithPrincipal, type Principal } from 'principal';
 
 import type { RequestHandler } from 'express';
 
-import { MovementEngineError } from 'movement-engine/public/errors';
 import {
   readBookHandler,
   describeInstanceHandler,
@@ -397,46 +413,40 @@ describe('POST /automations/delete — wire key `automation` reaches deleteMovem
   });
 });
 
-describe('POST /automations/cancel-run — searches the accessible teams like run-status/inspectRun', () => {
-  it('skips a team that owns nothing, calls abortRun for the team that does', async () => {
-    teamSetForReadsMock.mockResolvedValue(['team-a', 'team-b']);
-    abortRunMock
-      .mockRejectedValueOnce(new MovementEngineError('MOVENG_RUNTIME', 'run r1 not found'))
-      .mockResolvedValueOnce({ runId: 'r1' });
+const TEAM_A = '0000000a-0000-4000-8000-000000000000';
+const TEAM_B = '0000000b-0000-4000-8000-000000000000';
+
+describe('POST /automations/cancel-run — finds the run among the accessible teams, like run-status/inspectRun', () => {
+  it('calls abortRun for the team that owns the run, and no other', async () => {
+    teamSetForReadsMock.mockResolvedValue([TEAM_A, TEAM_B]);
+    automationOfRunMock.mockResolvedValueOnce({ teamId: TEAM_B, automationId: 'mv-1' });
+    abortRunMock.mockResolvedValueOnce({ runId: 'r1' });
 
     const res = fakeRes();
     await call(cancelRunHandler, { runId: 'r1' }, res);
 
-    expect(abortRunMock).toHaveBeenCalledTimes(2);
-    expect(abortRunMock).toHaveBeenNthCalledWith(1, {
-      runId: 'r1',
-      teamId: 'team-a',
-      abortedBy: 'user@example.com',
-    });
-    expect(abortRunMock).toHaveBeenNthCalledWith(2, {
-      runId: 'r1',
-      teamId: 'team-b',
-      abortedBy: 'user@example.com',
-    });
+    expect(automationOfRunMock).toHaveBeenCalledWith({ runId: 'r1', teamIds: [TEAM_A, TEAM_B] });
+    expect(abortRunMock).toHaveBeenCalledTimes(1);
+    expect(abortRunMock).toHaveBeenCalledWith({ runId: 'r1', teamId: TEAM_B, abortedBy: 'user@example.com' });
     expect(res.body).toEqual({ runId: 'r1' });
     expect(res.statusCode).toBe(200);
   });
 
   it('passes the caller\'s username/email as abortedBy', async () => {
-    teamSetForReadsMock.mockResolvedValue(['home']);
+    teamSetForReadsMock.mockResolvedValue([TEAM_A]);
     getByIdMock.mockResolvedValueOnce({ email: 'op@example.com', username: 'op' });
     abortRunMock.mockResolvedValueOnce({ runId: 'r1' });
 
     const res = fakeRes();
     await call(cancelRunHandler, { runId: 'r1' }, res);
 
-    expect(abortRunMock).toHaveBeenCalledWith({ runId: 'r1', teamId: 'home', abortedBy: 'op' });
+    expect(abortRunMock).toHaveBeenCalledWith({ runId: 'r1', teamId: TEAM_A, abortedBy: 'op' });
     expect(res.statusCode).toBe(200);
   });
 
   it('a run not found in any accessible team is a clean 404', async () => {
-    teamSetForReadsMock.mockResolvedValue(['team-a']);
-    abortRunMock.mockRejectedValueOnce(new MovementEngineError('MOVENG_RUNTIME', 'run r1 not found'));
+    teamSetForReadsMock.mockResolvedValue([TEAM_A]);
+    automationOfRunMock.mockResolvedValueOnce(undefined);
 
     const res = fakeRes();
     await call(cancelRunHandler, { runId: 'r1' }, res);

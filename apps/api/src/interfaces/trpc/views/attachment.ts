@@ -4,6 +4,7 @@ import { currentContext } from '../../../services/context';
 import { trpc } from '../trpc';
 import { DocumentService } from '../../../services/document';
 import { userProcedure as sharedUserProcedure } from '../procedures';
+import { decidesEach, type Decision } from '../../access_route';
 
 const attachmentRouter = (procedure: typeof trpc.procedure) => {
   const userProcedure = sharedUserProcedure(procedure);
@@ -30,5 +31,11 @@ const attachmentRouter = (procedure: typeof trpc.procedure) => {
       }),
   });
 };
+
+const EXEMPTION: Decision = { exempt: 'a team document, no automation' };
+
+decidesEach('attachments', {
+  getDownloadLinkByDocumentId: EXEMPTION,
+});
 
 export { attachmentRouter };

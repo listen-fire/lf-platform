@@ -26,6 +26,7 @@ import { listAdapterManifests } from '../../../services/translation_graph/adapte
 import { WRITE_METHODS } from 'movement-engine/public/adapter';
 import { connectWrittenAs } from '../../../services/translation_graph/adapters/builtin_modules';
 import { userProcedure as sharedUserProcedure } from '../procedures';
+import { EXEMPT, decidesEach } from '../../access_route';
 
 
 export type AdapterCatalogEntry = {
@@ -93,5 +94,9 @@ const adaptersRouter = (procedure: typeof trpc.procedure) => {
     }),
   });
 };
+
+decidesEach('adapters', {
+  list: EXEMPT.teamCatalog,
+});
 
 export { adaptersRouter };

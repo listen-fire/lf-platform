@@ -31,6 +31,7 @@ import { LegalEntityId } from '../../../generated/kysely/valuations/LegalEntity'
 import EventType from '../../../generated/kysely/valuations/EventType';
 import AssetType from '../../../generated/kysely/valuations/AssetType';
 import LegalEntityType from '../../../generated/kysely/valuations/LegalEntityType';
+import { decidesEach, type Decision } from '../../access_route';
 
 import { getCountryByCode } from 'platform-constants/countries';
 
@@ -1536,5 +1537,18 @@ const investmentsRouter = (procedure: typeof trpc.procedure) => {
       }),
   });
 };
+
+const EXEMPTION: Decision = { exempt: 'investment data, no automation' };
+
+decidesEach('investments', {
+  getPortfolioInvestments: EXEMPTION,
+  getInvestmentCalculation: EXEMPTION,
+  getPortfolioTotals: EXEMPTION,
+  updatePointOfContact: EXEMPTION,
+  getCountryOptions: EXEMPTION,
+  getYearOptions: EXEMPTION,
+  getCSVExport: EXEMPTION,
+  getPerCompanyMovementExport: EXEMPTION,
+});
 
 export { investmentsRouter };

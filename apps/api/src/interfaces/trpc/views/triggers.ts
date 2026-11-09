@@ -18,6 +18,9 @@ import { randomUUID } from 'node:crypto';
 
 import { z } from 'zod';
 import { sql } from 'kysely';
+import { TRPCError } from '@trpc/server';
+import { runWithPrincipal } from 'principal';
+import { logger } from 'movement-engine/public/log';
 import { observable } from '@trpc/server/observable';
 
 import type { TriggerRunEvent } from '../../../lib/message_queue/queues/triggerRuns';
@@ -27,7 +30,7 @@ import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
 
 import { currentContext } from '../../../services/context';
-import { replayThroughListen, type ReplayOutcome } from '../../../services/inbound/listen_replay';
+import { noSuchListen, replayThroughListen, type ReplayOutcome } from '../../../services/inbound/listen_replay';
 import { showDeliveryRequest, type ShownRequest } from '../../../services/inbound/show_request';
 import { resumeListen } from '../../../services/inbound/listen_pause';
 import { mq } from '../../../lib/message_queue';
@@ -57,7 +60,11 @@ import {
 import ExternalServiceType from '../../../generated/kysely/automations/ExternalServiceType';
 import { reportedFailureReason } from '../../../services/translation_graph/runs/trigger_run';
 import { UserService } from '../../../services/user';
-import { userProcedure as sharedUserProcedure } from '../procedures';
+import { actingPrincipal, userProcedure as sharedUserProcedure } from '../procedures';
+import { EXEMPT, decidesEach, readableAmong, unseen, type Decision } from '../../access_route';
+import { cannotChange } from '../access';
+import { Whose } from '../../../services/access/whose';
+import { nothingToRun } from '../../../services/translation_graph/movement/run_now';
 
 export type TriggerListItem = {
   id: string;
@@ -105,6 +112,23 @@ export type TriggerDetail = {
   entries: Array<never>;
 };
 
+/**
+ * Whether the caller may read the automation this listen of the team belongs
+ * to. A listen that is not there, or whose automation they may not read, is
+ * answered alike. A listen of no automation (its movement is gone, so nothing
+ * dispatches it) is the team's, as before statements.
+ */
+async function readsListen(triggerId: string, teamId: string): Promise<boolean> {
+  const owner = await Whose.automationOfListen({ triggerId, teamIds: [teamId] });
+  return owner !== undefined && !(await unseen(owner.automationId));
+}
+
+/** Whether the caller may change the automation this listen belongs to; one who may only read it is refused outright. */
+async function changesListen(triggerId: string, teamId: string): Promise<boolean> {
+  const owner = await Whose.automationOfListen({ triggerId, teamIds: [teamId] });
+  return owner !== undefined && !(await cannotChange(owner.automationId));
+}
+
 const triggersRouter = (procedure: typeof trpc.procedure) => {
   const userProcedure = sharedUserProcedure(procedure);
 
@@ -149,13 +173,17 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
       const ctx = currentContext();
       const teamId = ctx.user.teamId as TeamId;
 
-      const rows = await getAutomationsQb(['trigger'])
+      const listed = await getAutomationsQb(['trigger'])
         .selectFrom('trigger')
         .where('team_id', '=', teamId)
         .where(notLeftover)
-        .select(['id', 'name', 'kind', 'config', 'created_at', 'updated_at'])
+        .select(['id', 'name', 'kind', 'config', 'movement_id', 'created_at', 'updated_at'])
         .orderBy('created_at', 'desc')
         .execute();
+      const rows = await readableAmong(listed, {
+        automationOf: (row) => (row.movement_id === null ? null : String(row.movement_id)),
+        teamIds: [teamId],
+      });
 
       return rows.map((row) => ({
         id: row.id as unknown as string,
@@ -181,6 +209,7 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
       .query(async ({ input }): Promise<TriggerDetail> => {
         const ctx = currentContext();
         const teamId = ctx.user.teamId as TeamId;
+        if (!(await readsListen(input.id, teamId))) throw new Error(`Trigger ${input.id} not found`);
 
         const trigger = await getAutomationsQb(['trigger'])
           .selectFrom('trigger')
@@ -225,6 +254,7 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
       .query(async ({ input }): Promise<AutomationDetail> => {
         const ctx = currentContext();
         const teamId = ctx.user.teamId as TeamId;
+        if (!(await readsListen(input.id, teamId))) throw new Error(`Automation ${input.id} not found`);
 
         const trigger = await getAutomationsQb(['trigger'])
           .selectFrom('trigger')
@@ -435,6 +465,8 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
       .subscription(async ({ ctx: { authorise } }) => {
         await authorise();
         const teamId = currentContext().user.teamId as unknown as string;
+        // A message arrives in the publisher's context, not the subscriber's.
+        const subscriber = actingPrincipal();
         const queue = mq.triggerRunActivity
           .node({ name: `triggerRunActivity.teamId.${teamId}`, type: 'queue' })
           .attachTo(mq.triggerRunActivity.activityByTeamId);
@@ -445,9 +477,20 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
           phase: 'started' | 'finished';
         };
         return observable<Activity>((emit) => {
+          // One at a time, so a run's finished edge never overtakes its started one.
+          let decided = Promise.resolve();
           const onMessage = (evt: Activity) => {
             if (evt.teamId !== teamId) return;
-            emit.next(evt);
+            decided = decided
+              .then(() =>
+                runWithPrincipal(subscriber, async () => {
+                  // The run's row may not be written yet: its trigger id says whose it is.
+                  const owner = await Whose.automationOfTriggerId({ triggerId: evt.triggerId, teamIds: [teamId] });
+                  if (owner !== undefined && !(await unseen(owner.automationId))) emit.next(evt);
+                }),
+              )
+              // A tick that cannot be decided is not shown; the badge is best-effort, as its publisher is.
+              .catch((err: unknown) => logger.warn('[triggers] run activity not decided', { runId: evt.runId, err }));
           };
           queue.on('message', onMessage);
           return () => queue.off('message', onMessage);
@@ -466,6 +509,9 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
         await authorise();
         const ctx = currentContext();
         const teamId = ctx.user.teamId as unknown as string;
+        if (!(await runWithPrincipal(actingPrincipal(), () => readsListen(triggerId, teamId)))) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: `Automation ${triggerId} not found` });
+        }
         // The node name MUST equal the direct exchange's `keyPrefix + value`
         // (`triggerRun.recorded.triggerId.<id>`) — that's the key
         // `recordedByTriggerId` routes on (native.ts: destinations.get).
@@ -519,6 +565,7 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
       )
       .mutation(async ({ input }): Promise<{ id: string; name: string }> => {
         const ctx = currentContext();
+        if (!(await changesListen(input.triggerId, ctx.user.teamId))) throw new Error(`Automation ${input.triggerId} not found`);
         return renameTriggerImpl({
           triggerId: input.triggerId,
           name: input.name,
@@ -538,6 +585,7 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
       .mutation(async ({ input }): Promise<{ id: string }> => {
         const ctx = currentContext();
         const teamId = ctx.user.teamId as TeamId;
+        if (!(await changesListen(input.triggerId, teamId))) throw new Error(`Automation ${input.triggerId} not found`);
         const row = await getAutomationsQb(['trigger'])
           .selectFrom('trigger')
           .where('id', '=', input.triggerId as TriggerId)
@@ -583,6 +631,7 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
       .mutation(async ({ input }) => {
         const ctx = currentContext();
         const teamId = ctx.user.teamId as TeamId;
+        if (!(await changesListen(input.triggerId, teamId))) throw new Error(`Automation ${input.triggerId} not found`);
         const owned = await getAutomationsQb(['trigger'])
           .selectFrom('trigger')
           .where('id', '=', input.triggerId as TriggerId)
@@ -619,6 +668,7 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
       .input(z.object({ triggerId: z.string().min(1) }))
       .mutation(async ({ input }): Promise<{ resumed: boolean }> => {
         const ctx = currentContext();
+        if (!(await changesListen(input.triggerId, ctx.user.teamId))) throw new Error(`Automation ${input.triggerId} not found`);
         const resumed = await resumeListen({
           teamId: ctx.user.teamId as TeamId,
           triggerId: input.triggerId as TriggerId,
@@ -645,6 +695,7 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
       .mutation(async ({ input }): Promise<{ id: string; credentialsId: string | null }> => {
         const ctx = currentContext();
         const teamId = ctx.user.teamId as TeamId;
+        if (!(await changesListen(input.triggerId, teamId))) throw new Error(`Automation ${input.triggerId} not found`);
 
         const trigger = await getAutomationsQb(['trigger'])
           .selectFrom('trigger')
@@ -825,6 +876,7 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
       .mutation(
         async ({ input }): Promise<MovementRunAsyncResult> => {
           const ctx = currentContext();
+          if (!(await changesListen(input.triggerId, ctx.user.teamId))) return nothingToRun({ triggerId: input.triggerId });
           const user = await UserService.getById(ctx.user.id);
           return runMovementAsync({
             teamId: ctx.user.teamId,
@@ -849,6 +901,7 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
       .input(z.object({ triggerId: z.string().min(1), deliveryId: z.string().min(1), force: z.boolean().optional() }))
       .mutation(async ({ input }): Promise<ReplayOutcome> => {
         const ctx = currentContext();
+        if (!(await changesListen(input.triggerId, ctx.user.teamId))) return noSuchListen(input.triggerId);
         return replayThroughListen({
           teamId: ctx.user.teamId as TeamId,
           triggerId: input.triggerId as TriggerId,
@@ -1047,5 +1100,28 @@ function titleCase(value: string): string {
     .replace(/[-_]/g, ' ')
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
+
+const READS: Decision = { thing: 'automation', verb: 'read' };
+const WRITES: Decision = { thing: 'automation', verb: 'write' };
+
+// A listen's automation is its movement's; a listen of no movement is the team's.
+decidesEach('triggers', {
+  teamHasContent: { exempt: 'whether the team has made anything, a yes or no' },
+  list: READS,
+  get: READS,
+  getAutomationDetail: READS,
+  onRunActivity: READS,
+  onRecentActivity: READS,
+  renameTrigger: WRITES,
+  deleteTrigger: WRITES,
+  dryRunTrigger: WRITES,
+  resumeGuardPaused: WRITES,
+  setTriggerCredential: WRITES,
+  listCreatableSources: EXEMPT.teamCatalog,
+  createAutomation: { exempt: 'creates a listen of no automation, which only team membership decides' },
+  submitWebEvent: WRITES,
+  replayDelivery: WRITES,
+  showDeliveryRequest: { exempt: "a delivery's kept request, which only the team's admins see (ruling 3)" },
+});
 
 export { triggersRouter };

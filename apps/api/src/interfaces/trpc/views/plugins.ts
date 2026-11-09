@@ -14,6 +14,7 @@
 import { currentContext } from '../../../services/context';
 import { trpc } from '../trpc';
 import { userProcedure as sharedUserProcedure } from '../procedures';
+import { EXEMPT, decidesEach } from '../../access_route';
 
 export type PluginCatalogEntry = {
   /** Registry name the engine dispatches on (e.g. `vc-url-retrieval`). */
@@ -63,5 +64,9 @@ const pluginsRouter = (procedure: typeof trpc.procedure) => {
     }),
   });
 };
+
+decidesEach('plugins', {
+  list: EXEMPT.teamCatalog,
+});
 
 export { pluginsRouter };

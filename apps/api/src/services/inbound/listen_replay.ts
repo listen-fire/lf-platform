@@ -127,6 +127,12 @@ async function ranBefore(teamId: TeamId, pipeline: string, receipt: string): Pro
   return rows.length > 0;
 }
 
+/** What a replay through a listen that is not the team's answers. A route that
+ *  may not show the caller the listen's automation answers the same. */
+export function noSuchListen(triggerId: string): ReplayOutcome {
+  return { outcome: 'refused', reason: `no listen ${triggerId} in this team` };
+}
+
 /**
  * Put the kept delivery `deliveryId` through the listen `triggerId` of
  * `teamId` again. Refused, judging nothing, when either is not the team's,
@@ -137,9 +143,9 @@ export async function replayThroughListen(input: { teamId: TeamId; triggerId: Tr
   const now = input.now ?? new Date();
   const force = input.force === true;
   const listen = await savedListenOf(input.triggerId);
-  if (listen === null || listen.teamId !== teamId) return { outcome: 'refused', reason: `no listen ${input.triggerId} in this team` };
+  if (listen === null || listen.teamId !== teamId) return noSuchListen(input.triggerId);
   const adapterType = await adapterTypeOf(input.triggerId);
-  if (adapterType === null) return { outcome: 'refused', reason: `no listen ${input.triggerId} in this team` };
+  if (adapterType === null) return noSuchListen(input.triggerId);
   const named = `${listen.file}:${listen.plan.movement}`;
   const row = await deliveryOf(teamId, deliveryId);
   if (row === null) return { outcome: 'refused', reason: `no delivery ${deliveryId} is kept for this team: a delivery past its retention is forgotten` };

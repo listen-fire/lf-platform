@@ -84,6 +84,12 @@ export async function listAskRecordsForTeam(teamId: TeamId): Promise<AskRecordSu
     }));
 }
 
+/** What answering a question that is not the team's throws. A route that may
+ *  not show the caller the question's automation throws the same. */
+export function questionNotFound(): Error {
+  return new Error('That question could not be found.');
+}
+
 /** Answer a new-store question on the operator's behalf — clamps team ownership,
  *  then drives the ONE door, whose settle queues the wake for any run parked on
  *  the ask. The run resumes off-request, as it does for every other door: what
@@ -96,7 +102,7 @@ export async function answerAskRecordForTeam(input: {
 }): Promise<{ askId: string; state: string }> {
   const ask = await getAsk(input.askId);
   if (!ask || ask.teamId !== input.teamId) {
-    throw new Error('That question could not be found.');
+    throw questionNotFound();
   }
   const outcome = await answerAskById(input.askId, input.answer);
   switch (outcome.kind) {

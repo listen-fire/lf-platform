@@ -71,6 +71,7 @@ import {
 } from '../../../services/translation_graph/movement/provision';
 import {
   getMovementRunStatus,
+  nothingToRun,
   runMovementAsync,
   type MovementRunAsyncResult,
   type MovementRunStatus,
@@ -111,6 +112,9 @@ import { reportedFailureReason } from '../../../services/translation_graph/runs/
 import { UserService } from '../../../services/user';
 import { movementEventsImpl, type MovementEventItem } from '../../../services/inbound/arrival_ledger';
 import { userProcedure as sharedUserProcedure } from '../procedures';
+import { EXEMPT, decidesEach, readableAmong, unseen, type Decision } from '../../access_route';
+import { cannotChange } from '../access';
+import { Whose } from '../../../services/access/whose';
 
 export type MovementRunItem = {
   id: string;
@@ -385,6 +389,11 @@ function answered<T>(answer: EditorAnswer<T>, id: string | undefined): T {
   }
 }
 
+/** An editor question about a saved movement the caller may not read is one about a movement that is not there. */
+async function refuseUnseen(id: string | undefined): Promise<void> {
+  if (id !== undefined && (await unseen(id))) throw new TRPCError({ code: 'NOT_FOUND', message: `no movement ${id}` });
+}
+
 function editorRequestOf(input: z.infer<typeof editorPositionInput>) {
   return {
     teamId: currentContext().user.teamId,
@@ -423,6 +432,7 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
         }),
       )
       .mutation(async ({ input }): Promise<{ diagnostics: AuthoringDiagnostic[] }> => {
+        await refuseUnseen(input.id);
         const ctx = currentContext();
         const checked = await checkMovementSource({
           teamId: ctx.user.teamId,
@@ -443,15 +453,24 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
      */
     complete: userProcedure
       .input(editorPositionInput)
-      .mutation(async ({ input }): Promise<Completions> => answered(await completeAt(editorRequestOf(input)), input.id)),
+      .mutation(async ({ input }): Promise<Completions> => {
+        await refuseUnseen(input.id);
+        return answered(await completeAt(editorRequestOf(input)), input.id);
+      }),
 
     hover: userProcedure
       .input(editorPositionInput)
-      .mutation(async ({ input }): Promise<HoverCard | null> => answered(await hoverAt(editorRequestOf(input)), input.id)),
+      .mutation(async ({ input }): Promise<HoverCard | null> => {
+        await refuseUnseen(input.id);
+        return answered(await hoverAt(editorRequestOf(input)), input.id);
+      }),
 
     definition: userProcedure
       .input(editorPositionInput)
-      .mutation(async ({ input }): Promise<Definition | null> => answered(await defineAt(editorRequestOf(input)), input.id)),
+      .mutation(async ({ input }): Promise<Definition | null> => {
+        await refuseUnseen(input.id);
+        return answered(await defineAt(editorRequestOf(input)), input.id);
+      }),
 
     /**
      * The listens a program declares, read by its carried version's own parser:
@@ -462,6 +481,7 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
     outline: userProcedure
       .input(z.object({ source: z.string(), id: z.string().uuid() }))
       .mutation(async ({ input }): Promise<MovementListenOutline> => {
+        await refuseUnseen(input.id);
         const ctx = currentContext();
         const row = await getMovementRow({ teamId: ctx.user.teamId, id: input.id });
         if (row === null) throw new TRPCError({ code: 'NOT_FOUND', message: `no movement ${input.id}` });
@@ -598,11 +618,15 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
     get: userProcedure
       .input(z.object({ id: z.string().uuid() }))
       .query(async ({ input }): Promise<MovementDetailResponse | null> => {
+        if (await unseen(input.id)) return null;
         const ctx = currentContext();
         const teamId = ctx.user.teamId;
         const detail = await getMovement({ teamId, id: input.id });
         if (!detail) return null;
-        const dependents = await movementDependents({ teamId, name: detail.name });
+        const dependents = await readableAmong(await movementDependents({ teamId, name: detail.name }), {
+          automationOf: (dependent) => dependent.id,
+          teamIds: [teamId],
+        });
         // Opening an automation on a carried version is what loads that version.
         const route = routeOf(detail.languageVersion);
         const facets =
@@ -629,6 +653,7 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
     story: userProcedure
       .input(z.object({ id: z.string().uuid() }))
       .query(async ({ input }): Promise<StoryViewResult | null> => {
+        if (await unseen(input.id)) return null;
         const ctx = currentContext();
         return storyViewForMovement({ teamId: ctx.user.teamId, id: input.id });
       }),
@@ -636,10 +661,12 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
     list: userProcedure.query(async (): Promise<MovementListItemResponse[]> => {
       const ctx = currentContext();
       const teamId = ctx.user.teamId as TeamId;
-      const [items, rows] = await Promise.all([
+      const [listed, rows] = await Promise.all([
         listMovements(teamId),
         listMovementRows(teamId),
       ]);
+      // Who imports a file counts every importer: the count names none of them.
+      const items = await readableAmong(listed, { automationOf: (item) => item.id, teamIds: [teamId] });
       const usage = movementUsageIndex(rows);
 
       const allTriggerIds = items.flatMap((item) => item.listeners.map((l) => l.triggerId));
@@ -661,6 +688,7 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
     delete: userProcedure
       .input(z.object({ id: z.string().uuid() }))
       .mutation(async ({ input }): Promise<{ deleted: boolean }> => {
+        if (await cannotChange(input.id)) return { deleted: false };
         const ctx = currentContext();
         const deleted = await deleteMovement({ teamId: ctx.user.teamId, id: input.id });
         return { deleted };
@@ -674,6 +702,7 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
     runs: userProcedure
       .input(z.object({ movementId: z.string().uuid() }))
       .query(async ({ input }): Promise<MovementRunItem[]> => {
+        if (await unseen(input.movementId)) return [];
         const ctx = currentContext();
         return movementRunsImpl({
           teamId: ctx.user.teamId as TeamId,
@@ -689,6 +718,7 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
     events: userProcedure
       .input(z.object({ movementId: z.string().uuid() }))
       .query(async ({ input }): Promise<MovementEventItem[]> => {
+        if (await unseen(input.movementId)) return [];
         const ctx = currentContext();
         return movementEventsImpl({
           teamId: ctx.user.teamId as TeamId,
@@ -728,6 +758,7 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
         }),
       )
       .mutation(async ({ input }): Promise<MovementRunAsyncResult> => {
+        if (await cannotChange(input.id)) return nothingToRun({ movementId: input.id });
         const ctx = currentContext();
         const user = await UserService.getById(ctx.user.id);
         return runMovementAsync({
@@ -748,9 +779,35 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
       .input(z.object({ runId: z.string().uuid() }))
       .query(async ({ input }): Promise<MovementRunStatus | { error: string }> => {
         const ctx = currentContext();
+        const owner = await Whose.automationOfRun({ runId: input.runId, teamIds: [ctx.user.teamId] });
+        if (owner === undefined || (await unseen(owner.automationId))) return { error: `run ${input.runId} not found` };
         return getMovementRunStatus({ teamId: ctx.user.teamId, runId: input.runId });
       }),
   });
 };
+
+const READS: Decision = { thing: 'automation', verb: 'read' };
+const WRITES: Decision = { thing: 'automation', verb: 'write' };
+
+// An editor question names the saved movement whose pin it reads, when it names one.
+decidesEach('movement', {
+  catalog: EXEMPT.teamCatalog,
+  check: READS,
+  complete: READS,
+  hover: READS,
+  definition: READS,
+  outline: READS,
+  catalogForSource: EXEMPT.teamCatalog,
+  describeInstance: EXEMPT.connection,
+  save: EXEMPT.savedPerTarget,
+  get: READS,
+  story: READS,
+  list: READS,
+  delete: WRITES,
+  runs: READS,
+  events: READS,
+  runNow: WRITES,
+  runStatus: READS,
+});
 
 export { movementRouter };

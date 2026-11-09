@@ -3,6 +3,7 @@
 // script holds that), so its doors are watched: help and pictures of the current
 // version never open one, and a positive control shows they are the way in.
 
+jest.mock('../../../../services/access/decide', () => jest.requireActual('../../../../test/access_defaults').teamDefaults());
 jest.mock('../../../../services/translation_graph/movement/store', () => ({
   ...jest.requireActual('../../../../services/translation_graph/movement/store'),
   getMovementRow: jest.fn(),

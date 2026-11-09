@@ -8,6 +8,7 @@ import { trpc } from '../trpc';
 import { checkUsage, getBillingContacts, type UsageStatus } from '../../../services/usage';
 import { getCoreQb, getQb } from '../../../lib/kysely';
 import { userProcedure as sharedUserProcedure } from '../procedures';
+import { decidesEach, type Decision } from '../../access_route';
 
 const usageRouter = (procedure: typeof trpc.procedure) => {
   const userProcedure = sharedUserProcedure(procedure);
@@ -98,5 +99,13 @@ const usageRouter = (procedure: typeof trpc.procedure) => {
       }),
   });
 };
+
+const EXEMPTION: Decision = { exempt: 'team usage and billing, no automation' };
+
+decidesEach('usage', {
+  getUsageSummary: EXEMPTION,
+  getBillingContacts: EXEMPTION,
+  setBillingContact: EXEMPTION,
+});
 
 export { usageRouter };

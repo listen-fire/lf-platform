@@ -41,6 +41,7 @@ import {
 } from '../../../services/translation_graph/adapters/google_sheets/grants';
 import { resolveCredentialIdByImportName } from '../../../services/translation_graph/movement/catalog';
 import { userProcedure as sharedUserProcedure } from '../procedures';
+import { EXEMPT, decidesEach } from '../../access_route';
 
 /** Identify a credential either by raw id (credential UI) or by the movement
  *  import name the editor/chat hold (resolved against google_sheets). */
@@ -156,5 +157,12 @@ const googleSheetsRouter = (procedure: typeof trpc.procedure) => {
       }),
   });
 };
+
+decidesEach('googleSheets', {
+  pickerToken: EXEMPT.connection,
+  grant: EXEMPT.connection,
+  listGrants: EXEMPT.connection,
+  revoke: EXEMPT.connection,
+});
 
 export { googleSheetsRouter };

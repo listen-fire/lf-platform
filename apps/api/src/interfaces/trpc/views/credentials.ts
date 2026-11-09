@@ -51,6 +51,8 @@ import { UserId } from '../../../generated/kysely/core/User';
 import { ExternalServiceCredentialsId } from '../../../generated/kysely/automations/ExternalServiceCredentials';
 import ExternalServiceType from '../../../generated/kysely/automations/ExternalServiceType';
 import { reportedFailureReason } from '../../../services/translation_graph/runs/trigger_run';
+import { EXEMPT, decidesEach, unseen } from '../../access_route';
+import { Whose } from '../../../services/access/whose';
 
 function maybeFakeCreds<T extends Record<string, unknown>>(creds: T, serviceType: string): T {
   const ctx = currentContext();
@@ -573,6 +575,8 @@ const credentialsRouter = (procedure: typeof trpc.procedure) => {
       .input(z.object({ runId: z.string() }))
       .query(async ({ input }) => {
         const ctx = currentContext();
+        const owner = await Whose.automationOfRun({ runId: input.runId, teamIds: [ctx.user.teamId] });
+        if (owner === undefined || (await unseen(owner.automationId))) throw new Error(`trigger_run ${input.runId} not found`);
         const row = await getAutomationsQb(['trigger_run'])
           .selectFrom('trigger_run')
           .where('id', '=', input.runId as TriggerRunId)
@@ -603,5 +607,25 @@ const credentialsRouter = (procedure: typeof trpc.procedure) => {
       }),
   });
 };
+
+// A firing's detail is a run's: it is read on the run's automation.
+decidesEach('credentials', {
+  getCredentials: EXEMPT.connection,
+  addCredential: EXEMPT.connection,
+  updateCredential: EXEMPT.connection,
+  deleteCredential: EXEMPT.connection,
+  connectMethods: EXEMPT.connection,
+  slackConnectUrl: EXEMPT.connection,
+  airtableConnectUrl: EXEMPT.connection,
+  attioConnectUrl: EXEMPT.connection,
+  googleConnectUrl: EXEMPT.connection,
+  gmailConnectPolicy: EXEMPT.connection,
+  gmailConnectUrl: EXEMPT.connection,
+  dropboxConnectUrl: EXEMPT.connection,
+  attioListObjects: EXEMPT.connection,
+  listEntryPoints: EXEMPT.connection,
+  describeTypes: EXEMPT.connection,
+  getTgRun: { thing: 'automation', verb: 'read' },
+});
 
 export { credentialsRouter };
