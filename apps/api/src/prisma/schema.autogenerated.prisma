@@ -69,6 +69,23 @@ model AsksWorkerHeartbeat {
   @@schema("asks")
 }
 
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model AccessStatement {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teamId    String   @map("team_id") @db.Uuid
+  thing     String
+  thingId   String   @map("thing_id") @db.Uuid
+  verb      String
+  grantee   String
+  value     String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([teamId, thing, verb], map: "access_statement_team_idx")
+  @@map("access_statement")
+  @@schema("automations")
+}
+
 model AdapterAwait {
   id             String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   adapterType    String     @map("adapter_type")

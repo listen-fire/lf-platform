@@ -15,6 +15,7 @@ import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { UserId } from '../../../generated/kysely/core/User';
 import type { TeamInviteId } from '../../../generated/kysely/core/TeamInvite';
 
+import { passOnWhatTheyHeld } from '../../../services/access/decide';
 import { currentContext } from '../../../services/context';
 import { TeamInviteService } from '../../../services/team_invite';
 import {
@@ -260,6 +261,9 @@ const teamMembersRouter = (procedure: typeof trpc.procedure) => {
         const teamId = ctx.user.teamId as TeamId;
         await requireWriteAccess(teamId, ctx.user.id as UserId);
 
+        // One transaction, so a member never leaves while what only they held
+        // stays with nobody.
+        await ctx.enterTransaction();
         const result = await TeamMembershipService.removeMember({
           teamId,
           userId: input.userId as UserId,
@@ -267,6 +271,7 @@ const teamMembersRouter = (procedure: typeof trpc.procedure) => {
 
         switch (result.status) {
           case 'removed':
+            await passOnWhatTheyHeld({ teamId, userId: input.userId });
             return { removed: true as const, signedOut: result.signedOut };
           case 'not_a_member':
             throw new TRPCError({

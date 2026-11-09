@@ -31,6 +31,7 @@ import type { default as TriggerRunTable } from './TriggerRun';
 import type { default as ArrivalUnjudgedTable } from './ArrivalUnjudged';
 import type { default as TriggerTable } from './Trigger';
 import type { default as DeliveryRequestReadTable } from './DeliveryRequestRead';
+import type { default as AccessStatementTable } from './AccessStatement';
 import type { default as AuditLogTable } from './AuditLog';
 import type { default as TriggerEventTable } from './TriggerEvent';
 import type { default as CacheEntryTable } from './CacheEntry';
@@ -112,6 +113,8 @@ export default interface AutomationsSchema {
   trigger: TriggerTable;
 
   delivery_request_read: DeliveryRequestReadTable;
+
+  access_statement: AccessStatementTable;
 
   audit_log: AuditLogTable;
 

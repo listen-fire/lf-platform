@@ -10,8 +10,10 @@ import { randomUUID } from 'node:crypto';
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { UserId } from '../../../../generated/kysely/core/User';
+import type { MovementId } from '../../../../generated/kysely/automations/Movement';
 
 import { getAutomationsQb, getCoreQb } from '../../../../lib/kysely';
+import { StatementStore, type Target } from '../../../../services/access/statement';
 import { Context } from '../../../../services/context';
 import { userPrincipal } from '../../../../services/principal';
 import { ProvisioningService } from '../../../../services/provisioning';
@@ -235,6 +237,44 @@ describe('team members — managing the team from its own settings', () => {
       await refusalOf({ userId: admin.userId, teamId }, (c) => c.remove({ userId: admin.userId })),
     ).toMatchObject({ code: 'PRECONDITION_FAILED' });
     expect(await accessOn(teamId, admin.userId)).toBe('write');
+  });
+
+  it('passes what a removed member alone held to the team’s write members', async () => {
+    const leaver = await makeUser(teamId, 'write');
+    // On the team but not a write member, so never an heir.
+    await makeUser(teamId, 'read');
+    const deals: Target<'automation'> = { thing: 'automation', id: randomUUID() };
+    await getAutomationsQb(['movement'])
+      .insertInto('movement')
+      .values({ id: deals.id as MovementId, team_id: teamId, name: 'Deals', source: '' })
+      .execute();
+    await StatementStore.replaceGrants(deals, { teamId, verb: 'read', grantees: [{ kind: 'user', userId: leaver.userId }] });
+    await StatementStore.replaceGrants(deals, {
+      teamId,
+      verb: 'write',
+      grantees: [
+        { kind: 'user', userId: leaver.userId },
+        { kind: 'user', userId: admin.userId },
+      ],
+    });
+
+    try {
+      await asMember({ userId: admin.userId, teamId }, (c) => c.remove({ userId: leaver.userId }));
+
+      expect(await StatementStore.grantsOf(deals, { teamId, verb: 'read' })).toEqual([
+        { kind: 'user', userId: admin.userId },
+      ]);
+      const write = await StatementStore.grantsOf(deals, { teamId, verb: 'write' });
+      expect(write).toHaveLength(2);
+      expect(write).toEqual(
+        expect.arrayContaining([
+          { kind: 'user', userId: leaver.userId },
+          { kind: 'user', userId: admin.userId },
+        ]),
+      );
+    } finally {
+      await getAutomationsQb(['movement']).deleteFrom('movement').where('id', '=', deals.id as MovementId).execute();
+    }
   });
 
   it('tells a read-only member they are read-only, and refuses their writes as FORBIDDEN', async () => {

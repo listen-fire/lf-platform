@@ -4607,6 +4607,44 @@ CREATE INDEX public_inbox_team_id_idx ON automations.public_inbox USING btree (t
 
 CREATE TRIGGER public_inbox_audit AFTER INSERT OR DELETE OR UPDATE ON automations.public_inbox FOR EACH ROW EXECUTE FUNCTION automations.audit();
 
+-- Who may do what to one automation or connection, beside the team's own read
+-- or write (which still caps everything: a read member never writes through a
+-- statement). One row per grantee of one verb; a verb's rows are its whole
+-- list, replaced together and never emptied (services/access/decide.ts).
+--
+-- Reading, writing and using a connection go to the team or to named users;
+-- only firing admits outsiders, by address, domain, phone or anyone. A user
+-- grant counts only while the user is on the thing's team. `thing_id` names a
+-- movement or an external_service_credentials row, so it carries no foreign
+-- key; `value` is the user id, domain, address or phone digits, and is null for
+-- team and anyone. Rows are only ever inserted and deleted, never updated, so
+-- `created_at` is when the list holding the row was stated.
+CREATE TABLE automations.access_statement (
+    id uuid DEFAULT pg_catalog.gen_random_uuid() NOT NULL,
+    team_id uuid NOT NULL, -- opaque tenant id; no foreign key (D3)
+    thing text NOT NULL,
+    thing_id uuid NOT NULL,
+    verb text NOT NULL,
+    grantee text NOT NULL,
+    value text,
+    created_at timestamptz DEFAULT now() NOT NULL,
+    CONSTRAINT access_statement_thing_check CHECK (thing IN ('automation', 'connection')),
+    CONSTRAINT access_statement_verb_check CHECK (verb IN ('read', 'write', 'fire', 'use')),
+    CONSTRAINT access_statement_verb_thing_check CHECK ((verb = 'use') = (thing = 'connection')),
+    CONSTRAINT access_statement_grantee_check CHECK (grantee IN ('team', 'user', 'anyone', 'domain', 'email', 'phone')),
+    CONSTRAINT access_statement_members_only_check CHECK (verb = 'fire' OR grantee IN ('team', 'user')),
+    CONSTRAINT access_statement_value_check CHECK ((value IS NULL) = (grantee IN ('team', 'anyone')))
+);
+
+ALTER TABLE ONLY automations.access_statement
+    ADD CONSTRAINT access_statement_pkey PRIMARY KEY (id);
+
+CREATE UNIQUE INDEX access_statement_grant_key ON automations.access_statement USING btree (thing, thing_id, verb, grantee, COALESCE(value, ''::text));
+
+CREATE INDEX access_statement_team_idx ON automations.access_statement USING btree (team_id, thing, verb);
+
+CREATE TRIGGER access_statement_audit AFTER INSERT OR DELETE OR UPDATE ON automations.access_statement FOR EACH ROW EXECUTE FUNCTION automations.audit();
+
 -- lf's movements slot: the listing behind each `movements.watch` cursor
 -- (services/lf_movements/watch.ts). A cursor is a hash of the team and the
 -- paths and versions it is served, so a cursor one api instance minted is

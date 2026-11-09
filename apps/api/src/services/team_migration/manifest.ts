@@ -405,6 +405,10 @@ export const MANIFEST: Record<Product, TableSpec[]> = {
       exportExcludedBecause:
         'a public inbox key is unique across a deployment, so carried it could clash with a team already holding it on the target; the team claims its keys again there, where a clash is refused by name',
     },
+    // Carried with the automations and connections it names, whose ids survive
+    // the move; a user grant names a user id, which counts only while that user
+    // is on the team at the target.
+    { table: 'access_statement', tenancy: { kind: 'team_column' } },
     { table: 'team_settings', tenancy: { kind: 'team_column' } },
     {
       table: 'team_engine',
