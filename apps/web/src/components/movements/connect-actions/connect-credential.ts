@@ -10,7 +10,8 @@
 // OAuth chain (mirrors integration-modal.tsx):
 //   <service>ConnectUrl.mutate() -> window.open(popup)
 //   -> BroadcastChannel('listen-fire-oauth') yields { claimToken }
-//   -> addCredential.mutate({ name, type, claimToken }) claims + stores it.
+//   -> addCredential.mutate({ name, type, claimToken, use }) claims + stores it,
+//      with who may use it, asked of the person before the popup opens.
 
 import { ExternalServiceType } from "#trpc";
 import {
@@ -87,6 +88,10 @@ async function connectCredentialHandler(ctx: ConnectActionContext): Promise<void
   if (!getUrl) {
     throw new Error(`No OAuth connect flow for ${ctx.serviceType}.`);
   }
+  // Asked before anything opens: declining creates nothing.
+  const use = await ctx.chooseUse();
+  if (use === null) return;
+
   const url = await getUrl();
   // No install URL means this deployment registered no OAuth app for the
   // service, so there is nothing to open. Fail the way an unknown service type
@@ -103,6 +108,7 @@ async function connectCredentialHandler(ctx: ConnectActionContext): Promise<void
     name: ctx.adapter,
     type: ctx.serviceType as ExternalServiceType,
     claimToken,
+    use,
   });
 
   ctx.refreshInstance({

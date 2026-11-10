@@ -1,0 +1,296 @@
+// Who may reach an automation or a connection, as the page says it and as a
+// person chooses it. An automation has three lists (read, write, fire) and a
+// connection one (use); each names the whole team, people on it, or, for
+// firing only, people outside it. These shapes are the server's
+// (`services/access/statement.ts`); the server judges every value.
+
+export type Grantee =
+  | { kind: "team" }
+  | { kind: "user"; userId: string }
+  | { kind: "anyone" }
+  | { kind: "domain"; domain: string }
+  | { kind: "email"; address: string }
+  | { kind: "phone"; digits: string };
+
+/** A list entry as the server shows it: a named user comes with who they are. */
+export type ListedGrantee =
+  | Exclude<Grantee, { kind: "user" }>
+  | { kind: "user"; userId: string; name: string | null; email: string | null };
+
+export type AutomationVerb = "read" | "write" | "fire";
+export type Verb = AutomationVerb | "use";
+
+/** Someone on the team, as the team page lists them. */
+export interface Member {
+  userId: string;
+  username: string;
+  email: string | null;
+  access: "read" | "write";
+}
+
+/** Who is choosing: the lists name them as "you". */
+export interface Chooser {
+  viewerUserId: string;
+  members: readonly Member[];
+}
+
+/** A list in plain words, one phrase per entry. A list of only the viewer is "Only you". */
+export function listPhrases(list: readonly ListedGrantee[], viewerUserId: string | null): string[] {
+  const [only] = list;
+  if (list.length === 1 && only?.kind === "user" && only.userId === viewerUserId) return ["Only you"];
+  return list.map((grantee) => granteePhrase(grantee, viewerUserId));
+}
+
+export function granteePhrase(grantee: ListedGrantee, viewerUserId: string | null): string {
+  switch (grantee.kind) {
+    case "team":
+      return "Whole team";
+    case "user":
+      if (grantee.userId === viewerUserId) return "You";
+      return grantee.name ?? grantee.email ?? "Someone no longer on the team";
+    case "anyone":
+      return "Anyone";
+    case "domain":
+      return `Anyone at @${grantee.domain}`;
+    case "email":
+      return grantee.address;
+    case "phone":
+      return `+${grantee.digits}`;
+    default: {
+      const unreachable: never = grantee;
+      return unreachable;
+    }
+  }
+}
+
+// ── Choosing at creation ────────────────────────────────────────────────────
+
+/** Who may see and change a new automation: one choice sets both its read and write lists. */
+export type SeeChoice = "me" | "team" | "people";
+/** Who may set a new automation off. */
+export type FireChoice = "me" | "team" | "anyone" | "people";
+/** Who may use a new connection. */
+export type UseChoice = "me" | "team" | "people";
+
+/** A creation choice in progress: nothing is chosen until the person chooses it. */
+export interface AutomationChoice {
+  see: SeeChoice | null;
+  seePeople: readonly string[];
+  fire: FireChoice | null;
+  firePeople: readonly string[];
+}
+
+export interface ConnectionChoice {
+  use: UseChoice | null;
+  usePeople: readonly string[];
+}
+
+export const NO_AUTOMATION_CHOICE: AutomationChoice = { see: null, seePeople: [], fire: null, firePeople: [] };
+export const NO_CONNECTION_CHOICE: ConnectionChoice = { use: null, usePeople: [] };
+
+export const SEE_OPTIONS: readonly { value: SeeChoice; label: string }[] = [
+  { value: "me", label: "Only me" },
+  { value: "team", label: "Whole team" },
+  { value: "people", label: "Specific people" },
+];
+
+export const FIRE_OPTIONS: readonly { value: FireChoice; label: string }[] = [
+  { value: "me", label: "Only me" },
+  { value: "team", label: "Whole team" },
+  { value: "anyone", label: "Anyone who reaches it" },
+  { value: "people", label: "Specific people" },
+];
+
+export const USE_OPTIONS: readonly { value: UseChoice; label: string }[] = SEE_OPTIONS;
+
+const user = (userId: string): Grantee => ({ kind: "user", userId });
+
+/** The viewer and the people chosen, once each, the viewer first. */
+function withViewer(viewerUserId: string, people: readonly string[]): string[] {
+  return [...new Set([viewerUserId, ...people])];
+}
+
+/**
+ * The read, write and fire lists a new automation is created with, or null
+ * until both choices are made. Choosing people for "see and change" puts
+ * them all on the read list and those who may write on the team on the write
+ * list too; the creator is always on both, since nobody creates what they
+ * could not change.
+ */
+export function automationStatements(
+  choice: AutomationChoice,
+  chooser: Chooser,
+): Record<AutomationVerb, Grantee[]> | null {
+  const { viewerUserId, members } = chooser;
+  let read: Grantee[];
+  let write: Grantee[];
+  switch (choice.see) {
+    case null:
+      return null;
+    case "me":
+      read = [user(viewerUserId)];
+      write = [user(viewerUserId)];
+      break;
+    case "team":
+      read = [{ kind: "team" }];
+      write = [{ kind: "team" }];
+      break;
+    case "people": {
+      const people = withViewer(viewerUserId, choice.seePeople);
+      const writers = new Set(members.filter((m) => m.access === "write").map((m) => m.userId));
+      read = people.map(user);
+      write = people.filter((id) => id === viewerUserId || writers.has(id)).map(user);
+      break;
+    }
+    default: {
+      const unreachable: never = choice.see;
+      return unreachable;
+    }
+  }
+  let fire: Grantee[];
+  switch (choice.fire) {
+    case null:
+      return null;
+    case "me":
+      fire = [user(viewerUserId)];
+      break;
+    case "team":
+      fire = [{ kind: "team" }];
+      break;
+    case "anyone":
+      fire = [{ kind: "anyone" }];
+      break;
+    case "people":
+      if (choice.firePeople.length === 0) return null;
+      fire = choice.firePeople.map(user);
+      break;
+    default: {
+      const unreachable: never = choice.fire;
+      return unreachable;
+    }
+  }
+  return { read, write, fire };
+}
+
+/** The use list a new connection is created with, or null until it is chosen. The creator is always on it. */
+export function connectionUse(choice: ConnectionChoice, chooser: Chooser): Grantee[] | null {
+  switch (choice.use) {
+    case null:
+      return null;
+    case "me":
+      return [user(chooser.viewerUserId)];
+    case "team":
+      return [{ kind: "team" }];
+    case "people":
+      return withViewer(chooser.viewerUserId, choice.usePeople).map(user);
+    default: {
+      const unreachable: never = choice.use;
+      return unreachable;
+    }
+  }
+}
+
+// ── Changing a list ─────────────────────────────────────────────────────────
+
+/** One list being changed. People outside the team are firing's only. */
+export interface ListDraft {
+  mode: "me" | "team" | "anyone" | "people";
+  /** In `people` mode: the members named. */
+  people: readonly string[];
+  /** In `people` mode, firing only: the whole team beside the people named. */
+  withTeam: boolean;
+  /** In `people` mode, firing only: addresses, domains and phone numbers, as typed. */
+  outsiders: string;
+}
+
+/** Whether a verb's list may name people outside the team. */
+export function takesOutsiders(verb: Verb): boolean {
+  switch (verb) {
+    case "fire":
+      return true;
+    case "read":
+    case "write":
+    case "use":
+      return false;
+    default: {
+      const unreachable: never = verb;
+      return unreachable;
+    }
+  }
+}
+
+function outsiderText(grantee: Grantee): string | undefined {
+  switch (grantee.kind) {
+    case "domain":
+      return `@${grantee.domain}`;
+    case "email":
+      return grantee.address;
+    case "phone":
+      return `+${grantee.digits}`;
+    case "team":
+    case "user":
+    case "anyone":
+      return undefined;
+    default: {
+      const unreachable: never = grantee;
+      return unreachable;
+    }
+  }
+}
+
+/** A list as the editor opens on it. */
+export function draftOf(list: readonly ListedGrantee[], viewerUserId: string | null): ListDraft {
+  const empty: ListDraft = { mode: "people", people: [], withTeam: false, outsiders: "" };
+  if (list.some((g) => g.kind === "anyone")) return { ...empty, mode: "anyone" };
+  const people = list.flatMap((g) => (g.kind === "user" ? [g.userId] : []));
+  const outsiders = list.flatMap((g) => outsiderText(g) ?? []);
+  const withTeam = list.some((g) => g.kind === "team");
+  if (withTeam && outsiders.length === 0) return { ...empty, mode: "team" };
+  if (!withTeam && outsiders.length === 0 && people.length === 1 && people[0] === viewerUserId) return { ...empty, mode: "me" };
+  return { mode: "people", people, withTeam, outsiders: outsiders.join(", ") };
+}
+
+/**
+ * Someone outside the team as a person writes them: an address, a domain
+ * (with or without its @), or a phone number with its country code.
+ */
+export function outsiderOf(text: string): Grantee | null {
+  const value = text.trim();
+  if (value === "") return null;
+  if (/^\+?[\d\s().-]+$/.test(value)) return { kind: "phone", digits: value.replace(/[^\d]/g, "") };
+  const at = value.lastIndexOf("@");
+  if (at > 0) return { kind: "email", address: value };
+  const domain = at === 0 ? value.slice(1) : value;
+  return domain.includes(".") ? { kind: "domain", domain } : null;
+}
+
+/** The entries of an outsiders field that are none of an address, a domain or a phone number. */
+export function unreadableOutsiders(text: string): string[] {
+  return text
+    .split(/[,\n]/)
+    .map((part) => part.trim())
+    .filter((part) => part !== "" && outsiderOf(part) === null);
+}
+
+/** The list a draft states, empty when it names nobody yet. */
+export function listOfDraft(draft: ListDraft, options: { verb: Verb; viewerUserId: string }): Grantee[] {
+  switch (draft.mode) {
+    case "me":
+      return [user(options.viewerUserId)];
+    case "team":
+      return [{ kind: "team" }];
+    case "anyone":
+      return takesOutsiders(options.verb) ? [{ kind: "anyone" }] : [];
+    case "people": {
+      const outside = takesOutsiders(options.verb)
+        ? draft.outsiders.split(/[,\n]/).flatMap((part) => outsiderOf(part) ?? [])
+        : [];
+      const team: Grantee[] = draft.withTeam && takesOutsiders(options.verb) ? [{ kind: "team" }] : [];
+      return [...team, ...draft.people.map(user), ...outside];
+    }
+    default: {
+      const unreachable: never = draft.mode;
+      return unreachable;
+    }
+  }
+}

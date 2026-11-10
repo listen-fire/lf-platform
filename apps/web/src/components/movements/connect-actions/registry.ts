@@ -12,6 +12,7 @@
 // adapter may only reference a `kind` the app already ships a handler for.
 
 import { trpc } from "@/lib/trpc";
+import type { Grantee } from "@/components/access/grantees";
 
 /** The tRPC vanilla client (`trpc.useUtils().client`) — what handlers call
  *  the server through, without React Query hooks. */
@@ -35,6 +36,9 @@ export interface ConnectActionContext {
   /** The ExternalServiceType string for a credential connect, when the action
    *  is a credential OAuth flow. */
   serviceType?: string;
+  /** Ask the person who may use a connection the action is about to create;
+   *  null when they decline, and nothing is created. */
+  chooseUse: () => Promise<Grantee[] | null>;
 }
 
 export type ConnectActionHandler = (ctx: ConnectActionContext) => Promise<void>;

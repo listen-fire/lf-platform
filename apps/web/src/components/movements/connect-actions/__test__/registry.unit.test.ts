@@ -23,6 +23,7 @@ function fakeCtx(over: Partial<ConnectActionContext> = {}): ConnectActionContext
     // The handler under test never touches these in these cases.
     client: {} as ConnectActionContext['client'],
     refreshInstance: jest.fn(),
+    chooseUse: jest.fn(async () => null),
     ...over,
   };
 }

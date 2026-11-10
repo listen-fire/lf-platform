@@ -79,6 +79,10 @@ import {
   type ListenerSummary,
 } from "@/components/movements/listeners-panel";
 import { readFileAsBase64, type PickedFile } from "@/lib/picked-file";
+import { AccessPanel } from "@/components/access/access-panel";
+import { ChooseUseDialog, CreateAutomationDialog } from "@/components/access/creation";
+import type { AutomationVerb, Grantee } from "@/components/access/grantees";
+import { SaveRefusalNotice, SaveWarnings } from "@/components/movements/save-notice";
 
 const VIM_PREFERENCE_KEY = "listen-fire.movements.vim";
 const WRAP_PREFERENCE_KEY = "listen-fire.movements.wrap";
@@ -510,6 +514,13 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
   // handler registry by `kind`. The handler runs the interactive flow (e.g.
   // the Drive Picker), persists the grant, and we refresh the instance so the
   // newly-granted entries surface in suggestions.
+  // A connect action that creates a connection asks who may use it first.
+  const [useChoiceRequest, setUseChoiceRequest] = useState<{ resolve: (use: Grantee[] | null) => void } | null>(null);
+  const chooseUse = useCallback(
+    () => new Promise<Grantee[] | null>((resolve) => setUseChoiceRequest({ resolve })),
+    [],
+  );
+
   const handleConnectAction = useCallback(
     (action: { kind: string; adapter: string; credential?: string }) => {
       void runConnectAction(action.kind, {
@@ -517,6 +528,7 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
         ...(action.credential !== undefined ? { credential: action.credential } : {}),
         client: utils.client,
         refreshInstance,
+        chooseUse,
       })
         .then(() => {
           // The grant changed what the connection HAS, so the program's schema
@@ -530,7 +542,7 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
           console.error("Connect action failed:", err);
         });
     },
-    [utils, refreshInstance],
+    [utils, refreshInstance, chooseUse],
   );
 
   // Type the CURRENT program. Keyed on the source itself: the server's answer
@@ -629,8 +641,20 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
     };
   }, [utils, movementId]);
 
+  // Who may reach a new automation: chosen once, before its first save, and
+  // sent with every save until one creates it.
+  const [creationStatements, setCreationStatements] = useState<Record<AutomationVerb, Grantee[]> | null>(null);
+  const [choosingAccess, setChoosingAccess] = useState(false);
+  const statementsForSave = useMemo(
+    () => (movementId === undefined && creationStatements !== null ? { statements: creationStatements } : {}),
+    [movementId, creationStatements],
+  );
+
   const save = trpc.views.movement.save.useMutation({
     onSuccess: (result) => {
+      if (!result.ok && "refused" in result && result.refused?.kind === "missing_statement") {
+        setChoosingAccess(true);
+      }
       void utils.views.movement.list.invalidate();
       if (props.movementId) {
         void utils.views.movement.get.invalidate({ id: props.movementId });
@@ -1018,9 +1042,9 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
   const forceOverwrite = useCallback(() => {
     const source = editorRef.current?.getSource();
     if (source) {
-      save.mutate({ source, ...(movementId ? { id: movementId } : {}) });
+      save.mutate({ source, ...(movementId ? { id: movementId } : {}), ...statementsForSave });
     }
-  }, [movementId, save]);
+  }, [movementId, save, statementsForSave]);
 
   // A save the server withheld because it has problems (or couldn't be
   // verified against a connected system). "Save anyway" is the explicit
@@ -1033,22 +1057,40 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
       acknowledgeErrors: true,
       ...(movementId ? { id: movementId } : {}),
       ...(baseUpdatedAt ? { baseUpdatedAt } : {}),
+      ...statementsForSave,
     });
-  }, [movementId, save, baseUpdatedAt]);
+  }, [movementId, save, baseUpdatedAt, statementsForSave]);
 
   // The plain "Save" action — the editor's current text, guarded by the
   // load version (the same concurrency base the Save button uses). Shared by
   // the button and the cmd/ctrl-S shortcut.
+  // A new automation's first save asks who may reach it before anything is sent.
   const handleSave = useCallback(() => {
     if (save.isLoading || catalogLoading) return;
     const source = editorRef.current?.getSource();
     if (!source) return;
+    if (movementId === undefined && creationStatements === null) {
+      setChoosingAccess(true);
+      return;
+    }
     save.mutate({
       source,
       ...(movementId ? { id: movementId } : {}),
       ...(baseUpdatedAt ? { baseUpdatedAt } : {}),
+      ...statementsForSave,
     });
-  }, [save, catalogLoading, movementId, baseUpdatedAt]);
+  }, [save, catalogLoading, movementId, baseUpdatedAt, creationStatements, statementsForSave]);
+
+  const saveWithStatements = useCallback(
+    (statements: Record<AutomationVerb, Grantee[]>) => {
+      setCreationStatements(statements);
+      setChoosingAccess(false);
+      const source = editorRef.current?.getSource();
+      if (!source) return;
+      save.mutate({ source, ...(movementId ? { id: movementId } : {}), statements });
+    },
+    [save, movementId],
+  );
 
   // Rename from the breadcrumb. A movement's name is also the identity other
   // scripts import it by, so when importers exist we warn before proceeding
@@ -1148,10 +1190,11 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
           source: next,
           ...(movementId ? { id: movementId } : {}),
           ...(baseUpdatedAt ? { baseUpdatedAt } : {}),
+          ...statementsForSave,
         });
       }
     },
-    [ensureSchemasFor, movementId, save, baseUpdatedAt],
+    [ensureSchemasFor, movementId, save, baseUpdatedAt, statementsForSave],
   );
 
   const editListenLines = useCallback(
@@ -1706,7 +1749,10 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
                     )}
                   </div>
                 )}
+                <SaveWarnings warnings={result.warnings} />
               </div>
+            ) : "refused" in result && result.refused !== undefined ? (
+              <SaveRefusalNotice refused={result.refused} onChooseAccess={() => setChoosingAccess(true)} />
             ) : (
               <div className="rounded-xl border border-amber-100 bg-amber-50/70 px-4 py-3.5">
                 <div className="flex items-center gap-2 text-[12.5px] font-medium text-amber-800">
@@ -1752,6 +1798,9 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
                 )}
               </div>
             ))}
+
+          {/* Who may read, change and set it off. */}
+          {movementId !== undefined && <AccessPanel thing="automation" id={movementId} />}
 
           {/* Listeners — the file's listen lines, with pause/resume. */}
           <ListenersPanel
@@ -1833,6 +1882,23 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
           </p>
         </aside>
       </div>
+      <CreateAutomationDialog
+        isOpen={choosingAccess}
+        onCancel={() => setChoosingAccess(false)}
+        onConfirm={saveWithStatements}
+      />
+      <ChooseUseDialog
+        isOpen={useChoiceRequest !== null}
+        title="Who may use this connection"
+        onCancel={() => {
+          useChoiceRequest?.resolve(null);
+          setUseChoiceRequest(null);
+        }}
+        onConfirm={(use) => {
+          useChoiceRequest?.resolve(use);
+          setUseChoiceRequest(null);
+        }}
+      />
     </div>
   );
 }

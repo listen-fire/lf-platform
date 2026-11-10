@@ -33,6 +33,9 @@ import {
 import { CodeSnippet } from "@/components/code-snippet";
 import { ServiceIcon } from "@/components/service-icon";
 import { Modal } from "@/components/ontology/modal";
+import { AccessPanel } from "@/components/access/access-panel";
+import { ONLY_YOU } from "@/components/access/access-panel-view";
+import { useConnectionUseChoice } from "@/components/access/creation";
 import {
   Badge,
   Button,
@@ -112,6 +115,10 @@ export default function ConnectionsPage() {
     id: string;
     name: string;
   } | null>(null);
+  const [accessTarget, setAccessTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   const integrations = data?.integrations ?? [];
   const sourceChannels = data?.sourceChannels ?? [];
@@ -159,6 +166,11 @@ export default function ConnectionsPage() {
                         <Badge tone="gray">
                           {TYPE_LABELS[integration.type] ?? integration.type}
                         </Badge>
+                        {integration.onlyYou && (
+                          <Badge tone="amber" testId="connection-only-you">
+                            {ONLY_YOU}
+                          </Badge>
+                        )}
                       </div>
                       <div className="mt-0.5 text-[12px] text-gray-400">
                         {automationCountLabel(integration.automationCount)}
@@ -174,6 +186,14 @@ export default function ConnectionsPage() {
                     {/* Hover-revealed on pointer devices; always visible on
                         touch, where there is no hover to reveal them. */}
                     <div className="flex shrink-0 items-center gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                      <button
+                        onClick={() => setAccessTarget(integration)}
+                        title="Who may use this account"
+                        data-testid={`connection-access-${integration.name}`}
+                        className="cursor-pointer rounded-md px-2 py-1 text-[12px] font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                      >
+                        Access
+                      </button>
                       {CONNECTABLE_CREDENTIAL_TYPES.has(integration.type) && (
                         <button
                           onClick={() => setReconnectTarget(integration)}
@@ -208,7 +228,9 @@ export default function ConnectionsPage() {
               subtitle="link a personal account so messages you send reach the system as you"
             />
             <CardList>
-              <ConnectTelegramRow />
+              <ConnectTelegramRow
+                teamConnected={integrations.some((i) => i.type === "TELEGRAM")}
+              />
             </CardList>
           </section>
 
@@ -293,6 +315,15 @@ export default function ConnectionsPage() {
         credential={deleteTarget}
         onClose={() => setDeleteTarget(null)}
       />
+      <Modal
+        isOpen={accessTarget !== null}
+        onClose={() => setAccessTarget(null)}
+        title={accessTarget === null ? "Access" : `Who may use ${accessTarget.name}`}
+      >
+        <div className="p-5">
+          {accessTarget !== null && <AccessPanel thing="connection" id={accessTarget.id} />}
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -479,11 +510,21 @@ function DeleteCredentialDialog({
  * The link is single-use and expires (~10 min), so the copy is explicit about
  * opening it now.
  */
-function ConnectTelegramRow() {
+function ConnectTelegramRow({
+  teamConnected: alreadyConnected,
+}: {
+  /** Whether the team's Telegram connection exists already; when not, connecting creates it. */
+  teamConnected: boolean;
+}) {
   const [link, setLink] = useState<{ url: string; expiresAt: string } | null>(
     null,
   );
   const [teamConnected, setTeamConnected] = useState(false);
+  // Connecting the team creates its Telegram connection: who may use it is asked first.
+  const [asking, setAsking] = useState(false);
+  const { use, field: useField, reset: resetUse } = useConnectionUseChoice({
+    enabled: asking,
+  });
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -496,10 +537,17 @@ function ConnectTelegramRow() {
   const handleConnect = async () => {
     setError(null);
     setCopied(false);
+    const creates = !alreadyConnected && !teamConnected;
+    if (creates && use === null) {
+      setAsking(true);
+      return;
+    }
     try {
       // 1. Connect the team to the shared bot (creates the team credential).
       //    Idempotent — safe to call on every "New link" too.
-      await connectTelegramTeam();
+      await connectTelegramTeam(creates && use !== null ? { use } : undefined);
+      setAsking(false);
+      resetUse();
       setTeamConnected(true);
       // Refresh the connected-accounts list so the new Telegram credential
       // shows up immediately.
@@ -511,7 +559,9 @@ function ConnectTelegramRow() {
       setError(
         e instanceof Error && /not configured/i.test(e.message)
           ? "Telegram linking isn't set up for this workspace yet."
-          : "Couldn't create a Telegram link. Please try again.",
+          : e instanceof Error && /may not use|exists already|use list|on the team/i.test(e.message)
+            ? e.message
+            : "Couldn't create a Telegram link. Please try again.",
       );
     }
   };
@@ -585,6 +635,11 @@ function ConnectTelegramRow() {
             </div>
           </div>
         )}
+        {asking && (
+          <div className="mt-2" data-testid="telegram-use-choice">
+            {useField}
+          </div>
+        )}
         {error && (
           <div className="mt-0.5 text-[12px] text-red-600">{error}</div>
         )}
@@ -593,7 +648,7 @@ function ConnectTelegramRow() {
         variant="secondary"
         size="sm"
         onClick={handleConnect}
-        disabled={isLoading}
+        disabled={isLoading || (asking && use === null)}
         className="shrink-0"
       >
         {isLoading

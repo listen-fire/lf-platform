@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { trpc, type RouterOutputs } from "@/lib/trpc";
+import { useConnectionUseChoice } from "@/components/access/creation";
 
 import { btnPrimary, btnSecondary, inputClass, labelClass } from "./styles";
 
@@ -135,12 +136,14 @@ function AddCredentialForm({
   const [name, setName] = useState("");
   const [fields, setFields] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+  const { use, field: useField } = useConnectionUseChoice({ enabled: true });
 
   const target = {
     adapterType,
     declaredCredential: declaration.name,
     name: name.trim(),
     fields,
+    ...(use === null ? {} : { use }),
   };
 
   const handleAdd = async () => {
@@ -222,13 +225,15 @@ function AddCredentialForm({
           </p>
         ))}
 
+      {useField}
+
       {error && <p className="text-[12px] text-red-600">{error}</p>}
 
       <div className="flex items-center gap-2">
         {declaration.kind === "oauth2" ? (
           <button
             onClick={handleConnect}
-            disabled={!name.trim() || !declaration.signInAvailable || isConnecting}
+            disabled={!name.trim() || !declaration.signInAvailable || isConnecting || use === null}
             className={btnPrimary}
           >
             {isConnecting ? "Connecting..." : `Connect ${displayName}`}
@@ -236,7 +241,7 @@ function AddCredentialForm({
         ) : (
           <button
             onClick={handleAdd}
-            disabled={!name.trim() || isSaving}
+            disabled={!name.trim() || isSaving || use === null}
             className={btnPrimary}
           >
             {isSaving ? "Saving..." : "Add credential"}

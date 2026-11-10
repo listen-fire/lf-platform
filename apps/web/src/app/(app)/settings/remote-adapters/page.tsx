@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { trpc, type RouterInputs } from "@/lib/trpc";
+import { useConnectionUseChoice } from "@/components/access/creation";
 
 import { Card } from "../card";
 import { ModuleCredentials } from "./module-credentials";
@@ -82,6 +83,9 @@ export default function RemoteAdaptersPage() {
 
   const [editing, setEditing] = useState<FormState | null>(null);
   const [isEdit, setIsEdit] = useState(false);
+  // A new secret is stored as a connection of its own: who may use it is asked.
+  const entersSecret = editing !== null && editing.secret.trim() !== "";
+  const { use, field: useField, reset: resetUse } = useConnectionUseChoice({ enabled: entersSecret });
   const [formError, setFormError] = useState<string | null>(null);
   const [loadingSlug, setLoadingSlug] = useState<string | null>(null);
   const [confirmDeleteSlug, setConfirmDeleteSlug] = useState<string | null>(
@@ -98,12 +102,14 @@ export default function RemoteAdaptersPage() {
   const dismissSignInOutcome = () => router.replace(pathname, { scroll: false });
 
   const openAdd = () => {
+    resetUse();
     setIsEdit(false);
     setFormError(null);
     setEditing(blankForm());
   };
 
   const openEdit = async (adapterType: string) => {
+    resetUse();
     setFormError(null);
     setLoadingSlug(adapterType);
     try {
@@ -242,7 +248,7 @@ export default function RemoteAdaptersPage() {
         // adapter (rotation on edit). With no new secret, round-trip the
         // existing FK so editing other fields keeps the stored credential —
         // the upsert would otherwise null it out.
-        ...(trimmedSecret ? { secret: trimmedSecret } : {}),
+        ...(trimmedSecret ? { secret: trimmedSecret, ...(use === null ? {} : { use }) } : {}),
         ...(editing.credentialsId.trim()
           ? { credentialsId: editing.credentialsId.trim() }
           : {}),
@@ -423,6 +429,7 @@ export default function RemoteAdaptersPage() {
                   ? "A secret is already stored for this adapter. Leave blank to keep it, or enter a new one to replace it."
                   : "Listen-Fire encrypts this and uses it to authenticate to the adapter. It is stored bound to this adapter and never leaves the server."}
               </p>
+              {entersSecret && <div className="mt-3">{useField}</div>}
             </div>
 
             <div>
@@ -476,7 +483,7 @@ export default function RemoteAdaptersPage() {
           <div className="mt-4 flex items-center gap-2">
             <button
               onClick={handleSave}
-              disabled={isSaving}
+              disabled={isSaving || (entersSecret && use === null)}
               className={btnPrimary}
             >
               {isEdit ? "Save changes" : "Add adapter"}

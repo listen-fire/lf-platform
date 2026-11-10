@@ -9,6 +9,7 @@ import { Select } from "@/components/select";
 import { ServiceIcon } from "@/components/service-icon";
 import { openDriveSpreadsheetPicker } from "@/components/movements/connect-actions/google-drive-picker";
 import { GMAIL_UNAVAILABLE_NOTE, gmailConnectControls } from "@/lib/gmail-connect";
+import { useConnectionUseChoice } from "@/components/access/creation";
 
 const inputClass =
   "w-full rounded-md border border-gray-200 px-3 py-2 text-[13px] focus:border-gray-400 focus:outline-none";
@@ -242,6 +243,10 @@ export function IntegrationModal({
   const [name, setName] = useState("");
   const [type, setType] = useState<ExternalServiceType | "">("");
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  // A new credential is a new connection: who may use it is the person's to say.
+  const { use, field: useField, reset: resetUse } = useConnectionUseChoice({ enabled: isOpen && !existing });
+  const withUse = use === null ? {} : { use };
   const nameManuallyEdited = useRef(false);
 
   // API key credentials
@@ -302,7 +307,9 @@ export function IntegrationModal({
     setGmailRefreshToken("");
     setValuationsBaseUrl("");
     setClaimToken(null);
-  }, [isOpen, existing, initialType]);
+    setSaveError(null);
+    resetUse();
+  }, [isOpen, existing, initialType, resetUse]);
 
   // A deployment that registered no Attio OAuth app connects Attio with a
   // pasted workspace access token instead. The server owns that decision (it
@@ -341,7 +348,9 @@ export function IntegrationModal({
 
   const handleSave = async () => {
     if (!name.trim() || !type) return;
+    if (!existing && use === null) return;
     setIsSaving(true);
+    setSaveError(null);
 
     try {
       if (type === ExternalServiceType.AFFINITY) {
@@ -349,28 +358,28 @@ export function IntegrationModal({
         if (existing) {
           await updateCredential({ id: existing.id, name: name.trim(), type, credentials: { apiKey: affinityApiKey } });
         } else {
-          await addCredential({ name: name.trim(), type, credentials: { apiKey: affinityApiKey } });
+          await addCredential({ ...withUse, name: name.trim(), type, credentials: { apiKey: affinityApiKey } });
         }
       } else if (type === ExternalServiceType.GRANOLA) {
         if (!granolaApiKey) return;
         if (existing) {
           await updateCredential({ id: existing.id, name: name.trim(), type, credentials: { apiKey: granolaApiKey } });
         } else {
-          await addCredential({ name: name.trim(), type, credentials: { apiKey: granolaApiKey } });
+          await addCredential({ ...withUse, name: name.trim(), type, credentials: { apiKey: granolaApiKey } });
         }
       } else if (type === ExternalServiceType.EVERTRACE) {
         if (!evertraceApiKey) return;
         if (existing) {
           await updateCredential({ id: existing.id, name: name.trim(), type, credentials: { apiKey: evertraceApiKey } });
         } else {
-          await addCredential({ name: name.trim(), type, credentials: { apiKey: evertraceApiKey } });
+          await addCredential({ ...withUse, name: name.trim(), type, credentials: { apiKey: evertraceApiKey } });
         }
       } else if (type === ExternalServiceType.DEALROOM) {
         if (!dealroomApiKey) return;
         if (existing) {
           await updateCredential({ id: existing.id, name: name.trim(), type, credentials: { apiKey: dealroomApiKey } });
         } else {
-          await addCredential({ name: name.trim(), type, credentials: { apiKey: dealroomApiKey } });
+          await addCredential({ ...withUse, name: name.trim(), type, credentials: { apiKey: dealroomApiKey } });
         }
       } else if (type === ExternalServiceType.MCP) {
         const url = mcpUrl.trim();
@@ -380,7 +389,7 @@ export function IntegrationModal({
         if (existing) {
           await updateCredential({ id: existing.id, name: name.trim(), type, credentials });
         } else {
-          await addCredential({ name: name.trim(), type, credentials });
+          await addCredential({ ...withUse, name: name.trim(), type, credentials });
         }
       } else if (gmailMailboxEntry) {
         const mailbox = gmailMailbox.trim();
@@ -389,7 +398,7 @@ export function IntegrationModal({
         if (existing) {
           await updateCredential({ id: existing.id, name: name.trim(), type: gmailType, credentials: { mailbox } });
         } else {
-          await addCredential({ name: name.trim(), type: gmailType, credentials: { mailbox } });
+          await addCredential({ ...withUse, name: name.trim(), type: gmailType, credentials: { mailbox } });
         }
       } else if (gmail.refreshToken && gmailRefreshToken.trim() && !claimToken) {
         // Only when the user actually pasted one — the sign-in button is right
@@ -399,7 +408,7 @@ export function IntegrationModal({
         if (existing) {
           await updateCredential({ id: existing.id, name: name.trim(), type: gmailType, credentials: { refreshToken } });
         } else {
-          await addCredential({ name: name.trim(), type: gmailType, credentials: { refreshToken } });
+          await addCredential({ ...withUse, name: name.trim(), type: gmailType, credentials: { refreshToken } });
         }
       } else if (attioKeyEntry) {
         if (!attioAccessToken) return;
@@ -407,7 +416,7 @@ export function IntegrationModal({
         if (existing) {
           await updateCredential({ id: existing.id, name: name.trim(), type: ExternalServiceType.ATTIO, credentials });
         } else {
-          await addCredential({ name: name.trim(), type: ExternalServiceType.ATTIO, credentials });
+          await addCredential({ ...withUse, name: name.trim(), type: ExternalServiceType.ATTIO, credentials });
         }
       } else if (type === ExternalServiceType.NATIVE_VALUATIONS) {
         // Server auto-mints the api-key and registers it for echo
@@ -416,21 +425,21 @@ export function IntegrationModal({
         if (existing) {
           await updateCredential({ id: existing.id, name: name.trim(), type, baseUrl });
         } else {
-          await addCredential({ name: name.trim(), type, baseUrl });
+          await addCredential({ ...withUse, name: name.trim(), type, baseUrl });
         }
       } else if (claimToken) {
         const params = { name: name.trim(), type: type as ExternalServiceType, claimToken };
         if (existing) {
           await updateCredential({ id: existing.id, ...params });
         } else {
-          await addCredential(params);
+          await addCredential({ ...params, ...withUse });
         }
       }
       utils.views.credentials.getCredentials.invalidate();
       utils.views.connections.getAll.invalidate();
       onClose();
     } catch (error) {
-      console.error("Failed to save integration:", error);
+      setSaveError(error instanceof Error ? error.message : "Couldn't save this credential. Please try again.");
     } finally {
       setIsSaving(false);
     }
@@ -762,6 +771,10 @@ export function IntegrationModal({
         {existing && type === ExternalServiceType.GOOGLE && (
           <GoogleSheetsGrants credentialsId={existing.id} />
         )}
+
+        {!existing && type && <div className="border-t border-gray-100 pt-3">{useField}</div>}
+
+        {saveError && <p className="text-[12px] text-red-600">{saveError}</p>}
       </div>
 
       <div className="flex justify-end gap-2 border-t border-gray-100 px-5 py-3.5">
@@ -773,7 +786,7 @@ export function IntegrationModal({
         </button>
         <button
           onClick={handleSave}
-          disabled={!name.trim() || !type || !hasCredentials || isSaving}
+          disabled={!name.trim() || !type || !hasCredentials || isSaving || (!existing && use === null)}
           className="cursor-pointer rounded-md bg-primary px-4 py-1.5 text-[13px] font-medium text-white hover:bg-primary-600 disabled:cursor-default disabled:opacity-40"
         >
           {isSaving ? "Saving..." : existing ? "Save" : "Add credential"}

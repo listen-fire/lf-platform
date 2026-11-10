@@ -15,6 +15,7 @@ import { TAB_ORIGIN_ID } from "@/lib/tab-origin";
 import { usePageTitle } from "@/components/page-title";
 import { ValidityBadge } from "@/components/movements/movement-workbench";
 import { LanguageVersionCell } from "@/components/movements/language-version";
+import { ONLY_YOU } from "@/components/access/access-panel-view";
 import {
   Badge,
   ButtonLink,
@@ -63,9 +64,14 @@ function NameCell({ movement }: { movement: MovementListItem }) {
     <td className="py-0 pr-4">
       <Link
         href={`/movements/${movement.id}`}
-        className="block py-3 pl-4 font-medium text-gray-800"
+        className="flex items-center gap-2 py-3 pl-4 font-medium text-gray-800"
       >
         {movement.name}
+        {movement.onlyYou && (
+          <Badge tone="amber" testId="automation-only-you">
+            {ONLY_YOU}
+          </Badge>
+        )}
       </Link>
     </td>
   );
