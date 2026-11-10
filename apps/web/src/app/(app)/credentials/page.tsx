@@ -35,7 +35,9 @@ import { ServiceIcon } from "@/components/service-icon";
 import { Modal } from "@/components/ontology/modal";
 import { AccessPanel } from "@/components/access/access-panel";
 import { ONLY_YOU } from "@/components/access/access-panel-view";
+import { telegramStepAfter } from "@/components/access/connection-refusal";
 import { useConnectionUseChoice } from "@/components/access/creation";
+import type { Grantee } from "@/components/access/grantees";
 import {
   Badge,
   Button,
@@ -228,9 +230,7 @@ export default function ConnectionsPage() {
               subtitle="link a personal account so messages you send reach the system as you"
             />
             <CardList>
-              <ConnectTelegramRow
-                teamConnected={integrations.some((i) => i.type === "TELEGRAM")}
-              />
+              <ConnectTelegramRow />
             </CardList>
           </section>
 
@@ -510,17 +510,13 @@ function DeleteCredentialDialog({
  * The link is single-use and expires (~10 min), so the copy is explicit about
  * opening it now.
  */
-function ConnectTelegramRow({
-  teamConnected: alreadyConnected,
-}: {
-  /** Whether the team's Telegram connection exists already; when not, connecting creates it. */
-  teamConnected: boolean;
-}) {
+function ConnectTelegramRow() {
   const [link, setLink] = useState<{ url: string; expiresAt: string } | null>(
     null,
   );
   const [teamConnected, setTeamConnected] = useState(false);
-  // Connecting the team creates its Telegram connection: who may use it is asked first.
+  // The server says whether connecting creates the team's connection; only
+  // then is who may use it asked.
   const [asking, setAsking] = useState(false);
   const { use, field: useField, reset: resetUse } = useConnectionUseChoice({
     enabled: asking,
@@ -534,18 +530,13 @@ function ConnectTelegramRow({
   const { mutateAsync: connectTelegramTeam } =
     trpc.views.connections.connectTelegramTeam.useMutation();
 
-  const handleConnect = async () => {
+  const connect = async (chosenUse: Grantee[] | undefined) => {
     setError(null);
     setCopied(false);
-    const creates = !alreadyConnected && !teamConnected;
-    if (creates && use === null) {
-      setAsking(true);
-      return;
-    }
     try {
       // 1. Connect the team to the shared bot (creates the team credential).
       //    Idempotent — safe to call on every "New link" too.
-      await connectTelegramTeam(creates && use !== null ? { use } : undefined);
+      await connectTelegramTeam(chosenUse === undefined ? undefined : { use: chosenUse });
       setAsking(false);
       resetUse();
       setTeamConnected(true);
@@ -556,15 +547,35 @@ function ConnectTelegramRow({
       const res = await connectTelegram();
       setLink({ url: res.url, expiresAt: String(res.expiresAt) });
     } catch (e) {
-      setError(
-        e instanceof Error && /not configured/i.test(e.message)
-          ? "Telegram linking isn't set up for this workspace yet."
-          : e instanceof Error && /may not use|exists already|use list|on the team/i.test(e.message)
-            ? e.message
-            : "Couldn't create a Telegram link. Please try again.",
-      );
+      const next = telegramStepAfter(e);
+      switch (next.step) {
+        case "ask_use":
+          setAsking(true);
+          return;
+        case "connect_without_use":
+          setAsking(false);
+          resetUse();
+          await connect(undefined);
+          return;
+        case "say":
+          setError(next.sentence);
+          return;
+        case "other":
+          setError(
+            e instanceof Error && /not configured/i.test(e.message)
+              ? "Telegram linking isn't set up for this workspace yet."
+              : "Couldn't create a Telegram link. Please try again.",
+          );
+          return;
+        default: {
+          const unreachable: never = next;
+          return unreachable;
+        }
+      }
     }
   };
+
+  const handleConnect = () => connect(asking && use !== null ? use : undefined);
 
   const handleCopy = async () => {
     if (!link) return;

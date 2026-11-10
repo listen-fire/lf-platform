@@ -7,7 +7,7 @@ import { useState } from "react";
 
 import { trpc, type RouterInputs } from "@/lib/trpc";
 
-import { AccessPanelView, type AccessListing, type Thing } from "./access-panel-view";
+import { AccessLoadFailed, AccessPanelView, type AccessListing, type Thing } from "./access-panel-view";
 import { draftOf, listOfDraft, type Grantee, type ListDraft, type Member, type Verb } from "./grantees";
 
 type SetInput = RouterInputs["views"]["access"]["set"];
@@ -62,6 +62,7 @@ export function AccessPanel({ thing, id }: { thing: Thing; id: string }) {
     onError: (err) => setError(err.message),
   });
 
+  if (access.isError) return <AccessLoadFailed thing={thing} />;
   if (access.data === undefined) return null;
   const view = access.data;
   const listing: AccessListing = {

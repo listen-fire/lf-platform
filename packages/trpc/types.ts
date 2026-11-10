@@ -1214,6 +1214,10 @@ export type Grantee = {
     digits: string;
 };
 
+export type StatementRefusal = 'empty' | 'not_found' | 'not_allowed' | 'outsider' | 'not_a_member' | 'not_a_writer' | 'malformed' | 'lf_engine' | 'already_stated';
+
+/** Why a creation's statements were refused: the decision's own reasons, and statements given to a save that overwrites. */
+export type StatementReason = StatementRefusal | 'on_overwrite';
 /** Why a person's save was refused. Nothing of the text was stored. */
 export type SaveRefusal = {
     kind: 'read_only';
@@ -1228,6 +1232,7 @@ export type SaveRefusal = {
     missing: StatedVerb<'automation'>[];
 } | {
     kind: 'statement';
+    reason: StatementReason;
     message: string;
 } | {
     kind: 'connections';
@@ -1989,6 +1994,7 @@ export type ShownGrantee = Exclude<Grantee, {
     userId: string;
     name: string | null;
     email: string | null;
+    onTeam: boolean;
 };
 export type Shown<T extends Thing> = {
     thing: T;
@@ -9115,6 +9121,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     baseUpdatedAt?: string | undefined;
                     acknowledgeErrors?: boolean | undefined;
                     statements?: unknown;
+                    intent?: "create" | undefined;
                 };
                 _input_out: {
                     source: string;
@@ -9123,6 +9130,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     baseUpdatedAt?: string | undefined;
                     acknowledgeErrors?: boolean | undefined;
                     statements?: Partial<Readonly<Record<"read" | "write" | "fire", readonly Grantee[]>>> | undefined;
+                    intent?: "create" | undefined;
                 };
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;

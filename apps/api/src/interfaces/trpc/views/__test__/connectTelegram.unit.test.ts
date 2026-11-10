@@ -134,6 +134,13 @@ describe('connectTelegramTeam (Chunk 7 — connect the shared bot via an empty c
     expect(insertCapture.values).toBeUndefined();
   });
 
+  it('refuses with a code of its own for each reason, so the page need not read the text', async () => {
+    await expect(caller().connectTelegramTeam()).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+
+    existingCredential.row = { id: 'existing-cred' };
+    await expect(caller().connectTelegramTeam({ use: [{ kind: 'team' }] })).rejects.toMatchObject({ code: 'UNPROCESSABLE_CONTENT' });
+  });
+
   it('is idempotent — returns the existing credential without inserting a duplicate', async () => {
     existingCredential.row = { id: 'existing-cred' };
 

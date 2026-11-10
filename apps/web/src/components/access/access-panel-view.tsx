@@ -59,6 +59,15 @@ export interface AccessPanelViewProps {
   onCancel: () => void;
 }
 
+/** What the panel shows when its lists could not be read, so a missing panel is never mistaken for an unrestricted thing. */
+export function AccessLoadFailed({ thing }: { thing: Thing }) {
+  return (
+    <p className="text-[12px] text-red-600" data-testid="access-load-failed">
+      Couldn&apos;t load who may reach this {thing}. Reload the page to try again.
+    </p>
+  );
+}
+
 export function AccessPanelView(props: AccessPanelViewProps) {
   const { listing, editing } = props;
   const viewer = listing.viewerUserId;

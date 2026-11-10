@@ -12,10 +12,10 @@ export type Grantee =
   | { kind: "email"; address: string }
   | { kind: "phone"; digits: string };
 
-/** A list entry as the server shows it: a named user comes with who they are. */
+/** A list entry as the server shows it: a named user comes with who they are, and whether they are still on the team. */
 export type ListedGrantee =
   | Exclude<Grantee, { kind: "user" }>
-  | { kind: "user"; userId: string; name: string | null; email: string | null };
+  | { kind: "user"; userId: string; name: string | null; email: string | null; onTeam: boolean };
 
 export type AutomationVerb = "read" | "write" | "fire";
 export type Verb = AutomationVerb | "use";
@@ -47,6 +47,8 @@ export function granteePhrase(grantee: ListedGrantee, viewerUserId: string | nul
       return "Whole team";
     case "user":
       if (grantee.userId === viewerUserId) return "You";
+      // Someone who left keeps their account and name on file; the list says they are gone rather than naming them.
+      if (!grantee.onTeam) return "Someone no longer on the team";
       return grantee.name ?? grantee.email ?? "Someone no longer on the team";
     case "anyone":
       return "Anyone";
@@ -102,6 +104,24 @@ export const FIRE_OPTIONS: readonly { value: FireChoice; label: string }[] = [
 ];
 
 export const USE_OPTIONS: readonly { value: UseChoice; label: string }[] = SEE_OPTIONS;
+
+/**
+ * Who may set a new automation off that the team's engine can keep to. On lf
+ * the platform does not judge the door, so the server refuses any fire list
+ * but "anyone" there; offering the rest would only invite a refusal.
+ */
+export function fireOptionsFor(engine: "platform" | "lf"): readonly { value: FireChoice; label: string }[] {
+  switch (engine) {
+    case "platform":
+      return FIRE_OPTIONS;
+    case "lf":
+      return FIRE_OPTIONS.filter((option) => option.value === "anyone");
+    default: {
+      const unreachable: never = engine;
+      return unreachable;
+    }
+  }
+}
 
 const user = (userId: string): Grantee => ({ kind: "user", userId });
 
@@ -245,6 +265,9 @@ export function draftOf(list: readonly ListedGrantee[], viewerUserId: string | n
   const people = list.flatMap((g) => (g.kind === "user" ? [g.userId] : []));
   const outsiders = list.flatMap((g) => outsiderText(g) ?? []);
   const withTeam = list.some((g) => g.kind === "team");
+  // A list naming the whole team beside named people opens as "Whole team":
+  // those people are on the team, so dropping their names when it is saved
+  // loses nobody's access.
   if (withTeam && outsiders.length === 0) return { ...empty, mode: "team" };
   if (!withTeam && outsiders.length === 0 && people.length === 1 && people[0] === viewerUserId) return { ...empty, mode: "me" };
   return { mode: "people", people, withTeam, outsiders: outsiders.join(", ") };

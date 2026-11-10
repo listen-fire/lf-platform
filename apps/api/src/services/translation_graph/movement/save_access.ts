@@ -19,7 +19,7 @@ import type { CatalogAudience } from './audience';
 import type { ProvisionedListener } from './provision';
 import type { ListenReach } from '../../access/no_person';
 
-import { accessTo, membersAdmitted, stateAtCreation, type CreationStatements } from '../../access/decide';
+import { accessTo, membersAdmitted, stateAtCreation, type CreationStatements, type StatementRefusal } from '../../access/decide';
 import { automationLists, automationWithNoPerson } from '../../access/no_person';
 import { isLfEngineTeam } from '../../lf_engine/team_engine';
 import { StatementStore, type Grantee, type StatedVerb, type Target } from '../../access/statement';
@@ -33,13 +33,16 @@ import { constructionsOf, loadCredentialRows } from './catalog';
 import { assembleMovementFileSources } from './files';
 import { getMovementRowByName, type MovementRow } from './store';
 
+/** Why a creation's statements were refused: the decision's own reasons, and statements given to a save that overwrites. */
+export type StatementReason = StatementRefusal | 'on_overwrite';
+
 /** Why a person's save was refused. Nothing of the text was stored. */
 export type SaveRefusal =
   | { kind: 'read_only' }
   | { kind: 'name_taken'; name: string }
   | { kind: 'name_gone'; name: string }
   | { kind: 'missing_statement'; missing: StatedVerb<'automation'>[] }
-  | { kind: 'statement'; message: string }
+  | { kind: 'statement'; reason: StatementReason; message: string }
   | { kind: 'connections'; connections: { connection: string; file: string }[]; unreadableFiles: string[] };
 
 /** The person a save is decided for: nobody when a run saves. */
@@ -59,7 +62,10 @@ export async function overwriteRefusal(saver: Principal, row: MovementRow): Prom
 
 export const READ_ONLY_REFUSAL = 'You may read this automation but not change it.';
 
-/** A save by name over an automation the saver may not see: the name is taken, which is all it says. */
+/**
+ * A save by name over an automation the saver may not see, or a creation
+ * whose name is held: the name is taken, which is all it says.
+ */
 export function nameTakenRefusal(name: string): string {
   return `The name "${name}" is taken. Save under another name.`;
 }

@@ -993,6 +993,8 @@ export interface SaveMovementInput {
   statements?: Partial<CreationStatements>;
   /** Existing movement row id (the editor's re-save path). */
   id?: string;
+  /** Set when the caller means to create a new automation, never to overwrite: a name that is already held is then refused as taken, whoever the saver is and whatever they may do to the automation holding it. */
+  intent?: 'create';
   /** The row's name (the `<file>` half of the trigger-name convention).
    *  Defaults to the source's first movement declaration. */
   name?: string;
@@ -1376,6 +1378,9 @@ async function runSave(
   // a save by id; one that names nothing there creates it, with its statements.
   const over = existing ?? (await getMovementRowByName({ teamId: input.teamId, name }));
   const intent: MovementWriteIntent = over === null ? { kind: 'create' } : { kind: 'overwrite', id: over.id };
+  // A caller who means to create never overwrites: a held name is taken, and
+  // what the saver may do to its holder is not for this save to tell them.
+  if (input.intent === 'create' && over !== null) return refused({ kind: 'name_taken', name }, nameTakenRefusal(name));
   let creating: CreationStatements | undefined;
   let named: Awaited<ReturnType<typeof connectionsNamed>> = [];
   if (saver !== undefined) {
@@ -1388,7 +1393,7 @@ async function runSave(
       if (refusal === 'read_only') return refused({ kind: 'read_only' }, READ_ONLY_REFUSAL);
     }
     if (over !== null && input.statements !== undefined) {
-      return refused({ kind: 'statement', message: STATEMENTS_ON_OVERWRITE_REFUSAL }, STATEMENTS_ON_OVERWRITE_REFUSAL);
+      return refused({ kind: 'statement', reason: 'on_overwrite', message: STATEMENTS_ON_OVERWRITE_REFUSAL }, STATEMENTS_ON_OVERWRITE_REFUSAL);
     }
     if (over === null) {
       const given = creationStatements(input.statements);
@@ -1400,7 +1405,7 @@ async function runSave(
         await checkCreation(saver, { teamId: input.teamId, statements: creating });
       } catch (error) {
         if (!(error instanceof StatementRefusedError)) throw error;
-        return refused({ kind: 'statement', message: error.message }, error.message);
+        return refused({ kind: 'statement', reason: error.refusal, message: error.message }, error.message);
       }
     }
     named = await timer.step('connections', () => connectionsNamed({ teamId: input.teamId, file: name, source: input.source }));

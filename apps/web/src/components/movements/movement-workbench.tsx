@@ -82,6 +82,7 @@ import { readFileAsBase64, type PickedFile } from "@/lib/picked-file";
 import { AccessPanel } from "@/components/access/access-panel";
 import { ChooseUseDialog, CreateAutomationDialog } from "@/components/access/creation";
 import type { AutomationVerb, Grantee } from "@/components/access/grantees";
+import { creationParts, mustChooseFirst, refusesChoice } from "@/components/access/creation-save";
 import { SaveRefusalNotice, SaveWarnings } from "@/components/movements/save-notice";
 
 const VIM_PREFERENCE_KEY = "listen-fire.movements.vim";
@@ -645,15 +646,18 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
   // sent with every save until one creates it.
   const [creationStatements, setCreationStatements] = useState<Record<AutomationVerb, Grantee[]> | null>(null);
   const [choosingAccess, setChoosingAccess] = useState(false);
-  const statementsForSave = useMemo(
-    () => (movementId === undefined && creationStatements !== null ? { statements: creationStatements } : {}),
+  const creation = useMemo(
+    () => ({ movementId, statements: creationStatements }),
     [movementId, creationStatements],
   );
+  const statementsForSave = useMemo(() => creationParts(creation), [creation]);
 
   const save = trpc.views.movement.save.useMutation({
     onSuccess: (result) => {
-      if (!result.ok && "refused" in result && result.refused?.kind === "missing_statement") {
-        setChoosingAccess(true);
+      if (!result.ok && "refused" in result && result.refused !== undefined) {
+        // A choice the server refused is not sent again: the person chooses anew.
+        if (refusesChoice(result.refused)) setCreationStatements(null);
+        if (result.refused.kind === "missing_statement") setChoosingAccess(true);
       }
       void utils.views.movement.list.invalidate();
       if (props.movementId) {
@@ -1069,7 +1073,7 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
     if (save.isLoading || catalogLoading) return;
     const source = editorRef.current?.getSource();
     if (!source) return;
-    if (movementId === undefined && creationStatements === null) {
+    if (mustChooseFirst(creation)) {
       setChoosingAccess(true);
       return;
     }
@@ -1079,7 +1083,7 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
       ...(baseUpdatedAt ? { baseUpdatedAt } : {}),
       ...statementsForSave,
     });
-  }, [save, catalogLoading, movementId, baseUpdatedAt, creationStatements, statementsForSave]);
+  }, [save, catalogLoading, movementId, baseUpdatedAt, creation, statementsForSave]);
 
   const saveWithStatements = useCallback(
     (statements: Record<AutomationVerb, Grantee[]>) => {
@@ -1087,7 +1091,7 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
       setChoosingAccess(false);
       const source = editorRef.current?.getSource();
       if (!source) return;
-      save.mutate({ source, ...(movementId ? { id: movementId } : {}), statements });
+      save.mutate({ source, ...(movementId ? { id: movementId } : {}), ...creationParts({ movementId, statements }) });
     },
     [save, movementId],
   );
@@ -1752,7 +1756,10 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
                 <SaveWarnings warnings={result.warnings} />
               </div>
             ) : "refused" in result && result.refused !== undefined ? (
-              <SaveRefusalNotice refused={result.refused} onChooseAccess={() => setChoosingAccess(true)} />
+              <SaveRefusalNotice
+                refused={result.refused}
+                {...(movementId === undefined ? { onChooseAccess: () => setChoosingAccess(true) } : {})}
+              />
             ) : (
               <div className="rounded-xl border border-amber-100 bg-amber-50/70 px-4 py-3.5">
                 <div className="flex items-center gap-2 text-[12.5px] font-medium text-amber-800">

@@ -4,6 +4,7 @@ import {
   automationStatements,
   connectionUse,
   draftOf,
+  fireOptionsFor,
   listOfDraft,
   listPhrases,
   outsiderOf,
@@ -27,13 +28,14 @@ const chooser = { viewerUserId: ME, members };
 describe("a list in plain words", () => {
   it("says Whole team, Only you, each person by name, and firing's outsiders as written", () => {
     expect(listPhrases([{ kind: "team" }], ME)).toEqual(["Whole team"]);
-    expect(listPhrases([{ kind: "user", userId: ME, name: "Me", email: null }], ME)).toEqual(["Only you"]);
+    expect(listPhrases([{ kind: "user", userId: ME, name: "Me", email: null, onTeam: true }], ME)).toEqual(["Only you"]);
     expect(
       listPhrases(
         [
-          { kind: "user", userId: ME, name: "Me", email: null },
-          { kind: "user", userId: BOB, name: "Bob", email: "bob@acme.com" },
-          { kind: "user", userId: CAROL, name: null, email: null },
+          { kind: "user", userId: ME, name: "Me", email: null, onTeam: true },
+          { kind: "user", userId: BOB, name: "Bob", email: "bob@acme.com", onTeam: true },
+          // She left: her name is still on file, and the list does not show it.
+          { kind: "user", userId: CAROL, name: "Carol", email: "carol@acme.com", onTeam: false },
         ],
         ME,
       ),
@@ -49,6 +51,13 @@ describe("a list in plain words", () => {
         ME,
       ),
     ).toEqual(["Anyone", "Anyone at @acme.com", "pat@acme.com", "+447700900123"]);
+  });
+});
+
+describe("who may set a new automation off", () => {
+  it("offers every choice on the platform and only anyone on a team that runs on lf, which the server refuses the rest on", () => {
+    expect(fireOptionsFor("platform").map((o) => o.value)).toEqual(["me", "team", "anyone", "people"]);
+    expect(fireOptionsFor("lf")).toEqual([{ value: "anyone", label: "Anyone who reaches it" }]);
   });
 });
 
@@ -102,7 +111,7 @@ describe("changing a list", () => {
   it("opens on the list as it stands and gives back the same list", () => {
     const lists: ListedGrantee[][] = [
       [{ kind: "team" }],
-      [{ kind: "user", userId: ME, name: "Me", email: null }],
+      [{ kind: "user", userId: ME, name: "Me", email: null, onTeam: true }],
       [{ kind: "anyone" }],
       [
         { kind: "team" },
@@ -115,6 +124,12 @@ describe("changing a list", () => {
       const stated = listOfDraft(draftOf(list, ME), { verb: "fire", viewerUserId: ME });
       expect(stated).toEqual(list.map((g) => (g.kind === "user" ? { kind: "user", userId: g.userId } : g)));
     }
+  });
+
+  it("opens a list naming the team beside people as the whole team, which loses nobody's access when saved", () => {
+    const list: ListedGrantee[] = [{ kind: "team" }, { kind: "user", userId: BOB, name: "Bob", email: null, onTeam: true }];
+    expect(draftOf(list, ME).mode).toBe("team");
+    expect(listOfDraft(draftOf(list, ME), { verb: "read", viewerUserId: ME })).toEqual([{ kind: "team" }]);
   });
 
   it("names no outsider and no anyone on a list other than firing", () => {

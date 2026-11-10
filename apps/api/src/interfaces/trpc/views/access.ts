@@ -24,7 +24,9 @@ import { trpc } from '../trpc';
 /** One entry on a list as the page shows it: a named user with who they are. */
 type ShownGrantee =
   | Exclude<Grantee, { kind: 'user' }>
-  | { kind: 'user'; userId: string; name: string | null; email: string | null };
+  | { kind: 'user'; userId: string; name: string | null; email: string | null; onTeam: boolean };
+
+type Person = { name: string | null; email: string | null; onTeam: boolean };
 
 type Shown<T extends Thing> = {
   thing: T;
@@ -55,11 +57,18 @@ function notFound(thing: Thing): TRPCError {
 
 const uuid = z.string().uuid();
 
-/** Each user's name and primary address, for the ones that exist. */
-async function peopleNamed(userIds: readonly string[]): Promise<Map<string, { name: string | null; email: string | null }>> {
-  const ids = [...new Set(userIds)].filter((id) => uuid.safeParse(id).success).map((id) => id as UserId);
+function isUserId(id: string): id is UserId {
+  return uuid.safeParse(id).success;
+}
+
+/**
+ * Each user's name and primary address, for the ones that exist, and whether
+ * they are on the team now: a list can still name someone who left it.
+ */
+async function peopleNamed(teamId: string, userIds: readonly string[]): Promise<Map<string, Person>> {
+  const ids = [...new Set(userIds)].filter(isUserId);
   if (ids.length === 0) return new Map();
-  const [users, emails] = await Promise.all([
+  const [users, emails, members] = await Promise.all([
     getCoreQb(['user']).selectFrom('user').select(['id', 'username']).where('id', 'in', ids).execute(),
     getCoreQb(['user_email'])
       .selectFrom('user_email')
@@ -68,19 +77,20 @@ async function peopleNamed(userIds: readonly string[]): Promise<Map<string, { na
       .orderBy('is_primary', 'desc')
       .orderBy('created_at', 'asc')
       .execute(),
+    StatementStore.membershipsAmong(teamId, ids),
   ]);
   return new Map(
     users.map((user) => {
       const email = emails.find((row) => row.user_id === user.id)?.email;
-      return [String(user.id), { name: user.username, email: email === undefined ? null : String(email) }];
+      return [String(user.id), { name: user.username, email: email === undefined ? null : String(email), onTeam: members.has(String(user.id)) }];
     }),
   );
 }
 
-function shown(grantee: Grantee, people: ReadonlyMap<string, { name: string | null; email: string | null }>): ShownGrantee {
+function shown(grantee: Grantee, people: ReadonlyMap<string, Person>): ShownGrantee {
   switch (grantee.kind) {
     case 'user':
-      return { ...grantee, ...(people.get(grantee.userId) ?? { name: null, email: null }) };
+      return { ...grantee, ...(people.get(grantee.userId) ?? { name: null, email: null, onTeam: false }) };
     case 'team':
     case 'anyone':
     case 'domain':
@@ -96,7 +106,7 @@ function shown(grantee: Grantee, people: ReadonlyMap<string, { name: string | nu
 async function listsOf(target: Target, asked: { teamId: string; verbs: readonly Verb[] }): Promise<Map<Verb, ShownGrantee[]>> {
   const { teamId } = asked;
   const stored = await Promise.all(asked.verbs.map(async (verb) => [verb, await StatementStore.grantsOf(target, { teamId, verb })] as const));
-  const people = await peopleNamed(stored.flatMap(([, list]) => list.flatMap((g) => (g.kind === 'user' ? [g.userId] : []))));
+  const people = await peopleNamed(teamId, stored.flatMap(([, list]) => list.flatMap((g) => (g.kind === 'user' ? [g.userId] : []))));
   return new Map(stored.map(([verb, list]) => [verb, list.map((g) => shown(g, people))]));
 }
 

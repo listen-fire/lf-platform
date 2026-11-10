@@ -126,11 +126,14 @@ export function AutomationAccessChoice({
   onChange,
   members,
   viewerUserId,
+  fireOptions = FIRE_OPTIONS,
 }: {
   choice: AutomationChoice;
   onChange: (choice: AutomationChoice) => void;
   members: readonly Member[];
   viewerUserId: string;
+  /** What the team's engine can keep to for who may set it off. */
+  fireOptions?: typeof FIRE_OPTIONS;
 }) {
   return (
     <div className="space-y-4" data-testid="automation-access-choice">
@@ -158,7 +161,7 @@ export function AutomationAccessChoice({
       <Question title="Who may set it off" hint="Through its listens: a message, an email, an event from a connected system.">
         <RadioGroup
           label="Who may set it off"
-          options={FIRE_OPTIONS}
+          options={fireOptions}
           value={choice.fire}
           onChange={(fire) => onChange({ ...choice, fire })}
           testId="choice-fire"

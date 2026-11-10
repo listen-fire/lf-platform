@@ -138,13 +138,27 @@ describe('reading who may reach an automation', () => {
       thing: 'automation',
       id: DEALS,
       lists: {
-        read: [{ kind: 'user', userId: ALICE, name: 'Alice', email: 'alice@acme.com' }],
-        write: [{ kind: 'user', userId: ALICE, name: 'Alice', email: 'alice@acme.com' }],
+        read: [{ kind: 'user', userId: ALICE, name: 'Alice', email: 'alice@acme.com', onTeam: true }],
+        write: [{ kind: 'user', userId: ALICE, name: 'Alice', email: 'alice@acme.com', onTeam: true }],
         fire: [{ kind: 'domain', domain: 'acme.com' }],
       },
       mayChange: true,
       onlyYou: true,
       viewerUserId: ALICE,
+    });
+  });
+
+  it('says a named person who has left the team is no longer on it', async () => {
+    stated(automation, 'read', [{ kind: 'user', userId: ALICE }, { kind: 'user', userId: BOB }]);
+    stated(automation, 'write', [{ kind: 'user', userId: ALICE }]);
+    stated(automation, 'fire', [{ kind: 'team' }]);
+    mockState.members.delete(BOB);
+    const view = await as(ALICE, () => caller().get({ thing: 'automation', id: DEALS }));
+    expect(view.lists).toMatchObject({
+      read: [
+        { kind: 'user', userId: ALICE, onTeam: true },
+        { kind: 'user', userId: BOB, onTeam: false },
+      ],
     });
   });
 

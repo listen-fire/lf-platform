@@ -481,6 +481,39 @@ describe('saving over an automation needs write on it', () => {
   });
 });
 
+describe('a save that means to create', () => {
+  it('is refused a held name as taken, whatever the saver may do to its holder, and overwrites nothing', async () => {
+    const deals = await existing(manualOnly('deals'), { read: [user(ALICE)], write: [user(ALICE)] });
+    // The test restates the holder's lists between asks, so what must not change is the rows, not the statement count.
+    const { movements, triggers } = stored();
+    const taken = {
+      ok: false,
+      errors: ['The name "deals" is taken. Save under another name.'],
+      catalogNotes: [],
+      refused: { kind: 'name_taken', name: 'deals' },
+    };
+
+    // She may write it: without the intent this would overwrite, and with statements be told of setAccess.
+    expect(await asAlice({ intent: 'create', name: 'deals', source: manualOnly('deals'), statements: STATEMENTS })).toEqual(taken);
+
+    mockAccess.rows = mockAccess.rows.filter((r) => r.target.id !== deals);
+    stated(automation(deals), 'read', [user(ALICE)]);
+    stated(automation(deals), 'write', [user(BOB)]);
+    expect(await asAlice({ intent: 'create', name: 'deals', source: manualOnly('deals'), statements: STATEMENTS })).toEqual(taken);
+
+    mockAccess.rows = mockAccess.rows.filter((r) => r.target.id !== deals);
+    stated(automation(deals), 'write', [user(BOB)]);
+    expect(await asAlice({ intent: 'create', name: 'deals', source: manualOnly('deals'), statements: STATEMENTS })).toEqual(taken);
+    expect(stored()).toMatchObject({ movements, triggers });
+  });
+
+  it('creates when the name is free', async () => {
+    const created = await asAlice({ intent: 'create', source: manualOnly('fresh'), statements: STATEMENTS });
+    expect(created).toMatchObject({ ok: true });
+    expect(db.__tables.movement).toHaveLength(1);
+  });
+});
+
 describe('creating an automation needs who may read, write and fire it', () => {
   it('is refused without all three, naming what is missing, and stores nothing', async () => {
     const before = stored();
@@ -521,13 +554,13 @@ describe('creating an automation needs who may read, write and fire it', () => {
     const before = stored();
     // Nobody creates what they could not change.
     const notHers = await asAlice({ source: manualOnly('fresh'), statements: { ...STATEMENTS, write: [user(BOB)] } });
-    expect(notHers).toMatchObject({ ok: false, refused: { kind: 'statement' }, errors: [expect.stringContaining('write list')] });
+    expect(notHers).toMatchObject({ ok: false, refused: { kind: 'statement', reason: 'not_allowed' }, errors: [expect.stringContaining('write list')] });
     // Reading goes only to the team or people on it.
     const outsider = await asAlice({ source: manualOnly('fresh'), statements: { ...STATEMENTS, read: [anyone] } });
-    expect(outsider).toMatchObject({ ok: false, refused: { kind: 'statement' } });
+    expect(outsider).toMatchObject({ ok: false, refused: { kind: 'statement', reason: 'outsider' } });
     // A read member creates nothing.
     const reader = await saveMovement({ teamId: TEAM, audience: { for: carol }, source: manualOnly('fresh'), statements: STATEMENTS });
-    expect(reader).toMatchObject({ ok: false, refused: { kind: 'statement' } });
+    expect(reader).toMatchObject({ ok: false, refused: { kind: 'statement', reason: 'not_allowed' } });
     expect(stored()).toEqual(before);
   });
 
@@ -658,7 +691,7 @@ describe('statements apply only when creating', () => {
       ok: false,
       errors: [STATEMENTS_ON_OVERWRITE_REFUSAL],
       catalogNotes: [],
-      refused: { kind: 'statement', message: STATEMENTS_ON_OVERWRITE_REFUSAL },
+      refused: { kind: 'statement', reason: 'on_overwrite', message: STATEMENTS_ON_OVERWRITE_REFUSAL },
     };
     expect(STATEMENTS_ON_OVERWRITE_REFUSAL).toMatch(/only when creating.*setAccess/);
 

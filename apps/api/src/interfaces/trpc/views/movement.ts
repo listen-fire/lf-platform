@@ -595,6 +595,11 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
           acknowledgeErrors: z.boolean().optional(),
           /** Who may read, write and fire it, when this save creates it. */
           statements: CreationStatementsInput.optional(),
+          /** Set by a page that creates a new automation: a name already held is then refused as taken, never overwritten. */
+          intent: z.literal('create').optional(),
+        })
+        .refine((input) => input.intent === undefined || input.id === undefined, {
+          message: 'A save over an existing automation cannot also be a creation.',
         }),
       )
       .mutation(async ({ input }): Promise<SaveMovementResponse> => {
@@ -613,6 +618,7 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
             ? { acknowledgeErrors: input.acknowledgeErrors }
             : {}),
           ...(input.statements !== undefined ? { statements: input.statements } : {}),
+          ...(input.intent !== undefined ? { intent: input.intent } : {}),
         });
 
         // Dependent revalidation: a shipped save changes what files importing

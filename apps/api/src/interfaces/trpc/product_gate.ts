@@ -19,6 +19,9 @@ import { mounts, type Unit } from '../../products';
 
 /** Doc-settled ownership. Absent = unclaimed, and unclaimed always mounts. */
 const VIEW_ROUTER_UNITS: Readonly<Record<string, Unit | readonly Unit[]>> = {
+  // Not settled by a unit plan, claimed because it is one fact: the router
+  // serves automations and connections alike, and the automations product
+  // already owns both.
   access: 'automations',
   adapters: 'automations',
   admin: 'residual',

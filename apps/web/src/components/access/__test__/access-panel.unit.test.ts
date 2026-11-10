@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { AccessPanelView, ONLY_YOU, type AccessPanelViewProps } from "../access-panel-view";
+import { AccessLoadFailed, AccessPanelView, ONLY_YOU, type AccessPanelViewProps } from "../access-panel-view";
 import { AutomationAccessChoice, ConnectionAccessChoice } from "../choice";
 import { NO_AUTOMATION_CHOICE, NO_CONNECTION_CHOICE, type Member } from "../grantees";
 
@@ -21,7 +21,7 @@ const panel = (overrides: Partial<AccessPanelViewProps>) =>
         thing: "automation",
         lists: {
           read: [{ kind: "team" }],
-          write: [{ kind: "user", userId: ME, name: "Me", email: "me@acme.com" }],
+          write: [{ kind: "user", userId: ME, name: "Me", email: "me@acme.com", onTeam: true }],
           fire: [{ kind: "domain", domain: "acme.com" }],
         },
         mayChange: true,
@@ -131,9 +131,17 @@ describe("the choice at creation", () => {
 function readerListing(): AccessPanelViewProps["listing"] {
   return {
     thing: "automation",
-    lists: { read: [{ kind: "user", userId: ME, name: "Me", email: null }], write: [{ kind: "user", userId: BOB, name: "Bob", email: null }], fire: [{ kind: "team" }] },
+    lists: { read: [{ kind: "user", userId: ME, name: "Me", email: null, onTeam: true }], write: [{ kind: "user", userId: BOB, name: "Bob", email: null, onTeam: true }], fire: [{ kind: "team" }] },
     mayChange: true,
     onlyYou: false,
     viewerUserId: ME,
   };
 }
+
+describe("when the panel's lists could not be read", () => {
+  it("says so, so a missing panel is not mistaken for an unrestricted thing", () => {
+    const html = renderToStaticMarkup(createElement(AccessLoadFailed, { thing: "connection" }));
+    expect(html).toContain('data-testid="access-load-failed"');
+    expect(html).toContain("Couldn&#x27;t load who may reach this connection.");
+  });
+});
