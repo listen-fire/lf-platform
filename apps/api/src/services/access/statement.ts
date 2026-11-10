@@ -121,6 +121,32 @@ async function grantsOf(target: Target, options: { teamId: string; verb: Verb })
   return rows.map(granteeOf);
 }
 
+/** These verbs' lists on these things of one kind and team, by thing id. A thing with nothing stated is left out. */
+async function grantsAmong(options: {
+  thing: Thing;
+  teamId: string;
+  ids: readonly string[];
+  verbs: readonly Verb[];
+}): Promise<Map<string, { verb: Verb; grantee: Grantee }[]>> {
+  const ids = options.ids.filter(isUuid);
+  if (ids.length === 0 || options.verbs.length === 0) return new Map();
+  const rows = await getAutomationsQb(['access_statement'])
+    .selectFrom('access_statement')
+    .select(['thing_id', 'verb', 'grantee', 'value'])
+    .where('team_id', '=', options.teamId)
+    .where('thing', '=', options.thing)
+    .where('thing_id', 'in', ids)
+    .where('verb', 'in', [...options.verbs])
+    .execute();
+  const lists = new Map<string, { verb: Verb; grantee: Grantee }[]>();
+  for (const row of rows) {
+    const list = lists.get(row.thing_id) ?? [];
+    list.push({ verb: verbOf(row.verb), grantee: granteeOf(row) });
+    lists.set(row.thing_id, list);
+  }
+  return lists;
+}
+
 /**
  * Replace one verb's whole list on one thing. Its delete and insert commit
  * together, and two replacements of the same list take turns rather than
@@ -274,6 +300,7 @@ async function writeMembersOf(teamId: string): Promise<string[]> {
 const StatementStore = {
   teamOf,
   grantsOf,
+  grantsAmong,
   replaceGrants,
   grantedIds,
   listsNaming,

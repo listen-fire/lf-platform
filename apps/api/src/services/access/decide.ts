@@ -203,6 +203,56 @@ async function mayChange(principal: Principal, target: Target, teamId: string): 
   return accessTo<Thing>(principal, { target, verb: changedBy(target.thing) });
 }
 
+/** Whether the principal may change this thing's statement; never for a thing that does not exist. */
+async function mayChangeStatement(principal: Principal, target: Target): Promise<boolean> {
+  const teamId = await StatementStore.teamOf(target);
+  return teamId !== undefined && mayChange(principal, target, teamId);
+}
+
+/**
+ * Of these things of one team, the ones only the principal's user may see:
+ * every list that lets someone see one names people alone, and of the team as
+ * it stands now it admits only them. A team grant is never "only you", however
+ * small the team: whoever joins it next sees the thing.
+ */
+async function seenOnlyBy(
+  principal: Principal,
+  asked: { thing: Thing; teamId: string; ids: readonly string[] },
+): Promise<Set<string>> {
+  const userId = principal.userId?.toLowerCase();
+  if (userId === undefined) return new Set();
+  const lists = await StatementStore.grantsAmong({ ...asked, verbs: grantedBy(seenBy(asked.thing)) });
+  const named = (grantee: Grantee): string | undefined => {
+    switch (grantee.kind) {
+      case 'user':
+        return grantee.userId;
+      case 'team':
+      case 'anyone':
+      case 'domain':
+      case 'email':
+      case 'phone':
+        return undefined;
+      default:
+        return neverAsAny(grantee);
+    }
+  };
+  const people = [...lists.values()].flatMap((list) => list.flatMap(({ grantee }) => named(grantee) ?? []));
+  const memberships = await StatementStore.membershipsAmong(asked.teamId, [...new Set(people)]);
+  const only = new Set<string>();
+  for (const [id, list] of lists) {
+    if (list.some(({ grantee }) => named(grantee) === undefined)) continue;
+    const holders = new Set(
+      list.flatMap(({ verb, grantee }) => {
+        const holder = named(grantee);
+        const access = holder === undefined ? undefined : memberships.get(holder);
+        return holder !== undefined && access !== undefined && meets(access, holderNeeds(verb)) ? [holder] : [];
+      }),
+    );
+    if (holders.size === 1 && holders.has(userId)) only.add(id);
+  }
+  return only;
+}
+
 /** Whether a verb's list may name people who are not on the team. */
 function admitsOutsiders(verb: Verb): boolean {
   switch (verb) {
@@ -546,6 +596,8 @@ export {
   accessTo,
   readableIds,
   setStatement,
+  mayChangeStatement,
+  seenOnlyBy,
   checkCreation,
   stateCreation,
   checkConnectionCreation,

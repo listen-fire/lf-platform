@@ -24,6 +24,8 @@ function teamDefaults() {
     // Membership caps a statement: a read member never writes.
     accessTo: async (principal: Principal, asked: { verb: string }) => asked.verb !== 'write' || principal.access === 'write',
     readableIds: async () => new EveryId(),
+    // A team grant is never the caller alone.
+    seenOnlyBy: async () => new Set<string>(),
     // Creating is a write on the team, whatever list the creator states.
     checkConnectionCreation: async (principal: Principal) => {
       if (principal.access !== 'write') throw new actual.StatementRefusedError('not_allowed', 'Only someone with write access on the team can create a connection.');

@@ -1,3 +1,4 @@
+import { accessRouter } from './access';
 import { accountRouter } from './account';
 import { adaptersRouter } from './adapters';
 import { adminRouter } from './admin';
@@ -37,6 +38,7 @@ import { testHarnessRouter } from './testHarness';
 const gatedProcedure = trpc.procedure.use(productGateMiddleware);
 
 const viewsRouter = trpc.router({
+  access: accessRouter(gatedProcedure),
   account: accountRouter(gatedProcedure),
   adapters: adaptersRouter(gatedProcedure),
   admin: adminRouter(gatedProcedure),

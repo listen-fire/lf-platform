@@ -158,6 +158,16 @@ jest.mock('../../services/access/statement', () => {
             .map((r) => r.target.id),
         );
       },
+      grantsAmong: async (options: { thing: string; teamId: string; ids: string[]; verbs: Verb[] }) => {
+        ask();
+        const lists = new Map<string, { verb: Verb; grantee: Grantee }[]>();
+        for (const r of mockState.rows) {
+          if (r.teamId !== options.teamId || r.target.thing !== options.thing) continue;
+          if (!options.ids.includes(r.target.id) || !options.verbs.includes(r.verb)) continue;
+          lists.set(r.target.id, [...(lists.get(r.target.id) ?? []), { verb: r.verb, grantee: r.grantee }]);
+        }
+        return lists;
+      },
       hasAnyStatement: async (target: Target) => mockState.rows.some((r) => same(r.target, target)),
       membershipsOf: async (userId: string, teamIds: string[]) =>
         new Map(
@@ -985,6 +995,8 @@ const TRPC_CALLS: Record<string, { input: (refs: Refs) => unknown; list?: true }
   'views.controlTower.listRuns': { input: () => undefined, list: true },
   'views.home.getDashboard': { input: () => undefined, list: true },
   'views.credentials.getTgRun': { input: (r) => ({ runId: r.runId }) },
+  'views.access.get': { input: (r) => ({ thing: 'automation', id: r.automationId }) },
+  'views.access.set': { input: (r) => ({ thing: 'automation', id: r.automationId, verb: 'read', grantees: [{ kind: 'team' }] }) },
 };
 
 /** What a granted call changes: an effect by name, or a table written. */
@@ -1063,6 +1075,11 @@ const TRPC_CONNECTION_CALLS: Record<string, ConnectionCall<unknown>> = {
   'views.webhookSubscriptions.list': { ask: () => undefined, list: true },
   'views.webhookSubscriptions.create': { ask: (c) => ({ credentialsId: c.connectionId, provider: 'attio' }), effect: 'registerSubscription' },
   'views.webhookSubscriptions.delete': { ask: (c) => ({ id: c.subscriptionId }), effect: 'write:webhook_subscription' },
+  'views.access.get': { ask: (c) => ({ thing: 'connection', id: c.connectionId }) },
+  'views.access.set': {
+    ask: (c) => ({ thing: 'connection', id: c.connectionId, verb: 'use', grantees: [{ kind: 'team' }] }),
+    effect: 'write:access_statement',
+  },
 };
 
 /** A route's answer, as something two calls can be compared by. */

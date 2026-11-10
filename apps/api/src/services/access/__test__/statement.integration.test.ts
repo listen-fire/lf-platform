@@ -14,7 +14,7 @@ import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
 import { cleanupTeam } from '../../../test/harness/cleanup';
 import { userPrincipal } from '../../principal';
 import { ProvisioningService } from '../../provisioning';
-import { accessTo, readableIds, setStatement } from '../decide';
+import { accessTo, readableIds, seenOnlyBy, setStatement } from '../decide';
 import { StatementStore, type Grantee, type Target } from '../statement';
 
 async function makeTeam(): Promise<TeamId> {
@@ -119,6 +119,27 @@ describe('access statements — one table, one decision', () => {
     await expect(
       setStatement(as(bob), { target: finance, verb: 'use', grantees: [user(bob)] }),
     ).rejects.toMatchObject({ refusal: 'not_allowed' });
+  });
+
+  it('reads several things’ lists at once, and finds what only one member may see', async () => {
+    const notes: Target<'automation'> = { thing: 'automation', id: randomUUID() };
+    await getAutomationsQb(['movement'])
+      .insertInto('movement')
+      .values({ id: notes.id as MovementId, team_id: teamId, name: 'Notes', source: '' })
+      .execute();
+    await setStatement(as(alice), { target: deals, verb: 'write', grantees: [user(alice)] });
+    await setStatement(as(alice), { target: deals, verb: 'read', grantees: [user(alice)] });
+    await setStatement(as(alice), { target: deals, verb: 'fire', grantees: [{ kind: 'anyone' }] });
+    await setStatement(as(alice), { target: notes, verb: 'write', grantees: [user(alice)] });
+    await setStatement(as(alice), { target: notes, verb: 'read', grantees: [team] });
+
+    const lists = await StatementStore.grantsAmong({ thing: 'automation', teamId, ids: [deals.id, notes.id, 'not-a-uuid'], verbs: ['read', 'write'] });
+    expect(lists.get(deals.id)).toEqual(expect.arrayContaining([{ verb: 'read', grantee: user(alice) }, { verb: 'write', grantee: user(alice) }]));
+    expect(lists.get(deals.id)).toHaveLength(2);
+    expect(lists.get(notes.id)).toEqual(expect.arrayContaining([{ verb: 'read', grantee: team }]));
+
+    expect(await seenOnlyBy(as(alice), { thing: 'automation', teamId, ids: [deals.id, notes.id] })).toEqual(new Set([deals.id]));
+    expect(await seenOnlyBy(as(bob), { thing: 'automation', teamId, ids: [deals.id, notes.id] })).toEqual(new Set());
   });
 
   it('finds the lists that name a member', async () => {

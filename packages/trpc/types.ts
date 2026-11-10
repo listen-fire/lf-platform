@@ -1856,6 +1856,8 @@ export type ConnectionsIntegration = {
     /** Each `connect` a program writes with this credential: one per module
      *  the credential's type connects, under each of its names. */
     connectLines: string[];
+    /** Whether only the caller may use it. */
+    onlyYou: boolean;
 };
 export type ConnectionsSourceChannel = {
     /** Stable key matching the trigger.kind for this built-in receiver. */
@@ -1978,6 +1980,28 @@ export type AdapterCatalogEntry = {
     /** How many credentials of `connectType` the team already holds. */
     connectedCount: number;
 };
+
+/** One entry on a list as the page shows it: a named user with who they are. */
+export type ShownGrantee = Exclude<Grantee, {
+    kind: 'user';
+}> | {
+    kind: 'user';
+    userId: string;
+    name: string | null;
+    email: string | null;
+};
+export type Shown<T extends Thing> = {
+    thing: T;
+    id: string;
+    lists: Record<StatedVerb<T>, ShownGrantee[]>;
+    /** Whether the caller may change these lists; otherwise the page shows them read-only. */
+    mayChange: boolean;
+    /** Whether the lists that let someone see it admit the caller alone. */
+    onlyYou: boolean;
+    /** The caller's own user id as the lists store it, so the page can say "you". */
+    viewerUserId: string | null;
+};
+export type AccessView = Shown<'automation'> | Shown<'connection'>;
 
 declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig<{
     ctx: {
@@ -2123,6 +2147,89 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
         };
         transformer: _trpc_server.DefaultDataTransformer;
     }>, {
+        access: _trpc_server.CreateRouterInner<_trpc_server.RootConfig<{
+            ctx: {
+                authorise: () => Promise<void>;
+            };
+            meta: object;
+            errorShape: {
+                message: string;
+                code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
+                data: _trpc_server_dist_error_formatter.DefaultErrorData;
+            };
+            transformer: _trpc_server.DefaultDataTransformer;
+        }>, {
+            get: _trpc_server.BuildProcedure<"query", {
+                _config: _trpc_server.RootConfig<{
+                    ctx: {
+                        authorise: () => Promise<void>;
+                    };
+                    meta: object;
+                    errorShape: {
+                        message: string;
+                        code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
+                        data: _trpc_server_dist_error_formatter.DefaultErrorData;
+                    };
+                    transformer: _trpc_server.DefaultDataTransformer;
+                }>;
+                _meta: object;
+                _ctx_out: {
+                    authorise: () => Promise<void>;
+                };
+                _input_in: {
+                    thing: "automation" | "connection";
+                    id: string;
+                };
+                _input_out: {
+                    thing: "automation" | "connection";
+                    id: string;
+                };
+                _output_in: typeof _trpc_server.unsetMarker;
+                _output_out: typeof _trpc_server.unsetMarker;
+            }, AccessView>;
+            set: _trpc_server.BuildProcedure<"mutation", {
+                _config: _trpc_server.RootConfig<{
+                    ctx: {
+                        authorise: () => Promise<void>;
+                    };
+                    meta: object;
+                    errorShape: {
+                        message: string;
+                        code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
+                        data: _trpc_server_dist_error_formatter.DefaultErrorData;
+                    };
+                    transformer: _trpc_server.DefaultDataTransformer;
+                }>;
+                _meta: object;
+                _ctx_out: {
+                    authorise: () => Promise<void>;
+                };
+                _input_in: {
+                    thing: "automation";
+                    id: string;
+                    verb: "read" | "write" | "fire";
+                    grantees: unknown[];
+                } | {
+                    thing: "connection";
+                    id: string;
+                    verb: "use";
+                    grantees: unknown[];
+                };
+                _input_out: {
+                    thing: "automation";
+                    id: string;
+                    verb: "read" | "write" | "fire";
+                    grantees: Grantee[];
+                } | {
+                    thing: "connection";
+                    id: string;
+                    verb: "use";
+                    grantees: Grantee[];
+                };
+                _output_in: typeof _trpc_server.unsetMarker;
+                _output_out: typeof _trpc_server.unsetMarker;
+            }, AccessView>;
+        }>;
         account: _trpc_server.CreateRouterInner<_trpc_server.RootConfig<{
             ctx: {
                 authorise: () => Promise<void>;
@@ -2323,8 +2430,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     _output_out: typeof _trpc_server.unsetMarker;
                     _meta: object;
                 }, {
-                    name: string;
                     id: string;
+                    name: string;
                 }[]>;
                 getLegalEntitiesWithJargon: _trpc_server.BuildProcedure<"query", {
                     _config: _trpc_server.RootConfig<{
@@ -2462,10 +2569,10 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     _output_in: typeof _trpc_server.unsetMarker;
                     _output_out: typeof _trpc_server.unsetMarker;
                 }, {
+                    id: string;
                     type: _prisma_client.$Enums.LegalEntityType | null;
                     name: string;
                     personalWebsite: string | null;
-                    id: string;
                 }>;
             }>;
             authenticateAs: _trpc_server.CreateRouterInner<_trpc_server.RootConfig<{
@@ -2899,8 +3006,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         acceptsPlusAddressing: boolean;
                     }[];
                     phoneNumber: {
-                        phoneNumber: string;
                         id: string;
+                        phoneNumber: string;
                     } | null;
                 }>;
                 updateUsername: _trpc_server.BuildProcedure<"mutation", {
@@ -3586,8 +3693,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _output_out: typeof _trpc_server.unsetMarker;
                 _meta: object;
             }, {
-                name: string;
                 id: string;
+                name: string;
                 createdAt: Date;
                 scopes: string[];
                 expiresAt: Date | null;
@@ -4581,7 +4688,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     readable: boolean;
                     bounded?: boolean | undefined;
                     boundedBy?: string[] | undefined;
-                    delivery?: "scope" | "connection" | "polled" | undefined;
+                    delivery?: "connection" | "scope" | "polled" | undefined;
                     pollEverySeconds?: number | undefined;
                     carries?: string[] | undefined;
                     scopedBy?: string | undefined;
@@ -4777,7 +4884,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     answerShapeFrom?: string | undefined;
                     bounded?: boolean | undefined;
                     boundedBy?: string[] | undefined;
-                    delivery?: "scope" | "connection" | "polled" | undefined;
+                    delivery?: "connection" | "scope" | "polled" | undefined;
                     pollEverySeconds?: number | undefined;
                     carries?: string[] | undefined;
                     scopedBy?: string | undefined;
@@ -6192,8 +6299,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     _output_out: typeof _trpc_server.unsetMarker;
                 }, {
                     description: string;
-                    name: string;
                     id: NodeTypeId;
+                    name: string;
                     created_at: Date;
                     updated_at: Date;
                     category: NodeTypeCategory;
@@ -6228,8 +6335,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     _output_out: typeof _trpc_server.unsetMarker;
                 }, {
                     description: string;
-                    name: string;
                     id: NodeTypeId;
+                    name: string;
                     created_at: Date;
                     updated_at: Date;
                     category: NodeTypeCategory;
@@ -6266,8 +6373,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     _output_in: typeof _trpc_server.unsetMarker;
                     _output_out: typeof _trpc_server.unsetMarker;
                 }, {
-                    name: string;
                     id: NodeTypeId;
+                    name: string;
                     category: NodeTypeCategory;
                 }>;
                 updateNodeType: _trpc_server.BuildProcedure<"mutation", {
@@ -6308,8 +6415,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     _output_in: typeof _trpc_server.unsetMarker;
                     _output_out: typeof _trpc_server.unsetMarker;
                 }, {
-                    name: string;
                     id: NodeTypeId;
+                    name: string;
                     category: NodeTypeCategory;
                 }>;
                 deleteNodeType: _trpc_server.BuildProcedure<"mutation", {
@@ -6370,8 +6477,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 }, {
                     writable_by: string[] | null;
                     description: string;
-                    name: string;
                     id: PropertyTypeId;
+                    name: string;
                     created_at: Date;
                     updated_at: Date;
                     identity: PropertyIdentity;
@@ -6427,8 +6534,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     _output_in: typeof _trpc_server.unsetMarker;
                     _output_out: typeof _trpc_server.unsetMarker;
                 }, {
-                    name: string;
                     id: PropertyTypeId;
+                    name: string;
                     node_type_id: NodeTypeId | null;
                     edge_type_id: EdgeTypeId | null;
                 }>;
@@ -6478,8 +6585,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     _output_in: typeof _trpc_server.unsetMarker;
                     _output_out: typeof _trpc_server.unsetMarker;
                 }, {
-                    name: string;
                     id: PropertyTypeId;
+                    name: string;
                     node_type_id: NodeTypeId | null;
                 }>;
                 deletePropertyType: _trpc_server.BuildProcedure<"mutation", {
@@ -6885,8 +6992,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 }, {
                     nodeTypes: {
                         description: string;
-                        name: string;
                         id: NodeTypeId;
+                        name: string;
                         category: NodeTypeCategory;
                         icon_svg: string | null;
                         display_name_template: string | null;
@@ -6910,8 +7017,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     propertyTypes: {
                         writable_by: string[] | null;
                         description: string;
-                        name: string;
                         id: PropertyTypeId;
+                        name: string;
                         identity: PropertyIdentity;
                         cardinality: PropertyCardinality;
                         sort_order: number;
@@ -7116,8 +7223,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     _output_out: typeof _trpc_server.unsetMarker;
                 }, {
                     columns: {
-                        name: string;
                         id: PropertyTypeId;
+                        name: string;
                         identity: PropertyIdentity;
                         value_type: PropertyValueType;
                         enum_values: string[] | null;
@@ -7400,8 +7507,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     _output_out: typeof _trpc_server.unsetMarker;
                 }, {
                     description: string;
-                    type: EvidenceType;
                     id: EvidenceId;
+                    type: EvidenceType;
                     created_at: Date;
                     excerpt: string | null;
                     linked_object_id: LinkedObjectId | null;
@@ -7437,8 +7544,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     target_name: string | null;
                     target_type: "edge" | "property";
                     description: string;
-                    type: EvidenceType;
                     id: EvidenceId;
+                    type: EvidenceType;
                     created_at: Date;
                     excerpt: string | null;
                     edge_id: EdgeId | null;
@@ -7472,8 +7579,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     _output_out: typeof _trpc_server.unsetMarker;
                 }, {
                     description: string;
-                    type: EvidenceType;
                     id: EvidenceId;
+                    type: EvidenceType;
                     created_at: Date;
                     excerpt: string | null;
                     linked_object_id: LinkedObjectId | null;
@@ -8193,10 +8300,10 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     _output_in: typeof _trpc_server.unsetMarker;
                     _output_out: typeof _trpc_server.unsetMarker;
                 }, {
+                    id: ResourceId;
                     type: ResourceType;
                     name: string;
                     url: string | null;
-                    id: ResourceId;
                     created_at: Date;
                     document_id: DocumentId | null;
                     payload_data: unknown;
@@ -8242,8 +8349,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         property_name: string;
                     }[];
                     propertyTypes: {
-                        name: string;
                         id: PropertyTypeId;
+                        name: string;
                         identity: PropertyIdentity;
                         value_type: PropertyValueType;
                         enum_values: string[] | null;
@@ -8465,8 +8572,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     _output_out: typeof _trpc_server.unsetMarker;
                 }, {
                     description: string;
-                    name: string;
                     id: RecipeId;
+                    name: string;
                     created_at: Date;
                     updated_at: Date;
                     instructions: string;
@@ -8498,8 +8605,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     _output_out: typeof _trpc_server.unsetMarker;
                 }, {
                     description: string;
-                    name: string;
                     id: RecipeId;
+                    name: string;
                     created_at: Date;
                     updated_at: Date;
                     instructions: string;
@@ -8535,8 +8642,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     _output_out: typeof _trpc_server.unsetMarker;
                 }, {
                     description: string;
-                    name: string;
                     id: RecipeId;
+                    name: string;
                     instructions: string;
                 }>;
                 update: _trpc_server.BuildProcedure<"mutation", {
@@ -8572,8 +8679,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     _output_out: typeof _trpc_server.unsetMarker;
                 }, {
                     description: string;
-                    name: string;
                     id: RecipeId;
+                    name: string;
                     instructions: string;
                 }>;
                 delete: _trpc_server.BuildProcedure<"mutation", {
@@ -9104,6 +9211,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 listeners: (MovementListenerInfo & {
                     lastRun: MovementRunItem | null;
                 })[];
+                onlyYou: boolean;
             })[]>;
             delete: _trpc_server.BuildProcedure<"mutation", {
                 _config: _trpc_server.RootConfig<{
@@ -9429,8 +9537,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
             }, {
                 items: {
                     team_name: string | null;
-                    type: OpsEventType;
                     id: OpsEventId;
+                    type: OpsEventType;
                     created_at: Date;
                     updated_at: Date | null;
                     team_id: string | null;
@@ -9468,8 +9576,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
             }, {
-                type: OpsEventType;
                 id: OpsEventId;
+                type: OpsEventType;
                 created_at: Date;
                 title: string;
                 detail: unknown;
@@ -9501,8 +9609,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
             }, {
-                type: OpsEventType;
                 id: OpsEventId;
+                type: OpsEventType;
                 created_at: Date;
                 updated_at: Date | null;
                 team_id: string | null;
@@ -9658,11 +9766,11 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     _meta: object;
                 }, {
                     description: string | null;
+                    id: string;
                     teamId: string | null;
                     type: _prisma_client.$Enums.LegalEntityType | null;
                     name: string;
                     personalWebsite: string | null;
-                    id: string;
                     createdAt: Date;
                     updatedAt: Date;
                     slug: string | null;
@@ -9754,8 +9862,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     _output_in: typeof _trpc_server.unsetMarker;
                     _output_out: typeof _trpc_server.unsetMarker;
                 }, {
-                    teamId: string;
                     id: string;
+                    teamId: string;
                     createdAt: Date;
                     updatedAt: Date;
                     investmentId: string | null;
@@ -10182,11 +10290,11 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     _output_out: typeof _trpc_server.unsetMarker;
                 }, {
                     data: _prisma_client_runtime_library.JsonValue | null;
+                    id: string;
+                    date: Date;
                     teamId: string | null;
                     type: _prisma_client.$Enums.EventType;
                     name: string;
-                    date: Date;
-                    id: string;
                     createdAt: Date;
                     updatedAt: Date;
                     assetType: _prisma_client.$Enums.AssetType | null;
@@ -10626,9 +10734,9 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                             type: AssetType | null;
                             name: string | null;
                             asset_id: AssetId | null;
+                            id: PriceId;
                             date: Date;
                             price: number;
-                            id: PriceId;
                             event_id: EventId | null;
                             currency: CurrencyIsoCode;
                             priceType: PriceType;
@@ -10642,10 +10750,10 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         }[];
                         transactions: ClassifiedTransactionFlow[];
                         data: unknown;
+                        id: EventId;
+                        date: Date;
                         type: EventType;
                         name: string;
-                        date: Date;
-                        id: EventId;
                         valuation: number | null;
                         investment_round_type: InvestmentRoundType | null;
                         raised_amount: number | null;
@@ -10697,9 +10805,9 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         type: AssetType | null;
                         name: string | null;
                         asset_id: AssetId | null;
+                        id: PriceId;
                         date: Date;
                         price: number;
-                        id: PriceId;
                         event_id: EventId | null;
                         currency: CurrencyIsoCode;
                         priceType: PriceType;
@@ -10730,8 +10838,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     })[];
                     convertibleAssets: {
                         [k: string]: {
-                            name: string;
                             id: AssetId;
+                            name: string;
                             interest: number | null;
                             convertibleType: ConvertibleType | null;
                             convertibleAmount: number | null;
@@ -10821,11 +10929,11 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     _output_out: typeof _trpc_server.unsetMarker;
                 }, {
                     description: string | null;
+                    id: string;
                     teamId: string | null;
                     type: _prisma_client.$Enums.LegalEntityType | null;
                     name: string;
                     personalWebsite: string | null;
-                    id: string;
                     createdAt: Date;
                     updatedAt: Date;
                     slug: string | null;
@@ -11087,11 +11195,11 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 }, {
                     rounds: {
                         pricePerShare: {
+                            id: string;
+                            date: Date;
                             teamId: string;
                             type: _prisma_client.$Enums.PriceType;
-                            date: Date;
                             price: number;
-                            id: string;
                             createdAt: Date;
                             updatedAt: Date;
                             eventId: string | null;
@@ -11135,8 +11243,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                             slug: string | null;
                         };
                         investment: {
-                            name: string;
                             id: LegalEntityId;
+                            name: string;
                             iso_code: CurrencyIsoCode;
                             amount: number;
                         }[];
@@ -11623,8 +11731,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         event_date: Date | null;
                         company_name: string;
                         funds: {
-                            name: string;
                             id: LegalEntityId;
+                            name: string;
                         }[];
                     }[];
                     nextCursor: string | null;
@@ -13576,9 +13684,9 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
             }, {
+                id: string;
                 name: string | null;
                 phoneNumber: string;
-                id: string;
                 createdAt: Date;
                 updatedAt: Date;
                 wordIdentifier: string | null;
@@ -13609,9 +13717,9 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
             }, {
+                id: string;
                 name: string | null;
                 phoneNumber: string;
-                id: string;
                 createdAt: Date;
                 updatedAt: Date;
                 wordIdentifier: string | null;

@@ -27,6 +27,15 @@ jest.mock('../statement', () => {
         mockTable.rows
           .filter((r) => r.teamId === options.teamId && same(r.target, target) && r.verb === options.verb)
           .map((r) => r.grantee),
+      grantsAmong: async (options: { thing: Thing; teamId: string; ids: string[]; verbs: Verb[] }) => {
+        const lists = new Map<string, { verb: Verb; grantee: Grantee }[]>();
+        for (const r of mockTable.rows) {
+          if (r.teamId !== options.teamId || r.target.thing !== options.thing) continue;
+          if (!options.ids.includes(r.target.id) || !options.verbs.includes(r.verb)) continue;
+          lists.set(r.target.id, [...(lists.get(r.target.id) ?? []), { verb: r.verb, grantee: r.grantee }]);
+        }
+        return lists;
+      },
       replaceGrants: async (target: Target, options: { teamId: string; verb: Verb; grantees: Grantee[] }) => {
         mockTable.rows = [
           ...mockTable.rows.filter((r) => !(same(r.target, target) && r.verb === options.verb)),
@@ -90,8 +99,10 @@ import {
   checkConnectionCreation,
   checkCreation,
   stateAtCreation,
+  mayChangeStatement,
   membersAdmitted,
   passOnWhatTheyHeld,
+  seenOnlyBy,
   readableIds,
   setStatement,
   stateCreation,
@@ -434,6 +445,58 @@ describe('membersAdmitted', () => {
     expect(await membersAdmitted(TEAM, [{ verb: 'read', grantees: [team] }])).toEqual(new Set([ALICE, BOB]));
     expect(await membersAdmitted(TEAM, [{ verb: 'write', grantees: [team] }])).toEqual(new Set([ALICE]));
     expect(await membersAdmitted(TEAM, [{ verb: 'use', grantees: [user(BOB), user(CAROL)] }])).toEqual(new Set([BOB]));
+  });
+});
+
+describe('seenOnlyBy', () => {
+  const only = (userId: string, thing: Thing, ids: string[]) => seenOnlyBy(person(userId), { thing, teamId: TEAM, ids });
+
+  it('finds the automations whose read and write lists admit the caller alone', async () => {
+    member(TEAM, ALICE, 'write');
+    member(TEAM, BOB, 'write');
+    stated(DEALS, 'read', [user(ALICE)]);
+    stated(DEALS, 'write', [user(ALICE)]);
+    stated(NOTES, 'read', [user(ALICE)]);
+    stated(NOTES, 'write', [user(BOB)]);
+    expect(await only(ALICE, 'automation', [DEALS.id, NOTES.id])).toEqual(new Set([DEALS.id]));
+    expect(await only(BOB, 'automation', [DEALS.id, NOTES.id])).toEqual(new Set());
+  });
+
+  it('never counts a team grant as the caller alone, even on a team of one', async () => {
+    member(TEAM, ALICE, 'write');
+    stated(DEALS, 'read', [team]);
+    stated(DEALS, 'write', [user(ALICE)]);
+    expect(await only(ALICE, 'automation', [DEALS.id])).toEqual(new Set());
+  });
+
+  it('counts only who still holds a list: a named member who left, or a reader on a write list, admits nobody', async () => {
+    member(TEAM, ALICE, 'write');
+    member(TEAM, BOB, 'read');
+    stated(DEALS, 'read', [user(ALICE), user(CAROL)]);
+    stated(DEALS, 'write', [user(ALICE), user(BOB)]);
+    expect(await only(ALICE, 'automation', [DEALS.id])).toEqual(new Set([DEALS.id]));
+  });
+
+  it('reads a connection by its use list, and a machine principal is never anyone alone', async () => {
+    member(TEAM, ALICE, 'write');
+    stated(FINANCE, 'use', [user(ALICE)]);
+    expect(await only(ALICE, 'connection', [FINANCE.id])).toEqual(new Set([FINANCE.id]));
+    expect(await seenOnlyBy(machine(), { thing: 'connection', teamId: TEAM, ids: [FINANCE.id] })).toEqual(new Set());
+  });
+});
+
+describe('mayChangeStatement', () => {
+  it('answers as setStatement decides: write on the automation, use on the connection, and only on a thing that exists', async () => {
+    member(TEAM, ALICE, 'write');
+    member(TEAM, BOB, 'write');
+    stated(DEALS, 'write', [user(ALICE)]);
+    stated(DEALS, 'read', [team]);
+    stated(FINANCE, 'use', [user(BOB)]);
+    expect(await mayChangeStatement(person(ALICE), DEALS)).toBe(true);
+    expect(await mayChangeStatement(person(BOB), DEALS)).toBe(false);
+    expect(await mayChangeStatement(person(ALICE), FINANCE)).toBe(false);
+    expect(await mayChangeStatement(person(BOB), FINANCE)).toBe(true);
+    expect(await mayChangeStatement(person(ALICE), { thing: 'automation', id: 'd0000000-0000-4000-8000-00000000dead' })).toBe(false);
   });
 });
 

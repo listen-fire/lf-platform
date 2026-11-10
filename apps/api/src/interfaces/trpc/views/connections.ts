@@ -21,6 +21,7 @@
 
 
 import { TRPCError } from '@trpc/server';
+import { currentPrincipal } from 'principal';
 import { z } from 'zod';
 
 import type { UserId } from '../../../generated/kysely/core/User';
@@ -49,6 +50,7 @@ import {
   telegramStartUrl,
 } from '../../../services/translation_graph/adapters/telegram/handshake';
 import { USE_CONNECTION, connectionUnseen, decidesEach, readableAmong, usableAmong } from '../../access_route';
+import { seenOnlyBy } from '../../../services/access/decide';
 import { GranteesInput, MISSING_USE_REFUSAL } from '../../../services/access/stated_input';
 import { useForNewConnection } from './connection_creation';
 
@@ -76,6 +78,8 @@ export type ConnectionsIntegration = {
   /** Each `connect` a program writes with this credential: one per module
    *  the credential's type connects, under each of its names. */
   connectLines: string[];
+  /** Whether only the caller may use it. */
+  onlyYou: boolean;
 };
 
 export type ConnectionsSourceChannel = {
@@ -296,6 +300,11 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
       // the automations they may read.
       const credentialRows = await usableAmong(teamCredentialRows, { connectionOf: (c) => c.id, teamIds: [teamId] });
       const triggerRows = await readableAmong(teamTriggerRows, { automationOf: (t) => t.movement_id, teamIds: [teamId] });
+      const onlyYours = await seenOnlyBy(currentPrincipal(), {
+        thing: 'connection',
+        teamId,
+        ids: credentialRows.map((c) => String(c.id)),
+      });
 
       // Movement import names for each credential row — the identifier a
       // program writes in `import { … } from credentials`. Reuses the
@@ -339,6 +348,7 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
               imported: importedByCredentialId.get(credId) ?? [],
               secretOf: installsBySecretId.get(credId) ?? [],
             }),
+            onlyYou: onlyYours.has(credId),
           };
         });
 

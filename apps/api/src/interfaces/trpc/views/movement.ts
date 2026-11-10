@@ -34,7 +34,9 @@
  */
 
 import { CreationStatementsInput } from '../../../services/access/stated_input';
+import { seenOnlyBy } from '../../../services/access/decide';
 import { TRPCError } from '@trpc/server';
+import { currentPrincipal } from 'principal';
 import {
   LANGUAGE_VERSION,
   neverAsAny,
@@ -299,6 +301,8 @@ type MovementListItemResponse = Omit<MovementListItem, 'listeners'> & {
   /** How many other files import this one. */
   usedBy: number;
   listeners: MovementListenerWithRun[];
+  /** Whether only the caller may see it. */
+  onlyYou: boolean;
 };
 
 /**
@@ -683,11 +687,15 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
       const usage = movementUsageIndex(rows.filter((row) => readable.has(row.id)));
 
       const allTriggerIds = items.flatMap((item) => item.listeners.map((l) => l.triggerId));
-      const latestRuns = await latestRunsByTriggerId({ teamId, triggerIds: allTriggerIds });
+      const [latestRuns, onlyYours] = await Promise.all([
+        latestRunsByTriggerId({ teamId, triggerIds: allTriggerIds }),
+        seenOnlyBy(currentPrincipal(), { thing: 'automation', teamId, ids: items.map((item) => item.id) }),
+      ]);
 
       return items.map((item) => ({
         ...item,
         usedBy: usage.get(item.name)?.length ?? 0,
+        onlyYou: onlyYours.has(item.id),
         listeners: item.listeners.map((l) => ({
           ...l,
           lastRun: (() => {

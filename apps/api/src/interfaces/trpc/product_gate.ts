@@ -19,6 +19,7 @@ import { mounts, type Unit } from '../../products';
 
 /** Doc-settled ownership. Absent = unclaimed, and unclaimed always mounts. */
 const VIEW_ROUTER_UNITS: Readonly<Record<string, Unit | readonly Unit[]>> = {
+  access: 'automations',
   adapters: 'automations',
   admin: 'residual',
   apiKeys: 'core',
