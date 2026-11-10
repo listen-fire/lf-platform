@@ -17,11 +17,12 @@ import {
   type ListenReach,
 } from './no_person';
 import { storedRowOf } from './statement';
+import { listenReachesOf } from '../translation_graph/movement/save_access';
 
 type Unstated = { automations: string[]; connections: string[] };
 
-/** What a run stated: automations and connections that had no statement at all. */
-type StatedCounts = { automations: number; connections: number };
+/** What a run stated: the automations and connections that had no statement at all. */
+type StatedThings = Unstated;
 
 // A thing with any statement was stated by a person, or by its creation since
 // statements existed: it is never touched here.
@@ -68,29 +69,47 @@ async function teamRunsOnLf(client: Client, teamId: string): Promise<boolean> {
   return engine.rows.some((r) => r.engine === 'lf');
 }
 
-/** The listens of these automations, each by its module and whether it hears through a connection of the team's own. */
+/**
+ * The listens of these automations, read from each file's source by the
+ * function a save uses, so a file's listens have one derivation. The trigger
+ * rows are not the file: the deploy check deletes an automation's unpaused ones
+ * when it stops it, so a mixed file can look narrower there than its source is.
+ * A source that cannot be read gets no listens, which states the narrowest fire
+ * list (the team): migration never widens who may fire.
+ */
 async function listensOf(
   client: Client,
   teamId: string,
   movementIds: readonly string[],
 ): Promise<Map<string, ListenReach[]>> {
-  const listens = await client.query<{
-    movement_id: string;
-    kind: string;
-    via_connection: boolean;
-  }>(
-    `SELECT movement_id::text AS movement_id, kind, credentials_id IS NOT NULL AS via_connection
-       FROM automations.trigger WHERE team_id = $1::uuid AND movement_id = ANY($2::uuid[])`,
+  const files = await client.query<{ id: string; source: string }>(
+    `SELECT id::text AS id, source FROM automations.movement
+      WHERE team_id = $1::uuid AND id = ANY($2::uuid[])`,
     [teamId, movementIds],
   );
   const byMovement = new Map<string, ListenReach[]>();
-  for (const listen of listens.rows) {
-    byMovement.set(listen.movement_id, [
-      ...(byMovement.get(listen.movement_id) ?? []),
-      { module: listen.kind, viaConnection: listen.via_connection },
-    ]);
+  for (const file of files.rows) {
+    try {
+      byMovement.set(file.id, listenReachesOf(file.source));
+    } catch (err) {
+      console.warn(
+        `[state-unstated] could not read the listens of automation ${file.id} in team ${teamId}; treating it as having none, so only the team may fire it: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+      byMovement.set(file.id, []);
+    }
   }
   return byMovement;
+}
+
+/** Whether anything of this team has been stated: on a later run, an unstated thing is a creation that forgot to say. */
+async function teamHasStatements(client: Client, teamId: string): Promise<boolean> {
+  const found = await client.query(
+    `SELECT 1 FROM automations.access_statement WHERE team_id = $1::uuid LIMIT 1`,
+    [teamId],
+  );
+  return (found.rowCount ?? 0) > 0;
 }
 
 /**
@@ -127,28 +146,29 @@ async function stateIfStillUnstated<T extends Thing>(
  * Give everything of one team that has no statement at all the reach a
  * creation with no person gets. Nobody is choosing: this keeps what the team
  * has today. A thing with a statement keeps it, so a second run changes nothing.
+ * Returns the ids of the things it stated.
  */
-async function stateWhatIsUnstated(client: Client, teamId: string): Promise<StatedCounts> {
+async function stateWhatIsUnstated(client: Client, teamId: string): Promise<StatedThings> {
   const unstated = await unstatedIn(client, teamId);
   const runsOnLf = await teamRunsOnLf(client, teamId);
   const listensByAutomation = await listensOf(client, teamId, unstated.automations);
 
-  const counts: StatedCounts = { automations: 0, connections: 0 };
+  const stated: StatedThings = { automations: [], connections: [] };
   for (const id of unstated.automations) {
     const lists = automationLists(
       automationWithNoPerson({ listens: listensByAutomation.get(id) ?? [], runsOnLf }),
     );
     if (await stateIfStillUnstated(client, { teamId, thing: 'automation', id, lists }))
-      counts.automations += 1;
+      stated.automations.push(id);
   }
   for (const id of unstated.connections) {
     const lists: StatedList<'connection'>[] = [
       { verb: 'use', grantees: connectionWithNoPerson().use },
     ];
     if (await stateIfStillUnstated(client, { teamId, thing: 'connection', id, lists }))
-      counts.connections += 1;
+      stated.connections.push(id);
   }
-  return counts;
+  return stated;
 }
 
 export {
@@ -157,5 +177,6 @@ export {
   teamsWithUnstated,
   teamRunsOnLf,
   listensOf,
-  type StatedCounts,
+  teamHasStatements,
+  type StatedThings,
 };

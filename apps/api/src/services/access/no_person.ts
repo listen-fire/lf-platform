@@ -13,9 +13,9 @@ import type { Grantee } from './statement';
 
 import { resolveAdapterSlug } from '../translation_graph/adapters/registry';
 
-/** One listen of an automation, as its trigger row records it. */
+/** One listen of an automation, as its source states it. */
 type ListenReach = {
-  /** The listen's module, by slug or by the kind a trigger row stores. */
+  /** The listen's module, by slug or by the kind a trigger row stores */
   module: string;
   /** Whether it hears through a connection of the team's own, rather than a shared one. */
   viaConnection: boolean;

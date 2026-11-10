@@ -12,7 +12,6 @@ import type { MovementId } from '../../../generated/kysely/automations/Movement'
 
 import { getAutomationsQb } from '../../../lib/kysely';
 import { cleanupTeam } from '../../../test/harness/cleanup';
-import { insertTestListen } from '../../../test/harness/listens';
 import { StatementStore, type Target } from '../../access/statement';
 import ExternalServiceType from '../../../generated/kysely/automations/ExternalServiceType';
 import type { ExternalServiceCredentialsId } from '../../../generated/kysely/automations/ExternalServiceCredentials';
@@ -32,9 +31,9 @@ afterEach(async () => {
   await cleanupTeam(teamId);
 });
 
-async function automation(name: string): Promise<MovementId> {
+async function automation(name: string, source = ''): Promise<MovementId> {
   const id = randomUUID() as MovementId;
-  await getAutomationsQb(['movement']).insertInto('movement').values({ id, team_id: teamId, name, source: '' }).execute();
+  await getAutomationsQb(['movement']).insertInto('movement').values({ id, team_id: teamId, name, source }).execute();
   return id;
 }
 
@@ -52,15 +51,13 @@ const listOf = (target: Target, verb: 'read' | 'write' | 'fire' | 'use') => Stat
 describe('an imported team', () => {
   it('gives an automation with no statement the team, and fire by its listens; a connection or shell, use for the team', async () => {
     const slack = await connection('Slack');
-    const onSlack = await automation('On Slack');
-    const onEmail = await automation('On email');
-    const mixed = await automation('Mixed');
-    await insertTestListen({ teamId, movementId: onSlack, adapterType: 'SLACK', edge: 'Messages', delivery: 'connection', credentialsId: slack });
-    await insertTestListen({ teamId, movementId: onEmail, adapterType: 'email', edge: 'Emails', delivery: 'connection' });
-    await insertTestListen({ teamId, movementId: mixed, adapterType: 'email', edge: 'Emails', delivery: 'connection' });
-    await insertTestListen({ teamId, movementId: mixed, adapterType: 'slack', edge: 'Messages', delivery: 'connection', credentialsId: slack });
+    const onSlack = await automation('On Slack', 'chat = slack(credentials: `Slack`)');
+    const onEmail = await automation('On email', 'inbox = email()');
+    const mixed = await automation('Mixed', 'inbox = email()\nchat = slack(credentials: `Slack`)');
 
-    expect(await stateWhatIsUnstated(client, teamId)).toEqual({ automations: 3, connections: 1 });
+    const stated = await stateWhatIsUnstated(client, teamId);
+    expect(stated.automations).toHaveLength(3);
+    expect(stated.connections).toEqual([slack]);
 
     const team = [{ kind: 'team' }];
     for (const id of [onSlack, onEmail, mixed]) {
@@ -78,14 +75,13 @@ describe('an imported team', () => {
     const alice = randomUUID();
     await StatementStore.replaceGrants({ thing: 'automation', id: stated }, { teamId, verb: 'write', grantees: [{ kind: 'user', userId: alice }] });
 
-    expect(await stateWhatIsUnstated(client, teamId)).toEqual({ automations: 0, connections: 0 });
+    expect(await stateWhatIsUnstated(client, teamId)).toEqual({ automations: [], connections: [] });
     expect(await listOf({ thing: 'automation', id: stated }, 'write')).toEqual([{ kind: 'user', userId: alice }]);
     expect(await listOf({ thing: 'automation', id: stated }, 'read')).toEqual([]);
   });
 
   it('says anyone may fire on a team whose automations run on lf', async () => {
-    const onSlack = await automation('On Slack');
-    await insertTestListen({ teamId, movementId: onSlack, adapterType: 'slack', edge: 'Messages', delivery: 'connection' });
+    const onSlack = await automation('On Slack', 'chat = slack(credentials: `Slack`)');
     await getAutomationsQb(['team_engine']).insertInto('team_engine').values({ team_id: teamId, engine: 'lf' }).execute();
 
     await stateWhatIsUnstated(client, teamId);

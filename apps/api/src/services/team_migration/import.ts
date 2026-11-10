@@ -162,7 +162,8 @@ export async function importTeam(client: Client, options: ImportOptions): Promis
         [manifest.teamId],
       );
       shellCredentials = stamped.rowCount ?? 0;
-      stated = await stateWhatIsUnstated(client, manifest.teamId);
+      const statedNow = await stateWhatIsUnstated(client, manifest.teamId);
+      stated = { automations: statedNow.automations.length, connections: statedNow.connections.length };
     }
 
     await client.query('COMMIT');

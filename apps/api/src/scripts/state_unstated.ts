@@ -24,13 +24,37 @@ import { Client } from 'pg';
 
 import {
   stateWhatIsUnstated,
+  teamHasStatements,
   teamsWithUnstated,
   unstatedIn,
+  type StatedThings,
 } from '../services/access/state_unstated';
 
 function parseArgs(argv: string[]): { team: string | undefined; check: boolean } {
   const teamAt = argv.indexOf('--team');
   return { team: teamAt === -1 ? undefined : argv[teamAt + 1], check: argv.includes('--check') };
+}
+
+/**
+ * Say what a run stated. The first run in a team states what existed before
+ * statements; on a later run an unstated thing is one a creation path did not
+ * state, so it is a warning. "Later" is that the team already had statements
+ * (no marker to keep): the first rollout's second pass also warns about what
+ * the old api created while the first ran, which is true of it.
+ */
+function reportStated(teamId: string, stated: StatedThings, firstRun: boolean): void {
+  const things = [
+    ...stated.automations.map((id) => ({ kind: 'automation', id })),
+    ...stated.connections.map((id) => ({ kind: 'connection', id })),
+  ];
+  for (const { kind, id } of things) {
+    console.log(`[state-unstated] team ${teamId}: stated ${kind} ${id}`);
+    if (!firstRun) {
+      console.warn(
+        `[state-unstated] team ${teamId}: ${kind} ${id} had no statement though the team already has statements. After the first run an unstated thing means a creation path did not state it; it was given the reach a creation with no person gets.`,
+      );
+    }
+  }
 }
 
 async function stateUnstatedMain(argv: string[]): Promise<void> {
@@ -58,10 +82,12 @@ async function stateUnstatedMain(argv: string[]): Promise<void> {
       // One team at a time and all or none of it, so a failure leaves whole teams stated, never half of one.
       await client.query('BEGIN');
       try {
+        const firstRun = !(await teamHasStatements(client, teamId));
         const stated = await stateWhatIsUnstated(client, teamId);
         await client.query('COMMIT');
-        automations += stated.automations;
-        connections += stated.connections;
+        reportStated(teamId, stated, firstRun);
+        automations += stated.automations.length;
+        connections += stated.connections.length;
       } catch (err) {
         await client.query('ROLLBACK');
         throw err;

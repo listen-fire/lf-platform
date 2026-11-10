@@ -62,7 +62,7 @@ The compose file runs migrations as a one-shot service that must exit 0 before t
 pnpm deploy:render-pre
 ```
 
-Between the two, `node build/scripts/state_unstated.js` gives every automation and connection that has no access statement the reach it has today. It is idempotent, and it fails the deploy if it cannot finish, because a thing left unstated is a thing nobody can reach.
+Between the two, `node build/scripts/state_unstated.js` gives every automation and connection that has no access statement the reach it has today. It is idempotent, and it fails the deploy if it cannot finish, because a thing left unstated is a thing nobody can reach. After the first deployment that carries it, run `node build/scripts/state_unstated.js` once by hand (the previous service kept serving while it ran, and what that created has no statement), then `node build/scripts/list_mixed_fire_reach.js`: files that mix listens were given the narrower fire list, so widen them and restore any machine caller, which is cut off from a mixed file until then.
 
 The second half is the deploy check: once per release it re-validates every saved automation and reports which ones validate cleanly under the release's current language version. It moves none: only an explicit upgrade does. It always exits 0, so it never blocks a deploy; `node build/scripts/deploy_check.js --summary` prints what it did.
 

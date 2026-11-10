@@ -480,6 +480,17 @@ if ! compose run --rm --no-deps --entrypoint /usr/local/bin/with-generated-env a
 fi
 echo
 
+# On the first deployment that carries access statements the previous api kept
+# serving while `migrate` stated what existed, and anything it created in that
+# window has no statement, which admits nobody. The new api is healthy and the
+# old one is gone, so state whatever is still unstated; it writes only to
+# things with no statement, so every later run finds nothing to do.
+if ! compose run --rm --no-deps --entrypoint /usr/local/bin/with-generated-env api \
+    node build/scripts/state_unstated.js; then
+  echo "[up] could not state what is still unstated — run: node build/scripts/state_unstated.js" >&2
+fi
+echo
+
 echo -n "[up] waiting for the web app"
 for i in $(seq 1 60); do
   if curl -fsS "${WEB_LOCAL}/login" >/dev/null 2>&1; then

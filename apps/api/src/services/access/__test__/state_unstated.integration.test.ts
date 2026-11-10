@@ -15,6 +15,7 @@ import { getAutomationsQb } from '../../../lib/kysely';
 import { cleanupTeam } from '../../../test/harness/cleanup';
 import { insertTestListen } from '../../../test/harness/listens';
 import { mixedFilesOf } from '../../../scripts/list_mixed_fire_reach';
+import * as saveAccess from '../../translation_graph/movement/save_access';
 import { stateUnstatedMain } from '../../../scripts/state_unstated';
 import ExternalServiceType from '../../../generated/kysely/automations/ExternalServiceType';
 import { StatementStore, type Grantee, type Target } from '../statement';
@@ -33,6 +34,7 @@ beforeEach(async () => {
   databaseUrl = process.env.DATABASE_URL;
   process.env.DATABASE_URL = process.env.DATABASE_URL_TEST;
   jest.spyOn(console, 'log').mockImplementation(() => undefined);
+  jest.spyOn(console, 'warn').mockImplementation(() => undefined);
 });
 
 afterEach(async () => {
@@ -43,14 +45,17 @@ afterEach(async () => {
   await cleanupTeam(teamId);
 });
 
-async function automation(name: string): Promise<MovementId> {
+async function automation(name: string, source = ''): Promise<MovementId> {
   const id = randomUUID() as MovementId;
   await getAutomationsQb(['movement'])
     .insertInto('movement')
-    .values({ id, team_id: teamId, name, source: '' })
+    .values({ id, team_id: teamId, name, source })
     .execute();
   return id;
 }
+
+const SLACK_LISTEN = 'chat = slack(credentials: `Slack`)';
+const EMAIL_LISTEN = 'inbox = email()';
 
 /** A connection saved with no user, as one created before connections recorded who made them. */
 async function connection(name: string): Promise<ExternalServiceCredentialsId> {
@@ -76,39 +81,9 @@ const stateTheTeam = () => stateUnstatedMain(['--team', teamId]);
 
 async function seed() {
   const slack = await connection('Slack');
-  const onSlack = await automation('On Slack');
-  const onEmail = await automation('On email');
-  const mixed = await automation('Mixed');
-  await insertTestListen({
-    teamId,
-    movementId: onSlack,
-    adapterType: 'SLACK',
-    edge: 'Messages',
-    delivery: 'connection',
-    credentialsId: slack,
-  });
-  await insertTestListen({
-    teamId,
-    movementId: onEmail,
-    adapterType: 'email',
-    edge: 'Emails',
-    delivery: 'connection',
-  });
-  await insertTestListen({
-    teamId,
-    movementId: mixed,
-    adapterType: 'email',
-    edge: 'Emails',
-    delivery: 'connection',
-  });
-  await insertTestListen({
-    teamId,
-    movementId: mixed,
-    adapterType: 'slack',
-    edge: 'Messages',
-    delivery: 'connection',
-    credentialsId: slack,
-  });
+  const onSlack = await automation('On Slack', SLACK_LISTEN);
+  const onEmail = await automation('On email', EMAIL_LISTEN);
+  const mixed = await automation('Mixed', `${EMAIL_LISTEN}\n${SLACK_LISTEN}`);
   return { slack, onSlack, onEmail, mixed };
 }
 
@@ -156,6 +131,60 @@ describe('stating what exists', () => {
     expect(await listOf({ thing: 'automation', id: onSlack }, 'fire')).toEqual(TEAM);
     expect(await listOf({ thing: 'automation', id: onEmail }, 'fire')).toEqual(ANYONE);
     expect(await listOf({ thing: 'automation', id: mixed }, 'fire')).toEqual(TEAM);
+  });
+
+  it("reads a file's listens from its source, not from its trigger rows", async () => {
+    const mixed = await automation('Stopped half', `${EMAIL_LISTEN}\n${SLACK_LISTEN}`);
+    // The deploy check deletes a stopped automation's unpaused trigger rows and keeps the paused ones.
+    await insertTestListen({
+      teamId,
+      movementId: mixed,
+      adapterType: 'email',
+      edge: 'Emails',
+      delivery: 'connection',
+    });
+
+    await stateTheTeam();
+
+    expect(await listOf({ thing: 'automation', id: mixed }, 'fire')).toEqual(TEAM);
+  });
+
+  it('gives the team the fire list of a file whose source cannot be read, and says which', async () => {
+    const unreadable = await automation('Unreadable', EMAIL_LISTEN);
+    jest.spyOn(saveAccess, 'listenReachesOf').mockImplementation(() => {
+      throw new Error('cannot read');
+    });
+
+    await stateTheTeam();
+
+    expect(await listOf({ thing: 'automation', id: unreadable }, 'fire')).toEqual(TEAM);
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining(unreadable));
+  });
+
+  it("fires a file on the shared WhatsApp number for the team, and on the team's own number for anyone", async () => {
+    const shared = await automation('Shared number', 'wa = whatsapp()');
+    const own = await automation('Own number', 'wa = whatsapp(credentials: `WhatsApp`)');
+
+    await stateTheTeam();
+
+    expect(await listOf({ thing: 'automation', id: shared }, 'fire')).toEqual(TEAM);
+    expect(await listOf({ thing: 'automation', id: own }, 'fire')).toEqual(ANYONE);
+  });
+
+  it('logs each thing it states, and warns only once the team already has statements', async () => {
+    const { onSlack, slack } = await seed();
+
+    await stateTheTeam();
+
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining(`automation ${onSlack}`));
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining(`connection ${slack}`));
+    expect(console.warn).not.toHaveBeenCalled();
+
+    const late = await automation('Created without saying', EMAIL_LISTEN);
+    await stateTheTeam();
+
+    expect(console.warn).toHaveBeenCalledTimes(1);
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining(`automation ${late}`));
   });
 
   it('changes nothing on a second run', async () => {

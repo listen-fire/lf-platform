@@ -49,9 +49,27 @@ pnpm access:state-unstated [--team <teamId>]
 pnpm access:mixed-fire-reach [--team <teamId>] [--json]
 ```
 
-Run the report on a live team before the first deployment that carries this and
-look at the mixed files and any machine callers (a webhook sender that fires
-with no person behind it); the list names every file whose firing narrowed.
+Right after the first deployment that carries this, run the listing and look at
+the mixed files. Both the report and the listing read `access_statement`, which
+that deployment creates, so neither can run before it. Each file it names was
+given the narrower fire list, so widen it by hand to what it admitted before,
+and restore any machine caller. Until someone widens a mixed file, a machine
+caller that fires it through email or a webhook (a sender with no person behind
+it) is cut off: only the team may fire it now.
+
+On that first deployment the previous api keeps serving while the backfill runs,
+and what it creates in that window has no statement. `up.sh` runs the backfill
+once more after the new api is healthy; on Render, run
+`node build/scripts/state_unstated.js` once by hand after the first deployment.
+
+A file's listens are read from its source, as a save reads them, not from its
+trigger rows (the deploy check deletes a stopped automation's unpaused trigger
+rows, so a mixed file can look narrower there). A source that cannot be read
+gets no listens, so only the team may fire it, and the run logs its id.
+
+Each thing a run states is logged with its id and kind. A run in a team that
+already has statements also warns for each: after the first run an unstated
+thing is one a creation path did not state, which is a bug to report.
 
 Outstanding connect links are not backfilled: a link minted before links carried
 a use list is refused at its landing with a plain message, expires within 24

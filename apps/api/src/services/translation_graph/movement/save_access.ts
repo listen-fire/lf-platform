@@ -149,7 +149,7 @@ export async function connectionsNamed(input: { teamId: string; file: string; so
  * each module it constructs stands for a listen on it. That can only make the
  * fire list a run creates it with narrower than its listens alone would.
  */
-function listenReachesOf(source: string): ListenReach[] {
+export function listenReachesOf(source: string): ListenReach[] {
   return constructionsOf(source).map((ref) => ({ module: ref.adapter, viaConnection: ref.credential !== undefined }));
 }
 
