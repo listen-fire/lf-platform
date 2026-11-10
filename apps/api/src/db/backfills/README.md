@@ -22,6 +22,42 @@ code lives as a script instead, with its report/apply pair expressed as a
 read-only check flag and a write mode. It is still an operator-run backfill and
 is documented here, so this is the one place to look.
 
+## 2026-11-10_access_statements_for_what_exists (script, also a deploy step)
+
+Access statements say who may read, write or fire an automation and use a
+connection, and a thing with none admits nobody. This states every automation
+and connection that has none with the reach it has today, through the same rule
+a creation with no person uses (`services/access/no_person.ts`), so turning on
+the access checks changes nobody's reach: the team may read, write and use it;
+firing is the narrowest of its listens' modules (Slack and the shared WhatsApp
+number the team, everything else anyone; a team whose automations run on lf,
+anyone). It writes only to things with no statement at all, so it is safe to
+re-run, and it never changes a thing a person or a creation stated.
+
+It is not a `.sql` migration because the rule is code. `deploy:render-pre` and
+the compose `migrate` one-shot run it after the schema migrates, on every
+deployment, and it fails the deployment when it cannot finish.
+
+```bash
+# report — read-only: what is unstated, per team
+pnpm access:state-unstated --check [--team <teamId>]
+
+# apply — state it, one transaction per team
+pnpm access:state-unstated [--team <teamId>]
+
+# the files whose listens mix who may fire (narrowed by the backfill), to widen by hand
+pnpm access:mixed-fire-reach [--team <teamId>] [--json]
+```
+
+Run the report on a live team before the first deployment that carries this and
+look at the mixed files and any machine callers (a webhook sender that fires
+with no person behind it); the list names every file whose firing narrowed.
+
+Outstanding connect links are not backfilled: a link minted before links carried
+a use list is refused at its landing with a plain message, expires within 24
+hours anyway, and the row cannot tell one from the Telegram link that carries
+none by design. Minting a fresh link is the remedy.
+
 ## 2026-08-18_valuations_cache_degree_buckets (script)
 
 The valuations cache became degree-bucketed: each row is now the sum of the

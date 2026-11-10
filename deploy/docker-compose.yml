@@ -229,6 +229,11 @@ services:
         # No argument: the runner reads DATABASE_URL itself, because pnpm echoes its
         # command line into this container's log and the URL carries the password.
         pnpm schema:migrate
+        # Whatever has no access statement yet is stated with the reach it has
+        # today (apps/api/src/scripts/state_unstated.ts); a thing left unstated
+        # is a thing nobody can reach, so unlike the check below it stops the
+        # deployment when it fails. Idempotent: it states only what is unstated.
+        node build/scripts/state_unstated.js || exit 1
         # The deploy check: once per release, re-validate every saved automation
         # and report which are clean under this release; it moves no language
         # version pin (apps/api/src/scripts/deploy_check.ts). HERE because this

@@ -16,7 +16,7 @@ import { insertTestListen } from '../../../test/harness/listens';
 import { StatementStore, type Target } from '../../access/statement';
 import ExternalServiceType from '../../../generated/kysely/automations/ExternalServiceType';
 import type { ExternalServiceCredentialsId } from '../../../generated/kysely/automations/ExternalServiceCredentials';
-import { stateWhatArrivedUnstated } from '../import';
+import { stateWhatIsUnstated } from '../../access/state_unstated';
 
 let teamId: TeamId;
 let client: Client;
@@ -60,7 +60,7 @@ describe('an imported team', () => {
     await insertTestListen({ teamId, movementId: mixed, adapterType: 'email', edge: 'Emails', delivery: 'connection' });
     await insertTestListen({ teamId, movementId: mixed, adapterType: 'slack', edge: 'Messages', delivery: 'connection', credentialsId: slack });
 
-    expect(await stateWhatArrivedUnstated(client, teamId)).toEqual({ automations: 3, connections: 1 });
+    expect(await stateWhatIsUnstated(client, teamId)).toEqual({ automations: 3, connections: 1 });
 
     const team = [{ kind: 'team' }];
     for (const id of [onSlack, onEmail, mixed]) {
@@ -78,7 +78,7 @@ describe('an imported team', () => {
     const alice = randomUUID();
     await StatementStore.replaceGrants({ thing: 'automation', id: stated }, { teamId, verb: 'write', grantees: [{ kind: 'user', userId: alice }] });
 
-    expect(await stateWhatArrivedUnstated(client, teamId)).toEqual({ automations: 0, connections: 0 });
+    expect(await stateWhatIsUnstated(client, teamId)).toEqual({ automations: 0, connections: 0 });
     expect(await listOf({ thing: 'automation', id: stated }, 'write')).toEqual([{ kind: 'user', userId: alice }]);
     expect(await listOf({ thing: 'automation', id: stated }, 'read')).toEqual([]);
   });
@@ -88,7 +88,7 @@ describe('an imported team', () => {
     await insertTestListen({ teamId, movementId: onSlack, adapterType: 'slack', edge: 'Messages', delivery: 'connection' });
     await getAutomationsQb(['team_engine']).insertInto('team_engine').values({ team_id: teamId, engine: 'lf' }).execute();
 
-    await stateWhatArrivedUnstated(client, teamId);
+    await stateWhatIsUnstated(client, teamId);
     expect(await listOf({ thing: 'automation', id: onSlack }, 'fire')).toEqual([{ kind: 'anyone' }]);
   });
 });
