@@ -120,7 +120,7 @@ describe('catalog connect-method (real manifests)', () => {
       expect(needy.acme_crm?.requiresCredential).toBe(false);
 
       // Provision the secret (one-step) → now connected.
-      await installRemoteAdapterFromManifest({ teamId, manifest, secret: 'crm-token' });
+      await installRemoteAdapterFromManifest({ teamId, manifest, secret: 'crm-token', use: [{ kind: 'team' }] });
       const connected = toAgentCatalogView(await movementCatalogSnapshotForTeam(teamId, { audience: { for: 'run' } })).adapters as Record<
         string,
         { remoteConnection?: string }

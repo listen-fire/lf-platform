@@ -121,18 +121,20 @@ export function wireTarget(entry: { external: string; binding: SecretsBindingSha
 /** The credentials of a team that `secrets.list` answers lf: every connected
  *  (non-shell) row lf is served, by name, with how it reads and a version that
  *  hashes the ciphertext in SQL, so nothing is decrypted. The one rule for
- *  what lf can import from `credentials`. */
+ *  what lf can import from `credentials`. With `usable`, only those rows. */
 export async function servedCredentials(
   teamId: string,
+  options: { usable?: ReadonlySet<string> } = {},
 ): Promise<Array<{ ref: string; external: string; binding: SecretsBindingShape; version: string }>> {
   const rows = await getAutomationsQb(['external_service_credentials'])
     .selectFrom('external_service_credentials')
     .where('team_id', '=', teamId)
     .where('credentials', 'is not', null)
-    .select(['name', 'type', 'app_id', 'declared_credential', 'wire_binding', sql<string>`encode(sha256(credentials), 'hex')`.as('version')])
+    .select(['id', 'name', 'type', 'app_id', 'declared_credential', 'wire_binding', sql<string>`encode(sha256(credentials), 'hex')`.as('version')])
     .orderBy('name')
     .execute();
   return rows.flatMap((row) => {
+    if (options.usable !== undefined && !options.usable.has(row.id)) return [];
     const reading = wireReading(row);
     return reading === null ? [] : [{ ref: row.name, external: reading.external, binding: reading.binding, version: row.version }];
   });

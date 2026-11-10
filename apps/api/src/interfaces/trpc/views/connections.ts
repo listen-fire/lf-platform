@@ -49,6 +49,8 @@ import {
   telegramStartUrl,
 } from '../../../services/translation_graph/adapters/telegram/handshake';
 import { USE_CONNECTION, connectionUnseen, decidesEach, readableAmong, usableAmong } from '../../access_route';
+import { GranteesInput, MISSING_USE_REFUSAL } from '../../../services/access/stated_input';
+import { useForNewConnection } from './connection_creation';
 
 
 /** Hide seed labels that leaked into the dev-loop DB before U1's seed rename. */
@@ -537,21 +539,36 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
      * `ensureSharedTelegramTeamCredential` (shared with the author-time
      * connect-link landing route).
      */
-    connectTelegramTeam: userProcedure.mutation(
-      async (): Promise<{ id: string; name: string; created: boolean }> => {
+    connectTelegramTeam: userProcedure
+      .input(z.object({ use: GranteesInput.optional() }).optional())
+      .mutation(async ({ input }): Promise<{ id: string; name: string; created: boolean }> => {
         const ctx = currentContext();
+        const teamId = ctx.user.teamId as TeamId;
+        const existing = await getAutomationsQb(['external_service_credentials'])
+          .selectFrom('external_service_credentials')
+          .where('team_id', '=', teamId)
+          .where('type', '=', ExternalServiceType.TELEGRAM)
+          .select('id')
+          .executeTakeFirst();
+        // Who may use it is asked only of a connection this creates; one given
+        // for the team's existing connection would not be applied, so it is refused.
+        if (existing !== undefined && input?.use !== undefined) {
+          throw new TRPCError({ code: 'BAD_REQUEST', message: "The team's Telegram connection exists already: change who may use it with setAccess." });
+        }
+        const use = existing === undefined ? await useForNewConnection({ teamId, use: input?.use }) : undefined;
         const ensured = await ensureSharedTelegramTeamCredential({
-          teamId: ctx.user.teamId as TeamId,
+          teamId,
           userId: ctx.user.id as UserId,
+          use,
         });
+        if ('needsUse' in ensured) throw new TRPCError({ code: 'BAD_REQUEST', message: MISSING_USE_REFUSAL });
         // A team holds one shared Telegram connection: one the caller may not
         // use is not handed to them, and no second is made beside it.
         if (!ensured.created && (await connectionUnseen(ensured.id))) {
           throw new TRPCError({ code: 'CONFLICT', message: "The team's Telegram connection is one you may not use." });
         }
         return ensured;
-      },
-    ),
+      }),
   });
 };
 

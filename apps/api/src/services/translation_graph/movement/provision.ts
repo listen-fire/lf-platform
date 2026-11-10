@@ -106,6 +106,7 @@ import {
   nameTakenRefusal,
   overwriteRefusal,
   saverOf,
+  stateRunCreation,
   unusableConnections,
   type SaveRefusal,
 } from './save_access';
@@ -1421,19 +1422,20 @@ async function runSave(
       ...(input.languageUpgrade !== undefined ? { languageVersion: input.languageUpgrade.to } : {}),
     });
   const statements = creating;
+  // The automation and what it states commit together: a save never leaves
+  // one with no statement, which would admit nobody. A run creating one is no
+  // person choosing who may reach it.
+  const stated = async (created: MovementRow): Promise<MovementRow> => {
+    const target = { thing: 'automation', id: created.id } as const;
+    if (saver === undefined) await stateRunCreation({ teamId: input.teamId, target, source: input.source, given: input.statements });
+    else if (statements !== undefined) await stateCreation(saver, { target, statements });
+    else throw new Error('a person creating an automation reached the write with no statements decided');
+    return created;
+  };
+  const creates = intent.kind === 'create';
   let row: MovementRow;
   try {
-    row = await timer.step('persist', () =>
-      saver === undefined || statements === undefined
-        ? persist()
-        : // The automation and what it states commit together: a save never
-          // leaves one with no statement, which would admit nobody.
-          inOneTransaction(async () => {
-            const created = await persist();
-            await stateCreation(saver, { target: { thing: 'automation', id: created.id }, statements });
-            return created;
-          }),
-    );
+    row = await timer.step('persist', () => (creates ? inOneTransaction(async () => stated(await persist())) : persist()));
   } catch (error) {
     // Between the checks above and the write, the name was taken or the row
     // deleted. Neither is repaired by writing something nobody decided.

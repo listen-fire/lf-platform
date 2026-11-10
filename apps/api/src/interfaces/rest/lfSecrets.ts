@@ -143,7 +143,7 @@ async function answerEnvelope(req: Request, res: Response): Promise<void> {
   try {
     const teamId = await teamOf(principal, settings ?? {});
     const userId = principal.userId === undefined ? null : userIdSchema.parse(principal.userId);
-    const result = await platformSecretsModule({ teamId, userId })[method](params);
+    const result = await platformSecretsModule({ teamId, userId, audience: { for: principal } })[method](params);
     res.status(200).json({ ok: true, result: result ?? null });
   } catch (error) {
     if (error instanceof SlotRefusal) {

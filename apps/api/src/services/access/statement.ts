@@ -285,6 +285,7 @@ const StatementStore = {
 };
 
 export {
+  rowOf as storedRowOf,
   type Thing,
   type Verb,
   type StatedVerb,

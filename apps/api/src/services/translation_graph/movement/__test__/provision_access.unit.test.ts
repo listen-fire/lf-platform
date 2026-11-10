@@ -274,6 +274,9 @@ jest.mock('../../adapters/registry', () => {
   };
 });
 
+const mockLfTeams = new Set<string>();
+jest.mock('../../../lf_engine/team_engine', () => ({ isLfEngineTeam: async (teamId: string) => mockLfTeams.has(teamId) }));
+
 jest.mock('../save_access', () => {
   const actual = jest.requireActual('../save_access');
   return {
@@ -386,6 +389,10 @@ async function existing(
 ): Promise<string> {
   const saved = await saveMovement({ teamId: TEAM, audience: { for: 'run' }, source, acknowledgeErrors: true, ...(name !== undefined ? { name } : {}) });
   if (saved.movementId === undefined) throw new Error('the fixture did not save');
+  // Only these statements: not the team's, which a run's creation states.
+  const { movementId } = saved;
+  mockAccess.rows = mockAccess.rows.filter((r) => r.target.id !== movementId);
+  mockAccess.stated = [];
   for (const verb of ['read', 'write', 'fire'] as const) {
     const grantees = statements[verb];
     if (grantees !== undefined) stated(automation(saved.movementId), verb, grantees);
@@ -524,9 +531,28 @@ describe('creating an automation needs who may read, write and fire it', () => {
     expect(stored()).toEqual(before);
   });
 
-  it('is not decided for a run, which states nothing', async () => {
+  it('is not decided for a run, and gives what a run creates the team, and fire by its modules, with the insert', async () => {
     const saved = await saveMovement({ teamId: TEAM, audience: { for: 'run' }, source: manualOnly('fresh') });
     expect(saved.ok).toBe(true);
+    if (!saved.ok) return;
+    expect(mockAccess.stated).toEqual([
+      { verb: 'write', inTransaction: true },
+      { verb: 'read', inTransaction: true },
+      { verb: 'fire', inTransaction: true },
+    ]);
+    expect(listOf(saved.movementId, 'write')).toEqual([team]);
+    expect(listOf(saved.movementId, 'read')).toEqual([team]);
+    expect(listOf(saved.movementId, 'fire')).toEqual([{ kind: 'anyone' }]);
+  });
+
+  it('gives what a run creates on a team whose automations run on lf anyone to fire, and states nothing over what exists', async () => {
+    mockLfTeams.add(TEAM);
+    const saved = await saveMovement({ teamId: TEAM, audience: { for: 'run' }, source: manualOnly('onlf') });
+    mockLfTeams.clear();
+    if (!saved.ok) throw new Error('not saved');
+    expect(listOf(saved.movementId, 'fire')).toEqual([{ kind: 'anyone' }]);
+    mockAccess.stated = [];
+    expect((await saveMovement({ teamId: TEAM, audience: { for: 'run' }, source: manualOnly('onlf') })).ok).toBe(true);
     expect(mockAccess.stated).toEqual([]);
   });
 });

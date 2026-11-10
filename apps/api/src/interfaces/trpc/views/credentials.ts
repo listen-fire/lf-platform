@@ -54,6 +54,8 @@ import ExternalServiceType from '../../../generated/kysely/automations/ExternalS
 import { reportedFailureReason } from '../../../services/translation_graph/runs/trigger_run';
 import { EXEMPT, USE_CONNECTION, connectionUnseen, decidesEach, unseen, usableAmong } from '../../access_route';
 import { Whose } from '../../../services/access/whose';
+import { GranteesInput } from '../../../services/access/stated_input';
+import { useForNewConnection } from './connection_creation';
 
 /** A connection the caller may not use is answered as one that does not exist. */
 function connectionNotFound(id: string): TRPCError {
@@ -137,6 +139,7 @@ const credentialsRouter = (procedure: typeof trpc.procedure) => {
         z.intersection(
           z.object({
             name: z.string(),
+            use: GranteesInput.optional(),
           }),
           z.union([
             z.object({
@@ -208,6 +211,7 @@ const credentialsRouter = (procedure: typeof trpc.procedure) => {
       )
       .mutation(async ({ input }) => {
         const ctx = currentContext();
+        const use = await useForNewConnection({ teamId: ctx.user.teamId, use: input.use });
 
         let credentials: unknown;
         if ('claimToken' in input) {
@@ -242,6 +246,7 @@ const credentialsRouter = (procedure: typeof trpc.procedure) => {
           name: input.name,
           type: input.type,
           credentials,
+          use,
         });
       }),
 

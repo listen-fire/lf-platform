@@ -80,9 +80,16 @@ jest.mock('../statement', () => {
   };
 });
 
+const mockLfTeams = new Set<string>();
+jest.mock('../../lf_engine/team_engine', () => ({
+  isLfEngineTeam: async (teamId: string) => mockLfTeams.has(teamId),
+}));
+
 import {
   accessTo,
+  checkConnectionCreation,
   checkCreation,
+  stateAtCreation,
   membersAdmitted,
   passOnWhatTheyHeld,
   readableIds,
@@ -139,6 +146,7 @@ beforeEach(() => {
   mockTable.members = new Map();
   mockTable.memberSince = [];
   mockTable.rows = [];
+  mockLfTeams.clear();
   thing(DEALS);
   thing(NOTES);
   thing(FINANCE);
@@ -541,5 +549,121 @@ describe('passOnWhatTheyHeld, when a member loses write access', () => {
     mockTable.members.set(`${TEAM}:${ALICE}`, 'read');
     await passOnWhatTheyHeld({ teamId: TEAM, userId: ALICE, because: 'lost_write' });
     expect(listOf(DEALS, 'write')).toEqual([team]);
+  });
+});
+
+describe('the shapes a list takes', () => {
+  beforeEach(() => {
+    member(TEAM, ALICE, 'write');
+    stated(DEALS, 'write', [user(ALICE)]);
+  });
+
+  it.each([
+    [{ kind: 'domain', domain: 'pat@acme.com' }, 'pat@acme.com'],
+    [{ kind: 'domain', domain: 'acme' }, 'acme'],
+    [{ kind: 'domain', domain: '@acme.com' }, '@acme.com'],
+    [{ kind: 'email', address: 'acme.com' }, 'acme.com'],
+    [{ kind: 'email', address: 'pat at acme.com' }, 'pat at acme.com'],
+    [{ kind: 'email', address: 'pat@acme' }, 'pat@acme'],
+    [{ kind: 'phone', digits: '07700 900123' }, '07700 900123'],
+    [{ kind: 'phone', digits: 'call 447700900123' }, 'call 447700900123'],
+    [{ kind: 'phone', digits: '4477' }, '4477'],
+    [{ kind: 'user', userId: '  ' }, '  '],
+  ] as const)('refuses %o, naming the bad value', async (grantee, bad) => {
+    const verb = grantee.kind === 'user' ? 'read' : 'fire';
+    const refused = setStatement(person(ALICE), { target: DEALS, verb, grantees: [grantee] });
+    await expect(refused).rejects.toMatchObject({ refusal: 'malformed' });
+    await expect(refused).rejects.toThrow(JSON.stringify(bad));
+    expect(listOf(DEALS, verb)).toEqual([]);
+  });
+
+  it('takes a domain, an address and a phone written as people write them', async () => {
+    await setStatement(person(ALICE), {
+      target: DEALS,
+      verb: 'fire',
+      grantees: [
+        { kind: 'domain', domain: 'Mail.Acme.co.uk' },
+        { kind: 'email', address: 'pat.o+deals@acme.com' },
+        { kind: 'phone', digits: '+1 (415) 555-0100' },
+      ],
+    });
+    expect(listOf(DEALS, 'fire')).toEqual([
+      { kind: 'domain', domain: 'mail.acme.co.uk' },
+      { kind: 'email', address: 'pat.o+deals@acme.com' },
+      { kind: 'phone', digits: '14155550100' },
+    ]);
+  });
+});
+
+describe('a team whose automations run on lf', () => {
+  beforeEach(() => {
+    member(TEAM, ALICE, 'write');
+    mockLfTeams.add(TEAM);
+  });
+
+  it('refuses a fire list other than anyone, saying why', async () => {
+    stated(DEALS, 'write', [user(ALICE)]);
+    const refused = setStatement(person(ALICE), { target: DEALS, verb: 'fire', grantees: [team] });
+    await expect(refused).rejects.toMatchObject({ refusal: 'lf_engine' });
+    await expect(refused).rejects.toThrow(/run on lf, whose door the platform does not judge/);
+    await expect(
+      checkCreation(person(ALICE), { teamId: TEAM, statements: { read: [team], write: [team], fire: [{ kind: 'domain', domain: 'acme.com' }] } }),
+    ).rejects.toMatchObject({ refusal: 'lf_engine' });
+  });
+
+  it('takes anyone, and every other list as on any team', async () => {
+    stated(DEALS, 'write', [user(ALICE)]);
+    await setStatement(person(ALICE), { target: DEALS, verb: 'fire', grantees: [{ kind: 'anyone' }] });
+    await setStatement(person(ALICE), { target: DEALS, verb: 'read', grantees: [team] });
+    expect(listOf(DEALS, 'fire')).toEqual([{ kind: 'anyone' }]);
+    expect(listOf(DEALS, 'read')).toEqual([team]);
+  });
+});
+
+describe('creating a connection with who may use it', () => {
+  it('passes a write member who names themselves, or the team', async () => {
+    member(TEAM, ALICE, 'write');
+    await expect(checkConnectionCreation(person(ALICE), { teamId: TEAM, use: [user(ALICE)] })).resolves.toBeUndefined();
+    await expect(checkConnectionCreation(person(ALICE), { teamId: TEAM, use: [team] })).resolves.toBeUndefined();
+  });
+
+  it('refuses a creator the use list leaves out, a read member, an empty list and an outsider', async () => {
+    member(TEAM, ALICE, 'write');
+    member(TEAM, BOB, 'write');
+    member(TEAM, CAROL, 'read');
+    await expect(checkConnectionCreation(person(ALICE), { teamId: TEAM, use: [user(BOB)] })).rejects.toThrow(/could not use/);
+    await expect(checkConnectionCreation(person(CAROL), { teamId: TEAM, use: [team] })).rejects.toMatchObject({ refusal: 'not_allowed' });
+    await expect(checkConnectionCreation(person(ALICE), { teamId: TEAM, use: [] })).rejects.toMatchObject({ refusal: 'empty' });
+    await expect(
+      checkConnectionCreation(person(ALICE), { teamId: TEAM, use: [{ kind: 'anyone' }] }),
+    ).rejects.toMatchObject({ refusal: 'outsider' });
+  });
+});
+
+describe('stating a thing as it is created', () => {
+  it('states each list in the order given, checked as any list is', async () => {
+    member(TEAM, ALICE, 'write');
+    await stateAtCreation(FINANCE, { teamId: TEAM, lists: [{ verb: 'use', grantees: [user(ALICE)] }] });
+    expect(listOf(FINANCE, 'use')).toEqual([user(ALICE)]);
+    await stateAtCreation(DEALS, {
+      teamId: TEAM,
+      lists: [
+        { verb: 'write', grantees: [team] },
+        { verb: 'read', grantees: [team] },
+        { verb: 'fire', grantees: [{ kind: 'anyone' }] },
+      ],
+    });
+    expect(listOf(DEALS, 'fire')).toEqual([{ kind: 'anyone' }]);
+  });
+
+  it('refuses a thing something is already stated about, and stores nothing of a list it refuses', async () => {
+    stated(DEALS, 'write', [team]);
+    await expect(stateAtCreation(DEALS, { teamId: TEAM, lists: [{ verb: 'read', grantees: [team] }] })).rejects.toMatchObject({
+      refusal: 'already_stated',
+    });
+    await expect(
+      stateAtCreation(NOTES, { teamId: TEAM, lists: [{ verb: 'write', grantees: [team] }, { verb: 'read', grantees: [user(BOB)] }] }),
+    ).rejects.toMatchObject({ refusal: 'not_a_member' });
+    expect(listOf(NOTES, 'write')).toEqual([]);
   });
 });

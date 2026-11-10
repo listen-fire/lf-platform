@@ -228,6 +228,7 @@ model ConnectToken {
   expiresAt                  DateTime                    @map("expires_at") @db.Timestamptz(6)
   consumedAt                 DateTime?                   @map("consumed_at") @db.Timestamptz(6)
   createdAt                  DateTime                    @default(now()) @map("created_at") @db.Timestamptz(6)
+  useStatement               Json?                       @map("use_statement")
   externalServiceCredentials ExternalServiceCredentials? @relation(fields: [credentialsId], references: [id], onDelete: Cascade)
 
   @@index([expiresAt])

@@ -2,7 +2,8 @@
 // tells its author about who its statements reach.
 //
 // A person's save is decided here; a run's (an upgrade, the deploy sweep, a
-// script) is not, since nobody is authoring. Saving over an automation is a
+// script) is not, since nobody is authoring, and what a run creates gets the
+// statements a creation with no person gets. Saving over an automation is a
 // write on it, by id or by name. Creating one needs its read, write and fire
 // statements. Every connection the file and the files it imports name needs
 // `use`: an imported function runs against its own file's connections, and
@@ -16,10 +17,12 @@ import type { Principal } from 'principal';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { CatalogAudience } from './audience';
 import type { ProvisionedListener } from './provision';
+import type { ListenReach } from '../../access/no_person';
 
-import { accessTo, membersAdmitted, type CreationStatements } from '../../access/decide';
+import { accessTo, membersAdmitted, stateAtCreation, type CreationStatements } from '../../access/decide';
+import { automationLists, automationWithNoPerson } from '../../access/no_person';
+import { isLfEngineTeam } from '../../lf_engine/team_engine';
 import { StatementStore, type Grantee, type StatedVerb, type Target } from '../../access/statement';
-import { Context, unsafeCurrentContext } from '../../context';
 import { CRON_ADAPTER_TYPE } from '../adapters/cron';
 import { EMAIL_ADAPTER_TYPE } from '../adapters/email';
 import { hasAdapter, indexManifestsByName, resolveAdapterSlug } from '../adapters/registry';
@@ -141,6 +144,33 @@ export async function connectionsNamed(input: { teamId: string; file: string; so
   return [...named.values()];
 }
 
+/**
+ * The listens a file may have, as far as its text says before it is checked:
+ * each module it constructs stands for a listen on it. That can only make the
+ * fire list a run creates it with narrower than its listens alone would.
+ */
+function listenReachesOf(source: string): ListenReach[] {
+  return constructionsOf(source).map((ref) => ({ module: ref.adapter, viaConnection: ref.credential !== undefined }));
+}
+
+/**
+ * State what a run's save creates: the statements it was given, when it was
+ * given all three, else what a creation with no person gets.
+ */
+export async function stateRunCreation(created: {
+  teamId: string;
+  target: Target<'automation'>;
+  source: string;
+  given: Partial<CreationStatements> | undefined;
+}): Promise<void> {
+  const given = creationStatements(created.given);
+  const statements =
+    'statements' in given
+      ? given.statements
+      : automationWithNoPerson({ listens: listenReachesOf(created.source), runsOnLf: await isLfEngineTeam(created.teamId) });
+  await stateAtCreation(created.target, { teamId: created.teamId, lists: automationLists(statements) });
+}
+
 /** The named connections the saver may not use; one that does not exist is one they may not use. */
 export async function unusableConnections(saver: Principal, named: readonly NamedConnection[]): Promise<NamedConnection[]> {
   const unusable: NamedConnection[] = [];
@@ -185,18 +215,7 @@ export async function connectionsRefusal(
   };
 }
 
-/**
- * Run `fn` in one database transaction: the caller's open one, else one of
- * its own that commits when `fn` returns and rolls back when it throws.
- */
-export async function inOneTransaction<T>(fn: () => Promise<T>): Promise<T> {
-  if (unsafeCurrentContext()?.kyselyTrx !== undefined) return fn();
-  const context = new Context();
-  return context.runAsync(async () => {
-    await context.enterTransaction();
-    return fn();
-  });
-}
+export { inOneTransaction } from '../../context/one_transaction';
 
 /** Whether a module says who acted on what it delivers. */
 function reportsActor(manifest: AdapterManifest | undefined): boolean {

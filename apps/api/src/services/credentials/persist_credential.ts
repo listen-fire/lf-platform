@@ -13,9 +13,13 @@ import { randomUUID } from 'node:crypto';
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { UserId } from '../../generated/kysely/core/User';
 
+import type { Grantee } from '../access/statement';
+
 import { forgetAffinityWorkspace } from '@listen-fire/affinity/api_client';
 import { encryptToken } from '../../lib/credentials';
 import { getAutomationsQb } from '../../lib/kysely';
+import { stateAtCreation } from '../access/decide';
+import { inOneTransaction } from '../context/one_transaction';
 import { defaultAppIdForType } from './app_id';
 import ExternalServiceType from '../../generated/kysely/automations/ExternalServiceType';
 import { ExternalServiceCredentialsId } from '../../generated/kysely/automations/ExternalServiceCredentials';
@@ -39,6 +43,13 @@ interface PersistCredentialInput {
   userId: UserId | null;
   /** Human-readable name to store the credential under. */
   name: string;
+  /**
+   * Who may use it, stated as it is stored. The caller has decided whoever
+   * chose it may (`checkConnectionCreation`, at the request or when its
+   * connect link was minted), or no person is in the request and it is
+   * `connectionWithNoPerson`'s. A connection is never stored without one.
+   */
+  use: readonly Grantee[];
   type: ExternalServiceType;
   /** The decrypted credentials envelope (e.g. claimed pending OAuth tokens). */
   credentials: unknown;
@@ -81,17 +92,6 @@ interface PersistCredentialInput {
  * is removed first so the call upserts-by-name (reconnect / replace).
  */
 export async function persistCredential(input: PersistCredentialInput): Promise<string> {
-  if (input.replaceExisting) {
-    // Triggers bound to the replaced credential are released by the vault's
-    // in-schema ON DELETE SET NULL (restored with the vault's move, D7).
-    await getAutomationsQb(['external_service_credentials'])
-      .deleteFrom('external_service_credentials')
-      .where('team_id', '=', input.teamId)
-      .where('type', '=', input.type)
-      .where('name', '=', input.name)
-      .execute();
-  }
-
   const { credentials } = input;
 
   const id = randomUUID();
@@ -107,30 +107,45 @@ export async function persistCredential(input: PersistCredentialInput): Promise<
     }
   }
 
-  try {
-    await getAutomationsQb(['external_service_credentials'])
-      .insertInto('external_service_credentials')
-      .values({
-        id: id as ExternalServiceCredentialsId,
-        name: input.name,
-        type: input.type,
-        credentials: encrypted,
-        identifier,
-        // Explicit appId wins; else the type's default (Slack → 'listen-fire', the
-        // modern app). Pre-existing legacy rows keep their null (read as legacy).
-        app_id: input.appId ?? defaultAppIdForType(input.type) ?? null,
-        declared_credential: input.declaredCredential ?? null,
-        wire_binding: input.wireBinding ?? null,
-        team_id: input.teamId,
-        user_id: input.userId,
-      })
-      .executeTakeFirst();
-  } catch (err) {
-    if (isUniqueViolation(err)) {
-      throw new CredentialNameTakenError(input.name);
+  // The row and who may use it commit together: a connection stored with no
+  // statement would admit nobody.
+  await inOneTransaction(async () => {
+    if (input.replaceExisting) {
+      // Triggers bound to the replaced credential are released by the vault's
+      // in-schema ON DELETE SET NULL (restored with the vault's move, D7).
+      await getAutomationsQb(['external_service_credentials'])
+        .deleteFrom('external_service_credentials')
+        .where('team_id', '=', input.teamId)
+        .where('type', '=', input.type)
+        .where('name', '=', input.name)
+        .execute();
     }
-    throw err;
-  }
+    try {
+      await getAutomationsQb(['external_service_credentials'])
+        .insertInto('external_service_credentials')
+        .values({
+          id: id as ExternalServiceCredentialsId,
+          name: input.name,
+          type: input.type,
+          credentials: encrypted,
+          identifier,
+          // Explicit appId wins; else the type's default (Slack → 'listen-fire', the
+          // modern app). Pre-existing legacy rows keep their null (read as legacy).
+          app_id: input.appId ?? defaultAppIdForType(input.type) ?? null,
+          declared_credential: input.declaredCredential ?? null,
+          wire_binding: input.wireBinding ?? null,
+          team_id: input.teamId,
+          user_id: input.userId,
+        })
+        .executeTakeFirst();
+    } catch (err) {
+      if (isUniqueViolation(err)) {
+        throw new CredentialNameTakenError(input.name);
+      }
+      throw err;
+    }
+    await stateAtCreation({ thing: 'connection', id }, { teamId: input.teamId, lists: [{ verb: 'use', grantees: input.use }] });
+  });
 
   // A workspace whose key was just (re)connected is a workspace somebody has
   // been editing. Whatever we cached about its shape predates that.

@@ -31,6 +31,7 @@ import { Router, type RequestHandler } from 'express';
 import { z } from 'zod';
 
 import type { ExternalServiceCredentialsId } from '../../generated/kysely/automations/ExternalServiceCredentials';
+import type { Grantee } from '../../services/access/statement';
 
 import { getAdapterManifest } from '../../services/translation_graph/adapters/registry';
 import { bindFlowToUser, extractStateFromUrl } from '../../lib/oauthFlows';
@@ -137,14 +138,6 @@ const submitHandler: RequestHandler = async (req, res) => {
   }
 
   const { row } = lookup;
-  if (row.connectKind === 'oauth') {
-    await startOAuthFlow(row, token, res);
-    return;
-  }
-  if (row.connectKind === 'intrinsic') {
-    await provisionIntrinsic(row, res);
-    return;
-  }
   if (row.connectKind === 'handshake') {
     await startTelegramHandshake(row, res);
     return;
@@ -153,6 +146,20 @@ const submitHandler: RequestHandler = async (req, res) => {
     // The picker flow's writes go through /:token/picker-token and
     // /:token/grant — a bare POST has no meaning here.
     res.status(400).type('html').send(unavailablePage('bad_request'));
+    return;
+  }
+  // Refused before the provider is reached or anything is entered: the
+  // connection could not be stored.
+  if (!carriesUse(row)) {
+    res.status(410).type('html').send(unavailablePage('no_statement'));
+    return;
+  }
+  if (row.connectKind === 'oauth') {
+    await startOAuthFlow(row, token, res);
+    return;
+  }
+  if (row.connectKind === 'intrinsic') {
+    await provisionIntrinsic(row, res);
     return;
   }
 
@@ -245,6 +252,7 @@ const submitHandler: RequestHandler = async (req, res) => {
         adapterType: row.adapterSlug,
         displayName: row.credentialName,
         secret,
+        use: row.use,
         replaceExisting: true,
       });
       await linkRemoteAdapterCredential({
@@ -259,6 +267,7 @@ const submitHandler: RequestHandler = async (req, res) => {
         name: row.credentialName,
         type: row.serviceType,
         credentials,
+        use: row.use,
         replaceExisting: true,
       });
     }
@@ -322,7 +331,7 @@ async function startOAuthFlow(
 // persist it team-bound. A replayed submit that loses the consume race does
 // nothing, so we can never double-mint.
 async function provisionIntrinsic(
-  row: ConnectTokenRow,
+  row: ConnectTokenRow & { use: readonly Grantee[] },
   res: Parameters<RequestHandler>[1],
 ): Promise<void> {
   const provisioner = intrinsicProvisionerForType(row.serviceType);
@@ -351,6 +360,7 @@ async function provisionIntrinsic(
       name: row.credentialName,
       type: row.serviceType,
       credentials,
+      use: row.use,
       replaceExisting: true,
     });
   } catch (e) {
@@ -393,11 +403,16 @@ async function startTelegramHandshake(
   try {
     // The name only applies if this connect CREATES the credential; an existing
     // one keeps its name (which mintConnectLink already promised in that case).
-    await ensureSharedTelegramTeamCredential({
+    const ensured = await ensureSharedTelegramTeamCredential({
       teamId: row.teamId,
       userId: row.userId,
       name: row.credentialName,
+      use: row.use,
     });
+    if ('needsUse' in ensured) {
+      res.status(410).type('html').send(unavailablePage('no_statement'));
+      return;
+    }
     const { token: startToken } = await mintTelegramToken({
       nativeUserId: row.userId,
       teamId: row.teamId,
@@ -432,6 +447,10 @@ const completeHandler: RequestHandler = async (req, res) => {
   const { row } = lookup;
   const manifest = getAdapterManifest(row.adapterSlug);
   const displayName = manifest?.displayName ?? row.adapterSlug;
+  if (!carriesUse(row)) {
+    res.status(410).type('html').send(unavailablePage('no_statement'));
+    return;
+  }
 
   // Consume FIRST (single-use, atomic) so a replayed callback can't double-persist.
   const consumed = await consumeConnectToken(row.id);
@@ -448,6 +467,7 @@ const completeHandler: RequestHandler = async (req, res) => {
       name: row.credentialName,
       type: row.serviceType,
       credentials,
+      use: row.use,
       replaceExisting: true,
     });
   } catch (e) {
@@ -831,6 +851,11 @@ function keyEntryPage(
   );
 }
 
+/** Whether a link carries who may use the connection it creates; one minted before links did carries none. */
+function carriesUse(row: ConnectTokenRow): row is ConnectTokenRow & { use: readonly Grantee[] } {
+  return row.use !== undefined;
+}
+
 function statusForReason(reason: string): number {
   switch (reason) {
     case 'not_found':
@@ -872,6 +897,10 @@ function unavailablePage(reason: string): string {
     persist_failed: {
       title: 'Something went wrong saving the connection.',
       detail: 'Nothing was stored. Ask the assistant for a fresh link and try again.',
+    },
+    no_statement: {
+      title: 'This link was made before links said who may use what they connect.',
+      detail: 'Nothing was stored. Ask the assistant for a fresh link.',
     },
     bad_request: {
       title: 'This link is missing required information.',

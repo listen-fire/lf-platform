@@ -28,6 +28,8 @@ export default interface ConnectTokenTable {
   consumed_at: ColumnType<Date | null, Date | string | null, Date | string | null>;
 
   created_at: ColumnType<Date, Date | string | undefined, Date | string>;
+
+  use_statement: ColumnType<unknown | null, unknown | null, unknown | null>;
 }
 
 export type ConnectToken = Selectable<ConnectTokenTable>;

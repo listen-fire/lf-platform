@@ -14,6 +14,7 @@
 
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { UserId } from '../../generated/kysely/core/User';
+import type { Grantee } from '../access/statement';
 
 import { persistCredential } from './persist_credential';
 import ExternalServiceType from '../../generated/kysely/automations/ExternalServiceType';
@@ -34,6 +35,8 @@ export interface MintRemoteCredentialInput {
   secret: string;
   /** Re-provision (rotate) an existing same-name credential instead of erroring. */
   replaceExisting?: boolean;
+  /** Who may use it (`persistCredential`'s `use`). */
+  use: readonly Grantee[];
   /** The host's OAuth app at the provider, per declared `oauth2` credential.
    *  Kept with the install's secret; the host refreshes with it. */
   oauthClients?: RemoteAdapterCredentialPayload['oauthClients'];
@@ -57,6 +60,7 @@ export async function mintRemoteCredential(
     name: input.displayName,
     appId: input.adapterType,
     credentials: payload,
+    use: input.use,
     replaceExisting: input.replaceExisting ?? false,
   });
   return { credentialsId };
@@ -76,6 +80,8 @@ export interface MintRemoteModuleCredentialInput {
    *  and writes them. */
   fields: Record<string, string>;
   replaceExisting?: boolean;
+  /** Who may use it (`persistCredential`'s `use`). */
+  use: readonly Grantee[];
 }
 
 /**
@@ -96,6 +102,7 @@ export async function mintRemoteModuleCredential(
     appId: input.adapterType,
     declaredCredential: input.declaredCredential,
     credentials: input.fields,
+    use: input.use,
     replaceExisting: input.replaceExisting ?? false,
   });
   return { credentialsId };

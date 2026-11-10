@@ -19,6 +19,7 @@ import {
 } from '../../adapters/gmail/connect_method';
 import { intrinsicProvisionerForType } from '../../services/credentials/intrinsic_provision';
 import { persistCredential } from '../../services/credentials/persist_credential';
+import { connectionWithNoPerson } from '../../services/access/no_person';
 import { Context } from '../../services/context';
 import { ensurePublicIdentity } from '../../startup/core';
 
@@ -233,6 +234,7 @@ export async function ensureDevLoopRemoteAdapter(options: {
     userId: options.userId as UserId,
     manifest: fakeCrmManifest(baseUrl),
     secret: FAKE_CRM_SECRET,
+    use: connectionWithNoPerson().use,
   });
   return { baseUrl };
 }
@@ -299,6 +301,7 @@ export async function ensureDevLoopKnowledgeCredential(options: {
     name: DEV_LOOP_KNOWLEDGE_CREDENTIAL_NAME,
     type: ExternalServiceType.NATIVE_KNOWLEDGE,
     credentials,
+    use: connectionWithNoPerson().use,
   });
   return { created: true, healed: false };
 }

@@ -27,7 +27,7 @@ export default class extends Command {
   async execute(options: ImportTeamOptions): Promise<void> {
     const client = await connect(options.databaseUrl ?? getEnvVar('DATABASE_URL'));
     try {
-      const { manifest, inserted, shellCredentials } = await importTeam(client, {
+      const { manifest, inserted, shellCredentials, stated } = await importTeam(client, {
         bundleDir: options.in,
       });
       const total = inserted.reduce((sum, t) => sum + t.rows, 0);
@@ -39,6 +39,11 @@ export default class extends Command {
       if (shellCredentials > 0) {
         console.warn(
           `${shellCredentials} connection(s) arrived without their secret and must be reconnected before any movement using them will run.`,
+        );
+      }
+      if (stated.automations + stated.connections > 0) {
+        console.warn(
+          `${stated.automations} automation(s) and ${stated.connections} connection(s) arrived saying nothing of who may reach them, and were given the whole team's.`,
         );
       }
     } finally {

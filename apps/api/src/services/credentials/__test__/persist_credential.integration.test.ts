@@ -57,6 +57,7 @@ const baseInput = () => ({
   userId: null as unknown as import('../../../generated/kysely/core/User').UserId,
   type: ExternalServiceType.GOOGLE,
   credentials: { access_token: 'test-token' },
+  use: [{ kind: 'team' as const }],
 });
 
 describe('persistCredential', () => {

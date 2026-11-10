@@ -38,6 +38,8 @@ jest.mock('../../../../services/user', () => ({
   UserService: { getById: async () => ({ id: 'user-1' }) },
 }));
 
+jest.mock('../../../../services/context/one_transaction', () => ({ inOneTransaction: async <T>(fn: () => Promise<T>): Promise<T> => fn() }));
+
 jest.mock('../../../../lib/credentials', () => ({
   encryptToken: async (plaintext: string) => `enc:${plaintext}`,
 }));
@@ -114,7 +116,7 @@ describe('connectTelegram', () => {
 
 describe('connectTelegramTeam (Chunk 7 — connect the shared bot via an empty credential)', () => {
   it('inserts one empty TELEGRAM credential for the team when none exists', async () => {
-    const res = await caller().connectTelegramTeam();
+    const res = await caller().connectTelegramTeam({ use: [{ kind: 'team' }] });
 
     expect(res.created).toBe(true);
     expect(typeof res.id).toBe('string');
@@ -125,6 +127,11 @@ describe('connectTelegramTeam (Chunk 7 — connect the shared bot via an empty c
     expect(insertCapture.values?.identifier).toBeNull();
     // The encrypted payload is the empty object — no bot token (secret-less).
     expect(insertCapture.values?.credentials).toBe(`enc:${JSON.stringify({})}`);
+  });
+
+  it('refuses to create it with no statement of who may use it, inserting nothing', async () => {
+    await expect(caller().connectTelegramTeam()).rejects.toThrow(/needs a statement of who may use it/);
+    expect(insertCapture.values).toBeUndefined();
   });
 
   it('is idempotent — returns the existing credential without inserting a duplicate', async () => {

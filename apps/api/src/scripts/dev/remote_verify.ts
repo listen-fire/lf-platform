@@ -75,6 +75,7 @@ async function main(): Promise<void> {
       userId: seed.userId as never,
       manifest: fakeCrmManifest(server.baseUrl),
       secret: FAKE_CRM_SECRET,
+      use: [{ kind: 'team' }],
     });
     console.log(
       `[remote-verify] installed remote adapter '${FAKE_CRM_ADAPTER_TYPE}' + minted its REMOTE credential (${install.credentialsId})`,

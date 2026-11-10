@@ -166,6 +166,20 @@ jest.mock('../../services/access/statement', () => {
             return access === undefined ? [] : [[teamId, access] as const];
           }),
         ),
+      membershipsAmong: async (teamId: string, userIds: string[]) =>
+        new Map(
+          userIds.flatMap((userId) => {
+            const access = mockState.members.get(`${teamId}:${userId}`);
+            return access === undefined ? [] : [[userId, access] as const];
+          }),
+        ),
+      replaceGrants: async (target: Target, options: { teamId: string; verb: Verb; grantees: Grantee[] }) => {
+        mockState.writes.push('access_statement');
+        mockState.rows = [
+          ...mockState.rows.filter((r) => !(same(r.target, target) && r.verb === options.verb)),
+          ...options.grantees.map((grantee) => ({ teamId: options.teamId, target, verb: options.verb, grantee })),
+        ];
+      },
     },
   };
 });
@@ -575,7 +589,7 @@ import { publicRouter, privateRouter } from '../rest';
 import { automationRouter } from '../rest/v1/automation';
 import { asksRouter } from '../rest/v1/asks';
 import { viewsRouter } from '../trpc/views';
-import { EXEMPT, READ_ONLY_MESSAGE, registeredDecisions, restRoute } from '../access_route';
+import { EXEMPT, READ_ONLY_MESSAGE, decisionsOf, registeredDecisions, restRoute } from '../access_route';
 
 /**
  * How the walk treats a surface mounted on a REST root: it walks a router that
@@ -651,7 +665,7 @@ const APP_MOUNTS: Record<string, string> = {
   'http.createServer': 'the server itself',
   "'/api/resend'": "the inbound mail door's body parser, no route",
   // Undecided: it reads every connection of the key's team. Deciding use there needs a new connection to carry a statement (Task 6) first.
-  "'/api/public/lf-secrets'": "lf's secrets slot, held undecided until a new connection carries a statement; and its OAuth relay, whose signed state is the authority",
+  "'/api/public/lf-secrets'": "lf's secrets slot, which serves the key's owner only the connections they may use (lf_secrets_router.integration); and its OAuth relay, whose signed state is the authority",
   "'/api/public/webhook-sync'": SIGNED_DOOR,
   "'/api/public/adapter'": "a remote module's push doors: the credential it presents is the authority",
   "'/api/public/telegram'": SIGNED_DOOR,
@@ -929,6 +943,7 @@ const REST_CALLS: Record<string, { call: (refs: Refs) => RestCall; list?: true }
   'POST /v1/automation/automations/resume-run': { call: (r) => ({ body: { runId: r.runId } }) },
   'POST /v1/automation/automations/replay-delivery': { call: (r) => ({ body: { listen: r.listenId, deliveryId: r.deliveryId } }) },
   'POST /v1/automation/automations/resume-listen': { call: (r) => ({ body: { listen: r.listenId } }) },
+  'POST /v1/automation/access': { call: (r) => ({ body: { automation: r.automationName, verb: 'read', grantees: [{ kind: 'team' }] } }) },
   'GET /v1/asks/': { call: () => ({}), list: true },
   'GET /v1/asks/:': { call: (r) => ({ params: { id: r.askId } }) },
   'POST /v1/asks/:/cancel': { call: (r) => ({ params: { id: r.askId } }) },
@@ -994,13 +1009,17 @@ const REST_CONNECTION_CALLS: Record<string, ConnectionCall<RestCall>> = {
     ask: (c) => ({ body: { system: 'attio', connection: c.connectionName, detail: 'full' } }),
   },
   'POST /v1/automation/connections/connect': {
-    ask: (c) => ({ body: { system: 'affinity', connection: c.connectionName } }),
+    ask: (c) => ({ body: { system: 'affinity', connection: c.connectionName, use: [{ kind: 'team' }] } }),
     effect: 'write:connect_token',
     refusal: /taken by a connection you may not use/,
   },
   'POST /v1/automation/connections/grant-access': {
     ask: (c) => ({ body: { system: 'google_sheets', connection: c.connectionName } }),
     effect: 'write:connect_token',
+  },
+  'POST /v1/automation/access': {
+    ask: (c) => ({ body: { connection: c.connectionName, verb: 'use', grantees: [{ kind: 'team' }] } }),
+    effect: 'write:access_statement',
   },
 };
 
@@ -1142,25 +1161,31 @@ function effectsReached(): Effect[] {
   return [...new Set([...called, ...written])].filter((name): name is Effect => name in mockEffects || name.startsWith('write:'));
 }
 
-function thingOf(route: string): 'automation' | 'connection' | undefined {
+/** The decisions a route asks, one per thing it may act on. */
+function decidedOn(route: string): ReturnType<typeof decisionsOf> {
   const decision = registeredDecisions().get(route);
-  return decision === undefined || 'exempt' in decision ? undefined : decision.thing;
+  return decision === undefined ? [] : decisionsOf(decision);
 }
 
-const restDecided = restRoutes.filter((route) => thingOf(route.key) === 'automation');
-const trpcDecided = procedureNames.filter((name) => thingOf(name) === 'automation');
-const restUses = restRoutes.filter((route) => thingOf(route.key) === 'connection');
-const trpcUses = procedureNames.filter((name) => thingOf(name) === 'connection');
+const decidesOn = (route: string, thing: 'automation' | 'connection') => decidedOn(route).some((d) => d.thing === thing);
 
-function verbOf(route: string): 'read' | 'write' | 'use' | undefined {
-  const decision = registeredDecisions().get(route);
-  return decision === undefined || 'exempt' in decision ? undefined : decision.verb;
+const restDecided = restRoutes.filter((route) => decidesOn(route.key, 'automation'));
+const trpcDecided = procedureNames.filter((name) => decidesOn(name, 'automation'));
+const restUses = restRoutes.filter((route) => decidesOn(route.key, 'connection'));
+const trpcUses = procedureNames.filter((name) => decidesOn(name, 'connection'));
+
+/** The verb a route asks of an automation. */
+function verbOf(route: string): 'read' | 'write' | undefined {
+  const decision = decidedOn(route).find((d) => d.thing === 'automation');
+  return decision?.thing === 'automation' ? decision.verb : undefined;
 }
 
 describe('as a write member, on an automation whose statements name only someone else', () => {
   it('knows how to call every route that decides', () => {
-    expect(restRoutes.filter((route) => thingOf(route.key) !== undefined).length).toBe(restDecided.length + restUses.length);
-    expect(procedureNames.filter((name) => thingOf(name) !== undefined).length).toBe(trpcDecided.length + trpcUses.length);
+    const restCovered = new Set([...restDecided, ...restUses].map((r) => r.key));
+    const trpcCovered = new Set([...trpcDecided, ...trpcUses]);
+    expect(restRoutes.filter((route) => decidedOn(route.key).length > 0 && !restCovered.has(route.key))).toEqual([]);
+    expect(procedureNames.filter((name) => decidedOn(name).length > 0 && !trpcCovered.has(name))).toEqual([]);
     expect(restDecided.map((r) => r.key).filter((key) => REST_CALLS[key] === undefined)).toEqual([]);
     expect(trpcDecided.filter((name) => TRPC_CALLS[name] === undefined)).toEqual([]);
     expect(restUses.map((r) => r.key).filter((key) => REST_CONNECTION_CALLS[key] === undefined)).toEqual([]);

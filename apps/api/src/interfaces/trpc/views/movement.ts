@@ -33,6 +33,7 @@
  *   - `delete` — remove the movement and every derived trigger.
  */
 
+import { CreationStatementsInput } from '../../../services/access/stated_input';
 import { TRPCError } from '@trpc/server';
 import {
   LANGUAGE_VERSION,
@@ -588,6 +589,8 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
           /** Explicit consent to ship a non-valid save (the editor's
            *  "save anyway" confirmation). */
           acknowledgeErrors: z.boolean().optional(),
+          /** Who may read, write and fire it, when this save creates it. */
+          statements: CreationStatementsInput.optional(),
         }),
       )
       .mutation(async ({ input }): Promise<SaveMovementResponse> => {
@@ -605,6 +608,7 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
           ...(input.acknowledgeErrors !== undefined
             ? { acknowledgeErrors: input.acknowledgeErrors }
             : {}),
+          ...(input.statements !== undefined ? { statements: input.statements } : {}),
         });
 
         // Dependent revalidation: a shipped save changes what files importing

@@ -29,11 +29,14 @@ import type AutomationsSchema from '../../../../generated/kysely/automations/Aut
 import type { UserId } from '../../../../generated/kysely/core/User';
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { ExternalServiceCredentialsId } from '../../../../generated/kysely/automations/ExternalServiceCredentials';
+import type { Grantee } from '../../../access/statement';
 
 import { encryptToken } from '../../../../lib/credentials';
 import { getAutomationsQb, getQb, globalQb } from '../../../../lib/kysely';
 import ExternalServiceType from '../../../../generated/kysely/automations/ExternalServiceType';
 import { logger } from 'movement-engine/public/log';
+import { stateAtCreation } from '../../../access/decide';
+import { inOneTransaction } from '../../../context/one_transaction';
 
 /**
  * Typed, schema-scoped clients off an explicit transaction. `withSchema`
@@ -177,7 +180,9 @@ export async function ensureSharedTelegramTeamCredential(input: {
   teamId: TeamId;
   userId: UserId;
   name?: string;
-}): Promise<{ id: string; name: string; created: boolean }> {
+  /** Who may use the connection if this creates it; an existing one keeps its own. */
+  use: readonly Grantee[] | undefined;
+}): Promise<{ id: string; name: string; created: boolean } | { needsUse: true }> {
   const existing = await getAutomationsQb(['external_service_credentials'])
     .selectFrom('external_service_credentials')
     .where('team_id', '=', input.teamId)
@@ -187,6 +192,8 @@ export async function ensureSharedTelegramTeamCredential(input: {
   if (existing) {
     return { id: existing.id as unknown as string, name: existing.name, created: false };
   }
+  const { use } = input;
+  if (use === undefined) return { needsUse: true };
 
   // Mirror the standard credential-create path (pipelineConfiguration
   // .addCredential): randomUUID id → encryptToken(JSON, id) → insert.
@@ -194,18 +201,22 @@ export async function ensureSharedTelegramTeamCredential(input: {
   const name = input.name?.trim() || SHARED_TELEGRAM_CREDENTIAL_NAME;
   const id = randomUUID();
   const encrypted = await encryptToken(JSON.stringify({}), id);
-  await getAutomationsQb(['external_service_credentials'])
-    .insertInto('external_service_credentials')
-    .values({
-      id: id as ExternalServiceCredentialsId,
-      name,
-      type: ExternalServiceType.TELEGRAM,
-      credentials: encrypted,
-      identifier: null,
-      team_id: input.teamId,
-      user_id: input.userId,
-    })
-    .executeTakeFirst();
+  // The row and who may use it commit together.
+  await inOneTransaction(async () => {
+    await getAutomationsQb(['external_service_credentials'])
+      .insertInto('external_service_credentials')
+      .values({
+        id: id as ExternalServiceCredentialsId,
+        name,
+        type: ExternalServiceType.TELEGRAM,
+        credentials: encrypted,
+        identifier: null,
+        team_id: input.teamId,
+        user_id: input.userId,
+      })
+      .executeTakeFirst();
+    await stateAtCreation({ thing: 'connection', id }, { teamId: input.teamId, lists: [{ verb: 'use', grantees: use }] });
+  });
 
   return { id, name, created: true };
 }

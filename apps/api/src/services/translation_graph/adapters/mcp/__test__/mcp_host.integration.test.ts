@@ -50,7 +50,7 @@ let customers: FakeMcpServer;
 let teamId: TeamId;
 
 async function connect(name: string, credentials: Record<string, string>): Promise<void> {
-  await persistCredential({ teamId, userId: null, name, type: ExternalServiceType.MCP, credentials });
+  await persistCredential({ teamId, userId: null, name, type: ExternalServiceType.MCP, credentials, use: [{ kind: 'team' }] });
 }
 
 beforeAll(async () => {

@@ -46,7 +46,7 @@ afterAll(async () => {
 afterEach(() => jest.restoreAllMocks());
 
 const lf = (teamId: TeamId) => {
-  const module = platformSecretsModule({ teamId, userId: null });
+  const module = platformSecretsModule({ teamId, userId: null, audience: { for: 'run' } });
   return {
     resolve: async (ref: string) => SecretsRecord.nullable().parse(await module['secrets.resolve']({ ref })),
     writeBack: async (ref: string, fields: Record<string, string>, expectedVersion: string) =>
@@ -145,6 +145,7 @@ describe('reconnect under an lf lease', () => {
       declaredCredential: 'oauth',
       credentials: { access_token: 'reconnected', refresh_token: 'r2', expires_at: '2026-10-23T12:00:00.000Z' },
       replaceExisting: true,
+      use: [{ kind: 'team' }],
     });
     expect(Date.now() - started).toBeLessThan(2_000);
 
@@ -237,6 +238,7 @@ describe('replace', () => {
       displayName: ref,
       secret: 's1',
       oauthClients: { oauth: { clientId: 'c1', clientSecret: 'cs1' } },
+      use: [{ kind: 'team' }],
     });
     await lf(teamA).replace({ ref, external: 'acme_crm', binding: 'install', fields: { secret: 's2', workspace: 'w2' } });
     expect(await storedPayload(credentialsId)).toEqual({ secret: 's2', workspace: 'w2', oauthClients: { oauth: { clientId: 'c1', clientSecret: 'cs1' } } });

@@ -232,6 +232,7 @@ describe('movements.watch on the platform', () => {
       appId: 'acme_crm',
       declaredCredential: 'oauth',
       credentials: { access_token: 't' },
+      use: [{ kind: 'team' }],
     });
     await seed('uses_crm', 'import { crm } from credentials\n\nfunction a() {}\n');
     const cursor = await cursorFrom(watcher);
@@ -256,6 +257,7 @@ describe('movements.watch on the platform', () => {
         appId: 'acme_crm',
         declaredCredential: 'oauth',
         credentials: { access_token: 't2' },
+        use: [{ kind: 'team' }],
       }),
     );
     expect(back.events).toEqual([{ kind: 'added', path: 'uses_crm.mvt', version: await versionOf('uses_crm.mvt') }]);

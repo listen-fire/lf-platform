@@ -97,6 +97,8 @@ const INSTALL_ROW = {
 const SERVER_SECRET = 'server-secret-never-shown';
 const CLIENT = { clientId: 'host-app', clientSecret: 'host-app-secret' };
 
+
+const TEAM_USE = [{ kind: 'team' as const }];
 function caller() {
   return remoteAdapterRouter(trpc.procedure).createCaller({ authorise: async () => {} });
 }
@@ -174,7 +176,7 @@ describe('credentials — what a module declares, and what was created for it', 
 
 describe('createStaticCredential — validated against the declaration, then minted', () => {
   it('mints with the module, the declaration, the name and the entered fields', async () => {
-    const created = await caller().createStaticCredential({
+    const created = await caller().createStaticCredential({ use: TEAM_USE,
       adapterType: 'hubspot',
       declaredCredential: 'api_key',
       name: 'team_key',
@@ -188,20 +190,21 @@ describe('createStaticCredential — validated against the declaration, then min
       adapterType: 'hubspot',
       declaredCredential: 'api_key',
       name: 'team_key',
+      use: TEAM_USE,
       fields: { token: 'tok-123' },
     });
   });
 
   it('refuses a required field left out', async () => {
     await expect(
-      caller().createStaticCredential({ adapterType: 'hubspot', declaredCredential: 'api_key', name: 'team_key', fields: { workspace: 'w1' } }),
+      caller().createStaticCredential({ use: TEAM_USE, adapterType: 'hubspot', declaredCredential: 'api_key', name: 'team_key', fields: { workspace: 'w1' } }),
     ).rejects.toThrow('"api_key" needs "API token"');
     expect(mintMock).not.toHaveBeenCalled();
   });
 
   it('refuses a field the declaration does not list', async () => {
     await expect(
-      caller().createStaticCredential({
+      caller().createStaticCredential({ use: TEAM_USE,
         adapterType: 'hubspot',
         declaredCredential: 'api_key',
         name: 'team_key',
@@ -213,10 +216,10 @@ describe('createStaticCredential — validated against the declaration, then min
 
   it('refuses a name a movement could not import, and an oauth2 declaration', async () => {
     await expect(
-      caller().createStaticCredential({ adapterType: 'hubspot', declaredCredential: 'api_key', name: "Alice's key", fields: { token: 't' } }),
+      caller().createStaticCredential({ use: TEAM_USE, adapterType: 'hubspot', declaredCredential: 'api_key', name: "Alice's key", fields: { token: 't' } }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
     await expect(
-      caller().createStaticCredential({ adapterType: 'hubspot', declaredCredential: 'oauth', name: 'alice_hubspot', fields: {} }),
+      caller().createStaticCredential({ use: TEAM_USE, adapterType: 'hubspot', declaredCredential: 'oauth', name: 'alice_hubspot', fields: {} }),
     ).rejects.toThrow('signing in at the provider');
     expect(mintMock).not.toHaveBeenCalled();
   });
@@ -224,7 +227,7 @@ describe('createStaticCredential — validated against the declaration, then min
 
 describe('beginOAuthCredential and the callback — signing in at the provider', () => {
   it('returns an authorize URL built from the declaration and the install’s app', async () => {
-    const { url } = await caller().beginOAuthCredential({ adapterType: 'hubspot', declaredCredential: 'oauth', name: 'alice_hubspot' });
+    const { url } = await caller().beginOAuthCredential({ use: TEAM_USE, adapterType: 'hubspot', declaredCredential: 'oauth', name: 'alice_hubspot' });
 
     const authorize = new URL(url);
     expect(`${authorize.origin}${authorize.pathname}`).toBe('https://provider.example.com/oauth/authorize');
@@ -239,19 +242,19 @@ describe('beginOAuthCredential and the callback — signing in at the provider',
   it('refuses when the install holds no OAuth app for the declaration', async () => {
     installPayloadMock.mockResolvedValue({ secret: SERVER_SECRET });
     await expect(
-      caller().beginOAuthCredential({ adapterType: 'hubspot', declaredCredential: 'oauth', name: 'alice_hubspot' }),
+      caller().beginOAuthCredential({ use: TEAM_USE, adapterType: 'hubspot', declaredCredential: 'oauth', name: 'alice_hubspot' }),
     ).rejects.toThrow('has no OAuth app for "oauth"');
   });
 
   it('refuses a name already taken before sending the member to the provider', async () => {
     takenName = { id: 'c-9' };
     await expect(
-      caller().beginOAuthCredential({ adapterType: 'hubspot', declaredCredential: 'oauth', name: 'alice_hubspot' }),
+      caller().beginOAuthCredential({ use: TEAM_USE, adapterType: 'hubspot', declaredCredential: 'oauth', name: 'alice_hubspot' }),
     ).rejects.toMatchObject({ code: 'CONFLICT' });
   });
 
   it('the callback exchanges the code with the install’s app and stores the tokens through the mint', async () => {
-    const { url } = await caller().beginOAuthCredential({ adapterType: 'hubspot', declaredCredential: 'oauth', name: 'alice_hubspot' });
+    const { url } = await caller().beginOAuthCredential({ use: TEAM_USE, adapterType: 'hubspot', declaredCredential: 'oauth', name: 'alice_hubspot' });
     const state = new URL(url).searchParams.get('state') ?? '';
     const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ access_token: 'at-1', refresh_token: 'rt-1', expires_in: 3600 }), { status: 200 }),
@@ -270,6 +273,7 @@ describe('beginOAuthCredential and the callback — signing in at the provider',
       adapterType: 'hubspot',
       declaredCredential: 'oauth',
       name: 'alice_hubspot',
+      use: TEAM_USE,
       fields: { access_token: 'at-1', refresh_token: 'rt-1', expires_at: expect.any(String) },
     });
     expect(answered.redirect).toMatch(/\/settings\/remote-adapters\?connected=alice_hubspot$/);

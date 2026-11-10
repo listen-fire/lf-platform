@@ -1192,6 +1192,27 @@ export interface DependentCheckResult {
 export type Thing = 'automation' | 'connection';
 /** The verbs each thing's statement has: firing is an automation's, using is a connection's. */
 export type StatedVerb<T extends Thing> = T extends 'automation' ? 'read' | 'write' | 'fire' : 'use';
+/**
+ * One entry on a verb's list. Reading, writing and using go to the team or to
+ * named users; firing also admits outsiders, by domain, address or phone.
+ */
+export type Grantee = {
+    kind: 'team';
+} | {
+    kind: 'user';
+    userId: string;
+} | {
+    kind: 'anyone';
+} | {
+    kind: 'domain';
+    domain: string;
+} | {
+    kind: 'email';
+    address: string;
+} | {
+    kind: 'phone';
+    digits: string;
+};
 
 /** Why a person's save was refused. Nothing of the text was stored. */
 export type SaveRefusal = {
@@ -3785,8 +3806,12 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _ctx_out: {
                     authorise: () => Promise<void>;
                 };
-                _input_in: typeof _trpc_server.unsetMarker;
-                _input_out: typeof _trpc_server.unsetMarker;
+                _input_in: {
+                    use?: unknown[] | undefined;
+                } | undefined;
+                _input_out: {
+                    use?: Grantee[] | undefined;
+                } | undefined;
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
             }, {
@@ -3852,6 +3877,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 };
                 _input_in: {
                     name: string;
+                    use?: unknown[] | undefined;
                 } & ({
                     type: ExternalServiceType.AFFINITY;
                     credentials: {
@@ -3939,6 +3965,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 });
                 _input_out: {
                     name: string;
+                    use?: Grantee[] | undefined;
                 } & ({
                     type: ExternalServiceType.AFFINITY;
                     credentials: {
@@ -8980,6 +9007,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     name?: string | undefined;
                     baseUpdatedAt?: string | undefined;
                     acknowledgeErrors?: boolean | undefined;
+                    statements?: unknown;
                 };
                 _input_out: {
                     source: string;
@@ -8987,6 +9015,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     name?: string | undefined;
                     baseUpdatedAt?: string | undefined;
                     acknowledgeErrors?: boolean | undefined;
+                    statements?: Partial<Readonly<Record<"read" | "write" | "fire", readonly Grantee[]>>> | undefined;
                 };
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
@@ -12112,6 +12141,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     credentialsId?: string | undefined;
                     protocolVersion?: 2 | undefined;
                     secret?: string | undefined;
+                    use?: unknown[] | undefined;
                 };
                 _input_out: {
                     runtimeCapabilities: {
@@ -12295,6 +12325,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     credentialsId?: string | undefined;
                     protocolVersion?: 2 | undefined;
                     secret?: string | undefined;
+                    use?: Grantee[] | undefined;
                 };
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
@@ -12381,12 +12412,14 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     declaredCredential: string;
                     name: string;
                     fields: Record<string, string>;
+                    use?: unknown[] | undefined;
                 };
                 _input_out: {
                     adapterType: string;
                     declaredCredential: string;
                     name: string;
                     fields: Record<string, string>;
+                    use?: Grantee[] | undefined;
                 };
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
@@ -12415,12 +12448,14 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     declaredCredential: string;
                     name: string;
                     fields?: Record<string, string> | undefined;
+                    use?: unknown[] | undefined;
                 };
                 _input_out: {
                     adapterType: string;
                     declaredCredential: string;
                     name: string;
                     fields?: Record<string, string> | undefined;
+                    use?: Grantee[] | undefined;
                 };
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;

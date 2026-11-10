@@ -93,6 +93,7 @@ beforeEach(() => {
       credentialName: 'Acme CRM',
       serviceType: ExternalServiceType.REMOTE,
       connectKind: 'key-entry',
+      use: [{ kind: 'team' }],
     },
   });
   consumeConnectToken.mockResolvedValue(true);
@@ -143,7 +144,7 @@ describe('POST /api/connect/:token (remote key-entry)', () => {
 
     expect(res.status).toBe(200);
     expect(consumeConnectToken).toHaveBeenCalledWith('tok-remote');
-    expect(mintRemoteCredential).toHaveBeenCalledWith(expect.objectContaining({ adapterType: 'acme_crm', secret: SECRET }));
+    expect(mintRemoteCredential).toHaveBeenCalledWith(expect.objectContaining({ adapterType: 'acme_crm', secret: SECRET, use: [{ kind: 'team' }] }));
     expect(linkRemoteAdapterCredential).toHaveBeenCalledWith({
       teamId: 'team-1',
       adapterType: 'acme_crm',

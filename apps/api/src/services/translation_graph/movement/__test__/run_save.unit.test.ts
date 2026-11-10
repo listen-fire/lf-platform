@@ -18,6 +18,12 @@
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 require('engine-contracts/expression/schemas');
 
+// What a run's creation states is the access tests' (provision_access); here nothing is stated.
+jest.mock('../save_access', () => ({
+  ...jest.requireActual('../save_access'),
+  inOneTransaction: async <T>(fn: () => Promise<T>): Promise<T> => fn(),
+  stateRunCreation: jest.fn(async () => undefined),
+}));
 jest.mock('../../../../lib/kysely', () => {
   type Row = Record<string, unknown>;
   const tables: Record<string, Row[]> = {

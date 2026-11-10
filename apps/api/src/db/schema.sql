@@ -4150,6 +4150,7 @@ CREATE TABLE automations.connect_token (
     adapter_slug text NOT NULL,            -- which adapter to connect (e.g. "attio")
     credential_name text NOT NULL,         -- the name to store the credential under
     credentials_id uuid,                   -- @DEF: connect_token_credentials_id_fkey — set = a GRANT link against an existing credential (e.g. the Sheets picker), not a credential-connect link
+    use_statement jsonb,                   -- who may use the connection the link creates, chosen and decided when it was minted; null on a grant link, and on a Telegram link that reuses the team's connection
     expires_at timestamptz NOT NULL,       -- link TTL
     consumed_at timestamptz,               -- set when the credential lands (single-use)
     created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL

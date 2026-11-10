@@ -42,6 +42,7 @@ import type { PickerActionKind } from './picker_spec';
 import type { ConnectTokenId } from '../../generated/kysely/automations/ConnectToken';
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { UserId } from '../../generated/kysely/core/User';
+import type { Grantee } from '../access/statement';
 
 import { getAutomationsQb, getCoreQb } from '../../lib/kysely';
 import { getEnvVar } from '../../lib/utils/environment';
@@ -59,7 +60,8 @@ import {
   SHARED_TELEGRAM_CREDENTIAL_NAME,
 } from '../translation_graph/adapters/telegram/handshake';
 import ExternalServiceType from '../../generated/kysely/automations/ExternalServiceType';
-import { accessTo, readableIds } from '../access/decide';
+import { StatementRefusedError, accessTo, checkConnectionCreation, readableIds } from '../access/decide';
+import { GranteesInput, MISSING_USE_REFUSAL } from '../access/stated_input';
 
 
 // ---------------------------------------------------------------------------
@@ -229,6 +231,10 @@ export interface MintConnectLinkInput {
   adapterSlug: string;
   /** Name to store the credential under (defaults to the adapter slug). */
   credentialName?: string;
+  /** Who may use the connection the link creates. The link carries it, so the
+   *  landing page never asks; a link that only reuses the team's Telegram
+   *  connection creates nothing and takes none. */
+  use?: readonly Grantee[];
 }
 
 export interface MintConnectLinkResult {
@@ -244,6 +250,31 @@ export interface MintConnectLinkResult {
 /** Whether the asker may use this connection; one that does not exist is refused alike. */
 async function mayUse(connectionId: string): Promise<boolean> {
   return accessTo(currentPrincipal(), { target: { thing: 'connection', id: connectionId }, verb: 'use' });
+}
+
+/**
+ * The use statement a connect link carries: the asker's, decided as if they
+ * were creating the connection now. A link that reuses the team's Telegram
+ * connection creates nothing, so it carries none and is given none.
+ */
+async function useDecidedAtMint(asked: {
+  teamId: TeamId;
+  use: readonly Grantee[] | undefined;
+  reusesConnection: boolean;
+}): Promise<{ statement: readonly Grantee[] | null } | { error: string }> {
+  if (asked.reusesConnection) {
+    return asked.use === undefined
+      ? { statement: null }
+      : { error: "The team's Telegram connection exists already, so this link creates nothing: change who may use it with setAccess." };
+  }
+  if (asked.use === undefined) return { error: MISSING_USE_REFUSAL };
+  try {
+    await checkConnectionCreation(currentPrincipal(), { teamId: asked.teamId, use: asked.use });
+  } catch (error) {
+    if (error instanceof StatementRefusedError) return { error: error.message };
+    throw error;
+  }
+  return { statement: asked.use };
 }
 
 /**
@@ -304,6 +335,7 @@ export async function mintConnectLink(
   }
 
   let credentialName: string;
+  let reusesConnection = false;
   if (connectKind === 'handshake') {
     // The handshake credential is TEAM-level (the shared-bot opt-in row), not a
     // personal key. The landing route's idempotent ensure reuses any EXISTING
@@ -324,6 +356,7 @@ export async function mintConnectLink(
     }
     credentialName =
       existing?.name ?? (input.credentialName?.trim() || SHARED_TELEGRAM_CREDENTIAL_NAME);
+    reusesConnection = existing !== undefined;
   } else if (input.credentialName?.trim()) {
     credentialName = input.credentialName.trim();
     // A link under an existing connection's name reconnects it, which needs use of it.
@@ -348,6 +381,10 @@ export async function mintConnectLink(
     credentialName = uniquifyCredentialName(baseName, takenNames);
   }
 
+  // Decided now, as the asker: the landing is reached by the token alone.
+  const use = await useDecidedAtMint({ teamId: input.teamId, use: input.use, reusesConnection });
+  if ('error' in use) return use;
+
   const token = randomBytes(32).toString('base64url');
   const expiresAt = new Date(Date.now() + TOKEN_TTL_MS);
 
@@ -359,6 +396,7 @@ export async function mintConnectLink(
       user_id: input.userId,
       adapter_slug: slug,
       credential_name: credentialName,
+      use_statement: use.statement === null ? null : JSON.stringify(use.statement),
       expires_at: expiresAt,
     })
     .execute();
@@ -455,6 +493,10 @@ export interface ConnectTokenRow {
   /** Set on GRANT links only (kind 'item-picker') — the existing credential
    *  the grant lands against. */
   credentialsId?: string;
+  /** Who may use the connection the link creates, decided when it was minted.
+   *  Absent on a grant link, a Telegram link that reuses the team's
+   *  connection, and a link minted before links carried one. */
+  use?: readonly Grantee[];
   serviceType: ExternalServiceType;
   connectKind: ConnectKind;
 }
@@ -467,7 +509,7 @@ export async function lookupConnectToken(token: string): Promise<ConnectTokenLoo
   const row = await getAutomationsQb(['connect_token'])
     .selectFrom('connect_token')
     .where('token', '=', token)
-    .select(['id', 'team_id', 'user_id', 'adapter_slug', 'credential_name', 'credentials_id', 'expires_at', 'consumed_at'])
+    .select(['id', 'team_id', 'user_id', 'adapter_slug', 'credential_name', 'credentials_id', 'use_statement', 'expires_at', 'consumed_at'])
     .executeTakeFirst();
 
   if (!row) return { ok: false, reason: 'not_found' };
@@ -487,6 +529,8 @@ export async function lookupConnectToken(token: string): Promise<ConnectTokenLoo
   if (!serviceType || !connectKind) {
     return { ok: false, reason: 'misconfigured' };
   }
+  const use = row.use_statement === null ? undefined : GranteesInput.safeParse(row.use_statement);
+  if (use !== undefined && !use.success) return { ok: false, reason: 'misconfigured' };
 
   return {
     ok: true,
@@ -499,6 +543,7 @@ export async function lookupConnectToken(token: string): Promise<ConnectTokenLoo
       adapterSlug: row.adapter_slug,
       credentialName: row.credential_name,
       ...(row.credentials_id !== null ? { credentialsId: row.credentials_id as string } : {}),
+      ...(use !== undefined ? { use: use.data } : {}),
       serviceType,
       connectKind,
     },

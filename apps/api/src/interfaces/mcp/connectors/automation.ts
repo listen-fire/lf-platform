@@ -19,6 +19,7 @@ import {
   languageVersionInput,
 } from '../../../services/translation_graph/movement/language_pin_input';
 import { LANGUAGE_SEARCH_KINDS } from '../../../lib/knowledge/movement_handbook';
+import { GranteesInput, LIST_DESCRIPTIONS } from '../../../services/access/stated_input';
 
 /** Which version's help a tool answers with. */
 const HELP_INPUTS = {
@@ -272,6 +273,9 @@ function automationConnectorOptions(): McpRouterOptions {
             .string()
             .optional()
             .describe('Optional name to store the connection under (defaults to the system name).'),
+          use: GranteesInput.optional().describe(
+            `${LIST_DESCRIPTIONS.use} Required whenever the link creates a connection; the link carries it, so the page the user opens never asks. Leave it out only for a Telegram link when the team is already connected to Telegram.`,
+          ),
           team: z.string().optional().describe('Team id (see instructions).'),
         },
         title: 'Get a link to connect a system',
@@ -296,6 +300,22 @@ function automationConnectorOptions(): McpRouterOptions {
         title: 'Get a link to grant access to items',
         annotations: { destructiveHint: false },
         endpoint: { method: 'POST', path: '/v1/automation/connections/grant-access' },
+      },
+      setAccess: {
+        description:
+          "Change who may reach one automation or one connection, by replacing one of its lists. An automation has three: read; write (change, run and delete it, and change these lists; whoever may write may also read); fire (set it off through its listens). A connection has one, use (run automations on it, read through it, and change this list). Ask the person you are working for who should be on the list, and pass what they say; never choose for them, and never widen a list on your own judgement. Read, write and use take the team or members of it; fire also takes anyone, an email domain, an address or a phone. A list is never empty. Changing an automation's lists needs write on it; a connection's needs use. A new automation's lists are given to saveAutomation, and a new connection's to connectSystem; this changes them afterwards. Returns the list as stored. (grantAccess is different: it opens a provider's picker to grant items inside a connection.)",
+        inputSchema: {
+          automation: z.string().optional().describe('The automation (id or exact name). Name this or connection, not both.'),
+          connection: z.string().optional().describe('The connection (id or exact name, from listConnections). Name this or automation, not both.'),
+          verb: z.enum(['read', 'write', 'fire', 'use']).describe('Which list: read, write or fire for an automation; use for a connection.'),
+          grantees: GranteesInput.describe(
+            'The whole new list, replacing the old one: { kind: "team" }, { kind: "user", userId }, and for fire also { kind: "anyone" }, { kind: "domain", domain: "acme.com" }, { kind: "email", address: "pat@acme.com" } or { kind: "phone", digits: "447700900123" } (digits, country code first). From the person you are working for.',
+          ),
+          team: z.string().optional().describe('Team id (see instructions).'),
+        },
+        title: 'Change who may reach an automation or connection',
+        annotations: { destructiveHint: true },
+        endpoint: { method: 'POST', path: '/v1/automation/access' },
       },
       linkWhatsappNumber: {
         description: WHATSAPP_LINK_DESCRIPTION[linkVerification],
@@ -397,7 +417,7 @@ function automationConnectorOptions(): McpRouterOptions {
       },
       saveAutomation: {
         description:
-          'Save an automation program and provision its listeners (authoring → live). It validates first, exactly as validateAutomation does, so there is no need to call that before: with any error, or a system it could not check, NOTHING is saved and you get { ok: false, saved: false, diagnostics } — fix them and save again. A clean save goes live. Pass acknowledgeErrors: true to ship it despite errors: it then replaces whatever was running (even broken) and will run and fail visibly. There is no "draft" that quietly keeps the last good version running — what goes live is what you save and confirm. When updating an EXISTING automation, pass expectedRevision so a concurrent edit is caught rather than silently overwritten. Returns the provisioned listeners (each channel and the inbound address for email), whether an on-demand run is possible (runnable), storyUrl, `diagnostics` when a clean save still has warnings, and `warnings` — things that saved fine but would surprise the user (a movement name another automation already fires; listeners retired because the saved source could not be read). Always relay a warning to the user in your own words. storyUrl is a link to a picture of what the automation does — its triggers, steps, and the records it touches — for a person to look at, not something you can open yourself; hand it out as a labelled link once the save goes live. Anyone holding it can view with no login, until the automation is deleted. Pass id to re-save/rename. For a small, targeted change to an existing automation — one line, one field — editAutomation is cheaper: it anchors the change on a snippet instead of resending the whole program.',
+          'Save an automation program and provision its listeners (authoring → live). It validates first, exactly as validateAutomation does, so there is no need to call that before: with any error, or a system it could not check, NOTHING is saved and you get { ok: false, saved: false, diagnostics } — fix them and save again. A clean save goes live. Pass acknowledgeErrors: true to ship it despite errors: it then replaces whatever was running (even broken) and will run and fail visibly. There is no "draft" that quietly keeps the last good version running — what goes live is what you save and confirm. When updating an EXISTING automation, pass expectedRevision so a concurrent edit is caught rather than silently overwritten. Returns the provisioned listeners (each channel and the inbound address for email), whether an on-demand run is possible (runnable), storyUrl, `diagnostics` when a clean save still has warnings, and `warnings` — things that saved fine but would surprise the user (a movement name another automation already fires; listeners retired because the saved source could not be read). Always relay a warning to the user in your own words. storyUrl is a link to a picture of what the automation does — its triggers, steps, and the records it touches — for a person to look at, not something you can open yourself; hand it out as a labelled link once the save goes live. Anyone holding it can view with no login, until the automation is deleted. Pass id to re-save/rename. For a small, targeted change to an existing automation — one line, one field — editAutomation is cheaper: it anchors the change on a snippet instead of resending the whole program. A NEW automation needs `statements`: who may read, write and fire it. Ask the person you are working for before you save one; never choose for them. A save over an existing automation takes none: change those with setAccess.',
         inputSchema: {
           source: z.string().describe('The automation program text (.mvt).'),
           name: z
@@ -420,6 +440,16 @@ function automationConnectorOptions(): McpRouterOptions {
             .optional()
             .describe(
               "The `revision` returned by your last getAutomation call for this automation. When updating an existing automation, pass it so a concurrent edit can't be silently overwritten — a mismatch (someone saved a newer version since) is rejected; call getAutomation again, merge, and re-save with the new revision. Omit to save regardless of what changed.",
+            ),
+          statements: z
+            .object({
+              read: GranteesInput.optional().describe(LIST_DESCRIPTIONS.read),
+              write: GranteesInput.optional().describe(LIST_DESCRIPTIONS.write),
+              fire: GranteesInput.optional().describe(LIST_DESCRIPTIONS.fire),
+            })
+            .optional()
+            .describe(
+              'Who may reach a NEW automation: all three lists, each from the person you are working for. Refused on a save over an existing automation (use setAccess).',
             ),
           team: z.string().optional().describe('Team id (see instructions).'),
         },

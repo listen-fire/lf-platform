@@ -95,6 +95,7 @@ describe('save warnings (real Postgres + live adapter socket)', () => {
         methods: ['listEntryPoints', 'describe', 'resolveEntity', 'createRecord'],
       },
       secret: 'warn-secret',
+      use: [{ kind: 'team' }],
     });
   }, 60_000);
 

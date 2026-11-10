@@ -1,5 +1,10 @@
 import type { Client } from 'pg';
 
+import type { StatedList } from '../access/decide';
+import type { Thing } from '../access/statement';
+
+import { automationLists, automationWithNoPerson, connectionWithNoPerson, type ListenReach } from '../access/no_person';
+import { storedRowOf } from '../access/statement';
 import { readBundle, readTableFile, type BundleManifest } from './bundle';
 import { quoteIdent, readColumns, readMigrationHead, splitQualified } from './catalog';
 import { isProduct } from './manifest';
@@ -10,6 +15,8 @@ export type ImportResult = {
   manifest: BundleManifest;
   inserted: Array<{ table: string; rows: number }>;
   shellCredentials: number;
+  /** Automations and connections that arrived saying nothing of who may reach them, and were given the team's reach. */
+  stated: { automations: number; connections: number };
 };
 
 const DEFAULT_BATCH = 500;
@@ -95,6 +102,7 @@ export async function importTeam(client: Client, options: ImportOptions): Promis
 
   const inserted: Array<{ table: string; rows: number }> = [];
   let shellCredentials = 0;
+  let stated = { automations: 0, connections: 0 };
 
   await client.query('BEGIN');
   try {
@@ -158,6 +166,7 @@ export async function importTeam(client: Client, options: ImportOptions): Promis
         [manifest.teamId],
       );
       shellCredentials = stamped.rowCount ?? 0;
+      stated = await stateWhatArrivedUnstated(client, manifest.teamId);
     }
 
     await client.query('COMMIT');
@@ -166,5 +175,54 @@ export async function importTeam(client: Client, options: ImportOptions): Promis
     throw err;
   }
 
-  return { manifest, inserted, shellCredentials };
+  return { manifest, inserted, shellCredentials, stated };
+}
+
+/**
+ * Give everything that arrived with no statement at all the reach a creation
+ * with no person gets: a bundle cut before statements existed carries none, and
+ * a thing with none admits nobody. The import is nobody choosing. A thing that
+ * arrived with its statements keeps them as they were.
+ */
+export async function stateWhatArrivedUnstated(client: Client, teamId: string): Promise<{ automations: number; connections: number }> {
+  const unstated = (thing: Thing, table: string) =>
+    client.query<{ id: string }>(
+      `SELECT t.id::text AS id FROM automations.${quoteIdent(table)} t
+        WHERE t.team_id = $1::uuid
+          AND NOT EXISTS (SELECT 1 FROM automations.access_statement s WHERE s.thing = $2 AND s.thing_id = t.id)`,
+      [teamId, thing],
+    );
+  const automations = (await unstated('automation', 'movement')).rows.map((r) => r.id);
+  const connections = (await unstated('connection', 'external_service_credentials')).rows.map((r) => r.id);
+
+  const engine = await client.query<{ engine: string }>(`SELECT engine FROM automations.team_engine WHERE team_id = $1::uuid`, [teamId]);
+  const runsOnLf = engine.rows.some((r) => r.engine === 'lf');
+  const listens = await client.query<{ movement_id: string; kind: string; via_connection: boolean }>(
+    `SELECT movement_id::text AS movement_id, kind, credentials_id IS NOT NULL AS via_connection
+       FROM automations.trigger WHERE team_id = $1::uuid AND movement_id = ANY($2::uuid[])`,
+    [teamId, automations],
+  );
+  const listensOf = new Map<string, ListenReach[]>();
+  for (const listen of listens.rows) {
+    listensOf.set(listen.movement_id, [...(listensOf.get(listen.movement_id) ?? []), { module: listen.kind, viaConnection: listen.via_connection }]);
+  }
+
+  const state = async <T extends Thing>(thing: T, id: string, lists: readonly StatedList<T>[]) => {
+    for (const list of lists) {
+      for (const grantee of list.grantees) {
+        const row = storedRowOf(grantee);
+        await client.query(
+          `INSERT INTO automations.access_statement (team_id, thing, thing_id, verb, grantee, value) VALUES ($1::uuid, $2, $3::uuid, $4, $5, $6)`,
+          [teamId, thing, id, list.verb, row.grantee, row.value],
+        );
+      }
+    }
+  };
+  for (const id of automations) {
+    await state('automation', id, automationLists(automationWithNoPerson({ listens: listensOf.get(id) ?? [], runsOnLf })));
+  }
+  for (const id of connections) {
+    await state('connection', id, [{ verb: 'use', grantees: connectionWithNoPerson().use }]);
+  }
+  return { automations: automations.length, connections: connections.length };
 }

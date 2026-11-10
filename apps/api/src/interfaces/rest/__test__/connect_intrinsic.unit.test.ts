@@ -73,6 +73,7 @@ const valuationsRow: ConnectTokenLookup = {
     credentialName: 'Listen-Fire Valuations',
     serviceType: ExternalServiceType.NATIVE_VALUATIONS,
     connectKind: 'intrinsic',
+    use: [{ kind: 'team' }],
   },
 };
 
@@ -121,6 +122,8 @@ describe('POST /api/connect/:token (intrinsic provision)', () => {
         name: 'Listen-Fire Valuations',
         type: ExternalServiceType.NATIVE_VALUATIONS,
         credentials: { apiKey: 'mk-secret', apiKeyId: 'key-1' },
+        // Who may use it is the link's, chosen when it was minted: the page never asks.
+        use: [{ kind: 'team' }],
         replaceExisting: true,
       }),
     );

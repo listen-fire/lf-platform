@@ -16,8 +16,10 @@ import { MANIFEST_PROTOCOL_VERSION } from 'engine-contracts';
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { UserId } from '../../../../generated/kysely/core/User';
+import type { Grantee } from '../../../access/statement';
 
 import { mintRemoteCredential } from '../../../credentials/remote_credential';
+import { MISSING_USE_REFUSAL } from '../../../access/stated_input';
 import { loadRemoteAdapterSecret } from '../resolve';
 import { RemoteAdapterManifestFile, RemoteAdapterManifestInput, type RemoteAdapterCredentialPayload } from './manifest';
 import { remoteSlugRefusal } from './slugs';
@@ -32,6 +34,8 @@ export interface InstallRemoteAdapterInput {
   /** The adapter's auth secret. When present, minted into a REMOTE credential
    *  and linked; when absent, the install lands with a null credential FK. */
   secret?: string;
+  /** Who may use the connection `secret` is minted into: required with it. */
+  use?: readonly Grantee[];
   /** The host's OAuth app at the provider, per declared `oauth2` credential;
    *  stored with the secret, never in the manifest. */
   oauthClients?: RemoteAdapterCredentialPayload['oauthClients'];
@@ -54,12 +58,14 @@ export async function installRemoteAdapterFromManifest(
   let credentialsId: string | null = input.manifest.credentialsId ?? null;
 
   if (input.secret !== undefined) {
+    if (input.use === undefined) throw new Error(MISSING_USE_REFUSAL);
     const minted = await mintRemoteCredential({
       teamId: input.teamId,
       userId: input.userId ?? null,
       adapterType: input.manifest.adapterType,
       displayName: input.manifest.displayName ?? input.manifest.adapterType,
       secret: input.secret,
+      use: input.use,
       ...(input.oauthClients !== undefined ? { oauthClients: input.oauthClients } : {}),
       // Re-provision on re-install (rotation) rather than colliding on the
       // (team, name) unique.

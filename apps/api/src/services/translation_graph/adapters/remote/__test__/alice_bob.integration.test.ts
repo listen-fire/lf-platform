@@ -90,6 +90,7 @@ async function signInAs(input: { user: string; name: string; expired?: boolean }
     adapterType: 'hubspot',
     declaredCredential: 'oauth',
     name: input.name,
+    use: [{ kind: 'team' }],
   });
   const state = new URL(url).searchParams.get('state') ?? '';
   const code = fake.authorize(input.user, { expired: input.expired === true });
@@ -150,7 +151,7 @@ beforeAll(async () => {
     params: {},
   });
   const manifest = RemoteAdapterManifestInput.parse({ ...(answer as object), baseUrl, authStrategy: { kind: 'bearer' } });
-  await installRemoteAdapterFromManifest({ teamId, manifest, secret: SERVER_SECRET, oauthClients: { oauth: CLIENT } });
+  await installRemoteAdapterFromManifest({ teamId, manifest, secret: SERVER_SECRET, use: [{ kind: 'team' }], oauthClients: { oauth: CLIENT } });
 
   // Two users' credentials for it, each signed in at the provider.
   alice = await signInAs({ user: 'alice', name: 'alice_hubspot', expired: true });

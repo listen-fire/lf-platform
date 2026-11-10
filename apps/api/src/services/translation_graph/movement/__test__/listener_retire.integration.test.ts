@@ -109,6 +109,7 @@ describe('listener retirement on re-save (real Postgres + live adapter socket)',
         methods: ['listEntryPoints', 'describe', 'resolveEntity', 'createRecord'],
       },
       secret: 'retire-secret',
+      use: [{ kind: 'team' }],
     });
   }, 60_000);
 

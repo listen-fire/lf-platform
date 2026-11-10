@@ -11,6 +11,7 @@ import { neverAsAny } from 'movement-engine/public/types';
 
 import type { Access, Principal } from 'principal';
 
+import { isLfEngineTeam } from '../lf_engine/team_engine';
 import { StatementStore, type AskedVerb, type Grantee, type StatedVerb, type Target, type Thing, type Verb } from './statement';
 
 type StatementRefusal =
@@ -20,7 +21,9 @@ type StatementRefusal =
   | 'outsider'
   | 'not_a_member'
   | 'not_a_writer'
-  | 'malformed';
+  | 'malformed'
+  | 'lf_engine'
+  | 'already_stated';
 
 class StatementRefusedError extends Error {
   readonly refusal: StatementRefusal;
@@ -214,32 +217,47 @@ function admitsOutsiders(verb: Verb): boolean {
   }
 }
 
+// The shapes a fire list's outsiders are judged against at the door: a sender's
+// domain, a sender's address, and a phone as WhatsApp's `From` gives it.
+const DOMAIN = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+const ADDRESS_LOCAL = /^[^\s@"(),:;<>[\\\]]{1,64}$/;
+const PHONE_DIGITS = /^[1-9]\d{7,14}$/;
+const PHONE_SPACING = /[\s().-]/g;
+
 /**
  * A grantee as it is stored: user ids, domains and addresses lowercased, a
- * phone as its digits, so a stored value compares exactly. Undefined when it
- * names nothing.
+ * phone as its digits, so a stored value compares exactly. A value of the
+ * wrong shape is refused, naming it.
  */
-function normalised(grantee: Grantee): Grantee | undefined {
-  const present = <G extends Grantee>(g: G, value: string): G | undefined => (value === '' ? undefined : g);
+function normalised(grantee: Grantee, verb: Verb): Grantee {
+  const malformed = (value: string, shape: string): never => {
+    throw new StatementRefusedError('malformed', `${JSON.stringify(value)} on the ${verb} list is not ${shape}.`);
+  };
   switch (grantee.kind) {
     case 'team':
     case 'anyone':
       return grantee;
     case 'user': {
       const userId = grantee.userId.trim().toLowerCase();
-      return present({ kind: 'user', userId }, userId);
+      return userId === '' ? malformed(grantee.userId, 'a user: name which one') : { kind: 'user', userId };
     }
     case 'domain': {
       const domain = grantee.domain.trim().toLowerCase();
-      return present({ kind: 'domain', domain }, domain);
+      return DOMAIN.test(domain) ? { kind: 'domain', domain } : malformed(grantee.domain, 'a domain, such as example.com');
     }
     case 'email': {
       const address = grantee.address.trim().toLowerCase();
-      return present({ kind: 'email', address }, address);
+      const at = address.lastIndexOf('@');
+      const shaped = at > 0 && ADDRESS_LOCAL.test(address.slice(0, at)) && DOMAIN.test(address.slice(at + 1));
+      return shaped ? { kind: 'email', address } : malformed(grantee.address, 'an email address, such as pat@example.com');
     }
     case 'phone': {
-      const digits = grantee.digits.replace(/\D/g, '');
-      return present({ kind: 'phone', digits }, digits);
+      // Spacing and the international plus are how people write a number; the
+      // digits are what WhatsApp sends, and they must start with the country code.
+      const digits = grantee.digits.trim().replace(PHONE_SPACING, '').replace(/^\+/, '');
+      return PHONE_DIGITS.test(digits)
+        ? { kind: 'phone', digits }
+        : malformed(grantee.digits, 'a phone number: its digits with the country code first, such as 447700900123');
     }
     default:
       return neverAsAny(grantee);
@@ -267,10 +285,7 @@ function keyOf(grantee: Grantee): string {
 function listFor(verb: Verb, grantees: readonly Grantee[]): Grantee[] {
   const list = new Map<string, Grantee>();
   for (const given of grantees) {
-    const grantee = normalised(given);
-    if (grantee === undefined) {
-      throw new StatementRefusedError('malformed', `A ${given.kind} on the ${verb} list must say which.`);
-    }
+    const grantee = normalised(given, verb);
     if (!admitsOutsiders(verb) && grantee.kind !== 'team' && grantee.kind !== 'user') {
       throw new StatementRefusedError(
         'outsider',
@@ -318,6 +333,12 @@ async function checkedList(teamId: string, stated: { verb: Verb; grantees: reado
     throw new StatementRefusedError('empty', `The ${verb} list can't be emptied: name the team, or someone on it.`);
   }
   const list = listFor(verb, grantees);
+  if (verb === 'fire' && !list.some((grantee) => grantee.kind === 'anyone') && (await isLfEngineTeam(teamId))) {
+    throw new StatementRefusedError(
+      'lf_engine',
+      "This team's automations run on lf, whose door the platform does not judge, so a fire list other than anyone would not be kept to. State anyone, or move the team back to the platform's engine first.",
+    );
+  }
   const named = list.flatMap((grantee) => (grantee.kind === 'user' ? [grantee.userId] : []));
   const memberships = await StatementStore.membershipsAmong(teamId, named);
   const strangers = named.filter((userId) => !memberships.has(userId));
@@ -381,6 +402,53 @@ async function stateCreation(
   for (const verb of ['write', 'read', 'fire'] as const) {
     await setStatement(principal, { target, verb, grantees: statements[verb] });
   }
+}
+
+/**
+ * Whether the principal may create a connection on this team that these
+ * people may use, checked before anything is stored. As with an automation,
+ * creating is a write on the team, and the creator must be on the use list:
+ * only someone who may use a connection may change who else may.
+ */
+async function checkConnectionCreation(
+  principal: Principal,
+  asked: { teamId: string; use: readonly Grantee[] },
+): Promise<void> {
+  const standing = (await standingsIn(principal, [asked.teamId])).get(asked.teamId);
+  if (standing?.access !== 'write') {
+    throw new StatementRefusedError('not_allowed', 'Only someone with write access on the team can create a connection.');
+  }
+  const use = await checkedList(asked.teamId, { verb: 'use', grantees: asked.use });
+  if (!use.some((grantee) => admits(grantee, standing))) {
+    throw new StatementRefusedError(
+      'not_allowed',
+      "You can't create a connection you could not use: put yourself, or the team, on its use list.",
+    );
+  }
+}
+
+/** One verb's list, as a thing is created with it. */
+type StatedList<T extends Thing> = { verb: StatedVerb<T>; grantees: readonly Grantee[] };
+
+/**
+ * State a just-created thing's lists, in the order given, with no person
+ * deciding: whoever created it was decided before it was stored (a person by
+ * `checkCreation` or `checkConnectionCreation`, at the request or when its
+ * connect link was minted), or nobody was in the request and the lists are
+ * the ones `statementsWithNoPerson` gives. Allowed only while nothing at all
+ * is stated about the thing, which is what being created means.
+ */
+async function stateAtCreation<T extends Thing>(
+  target: Target<T>,
+  created: { teamId: string; lists: readonly StatedList<T>[] },
+): Promise<void> {
+  const { teamId, lists } = created;
+  if (await StatementStore.hasAnyStatement(target)) {
+    throw new StatementRefusedError('already_stated', `This ${target.thing} already says who may reach it.`);
+  }
+  const checked: { verb: StatedVerb<T>; grantees: Grantee[] }[] = [];
+  for (const list of lists) checked.push({ verb: list.verb, grantees: await checkedList(teamId, list) });
+  for (const list of checked) await StatementStore.replaceGrants(target, { teamId, ...list });
 }
 
 /** The team's members these lists admit, as the team stands now: the people who hold any of them. */
@@ -480,10 +548,13 @@ export {
   setStatement,
   checkCreation,
   stateCreation,
+  checkConnectionCreation,
+  stateAtCreation,
   membersAdmitted,
   passOnWhatTheyHeld,
   StatementRefusedError,
   type CreationStatements,
+  type StatedList,
   type StatementRefusal,
   type StandingChange,
 };

@@ -21,6 +21,8 @@ import ExternalServiceType from '../../../generated/kysely/automations/ExternalS
 import { encryptToken } from '../../../lib/credentials';
 import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
 import { cleanupTeam } from '../../../test/harness/cleanup';
+import { stateTeamDefaults } from '../../../test/harness/access';
+import { StatementStore } from '../../../services/access/statement';
 import { ApiKeyService } from '../../../services/api_key';
 import { createLfSecretsRouter } from '../lfSecrets';
 
@@ -126,10 +128,37 @@ describe('team setting must match the key', () => {
     const key = await mintKey(['secrets'], teamA);
     const ref = `door-${randomUUID().slice(0, 8)}`;
     await client(key).call('secrets.create', { ref, external: 'acme_crm', binding: 'legacy', fields: { api_key: 'k1' } });
+    // lf creating a secret is no person choosing: the whole team may use it.
+    const created = await getAutomationsQb(['external_service_credentials']).selectFrom('external_service_credentials').where('team_id', '=', teamA).where('name', '=', ref).select('id').executeTakeFirstOrThrow();
+    expect(await StatementStore.grantsOf({ thing: 'connection', id: created.id }, { teamId: teamA, verb: 'use' })).toEqual([{ kind: 'team' }]);
     const listed = z.array(SecretsListed).parse(await client(key).call('secrets.list', {}));
     expect(listed.find((entry) => entry.ref === ref)).toMatchObject({ external: 'acme_crm', binding: 'legacy' });
     const inB = await getAutomationsQb(['external_service_credentials']).selectFrom('external_service_credentials').where('team_id', '=', teamB).where('name', '=', ref).select('id').executeTakeFirst();
     expect(inB).toBeUndefined();
+  });
+});
+
+describe('a connection the owner of the key may not use', () => {
+  it('is answered as one the platform does not keep, until its statement names them', async () => {
+    const key = await mintKey(['secrets'], teamA);
+    const ref = `hidden-${randomUUID().slice(0, 8)}`;
+    const id = randomUUID();
+    await getAutomationsQb(['external_service_credentials'])
+      .insertInto('external_service_credentials')
+      .values({ id: id as ExternalServiceCredentialsId, name: ref, team_id: teamA, type: ExternalServiceType.REMOTE, app_id: 'acme_crm', credentials: await encryptToken(JSON.stringify({ api_key: 'k1' }), id) })
+      .execute();
+    const target = { thing: 'connection' as const, id };
+    await StatementStore.replaceGrants(target, { teamId: teamA, verb: 'use', grantees: [{ kind: 'user', userId: randomUUID() }] });
+
+    expect(await client(key).call('secrets.resolve', { ref })).toBeNull();
+    expect(await client(key).call('secrets.writeBack', { ref, fields: { api_key: 'k2' }, expectedVersion: 'v' })).toEqual({ kind: 'missing' });
+    const listed = z.array(SecretsListed).parse(await client(key).call('secrets.list', {}));
+    expect(listed.map((entry) => entry.ref)).not.toContain(ref);
+    expect(await refusedCode(client(key).call('secrets.delete', { ref }))).toBe('missing');
+    expect(await refusedCode(client(key).call('secrets.replace', { ref, external: 'acme_crm', binding: 'legacy', fields: { api_key: 'k2' } }))).toBe('exists');
+
+    await stateTeamDefaults(target, teamA);
+    expect(await client(key).call('secrets.resolve', { ref })).toMatchObject({ fields: { api_key: 'k1' } });
   });
 });
 
@@ -158,6 +187,7 @@ describe('the envelope', () => {
       .insertInto('external_service_credentials')
       .values({ id: id as ExternalServiceCredentialsId, name: ref, team_id: teamA, type: ExternalServiceType.REMOTE, app_id: 'acme_crm', credentials: await encryptToken(JSON.stringify({ api_key: canary }), randomUUID()) })
       .execute();
+    await stateTeamDefaults({ thing: 'connection', id }, teamA);
     const logged: unknown[][] = [];
     for (const level of ['debug', 'info', 'warn', 'error'] as const) {
       jest.spyOn(logger, level).mockImplementation((...args: unknown[]) => {

@@ -7,6 +7,7 @@
 // run.
 
 const validateMock = jest.fn();
+jest.mock('../../../../services/access/decide', () => jest.requireActual('../../../../test/access_defaults').teamDefaults());
 jest.mock('../../../../adapters/gmail/apiClient', () => {
   const actual = jest.requireActual('../../../../adapters/gmail/apiClient');
   return { ...actual, validateGmailMailbox: (...args: unknown[]) => validateMock(...args) };
@@ -58,7 +59,7 @@ describe('addCredential — Gmail runs the live check before storing', () => {
     });
 
     await expect(
-      caller().addCredential({
+      caller().addCredential({ use: [{ kind: 'team' }],
         name: 'Deals mailbox',
         type: ExternalServiceType.GOOGLE_GMAIL,
         credentials: { mailbox: 'someone@example.com' },
@@ -77,7 +78,7 @@ describe('addCredential — Gmail runs the live check before storing', () => {
       profile: { emailAddress: 'deals@example.com', historyId: '1' },
     });
 
-    await caller().addCredential({
+    await caller().addCredential({ use: [{ kind: 'team' }],
       name: 'Deals mailbox',
       type: ExternalServiceType.GOOGLE_GMAIL,
       credentials: { mailbox: 'deals@example.com' },

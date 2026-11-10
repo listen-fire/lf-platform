@@ -67,6 +67,7 @@ const granolaRow: ConnectTokenLookup = {
     credentialName: 'Granola',
     serviceType: ExternalServiceType.GRANOLA,
     connectKind: 'key-entry',
+    use: [{ kind: 'team' }],
   },
 };
 
@@ -80,6 +81,7 @@ const attioRow: ConnectTokenLookup = {
     credentialName: 'Attio',
     serviceType: ExternalServiceType.ATTIO,
     connectKind: 'oauth',
+    use: [{ kind: 'team' }],
   },
 };
 
@@ -156,6 +158,8 @@ describe('POST /api/connect/:token (key-entry submit)', () => {
         name: 'Granola',
         type: ExternalServiceType.GRANOLA,
         credentials: { apiKey: 'gr-secret' },
+        // Who may use it is the link's, chosen when it was minted: the page never asks.
+        use: [{ kind: 'team' }],
         replaceExisting: true,
       }),
     );

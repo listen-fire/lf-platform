@@ -205,6 +205,7 @@ describe('the movements module', () => {
       appId: 'acme_crm',
       declaredCredential: 'oauth',
       credentials: { access_token: 't' },
+      use: [{ kind: 'team' }],
     });
     await seed(teamA, 'uses_served', 'import { served_cred as c } from credentials\n\nfunction a() {}\n');
     await seed(teamA, 'uses_unserved', 'import { missing_cred } from credentials\n\nfunction b() {}\n');

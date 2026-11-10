@@ -91,6 +91,7 @@ describe('installRemoteAdapterFromManifest', () => {
       teamId,
       manifest: manifest('acme_crm', v2Server.baseUrl),
       secret: SECRET,
+      use: [{ kind: 'team' }],
     });
 
     expect(result.credentialsId).not.toBeNull();
@@ -126,6 +127,7 @@ describe('installRemoteAdapterFromManifest', () => {
         // The file's claim is not what decides.
         manifest: { ...manifest('legacy_crm', v1BaseUrl), protocolVersion: 2 },
         secret: 'legacy-token',
+        use: [{ kind: 'team' }],
       }),
     ).rejects.toThrow(
       new RegExp(`Remote adapter "legacy_crm" at ${v1BaseUrl} refused: protocolVersion: expected 2, got nothing`),
@@ -180,7 +182,7 @@ describe('installRemoteAdapterFromManifest with a slug a built-in answers to', (
     'refuses %s before asking the server or minting anything',
     async (slug) => {
       await expect(
-        installRemoteAdapterFromManifest({ teamId, manifest: manifest(slug, v2Server.baseUrl), secret: SECRET }),
+        installRemoteAdapterFromManifest({ teamId, manifest: manifest(slug, v2Server.baseUrl), secret: SECRET, use: [{ kind: 'team' }] }),
       ).rejects.toThrow(/Remote adapter cannot be installed: .* a remote adapter needs a slug of its own/);
 
       const rows = await getAutomationsQb(['remote_adapter'])

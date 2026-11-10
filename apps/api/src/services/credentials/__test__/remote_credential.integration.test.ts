@@ -52,6 +52,7 @@ describe('mintRemoteCredential', () => {
       adapterType: 'acme_crm',
       displayName: 'Acme CRM',
       secret: 'crm-token-xyz',
+      use: [{ kind: 'team' }],
     });
 
     const row = await getAutomationsQb(['external_service_credentials'])
@@ -75,12 +76,14 @@ describe('mintRemoteCredential', () => {
       adapterType: 'acme_crm',
       displayName: 'Acme CRM',
       secret: 's1',
+      use: [{ kind: 'team' }],
     });
     const b = await mintRemoteCredential({
       teamId,
       adapterType: 'other_crm',
       displayName: 'Other CRM',
       secret: 's2',
+      use: [{ kind: 'team' }],
     });
 
     const rows = await getAutomationsQb(['external_service_credentials'])

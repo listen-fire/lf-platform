@@ -25,6 +25,7 @@ import {
 import type { WireCredentialDeclarationShape } from 'engine-contracts';
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { UserId } from '../../generated/kysely/core/User';
+import type { Grantee } from '../access/statement';
 
 
 import { getAutomationsQb } from '../../lib/kysely';
@@ -225,6 +226,8 @@ export interface RemoteModuleCredentialTarget {
   adapterType: string;
   declaredCredential: string;
   name: string;
+  /** Who may use the credential once it is created, decided before (`checkConnectionCreation`). */
+  use: readonly Grantee[];
 }
 
 export async function createStaticRemoteModuleCredential(
@@ -245,6 +248,7 @@ export async function createStaticRemoteModuleCredential(
     adapterType: install.row.adapter_type,
     declaredCredential: declaration.name,
     name: input.name,
+    use: input.use,
     fields: validatedFields(declaration, input.fields),
   });
 }
@@ -294,6 +298,7 @@ export async function beginRemoteModuleSignIn(
     adapterType: install.row.adapter_type,
     declaredCredential: declaration.name,
     name: input.name,
+    use: input.use,
     attempt,
     fields,
   });
@@ -325,6 +330,7 @@ export async function completeRemoteModuleSignIn(input: { state: string; code: s
     adapterType: pending.adapterType,
     declaredCredential: declaration.name,
     name: pending.name,
+    use: pending.use,
     fields: { ...pending.fields, ...grant.fields },
   });
   return { credentialsId, name: pending.name };

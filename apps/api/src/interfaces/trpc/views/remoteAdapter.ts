@@ -17,6 +17,8 @@ import {
   type RemoteAdapterRow,
 } from '../../../services/translation_graph/adapters/remote/store';
 import { installRemoteAdapterFromManifest } from '../../../services/translation_graph/adapters/remote/install';
+import { GranteesInput } from '../../../services/access/stated_input';
+import { useForNewConnection } from './connection_creation';
 import { bindFlowToUser } from '../../../lib/oauthFlows';
 import { CredentialNameTakenError } from '../../../services/credentials/persist_credential';
 import {
@@ -182,10 +184,10 @@ const remoteAdapterRouter = (procedure: typeof trpc.procedure) => {
      * the new secret, or the stored one on an edit; the form never claims it.
      */
     upsertFromManifest: userProcedure
-      .input(RemoteAdapterManifestInput.extend({ secret: z.string().min(1).optional() }))
+      .input(RemoteAdapterManifestInput.extend({ secret: z.string().min(1).optional(), use: GranteesInput.optional() }))
       .mutation(async ({ input }) => {
         const ctx = currentContext();
-        const { secret, ...manifest } = input;
+        const { secret, use: givenUse, ...manifest } = input;
         // The install authenticates to the manifest's server with its secret,
         // so naming a connection here hands it over: it needs use of it.
         if (manifest.credentialsId !== undefined && (await connectionUnseen(manifest.credentialsId))) {
@@ -204,11 +206,13 @@ const remoteAdapterRouter = (procedure: typeof trpc.procedure) => {
             throw new TRPCError({ code: 'CONFLICT', message: `The name "${name}" is taken by a connection you may not use; choose another name.` });
           }
         }
+        // A new secret is minted into a connection of its own, whose users are asked for.
+        const use = secret !== undefined ? await useForNewConnection({ teamId: ctx.user.teamId, use: givenUse }) : undefined;
         return installRemoteAdapterFromManifest({
           teamId: ctx.user.teamId as TeamId,
           userId: ctx.user.id as UserId,
           manifest: await keepingInstallSecret({ teamId: ctx.user.teamId as TeamId, submitted: manifest, replacing: secret !== undefined }),
-          ...(secret !== undefined ? { secret } : {}),
+          ...(secret !== undefined ? { secret, use } : {}),
         });
       }),
 
@@ -241,12 +245,14 @@ const remoteAdapterRouter = (procedure: typeof trpc.procedure) => {
      * a required one left out, and a name a movement could not import.
      */
     createStaticCredential: userProcedure
-      .input(ModuleCredentialTarget.extend({ fields: z.record(z.string(), z.string()) }))
+      .input(ModuleCredentialTarget.extend({ fields: z.record(z.string(), z.string()), use: GranteesInput.optional() }))
       .mutation(async ({ input }) => {
         const ctx = currentContext();
+        const use = await useForNewConnection({ teamId: ctx.user.teamId, use: input.use });
         return reportingRefusals(() =>
           createStaticRemoteModuleCredential({
             ...input,
+            use,
             teamId: ctx.user.teamId as TeamId,
             userId: ctx.user.id as UserId,
           }),
@@ -260,12 +266,15 @@ const remoteAdapterRouter = (procedure: typeof trpc.procedure) => {
      * install holds no OAuth app for the declaration.
      */
     beginOAuthCredential: userProcedure
-      .input(ModuleCredentialTarget.extend({ fields: z.record(z.string(), z.string()).optional() }))
+      .input(ModuleCredentialTarget.extend({ fields: z.record(z.string(), z.string()).optional(), use: GranteesInput.optional() }))
       .mutation(async ({ input }) => {
         const ctx = currentContext();
+        // Decided now: the provider's callback that stores the credential has no caller.
+        const use = await useForNewConnection({ teamId: ctx.user.teamId, use: input.use });
         const { url, state } = await reportingRefusals(() =>
           beginRemoteModuleSignIn({
             ...input,
+            use,
             teamId: ctx.user.teamId as TeamId,
             userId: ctx.user.id as UserId,
           }),

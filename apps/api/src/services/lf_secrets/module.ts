@@ -15,6 +15,7 @@ import { SlotRefusal } from 'movement-engine/public/module-wire';
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { UserId } from '../../generated/kysely/core/User';
 import type { ExternalServiceCredentialsId } from '../../generated/kysely/automations/ExternalServiceCredentials';
+import type { CatalogAudience } from '../translation_graph/movement/audience';
 import ExternalServiceType from '../../generated/kysely/automations/ExternalServiceType';
 import { decryptToken, encryptToken } from '../../lib/credentials';
 import { getAutomationsQb } from '../../lib/kysely';
@@ -23,6 +24,8 @@ import { deleteCredential, forgetCachedClients } from '../credentials/delete_cre
 import { postgresSecrets, type PayloadShape } from '../credentials/secrets_postgres';
 import { lockLease, unlockLease } from './lease';
 import { servedCredentials, wireReading, wireTarget, type WireTarget } from './rows';
+import { accessTo, readableIds } from '../access/decide';
+import { connectionWithNoPerson } from '../access/no_person';
 
 export type SecretsMethod = (typeof SECRETS_METHODS)[number];
 
@@ -72,8 +75,24 @@ function slackIdentifier(type: ExternalServiceType, payload: StoredPayload): str
   return null;
 }
 
-export function platformSecretsModule({ teamId, userId }: { teamId: TeamId; userId: UserId | null }): PlatformSecretsModule {
+/**
+ * `audience` is who is asking: a person (the key's owner) is served only the
+ * connections they may use, and a connection they may not use reads as one
+ * that does not exist; a run is served every connection of the team.
+ */
+export function platformSecretsModule({
+  teamId,
+  userId,
+  audience,
+}: {
+  teamId: TeamId;
+  userId: UserId | null;
+  audience: CatalogAudience;
+}): PlatformSecretsModule {
   const credentials = () => getAutomationsQb(['external_service_credentials']);
+
+  const mayUse = async (id: string): Promise<boolean> =>
+    audience.for === 'run' || accessTo(audience.for, { target: { thing: 'connection', id }, verb: 'use' });
 
   /** The team's row named `ref`, whatever it is. */
   const rowNamed = (ref: string) =>
@@ -88,7 +107,7 @@ export function platformSecretsModule({ teamId, userId }: { teamId: TeamId; user
    *  shell, or lf is not served its kind. */
   const servedRow = async (ref: string) => {
     const row = await rowNamed(ref);
-    if (row === undefined || row.shell) return undefined;
+    if (row === undefined || row.shell || !(await mayUse(row.id))) return undefined;
     const reading = wireReading(row);
     return reading === null ? undefined : { id: row.id, shape: reading.shape };
   };
@@ -100,6 +119,8 @@ export function platformSecretsModule({ teamId, userId }: { teamId: TeamId; user
         userId,
         name: ref,
         type: target.type,
+        // lf creating a secret is no person choosing who may use it.
+        use: connectionWithNoPerson().use,
         credentials: target.shape.withFields({}, fields),
         appId: target.appId,
         ...(target.declaredCredential !== null ? { declaredCredential: target.declaredCredential } : {}),
@@ -166,7 +187,8 @@ export function platformSecretsModule({ teamId, userId }: { teamId: TeamId; user
     },
 
     async 'secrets.list'() {
-      return servedCredentials(teamId);
+      if (audience.for === 'run') return servedCredentials(teamId);
+      return servedCredentials(teamId, { usable: await readableIds(audience.for, { thing: 'connection', teamIds: [teamId] }) });
     },
 
     async 'secrets.lock'(params) {
@@ -194,6 +216,8 @@ export function platformSecretsModule({ teamId, userId }: { teamId: TeamId; user
       const target = wireTarget({ external, binding });
       const row = await rowNamed(ref);
       if (row === undefined) return create(ref, target, fields);
+      // A connection the caller may not use holds the name as any would: creating under it collides.
+      if (!(await mayUse(row.id))) throw new SlotRefusal('exists', `the platform already keeps a credential named "${ref}"`);
       if (row.type !== target.type) {
         throw new SlotRefusal('type_change', `the platform keeps "${ref}" as a ${row.type} credential, and "${external}" would make it a ${target.type} one; delete it first`);
       }
@@ -203,7 +227,7 @@ export function platformSecretsModule({ teamId, userId }: { teamId: TeamId; user
     async 'secrets.delete'(params) {
       const { ref } = parse(Ref, 'secrets.delete', params);
       const row = await rowNamed(ref);
-      if (row === undefined || wireReading(row) === null) throw new SlotRefusal('missing', `the platform keeps no credential named "${ref}"`);
+      if (row === undefined || wireReading(row) === null || !(await mayUse(row.id))) throw new SlotRefusal('missing', `the platform keeps no credential named "${ref}"`);
       await deleteCredential({ teamId, id: row.id });
       return null;
     },

@@ -146,6 +146,7 @@ describe('POST /api/connect/:token (handshake start)', () => {
       teamId: 'team-1',
       userId: 'user-1',
       name: 'telegram_main',
+      use: undefined,
     });
     expect(mintTelegramToken).toHaveBeenCalledWith({
       nativeUserId: 'user-1',

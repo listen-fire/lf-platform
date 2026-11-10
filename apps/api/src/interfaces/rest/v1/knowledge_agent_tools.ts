@@ -9,6 +9,7 @@
 // implementation. The route metadata is also registered on the registry
 // (`registerKnowledgeAgentToolRoutes`) for non-MCP discovery.
 
+import { CreationStatementsInput, GranteesInput, LIST_DESCRIPTIONS } from '../../../services/access/stated_input';
 import { randomUUID } from "node:crypto";
 
 import { Router, type RequestHandler } from 'express';
@@ -22,7 +23,7 @@ import type { UserId } from '../../../generated/kysely/core/User';
 import type { NodeId } from '../../../generated/kysely/knowledge/Node';
 import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
 
-import { getKnowledgeQb } from '../../../lib/kysely';
+import { getAutomationsQb, getKnowledgeQb } from '../../../lib/kysely';
 import { teamIdSchema } from '../../../lib/team_id';
 import { mintConnectLink } from '../../../services/credentials/connect_link';
 import { mintGrantAccessLink } from '../../../services/credentials/grant_access';
@@ -124,9 +125,11 @@ import { MovementEngineError } from 'movement-engine/public/errors';
 import { UserService } from '../../../services/user';
 import { registerRoute } from '../../mcp/registry';
 import {
+  CHANGE_STATEMENT,
   EXEMPT,
   READ_ONLY_MESSAGE,
   USE_CONNECTION,
+  connectionUnseen,
   decidingRouter,
   readableAmong,
   refusalOn,
@@ -134,6 +137,8 @@ import {
   type Decision,
 } from '../../access_route';
 import { Whose } from '../../../services/access/whose';
+import { StatementRefusedError, setStatement } from '../../../services/access/decide';
+import { StatementStore, type Grantee, type Target } from '../../../services/access/statement';
 import {
   ToolTeamError,
   listAccessibleTeams,
@@ -703,6 +708,8 @@ async function describeInstanceFull(teamId: TeamId, input: z.infer<typeof descri
 const connectCredentialSchema = z.object({
   system: z.string(),
   connection: z.string().optional(),
+  /** Who may use the connection the link creates (`mintConnectLink`). */
+  use: GranteesInput.optional(),
   team: z.string().optional(),
 });
 
@@ -725,6 +732,7 @@ const connectCredentialHandler: RequestHandler = jsonHandler(
       userId,
       adapterSlug: input.system,
       ...(input.connection !== undefined ? { credentialName: input.connection } : {}),
+      ...(input.use !== undefined ? { use: input.use } : {}),
     });
     if ('error' in result) return result;
     const action =
@@ -1239,6 +1247,9 @@ const saveMovementSchema = z.object({
    *  conflict instead of silently overwriting. Omit for today's behaviour
    *  (no precondition). Ignored when creating a new automation. */
   expectedRevision: z.string().optional(),
+  /** Who may read, write and fire the automation, when this save creates it:
+   *  each list is required then, and refused on a save over an existing one. */
+  statements: CreationStatementsInput.optional(),
 });
 
 const saveMovementHandler: RequestHandler = jsonHandler(saveMovementSchema, 'body', async (input) => {
@@ -1273,6 +1284,7 @@ const saveMovementHandler: RequestHandler = jsonHandler(saveMovementSchema, 'bod
     ...(input.id !== undefined ? { id: input.id } : {}),
     ...(input.acknowledgeErrors !== undefined ? { acknowledgeErrors: input.acknowledgeErrors } : {}),
     ...(input.expectedRevision !== undefined ? { expectedRevision: input.expectedRevision } : {}),
+    ...(input.statements !== undefined ? { statements: input.statements } : {}),
   });
   if (result.ok) {
     // A manual channel is what runAutomation dispatches on — surface whether an
@@ -1316,6 +1328,89 @@ const saveMovementHandler: RequestHandler = jsonHandler(saveMovementSchema, 'bod
     ...helpNote,
   };
 });
+
+// ---------------------------------------------------------------------------
+// access.set — setAccess: who may reach one automation or one connection
+// ---------------------------------------------------------------------------
+
+const setAccessSchema = z
+  .object({
+    automation: z.string().optional(),
+    connection: z.string().optional(),
+    verb: z.enum(['read', 'write', 'fire', 'use']),
+    grantees: GranteesInput,
+    team: z.string().optional(),
+  })
+  .refine((input) => (input.automation === undefined) !== (input.connection === undefined), {
+    message: 'Name exactly one of automation or connection.',
+  });
+
+type SetAccessInput = z.infer<typeof setAccessSchema>;
+
+/** The connection an id or exact name names in the team, if the caller may use it: one they may not is answered as one that is not there. */
+async function usableConnectionNamed(input: { idOrName: string; team: string | undefined }): Promise<{ id: string; name: string } | null> {
+  const teamId = await resolveToolTeam(input.team);
+  const rows = await getAutomationsQb(['external_service_credentials'])
+    .selectFrom('external_service_credentials')
+    .where('team_id', '=', teamId as TeamId)
+    .select(['id', 'name'])
+    .execute();
+  const row = rows.find((r) => r.id === input.idOrName) ?? rows.find((r) => r.name === input.idOrName);
+  if (row === undefined || (await connectionUnseen(row.id))) return null;
+  return { id: row.id, name: row.name };
+}
+
+/** One list changed: who it now names, as stored. */
+async function listNow(target: Target, verb: SetAccessInput['verb']): Promise<Grantee[]> {
+  const teamId = await StatementStore.teamOf(target);
+  return teamId === undefined ? [] : StatementStore.grantsOf(target, { teamId, verb });
+}
+
+const SET_ACCESS_DESCRIPTION =
+  'Change who may reach one automation or one connection: replace one of its lists. An automation has three — read, write (change, run, delete, and change these lists; whoever may write may also read) and fire (set it off through its listens) — and a connection one, use. Body: { automation | connection (id or exact name), verb, grantees, team? }. Read, write and use take { kind: "team" } or { kind: "user", userId }; fire also takes { kind: "anyone" }, { kind: "domain", domain }, { kind: "email", address } and { kind: "phone", digits } (digits, country code first). A list is never empty, and names only people on the team. Ask the person you are working for who should be on it; never choose for them. Changing an automation\'s lists needs write on it; a connection\'s needs use. Returns the list as stored. Also the top-level "setAccess" tool.';
+
+const WRONG_VERB = "An automation's lists are read, write and fire; a connection's is use.";
+
+// Replace one of a thing's lists, as the person the agent works for chose it.
+// The decision is the thing's own: write on the automation, use on the
+// connection. What the caller may not reach is answered as what is not there.
+const setAccessHandler: RequestHandler = async (req, res) => {
+  const parsed = setAccessSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() });
+  }
+  const input = parsed.data;
+  try {
+    let target: Target;
+    let named: { automation: { id: string; name: string } } | { connection: { id: string; name: string } };
+    if (input.automation !== undefined) {
+      const missing = { error: `No automation '${input.automation}'.` };
+      const row = await rowByIdOrName({ idOrName: input.automation, team: input.team });
+      if (row === null) return res.status(404).json(missing);
+      const refused = await refusedChange({ automationId: row.id, missing });
+      if (refused instanceof Forbidden) return res.status(403).json({ error: refused.message });
+      if (refused !== null) return res.status(404).json(refused);
+      if (input.verb === 'use') return res.status(400).json({ error: WRONG_VERB });
+      const automation: Target<'automation'> = { thing: 'automation', id: row.id };
+      await setStatement(currentPrincipal(), { target: automation, verb: input.verb, grantees: input.grantees });
+      target = automation;
+      named = { automation: { id: row.id, name: row.name } };
+    } else {
+      const asked = input.connection ?? '';
+      const row = await usableConnectionNamed({ idOrName: asked, team: input.team });
+      if (row === null) return res.status(404).json({ error: `No connection '${asked}' in this team.` });
+      if (input.verb !== 'use') return res.status(400).json({ error: WRONG_VERB });
+      const connection: Target<'connection'> = { thing: 'connection', id: row.id };
+      await setStatement(currentPrincipal(), { target: connection, verb: input.verb, grantees: input.grantees });
+      target = connection;
+      named = { connection: row };
+    }
+    return res.status(200).json({ ...named, verb: input.verb, grantees: await listNow(target, input.verb) });
+  } catch (err) {
+    if (err instanceof StatementRefusedError) return res.status(400).json({ error: err.message, refusal: err.refusal });
+    return internalError(res, err);
+  }
+};
 
 // ---------------------------------------------------------------------------
 // automations.read (windowed) / automations.edit / automations.grep — the
@@ -1852,6 +1947,7 @@ function mountAutomationToolRoutes(router: ReturnType<typeof Router>): void {
   route.post('/connections/describe', USE_CONNECTION, describeInstanceHandler);
   route.post('/connections/connect', USE_CONNECTION, connectCredentialHandler);
   route.post('/connections/grant-access', USE_CONNECTION, grantAccessHandler);
+  route.post('/access', CHANGE_STATEMENT, setAccessHandler);
 
   // whatsapp number linking (verification code loop)
   const ownNumber: Decision = { exempt: "the caller's own phone number, no automation" };
@@ -1978,8 +2074,9 @@ function registerAutomationToolRoutes(): void {
   // connected systems
   reg('GET', '/connections', 'The connected systems list: the workspace\'s systems (construction args + listener-config keys + `triggerExpectation` — what a listener actually fires on; ground trigger-surface claims in it), connections, plugins, and knowledge-graph type names — the ONLY names valid in automation imports/constructions. Also the top-level "listConnections" tool.', { readOnly: true, latency: 'medium' });
   reg('POST', '/connections/describe', 'The live schema of one (system, connection) at one position. Body: { system, connection?, types?, position?, narrow?, detail? }. By default answers compact markdown in getStarted\'s notation (the node\'s fields, its edges with their targets\' fields one level deep; at the root, how to construct and listen); `detail: "full"` answers the JSON described below. Call before authoring an automation against a system; every call re-reads the live schema, so call again after adding a field in the external workspace. Returns the system\'s description + triggerExpectation, plus an identity note (who a movement runs as, and whose activity triggers a listener) and a capability note (what it can read/write), even when no connection exists yet. A type listing `members` is POLYMORPHIC: it shows only what all its members share (often nothing), and you reach one member\'s real fields and edges by describing again with `narrow` — see `narrowBy` for the fields to test and `narrowingHint` for a worked example.', { inputSchema: describeInstanceSchema, readOnly: true, latency: 'medium' });
-  reg('POST', '/connections/connect', 'AUTHOR-TIME: if a system the automation needs isn\'t connected yet, mint a single-use link for the user to open in their browser — no popup needed. Works for OAuth systems (the link opens a browser sign-in), API-key systems (the link opens a form to paste/replace the key), intrinsic systems (one-click confirm), and handshake systems (Telegram — the link opens Telegram with the Listen-Fire bot; the user presses Start there to finish). Body: { system, connection? }. Returns a link to send the user, the connect kind ("oauth" | "key-entry" | "intrinsic" | "handshake"), the name the connection will be stored under, and when the link expires. Hand the url to the user; after they connect, poll listConnections — the connection shows up in the results. Also the top-level "connectSystem" tool.', { inputSchema: connectCredentialSchema, latency: 'fast' });
+  reg('POST', '/connections/connect', 'AUTHOR-TIME: if a system the automation needs isn\'t connected yet, mint a single-use link for the user to open in their browser — no popup needed. Works for OAuth systems (the link opens a browser sign-in), API-key systems (the link opens a form to paste/replace the key), intrinsic systems (one-click confirm), and handshake systems (Telegram — the link opens Telegram with the Listen-Fire bot; the user presses Start there to finish). Body: { system, connection?, use? } — `use` says who may use the connection the link creates (ask the person you work for, never choose), and is required unless the link only reuses the team\'s Telegram connection. Returns a link to send the user, the connect kind ("oauth" | "key-entry" | "intrinsic" | "handshake"), the name the connection will be stored under, and when the link expires. Hand the url to the user; after they connect, poll listConnections — the connection shows up in the results. Also the top-level "connectSystem" tool.', { inputSchema: connectCredentialSchema, latency: 'fast' });
   reg('POST', '/connections/grant-access', 'AUTHOR-TIME: some systems need access granted to specific items inside an already-connected account (Google Sheets: the Drive picker — under drive.file, picking is the only way to reach an existing file). Mint a single-use link where the user picks the item(s) to grant. Body: { system, connection? }. Returns { url, connection, expiresAt }. Systems without a grant flow return a clear error. Also the top-level "grantAccess" tool.', { inputSchema: grantAccessSchema, latency: 'fast' });
+  reg('POST', '/access', SET_ACCESS_DESCRIPTION, { inputSchema: setAccessSchema, latency: 'fast' });
 
   // automations
   reg('GET', '/automations', 'List saved automations: id, name, status, listeners. Spans every team the connection covers; each item is tagged with its teamId + teamName.', { readOnly: true, latency: 'fast' });
@@ -1990,7 +2087,7 @@ function registerAutomationToolRoutes(): void {
   reg('POST', '/automations/validate', 'Typecheck an automation program against the live connected systems WITHOUT saving. Returns diagnostics (code, message, severity, line/col). A clean validation predicts a live save; saving runs the same check first, so this is for exploring. Acts in your default team unless you pass `team`. Also the top-level "validateAutomation" tool.', { inputSchema: validateMovementSchema, latency: 'medium' });
   reg('POST', '/automations/upgrade', 'Move a saved automation onto the current language version. Body: { automation, acknowledge?, applyAllFixes?, team? }. Rewrites its old spellings by the checker\'s fixes proved to keep the meaning (applyAllFixes: true applies the others too), validates the result under the current version and returns { status, from, to, diagnostics, upgradedSource?, message }: `blocked` (diagnostics to repair, a rewrite not proved to keep the meaning, or a warning that the automation may now do something else; applyAllFixes applies the rewrites and moves past the warnings once checked), `needs_acknowledgement` (nothing holds it — call again with acknowledge: true to move it), `upgraded`, `already_current`, or `unverified`. The automations and libraries it shares imports with on its version move with it (movesWith); when one cannot, nothing moves (heldBy). Without acknowledge nothing changes. Also the top-level "upgradeAutomation" tool.', { inputSchema: upgradeMovementSchema, latency: 'medium' });
   reg('POST', '/automations/completions', 'Given an automation program with a `<|>` cursor marker, return the valid next tokens at that point (writable fields, edges, enum options). Body: { source, team?, automation?, languageVersion? } (a saved automation completes under its pinned language version). Returns { completions: [{ label, kind, detail? }], note? }; under a release pin the kinds are the language service\'s: variable, function, field, edge, module, keyword, property, credential, type, namespace.', { inputSchema: completionsAtSchema, latency: 'medium' });
-  reg('POST', '/automations/save', 'Save an automation program and provision its listeners (authoring → live). It validates first: text with errors, or that can\'t be verified, is NOT saved — the answer is { ok: false, saved: false, diagnostics } — and acknowledgeErrors: true ships it anyway (replacing whatever ran, even broken). A clean save goes live. No "draft" quietly keeps the last good version running. Returns diagnostics, per-listener details, runnable, `warnings` (saved fine, but would surprise the user — a movement name another automation already fires, or listeners retired because the saved source could not be read; always relay these), and `storyUrl` — a login-free link to a picture of what the automation does, worth offering as a labelled link once a save goes live. Body: { source, name?, description?, id?, acknowledgeErrors?, expectedRevision?, team? } — pass id to re-save, expectedRevision (the `revision` from your last getAutomation read) when updating an EXISTING automation so a concurrent edit can\'t be silently clobbered — a stale expectedRevision is rejected with { ok: false, conflict } instead of overwriting; call getAutomation again, merge, and re-save with the new revision. Omit expectedRevision for today\'s behaviour (no precondition — last write wins); it\'s ignored when creating a new automation. `team` files it in a specific team. Also the top-level "saveAutomation" tool.', { inputSchema: saveMovementSchema, latency: 'medium' });
+  reg('POST', '/automations/save', 'Save an automation program and provision its listeners (authoring → live). It validates first: text with errors, or that can\'t be verified, is NOT saved — the answer is { ok: false, saved: false, diagnostics } — and acknowledgeErrors: true ships it anyway (replacing whatever ran, even broken). A clean save goes live. No "draft" quietly keeps the last good version running. Returns diagnostics, per-listener details, runnable, `warnings` (saved fine, but would surprise the user — a movement name another automation already fires, or listeners retired because the saved source could not be read; always relay these), and `storyUrl` — a login-free link to a picture of what the automation does, worth offering as a labelled link once a save goes live. Body: { source, name?, description?, id?, acknowledgeErrors?, expectedRevision?, statements?, team? } — a NEW automation needs `statements` ({ read, write, fire }: who may reach it; ask the person you work for, never choose), and a save over an existing one takes none (setAccess changes them); pass id to re-save, expectedRevision (the `revision` from your last getAutomation read) when updating an EXISTING automation so a concurrent edit can\'t be silently clobbered — a stale expectedRevision is rejected with { ok: false, conflict } instead of overwriting; call getAutomation again, merge, and re-save with the new revision. Omit expectedRevision for today\'s behaviour (no precondition — last write wins); it\'s ignored when creating a new automation. `team` files it in a specific team. Also the top-level "saveAutomation" tool.', { inputSchema: saveMovementSchema, latency: 'medium' });
   reg('POST', '/automations/delete', 'Permanently delete a saved automation and every listener it derives (a hard delete — the automation and its run triggers are gone, and any now-orphaned external subscriptions are torn down). Body: { automation, team? } — the automation id (from listAutomations); pass `team` when you belong to more than one. Returns { deleted } — false if no automation with that id lives in the resolved team. Also the top-level "deleteAutomation" tool.', { inputSchema: deleteMovementSchema, latency: 'fast' });
   reg('POST', '/automations/run', 'Dispatch a saved automation on its manual channel and return IMMEDIATELY with { runId, status: "running" } — the run executes asynchronously (it can take a while). Optionally pass text and/or files as its input. Body: { automation, text?, files?, requestId?, team? } — a retry with the same requestId returns the same run. Poll /automations/run-status (the "checkRun" tool) with the runId for the outcome. Also the top-level "runAutomation" tool.', { inputSchema: runMovementSchema, latency: 'fast' });
   reg('POST', '/automations/run-status', 'Read one automation run\'s status by id — the poll target for runAutomation. Body: { runId, team? }. Returns { status (running | parked | success | partial | failed), recordCount, errors, startedAt, finishedAt, failedAt, failureReason, costUsd, modelCalls } — costUsd/modelCalls are the run\'s model-call spend and call count. Poll until status leaves "running" ("parked" means paused, waiting for your review — see listReviews). Also the top-level "checkRun" tool.', { inputSchema: getMovementRunSchema, readOnly: true, latency: 'fast' });

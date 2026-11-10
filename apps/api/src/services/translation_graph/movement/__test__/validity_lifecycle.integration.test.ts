@@ -93,6 +93,7 @@ describe('movement validity lifecycle (real save gate + firings + live remote so
         methods: ['listEntryPoints', 'describe', 'resolveEntity', 'createRecord'],
       },
       secret: 'probe-secret',
+      use: [{ kind: 'team' }],
     });
   });
 

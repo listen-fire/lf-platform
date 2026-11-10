@@ -16,15 +16,31 @@ import type { AskedVerb, Target } from '../services/access/statement';
 
 import { accessTo, readableIds } from '../services/access/decide';
 
+/** One decision about one kind of thing. */
+type ThingDecision = { thing: 'automation'; verb: AskedVerb<'automation'> } | { thing: 'connection'; verb: AskedVerb<'connection'> };
+
 type Decision =
-  | { thing: 'automation'; verb: AskedVerb<'automation'> }
-  | { thing: 'connection'; verb: AskedVerb<'connection'> }
+  | ThingDecision
+  /** A route that acts on whichever thing its request names, asking that thing's verb. */
+  | { byTarget: { automation: AskedVerb<'automation'>; connection: AskedVerb<'connection'> } }
   | { exempt: string };
+
+/** The decisions a route asks, one per thing it may act on; none for an exemption. */
+function decisionsOf(decision: Decision): ThingDecision[] {
+  if ('exempt' in decision) return [];
+  if ('byTarget' in decision) {
+    return [
+      { thing: 'automation', verb: decision.byTarget.automation },
+      { thing: 'connection', verb: decision.byTarget.connection },
+    ];
+  }
+  return [decision];
+}
 
 /** The exemptions more than one router shares, worded once. */
 const EXEMPT = {
   teamCatalog: { exempt: 'team catalog, no automation' },
-  newConnection: { exempt: "starts a new connection, which no one may use yet; its statement is Task 6's" },
+  newConnection: { exempt: 'starts or creates a new connection, stored only with the use statement its creator gives, decided as theirs to give' },
   deploymentConnects: { exempt: 'how this deployment connects a system, no connection' },
   savedPerTarget: {
     exempt: 'creates or overwrites by name, so the save decides per target: write on what it overwrites, statements for what it creates, use on every connection it names',
@@ -36,11 +52,15 @@ const EXEMPT = {
 /** The decision of every route that reads, changes or lists connections. */
 const USE_CONNECTION = { thing: 'connection', verb: 'use' } satisfies Decision;
 
+/** Changing who may reach a thing: whoever may write the automation, or use the connection. */
+const CHANGE_STATEMENT = { byTarget: { automation: 'write', connection: 'use' } } satisfies Decision;
+
 const decisions = new Map<string, Decision>();
 
 function sameDecision(a: Decision, b: Decision): boolean {
   if ('exempt' in a || 'exempt' in b) return 'exempt' in a && 'exempt' in b && a.exempt === b.exempt;
-  return a.thing === b.thing && a.verb === b.verb;
+  const [asked, other] = [decisionsOf(a), decisionsOf(b)];
+  return asked.length === other.length && asked.every((d, i) => d.thing === other[i]?.thing && d.verb === other[i]?.verb);
 }
 
 /** Record which decision a route asks. A route says one thing: saying another is a bug. */
@@ -182,7 +202,9 @@ export {
   connectionUnseen,
   usableAmong,
   USE_CONNECTION,
+  CHANGE_STATEMENT,
   EXEMPT,
+  decisionsOf,
   READ_ONLY_MESSAGE,
   type Decision,
   type DecidingRouter,
