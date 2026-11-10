@@ -40,6 +40,8 @@ import AssetType from '../../generated/kysely/valuations/AssetType';
 import CurrencyIsoCode from '../../generated/kysely/valuations/CurrencyIsoCode';
 import { ApiKeyService } from '../../services/api_key';
 import { ensureDevLoopTeam } from './_lib';
+import { persistCredential } from '../../services/credentials/persist_credential';
+import { connectionWithNoPerson } from '../../services/access/no_person';
 
 const CREDENTIAL_NAME = 'Dev Loop Valuations';
 const API_KEY_NAME = 'Dev Loop Valuations Integration';
@@ -122,26 +124,19 @@ async function ensureCredential(input: {
         `so its plaintext is unrecoverable. Revoke the api_key row and re-run setup.`,
     );
   }
-  const credId = randomUUID() as ExternalServiceCredentialsId;
-  const encrypted = await encryptToken(
-    JSON.stringify({
+  const id = await persistCredential({
+    teamId: input.teamId,
+    userId: null,
+    name: CREDENTIAL_NAME,
+    type: ExternalServiceType.NATIVE_VALUATIONS,
+    credentials: {
       apiKey: input.apiKey.plaintext,
       apiKeyId: input.apiKey.id,
       baseUrl: API_HOST_BASE_URL,
-    }),
-    credId,
-  );
-  await qb
-    .insertInto('external_service_credentials')
-    .values({
-      id: credId,
-      name: CREDENTIAL_NAME,
-      type: ExternalServiceType.NATIVE_VALUATIONS,
-      credentials: encrypted,
-      team_id: input.teamId,
-    } as never)
-    .execute();
-  return { id: credId, healed: false, created: true };
+    },
+    use: connectionWithNoPerson().use,
+  });
+  return { id, healed: false, created: true };
 }
 
 /** `asset`/`currency_asset` are GLOBAL reference rows (no team_id) — every

@@ -25,7 +25,6 @@ import { ensurePublicIdentity } from '../../startup/core';
 
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { UserId } from '../../generated/kysely/core/User';
-import type { ExternalServiceCredentialsId } from '../../generated/kysely/automations/ExternalServiceCredentials';
 
 import ExternalServiceType from '../../generated/kysely/automations/ExternalServiceType';
 import { installRemoteAdapterFromManifest } from '../../services/translation_graph/adapters/remote/install';
@@ -100,18 +99,15 @@ export async function ensureDevLoopGmailCredential(input: {
   const appId =
     method === 'oauth' ? GMAIL_APP_ID.oauthMailbox : GMAIL_APP_ID.delegatedMailbox;
 
-  const credId = randomUUID() as ExternalServiceCredentialsId;
-  await getAutomationsQb(['external_service_credentials'])
-    .insertInto('external_service_credentials')
-    .values({
-      id: credId,
-      name: DEV_LOOP_GMAIL_CREDENTIAL_NAME,
-      type: ExternalServiceType.GOOGLE_GMAIL,
-      credentials: await encryptToken(JSON.stringify(payload), credId),
-      app_id: appId,
-      team_id: input.teamId,
-    } as never)
-    .execute();
+  await persistCredential({
+    teamId: input.teamId,
+    userId: null,
+    name: DEV_LOOP_GMAIL_CREDENTIAL_NAME,
+    type: ExternalServiceType.GOOGLE_GMAIL,
+    credentials: payload,
+    appId,
+    use: connectionWithNoPerson().use,
+  });
   return { created: true, method };
 }
 
@@ -176,22 +172,14 @@ export async function ensureDevLoopSlackCredential(teamId: string): Promise<void
     return;
   }
 
-  const credId = randomUUID() as ExternalServiceCredentialsId;
-  const encrypted = await encryptToken(
-    JSON.stringify({ accessToken: 'dev-loop-slack-token' }),
-    credId,
-  );
-  await getAutomationsQb(['external_service_credentials'])
-    .insertInto('external_service_credentials')
-    .values({
-      id: credId,
-      name: 'Dev Loop Slack',
-      type: ExternalServiceType.SLACK,
-      credentials: encrypted,
-      team_id: teamId,
-      app_id: defaultAppIdForType(ExternalServiceType.SLACK),
-    } as never)
-    .execute();
+  await persistCredential({
+    teamId: teamId as TeamId,
+    userId: null,
+    name: 'Dev Loop Slack',
+    type: ExternalServiceType.SLACK,
+    credentials: { accessToken: 'dev-loop-slack-token' },
+    use: connectionWithNoPerson().use,
+  });
 }
 /**
  * The install probes the server's own `manifest` answer for its protocol
@@ -530,21 +518,14 @@ export async function ensureDevLoopTeam(): Promise<SeedResult> {
     .select('id')
     .executeTakeFirst();
   if (!existingCreds) {
-    const credId = randomUUID() as ExternalServiceCredentialsId;
-    const encrypted = await encryptToken(
-      JSON.stringify({ accessToken: 'dev-loop-attio-token' }),
-      credId,
-    );
-    await getAutomationsQb(['external_service_credentials'])
-      .insertInto('external_service_credentials')
-      .values({
-        id: credId,
-        name: 'Dev Loop Attio',
-        type: ExternalServiceType.ATTIO,
-        credentials: encrypted,
-        team_id: teamId,
-      } as any)
-      .execute();
+    await persistCredential({
+      teamId: teamId as TeamId,
+      userId: null,
+      name: 'Dev Loop Attio',
+      type: ExternalServiceType.ATTIO,
+      credentials: { accessToken: 'dev-loop-attio-token' },
+      use: connectionWithNoPerson().use,
+    });
     created.attioCredentials = true;
   }
 
@@ -561,26 +542,19 @@ export async function ensureDevLoopTeam(): Promise<SeedResult> {
     .select('id')
     .executeTakeFirst();
   if (!existingAirtableCreds) {
-    const credId = randomUUID() as ExternalServiceCredentialsId;
-    const encrypted = await encryptToken(
-      JSON.stringify({
+    await persistCredential({
+      teamId: teamId as TeamId,
+      userId: null,
+      name: 'Dev Loop Airtable',
+      type: ExternalServiceType.AIRTABLE,
+      credentials: {
         accessToken: 'dev-loop-airtable-token',
         refreshToken: 'dev-loop-airtable-refresh',
         accessTokenExpiresAt: '2099-01-01T00:00:00.000Z',
         refreshTokenExpiresAt: '2099-01-01T00:00:00.000Z',
-      }),
-      credId,
-    );
-    await getAutomationsQb(['external_service_credentials'])
-      .insertInto('external_service_credentials')
-      .values({
-        id: credId,
-        name: 'Dev Loop Airtable',
-        type: ExternalServiceType.AIRTABLE,
-        credentials: encrypted,
-        team_id: teamId,
-      } as any)
-      .execute();
+      },
+      use: connectionWithNoPerson().use,
+    });
     created.airtableCredentials = true;
   }
 
@@ -596,18 +570,14 @@ export async function ensureDevLoopTeam(): Promise<SeedResult> {
     .select('id')
     .executeTakeFirst();
   if (!existingEvertraceCreds) {
-    const credId = randomUUID() as ExternalServiceCredentialsId;
-    const encrypted = await encryptToken(JSON.stringify({ apiKey: 'dev-loop-evertrace-key' }), credId);
-    await getAutomationsQb(['external_service_credentials'])
-      .insertInto('external_service_credentials')
-      .values({
-        id: credId,
-        name: 'Dev Loop Evertrace',
-        type: ExternalServiceType.EVERTRACE,
-        credentials: encrypted,
-        team_id: teamId,
-      } as any)
-      .execute();
+    await persistCredential({
+      teamId: teamId as TeamId,
+      userId: null,
+      name: 'Dev Loop Evertrace',
+      type: ExternalServiceType.EVERTRACE,
+      credentials: { apiKey: 'dev-loop-evertrace-key' },
+      use: connectionWithNoPerson().use,
+    });
     created.evertraceCredentials = true;
   }
 
@@ -623,18 +593,14 @@ export async function ensureDevLoopTeam(): Promise<SeedResult> {
     .select('id')
     .executeTakeFirst();
   if (!existingDealroomCreds) {
-    const credId = randomUUID() as ExternalServiceCredentialsId;
-    const encrypted = await encryptToken(JSON.stringify({ apiKey: 'dev-loop-dealroom-key' }), credId);
-    await getAutomationsQb(['external_service_credentials'])
-      .insertInto('external_service_credentials')
-      .values({
-        id: credId,
-        name: 'Dev Loop Dealroom',
-        type: ExternalServiceType.DEALROOM,
-        credentials: encrypted,
-        team_id: teamId,
-      } as any)
-      .execute();
+    await persistCredential({
+      teamId: teamId as TeamId,
+      userId: null,
+      name: 'Dev Loop Dealroom',
+      type: ExternalServiceType.DEALROOM,
+      credentials: { apiKey: 'dev-loop-dealroom-key' },
+      use: connectionWithNoPerson().use,
+    });
     created.dealroomCredentials = true;
   }
 
@@ -705,22 +671,16 @@ export async function ensureCredential(input: {
     .select('id')
     .executeTakeFirst();
   if (existing) return;
-  const credId = randomUUID() as ExternalServiceCredentialsId;
-  const encrypted = await encryptToken(JSON.stringify(input.secret), credId);
-  await getAutomationsQb(['external_service_credentials'])
-    .insertInto('external_service_credentials')
-    .values({
-      id: credId,
-      name: input.name,
-      type: input.type,
-      credentials: encrypted,
-      team_id: input.teamId,
-      // Slack is two apps and a NULL app_id reads as the LEGACY one, which the
-      // authoring surface hides — so omitting this mints a credential the
-      // checker can't see. undefined for every other type.
-      app_id: defaultAppIdForType(input.type),
-    } as never)
-    .execute();
+  // persistCredential gives a Slack row the modern app's id: a NULL app_id
+  // reads as the legacy app, which the authoring surface hides.
+  await persistCredential({
+    teamId: input.teamId as TeamId,
+    userId: null,
+    name: input.name,
+    type: input.type,
+    credentials: input.secret,
+    use: connectionWithNoPerson().use,
+  });
 }
 
 /** `pnpm dev:telegram setup` provisions the same credential; a catalog capture

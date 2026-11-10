@@ -14,11 +14,11 @@ import { getAutomationsQb, getCoreQb, getKnowledgeQb } from '../lib/kysely';
 import { materializeTemplate } from '../lib/knowledge/templates/materialize';
 import { getTemplate } from '../lib/knowledge/templates/index';
 import { generateJWT } from '../lib/middleware/authentication/token';
-import { encryptToken } from '../lib/credentials';
+import { persistCredential } from '../services/credentials/persist_credential';
+import { connectionWithNoPerson } from '../services/access/no_person';
 import { getEnvVar } from '../lib/utils/environment';
 
 import type { TeamId } from '../generated/kysely/core/Team';
-import type { ExternalServiceCredentialsId } from '../generated/kysely/automations/ExternalServiceCredentials';
 
 import ExternalServiceType from '../generated/kysely/automations/ExternalServiceType';
 
@@ -455,18 +455,14 @@ async function seedTestTeam(): Promise<{ teamId: TeamId; token: string; template
         .select('id')
         .executeTakeFirst();
       if (!existingCreds) {
-        const credId = randomUUID() as ExternalServiceCredentialsId;
-        const encrypted = await encryptToken(JSON.stringify({ accessToken: 'mock-attio-token' }), credId);
-        await getAutomationsQb(['external_service_credentials'])
-          .insertInto('external_service_credentials')
-          .values({
-            id: credId,
-            name: 'Mock Attio',
-            type: ExternalServiceType.ATTIO,
-            credentials: encrypted,
-            team_id: teamId,
-          } as any)
-          .execute();
+        const credId = await persistCredential({
+          teamId,
+          userId: null,
+          name: 'Mock Attio',
+          type: ExternalServiceType.ATTIO,
+          credentials: { accessToken: 'mock-attio-token' },
+          use: connectionWithNoPerson().use,
+        });
         console.log(`   Added mock Attio credentials: ${credId}`);
       }
     }
@@ -520,18 +516,14 @@ async function seedTestTeam(): Promise<{ teamId: TeamId; token: string; template
 
   // Create mock Attio credentials
   if (process.env.MOCK_OUTPUT_ADAPTERS === 'true') {
-    const credId = randomUUID() as ExternalServiceCredentialsId;
-    const encrypted = await encryptToken(JSON.stringify({ accessToken: 'mock-attio-token' }), credId);
-    await getAutomationsQb(['external_service_credentials'])
-      .insertInto('external_service_credentials')
-      .values({
-        id: credId,
-        name: 'Mock Attio',
-        type: 'ATTIO',
-        credentials: encrypted,
-        team_id: teamId,
-      } as any)
-      .execute();
+    const credId = await persistCredential({
+      teamId,
+      userId: null,
+      name: 'Mock Attio',
+      type: ExternalServiceType.ATTIO,
+      credentials: { accessToken: 'mock-attio-token' },
+      use: connectionWithNoPerson().use,
+    });
     console.log(`   Mock Attio credentials: ${credId}`);
   }
 

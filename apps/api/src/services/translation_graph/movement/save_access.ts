@@ -155,7 +155,8 @@ function listenReachesOf(source: string): ListenReach[] {
 
 /**
  * State what a run's save creates: the statements it was given, when it was
- * given all three, else what a creation with no person gets.
+ * given all three, else what a creation with no person gets. One or two of
+ * the three is refused as a programming error.
  */
 export async function stateRunCreation(created: {
   teamId: string;
@@ -164,6 +165,11 @@ export async function stateRunCreation(created: {
   given: Partial<CreationStatements> | undefined;
 }): Promise<void> {
   const given = creationStatements(created.given);
+  // Some of the three is a caller's mistake, not a request for the defaults:
+  // carrying on would drop what they stated without a word.
+  if ('missing' in given && given.missing.length < STATED_VERBS.length) {
+    throw new Error(`A run's save was given only some of the statements: ${given.missing.join(', ')} missing. Give all three, or none.`);
+  }
   const statements =
     'statements' in given
       ? given.statements

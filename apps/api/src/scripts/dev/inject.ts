@@ -72,7 +72,8 @@ import type { ExternalServiceCredentialsId } from '../../generated/kysely/automa
 import type { WebhookSubscriptionId } from '../../generated/kysely/automations/WebhookSubscription';
 
 import ExternalServiceType from '../../generated/kysely/automations/ExternalServiceType';
-import { encryptToken } from '../../lib/credentials';
+import { persistCredential } from '../../services/credentials/persist_credential';
+import { connectionWithNoPerson } from '../../services/access/no_person';
 import { ensureDevLoopTeam } from './_lib';
 
 // The dev-loop Airtable base/table `dev:airtable setup` seeds (kept in step
@@ -275,22 +276,14 @@ async function ensureTelegramCredentials(teamId: string): Promise<string> {
     .executeTakeFirst();
   if (existing) return existing.id as string;
 
-  const credId = randomUUID() as ExternalServiceCredentialsId;
-  const encrypted = await encryptToken(
-    JSON.stringify({ botToken: 'dev-loop-telegram-token' }),
-    credId,
-  );
-  await getAutomationsQb(['external_service_credentials'])
-    .insertInto('external_service_credentials')
-    .values({
-      id: credId,
-      name: 'Dev Loop Telegram',
-      type: ExternalServiceType.TELEGRAM,
-      credentials: encrypted,
-      team_id: teamId,
-    } as any)
-    .execute();
-  return credId as string;
+  return persistCredential({
+    teamId: teamId as TeamId,
+    userId: null,
+    name: 'Dev Loop Telegram',
+    type: ExternalServiceType.TELEGRAM,
+    credentials: { botToken: 'dev-loop-telegram-token' },
+    use: connectionWithNoPerson().use,
+  });
 }
 
 async function ensureTelegramSubscription(teamId: string): Promise<{ id: string; credentialsId: string }> {

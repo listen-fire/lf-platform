@@ -35,14 +35,12 @@ import './_profile_loader';
 // real provision path (catalog assembly, listener reconciliation).
 import '../../services';
 
-import { randomUUID } from 'node:crypto';
 
 import { getQb, getAutomationsQb } from '../../lib/kysely';
-import { encryptToken } from '../../lib/credentials';
-import { defaultAppIdForType } from '../../services/credentials/app_id';
+import { persistCredential } from '../../services/credentials/persist_credential';
+import { connectionWithNoPerson } from '../../services/access/no_person';
 
 import type { TeamId } from '../../generated/kysely/core/Team';
-import type { ExternalServiceCredentialsId } from '../../generated/kysely/automations/ExternalServiceCredentials';
 
 import ExternalServiceType from '../../generated/kysely/automations/ExternalServiceType';
 import { ensureDevLoopTeam } from './_lib';
@@ -95,22 +93,14 @@ async function ensureCredential(input: {
     .select('id')
     .executeTakeFirst();
   if (existing) return;
-  const credId = randomUUID() as ExternalServiceCredentialsId;
-  const encrypted = await encryptToken(JSON.stringify(input.payload), credId);
-  await getAutomationsQb(['external_service_credentials'])
-    .insertInto('external_service_credentials')
-    .values({
-      id: credId,
-      name: input.name,
-      type: input.type,
-      credentials: encrypted,
-      team_id: input.teamId,
-      // Slack is two apps and a NULL app_id reads as the LEGACY one, which the
-      // authoring surface hides — so omitting this mints a credential the
-      // checker can't see. undefined for every other type.
-      app_id: defaultAppIdForType(input.type),
-    } as never)
-    .execute();
+  await persistCredential({
+    teamId: input.teamId as TeamId,
+    userId: null,
+    name: input.name,
+    type: input.type,
+    credentials: input.payload,
+    use: connectionWithNoPerson().use,
+  });
 }
 
 async function main() {

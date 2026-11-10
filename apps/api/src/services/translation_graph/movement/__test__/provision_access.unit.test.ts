@@ -545,6 +545,30 @@ describe('creating an automation needs who may read, write and fire it', () => {
     expect(listOf(saved.movementId, 'fire')).toEqual([{ kind: 'anyone' }]);
   });
 
+  it('states the three a run gives it, over the defaults', async () => {
+    const carol = user(CAROL);
+    const saved = await saveMovement({
+      teamId: TEAM,
+      audience: { for: 'run' },
+      source: manualOnly('given'),
+      statements: { read: [carol], write: [team], fire: [team] },
+    });
+    if (!saved.ok) throw new Error('not saved');
+    expect(listOf(saved.movementId, 'read')).toEqual([carol]);
+    expect(listOf(saved.movementId, 'fire')).toEqual([team]);
+  });
+
+  it.each([
+    ['one', { read: [team] }, 'write, fire'],
+    ['two', { read: [team], write: [team] }, 'fire'],
+  ])('refuses a run given only %s of the three, as a mistake, stating nothing for the defaults', async (_, given, missing) => {
+    await expect(
+      saveMovement({ teamId: TEAM, audience: { for: 'run' }, source: manualOnly('partial'), statements: given }),
+    ).rejects.toThrow(`only some of the statements: ${missing} missing`);
+    // The two the fixture's connections began with: none for the automation.
+    expect(stored().statements).toBe(2);
+  });
+
   it('gives what a run creates on a team whose automations run on lf anyone to fire, and states nothing over what exists', async () => {
     mockLfTeams.add(TEAM);
     const saved = await saveMovement({ teamId: TEAM, audience: { for: 'run' }, source: manualOnly('onlf') });

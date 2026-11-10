@@ -2,17 +2,16 @@
 // OAuth provider in fake-channels, and the two moves a refresh test needs —
 // making the stored token stale, and reading what the provider was asked.
 
-import { randomUUID } from 'node:crypto';
 
 import { createSecretsFamily } from 'movement-engine/public/secrets';
 
 import { DropboxAuthClient } from '../../../adapters/dropbox/authClient';
-import type { ExternalServiceCredentialsId } from '../../../generated/kysely/automations/ExternalServiceCredentials';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import ExternalServiceType from '../../../generated/kysely/automations/ExternalServiceType';
-import { encryptToken } from '../../../lib/credentials';
 import { getAutomationsQb } from '../../../lib/kysely';
 import { camelTokenPayloadShape, postgresSecrets } from '../../../services/credentials/secrets_postgres';
+import { persistCredential } from '../../../services/credentials/persist_credential';
+import { connectionWithNoPerson } from '../../../services/access/no_person';
 
 export const DEV_LOOP_DROPBOX_CREDENTIAL_NAME = 'Dev Loop Dropbox';
 
@@ -109,17 +108,14 @@ export async function ensureDevLoopDropboxCredential(input: {
   }
 
   const tokens = await signInAgainstFakeProvider();
-  const id = randomUUID() as ExternalServiceCredentialsId;
-  await qb
-    .insertInto('external_service_credentials')
-    .values({
-      id,
-      name: DEV_LOOP_DROPBOX_CREDENTIAL_NAME,
-      type: ExternalServiceType.DROPBOX,
-      credentials: await encryptToken(JSON.stringify(tokens), id),
-      team_id: input.teamId as TeamId,
-    } as never)
-    .execute();
+  const id = await persistCredential({
+    teamId: input.teamId as TeamId,
+    userId: null,
+    name: DEV_LOOP_DROPBOX_CREDENTIAL_NAME,
+    type: ExternalServiceType.DROPBOX,
+    credentials: tokens,
+    use: connectionWithNoPerson().use,
+  });
   return { id, created: true, resignedIn: false };
 }
 

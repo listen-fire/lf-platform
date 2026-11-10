@@ -20,7 +20,7 @@ const startConnectOAuth = jest.fn();
 const persistCredential = jest.fn();
 const builtInBotUsername = jest.fn<string | null, []>();
 const ensureSharedTelegramTeamCredential = jest.fn<
-  Promise<{ id: string; name: string; created: boolean }>,
+  Promise<{ id: string; name: string; created: boolean } | { needsUse: true }>,
   [unknown]
 >();
 const mintTelegramToken = jest.fn<
@@ -186,5 +186,26 @@ describe('POST /api/connect/:token (handshake start)', () => {
     expect(res.status).toBe(503);
     expect(consumeConnectToken).not.toHaveBeenCalled();
     expect(ensureSharedTelegramTeamCredential).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/connect/:token (handshake start) after the connection the link reused is gone', () => {
+  it('says the connection is gone, not that the link predates statements, and starts no handshake', async () => {
+    lookupConnectToken.mockResolvedValue(telegramRow);
+    consumeConnectToken.mockResolvedValue(true);
+    ensureSharedTelegramTeamCredential.mockResolvedValue({ needsUse: true });
+
+    const res = await fetch(`${baseUrl}/api/connect/abc`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({}),
+      redirect: 'manual',
+    });
+
+    expect(res.status).toBe(410);
+    const html = await res.text();
+    expect(html).toContain('The connection this link was for is gone.');
+    expect(html).not.toContain('made before');
+    expect(mintTelegramToken).not.toHaveBeenCalled();
   });
 });

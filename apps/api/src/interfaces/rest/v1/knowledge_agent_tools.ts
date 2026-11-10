@@ -1347,17 +1347,41 @@ const setAccessSchema = z
 
 type SetAccessInput = z.infer<typeof setAccessSchema>;
 
-/** The connection an id or exact name names in the team, if the caller may use it: one they may not is answered as one that is not there. */
+/**
+ * The connection an id or exact name names in these teams, if the caller may
+ * use it: an id first, then a name, team by team, as an automation is found. One
+ * they may not use is passed over, so it is answered exactly as one that does not
+ * exist, and the same name in a later team is still found.
+ */
 async function usableConnectionNamed(input: { idOrName: string; team: string | undefined }): Promise<{ id: string; name: string } | null> {
-  const teamId = await resolveToolTeam(input.team);
-  const rows = await getAutomationsQb(['external_service_credentials'])
-    .selectFrom('external_service_credentials')
-    .where('team_id', '=', teamId as TeamId)
-    .select(['id', 'name'])
-    .execute();
-  const row = rows.find((r) => r.id === input.idOrName) ?? rows.find((r) => r.name === input.idOrName);
-  if (row === undefined || (await connectionUnseen(row.id))) return null;
-  return { id: row.id, name: row.name };
+  const teams = input.team !== undefined ? [await resolveToolTeam(input.team)] : await teamSetForReads();
+  const qb = getAutomationsQb(['external_service_credentials']);
+  const usable = async (row: { id: string; name: string } | undefined) =>
+    row !== undefined && !(await connectionUnseen(row.id)) ? row : null;
+  for (const teamId of teams) {
+    const byId = await usable(
+      await qb
+        .selectFrom('external_service_credentials')
+        .where('team_id', '=', teamId)
+        // Compared as text: Postgres refuses a name where it expects a uuid.
+        .where((eb) => eb(eb.cast<string>('id', 'text'), '=', input.idOrName))
+        .select(['id', 'name'])
+        .executeTakeFirst(),
+    );
+    if (byId !== null) return byId;
+  }
+  for (const teamId of teams) {
+    const named = await usable(
+      await qb
+        .selectFrom('external_service_credentials')
+        .where('team_id', '=', teamId)
+        .where('name', '=', input.idOrName)
+        .select(['id', 'name'])
+        .executeTakeFirst(),
+    );
+    if (named !== null) return named;
+  }
+  return null;
 }
 
 /** One list changed: who it now names, as stored. */
@@ -1368,6 +1392,8 @@ async function listNow(target: Target, verb: SetAccessInput['verb']): Promise<Gr
 
 const SET_ACCESS_DESCRIPTION =
   'Change who may reach one automation or one connection: replace one of its lists. An automation has three — read, write (change, run, delete, and change these lists; whoever may write may also read) and fire (set it off through its listens) — and a connection one, use. Body: { automation | connection (id or exact name), verb, grantees, team? }. Read, write and use take { kind: "team" } or { kind: "user", userId }; fire also takes { kind: "anyone" }, { kind: "domain", domain }, { kind: "email", address } and { kind: "phone", digits } (digits, country code first). A list is never empty, and names only people on the team. Ask the person you are working for who should be on it; never choose for them. Changing an automation\'s lists needs write on it; a connection\'s needs use. Returns the list as stored. Also the top-level "setAccess" tool.';
+
+const READ_ONLY_CONNECTION_MESSAGE = 'You may use this connection but not change who may.';
 
 const WRONG_VERB = "An automation's lists are read, write and fire; a connection's is use.";
 
@@ -1401,7 +1427,14 @@ const setAccessHandler: RequestHandler = async (req, res) => {
       if (row === null) return res.status(404).json({ error: `No connection '${asked}' in this team.` });
       if (input.verb !== 'use') return res.status(400).json({ error: WRONG_VERB });
       const connection: Target<'connection'> = { thing: 'connection', id: row.id };
-      await setStatement(currentPrincipal(), { target: connection, verb: input.verb, grantees: input.grantees });
+      try {
+        await setStatement(currentPrincipal(), { target: connection, verb: input.verb, grantees: input.grantees });
+      } catch (err) {
+        // The caller may use it (else it was not found above), so the one way
+        // this refuses is that they only read on its team.
+        if (err instanceof StatementRefusedError && err.refusal === 'not_allowed') return res.status(403).json({ error: READ_ONLY_CONNECTION_MESSAGE });
+        throw err;
+      }
       target = connection;
       named = { connection: row };
     }

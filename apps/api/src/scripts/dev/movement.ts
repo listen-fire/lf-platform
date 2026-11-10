@@ -72,6 +72,8 @@ import {
   ensureDevLoopTeam,
 } from './_lib';
 import { saveMovement } from '../../services/translation_graph/movement/provision';
+import { stateRunCreation } from '../../services/translation_graph/movement/save_access';
+import { inOneTransaction } from '../../services/context/one_transaction';
 import { upgradeMovement } from '../../services/translation_graph/movement/language_upgrade';
 import { getMovementRunStatus, runMovementAsync, runMovementNow } from '../../services/translation_graph/movement/run_now';
 import { registerCoreWork } from '../../services/work/register';
@@ -568,10 +570,14 @@ async function main() {
     const existing = await getMovementRowByName({ teamId: seed.teamId, name: movementName });
     existingId = existing?.id ?? randomUUID();
     if (existing === null) {
-      await getAutomationsQb(['movement'])
-        .insertInto('movement')
-        .values({ id: existingId as MovementId, team_id: seed.teamId as TeamId, name: movementName, source, description: '', language_version: pin })
-        .execute();
+      const created = existingId;
+      await inOneTransaction(async () => {
+        await getAutomationsQb(['movement'])
+          .insertInto('movement')
+          .values({ id: created as MovementId, team_id: seed.teamId as TeamId, name: movementName, source, description: '', language_version: pin })
+          .execute();
+        await stateRunCreation({ teamId: seed.teamId, target: { thing: 'automation', id: created }, source, given: undefined });
+      });
     }
   }
   const result = await saveMovement({

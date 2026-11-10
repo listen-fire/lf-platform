@@ -14,14 +14,13 @@ import './_profile_loader';
 import '../../services';
 import { ensureDevLoopTeam } from './_lib';
 import { getAutomationsQb } from '../../lib/kysely';
-import { encryptToken } from '../../lib/credentials';
+import { persistCredential } from '../../services/credentials/persist_credential';
+import { connectionWithNoPerson } from '../../services/access/no_person';
 
 import type { TeamId } from '../../generated/kysely/core/Team';
-import type { ExternalServiceCredentialsId } from '../../generated/kysely/automations/ExternalServiceCredentials';
 
 import ExternalServiceType from '../../generated/kysely/automations/ExternalServiceType';
 
-import { randomUUID } from 'node:crypto';
 
 import { saveMovement } from '../../services/translation_graph/movement/provision';
 
@@ -34,19 +33,14 @@ async function ensureEmptyCredential(input: { teamId: string; name: string }): P
     .select('id')
     .executeTakeFirst();
   if (existing) return;
-  const credId = randomUUID() as ExternalServiceCredentialsId;
-  const encrypted = await encryptToken(JSON.stringify({}), credId);
-  await getAutomationsQb(['external_service_credentials'])
-    .insertInto('external_service_credentials')
-    .values({
-      id: credId,
-      name: input.name,
-      type: ExternalServiceType.TELEGRAM,
-      credentials: encrypted,
-      team_id: input.teamId,
-      app_id: undefined,
-    } as never)
-    .execute();
+  await persistCredential({
+    teamId: input.teamId as TeamId,
+    userId: null,
+    name: input.name,
+    type: ExternalServiceType.TELEGRAM,
+    credentials: {},
+    use: connectionWithNoPerson().use,
+  });
 }
 
 const MOVEMENT = `

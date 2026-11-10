@@ -207,3 +207,40 @@ describe('POST /api/connect/:token (key-entry submit)', () => {
     expect(consumeConnectToken).not.toHaveBeenCalled();
   });
 });
+
+// A link minted before links carried who may use what they connect has no list,
+// and the landing never asks: it refuses before the provider is reached or a
+// key is read, and spends nothing.
+describe('a link minted before links carried a use statement', () => {
+  const withNoUse = (lookup: ConnectTokenLookup): ConnectTokenLookup =>
+    lookup.ok ? { ok: true, row: { ...lookup.row, use: undefined } } : lookup;
+  const post = () =>
+    fetch(`${baseUrl}/api/connect/abc`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ apiKey: 'gr-secret' }),
+    });
+
+  async function expectRefusedPage(res: Response) {
+    expect(res.status).toBe(410);
+    expect(await res.text()).toContain('This link was made before links said who may use what they connect.');
+    expect(consumeConnectToken).not.toHaveBeenCalled();
+    expect(persistCredential).not.toHaveBeenCalled();
+    expect(startConnectOAuth).not.toHaveBeenCalled();
+  }
+
+  it('is refused at key entry, storing nothing and consuming nothing', async () => {
+    lookupConnectToken.mockResolvedValue(withNoUse(granolaRow));
+    await expectRefusedPage(await post());
+  });
+
+  it('is refused at the start of an OAuth sign-in, before the provider is reached', async () => {
+    lookupConnectToken.mockResolvedValue(withNoUse(attioRow));
+    await expectRefusedPage(await post());
+  });
+
+  it('is refused where an OAuth sign-in lands, storing nothing and consuming nothing', async () => {
+    lookupConnectToken.mockResolvedValue(withNoUse(attioRow));
+    await expectRefusedPage(await fetch(`${baseUrl}/api/connect/abc/complete?claimToken=claim-1`));
+  });
+});

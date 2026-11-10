@@ -6,13 +6,14 @@ import { z } from 'zod';
 import * as db from '@prisma/client';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
-import type { ExternalServiceCredentialsId } from '../../../generated/kysely/automations/ExternalServiceCredentials';
+import type { UserId } from '../../../generated/kysely/core/User';
 
 import { trpc } from '../trpc';
 import { currentContext } from '../../../services/context';
 import { getAutomationsQb, getCoreQb, getQb } from '../../../lib/kysely';
 import { getTestHarnessConfig } from '../../../lib/recording';
-import { encryptToken } from '../../../lib/credentials';
+import { persistCredential } from '../../../services/credentials/persist_credential';
+import { connectionWithNoPerson } from '../../../services/access/no_person';
 import ExternalServiceType from '../../../generated/kysely/automations/ExternalServiceType';
 import { userProcedure as sharedUserProcedure } from '../procedures';
 import { decidesEach, type Decision } from '../../access_route';
@@ -150,21 +151,14 @@ const testHarnessRouter = (procedure: typeof trpc.procedure) => {
       for (const { type, name, creds } of serviceCredentials) {
         if (existingTypes.has(type)) continue;
 
-        const id = randomUUID();
-        const encrypted = await encryptToken(JSON.stringify(creds), id);
-
-        await getAutomationsQb(['external_service_credentials'])
-          .insertInto('external_service_credentials')
-          .values({
-            id: id as ExternalServiceCredentialsId,
-            name,
-            type,
-            credentials: encrypted,
-            identifier: null,
-            team_id: teamId as TeamId,
-            user_id: ctx.user.id as any,
-          })
-          .execute();
+        await persistCredential({
+          teamId: teamId as TeamId,
+          userId: ctx.user.id as UserId,
+          name,
+          type,
+          credentials: creds,
+          use: connectionWithNoPerson().use,
+        });
 
         created.push(type);
       }

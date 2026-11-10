@@ -410,7 +410,8 @@ async function startTelegramHandshake(
       use: row.use,
     });
     if ('needsUse' in ensured) {
-      res.status(410).type('html').send(unavailablePage('no_statement'));
+      // The link reused the team's connection and carries no list; it is gone.
+      res.status(410).type('html').send(unavailablePage('connection_gone'));
       return;
     }
     const { token: startToken } = await mintTelegramToken({
@@ -901,6 +902,10 @@ function unavailablePage(reason: string): string {
     no_statement: {
       title: 'This link was made before links said who may use what they connect.',
       detail: 'Nothing was stored. Ask the assistant for a fresh link.',
+    },
+    connection_gone: {
+      title: 'The connection this link was for is gone.',
+      detail: 'It was removed after the link was made. Ask the assistant for a fresh link.',
     },
     bad_request: {
       title: 'This link is missing required information.',
