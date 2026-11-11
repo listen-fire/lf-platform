@@ -134,8 +134,8 @@ export function AccessPanelView(props: AccessPanelViewProps) {
       {!listing.mayChange && (
         <p className="mt-2 text-[11.5px] text-gray-400" data-testid="access-read-only">
           {listing.thing === "automation"
-            ? "Only someone who may change this automation can change who may reach it."
-            : "Only someone who may use this connection, with write access on the team, can change who may."}
+            ? "Only someone who may change this automation, or a team admin, can change who may reach it."
+            : "Only someone who may use this connection, with write access on the team, or a team admin, can change who may."}
         </p>
       )}
     </section>

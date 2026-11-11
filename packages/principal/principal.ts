@@ -2,7 +2,8 @@
 // (D2, core plan §3). A product sees opaque ids and an access level; it never
 // sees core's tables, services, or middleware.
 
-type Access = 'read' | 'write';
+/** A team member's level there: each holds everything the one below it does. */
+type Access = 'read' | 'write' | 'admin';
 
 interface Principal {
   /** Opaque tenant id — the only scoping key. */
@@ -66,7 +67,32 @@ class TeamScopeError extends Error {
 }
 
 function isAccess(value: unknown): value is Access {
-  return value === 'read' || value === 'write';
+  return value === 'read' || value === 'write' || value === 'admin';
+}
+
+function rankOf(access: Access): number {
+  switch (access) {
+    case 'read':
+      return 0;
+    case 'write':
+      return 1;
+    case 'admin':
+      return 2;
+    default: {
+      const unknown: never = access;
+      throw new Error(`Unknown access level: ${String(unknown)}`);
+    }
+  }
+}
+
+/** Whether team access `held` is at least `needed`: an admin holds whatever a write member does. */
+function meets(held: Access, needed: Access): boolean {
+  return rankOf(held) >= rankOf(needed);
+}
+
+/** The lesser of two levels. */
+function narrower(a: Access, b: Access): Access {
+  return meets(a, b) ? b : a;
 }
 
 export {
@@ -78,4 +104,6 @@ export {
   type PrincipalProvider,
   TeamScopeError,
   isAccess,
+  meets,
+  narrower,
 };

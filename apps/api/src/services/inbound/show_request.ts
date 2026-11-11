@@ -6,6 +6,7 @@
 import { TextDecoder } from 'node:util';
 
 import { sql } from 'kysely';
+import { meets, type Access } from 'principal';
 import type { Arrival } from 'engine-contracts';
 
 import type { TeamId } from '../../generated/kysely/core/Team';
@@ -16,7 +17,7 @@ import { readKeptRequest } from './captured_request';
 /** Who asks: a person of the team, and the API key they came through. */
 export interface RequestReader {
   userId: string;
-  access: 'read' | 'write';
+  access: Access;
   credentialId?: string;
 }
 
@@ -57,7 +58,9 @@ function bodyOf(base64: string): { body: string; bodyEncoding: 'utf8' | 'base64'
 
 /** Refused before any delivery is looked at: to anyone but a team admin. */
 export function adminRefusal(reader: RequestReader): ShownRequest | undefined {
-  return reader.access === 'write' ? undefined : { outcome: 'refused', reason: "only the team's admins may read a delivery's request" };
+  return meets(reader.access, 'admin')
+    ? undefined
+    : { outcome: 'refused', reason: "only the team's admins may read a delivery's request" };
 }
 
 /** The answer for a delivery the team does not have. */

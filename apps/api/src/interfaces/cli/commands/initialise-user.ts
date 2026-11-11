@@ -20,8 +20,8 @@ async function main({ email, teamName }: { email: string; teamName?: string }) {
   const { id: teamId } = await TeamService.getFirstByNameOrCreate(teamName ?? email);
   const { id: userId } = await UserService.create({ email, teamId });
 
-  // grant write access to the team
-  await PermissionService.grantMembership({ userId, teamId, access: 'write' });
+  // the team's admin
+  await PermissionService.grantMembership({ userId, teamId, access: 'admin' });
 }
 
 class UserOptions extends Options {

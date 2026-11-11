@@ -192,6 +192,19 @@ describe('access is a membership derivation, and no membership is no access (D44
     expect(await accessFor({ userId: USER, teamId: HOME })).toBe('write');
   });
 
+  it('is admin for an admin, the highest level any membership in the team holds', async () => {
+    rows.team_membership = [membership(HOME, 'write'), membership(HOME, 'admin'), membership(OTHER, 'read')];
+
+    expect(await accessFor({ userId: USER, teamId: HOME })).toBe('admin');
+    expect(await listTeamsFor(principal())).toEqual(expect.arrayContaining([expect.objectContaining({ teamId: HOME, access: 'admin' })]));
+  });
+
+  it('refuses a stored level it does not know rather than reading it as some level', async () => {
+    rows.team_membership = [membership(HOME, 'MANAGE')];
+
+    await expect(accessFor({ userId: USER, teamId: HOME })).rejects.toThrow(/unknown access level: MANAGE/);
+  });
+
   it('is read when every membership in the team is read-only', async () => {
     rows.team_membership = [membership(HOME, 'read')];
 

@@ -315,13 +315,13 @@ async function carryStatements(from: Target, to: Target, options: { teamId: stri
   return moved.numUpdatedRows > 0n;
 }
 
-/** The team's members with write access, oldest first. */
-async function writeMembersOf(teamId: string): Promise<string[]> {
+/** The team's admins, oldest first. */
+async function adminsOf(teamId: string): Promise<string[]> {
   const rows = await getCoreQb(['team_membership'])
     .selectFrom('team_membership')
     .select('user_id')
     .where('team_id', '=', teamId as TeamId)
-    .where('access', '=', 'write')
+    .where('access', '=', 'admin')
     .orderBy('created_at')
     .execute();
   return rows.map((r) => String(r.user_id));
@@ -340,7 +340,7 @@ const StatementStore = {
   membershipsOf,
   membershipsAmong,
   membersOf,
-  writeMembersOf,
+  adminsOf,
 };
 
 export {

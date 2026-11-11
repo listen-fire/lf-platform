@@ -32,12 +32,12 @@ function config(overrides: Partial<StaticIdentityConfig> = {}): StaticIdentityCo
 }
 
 describe('staticConfigFromEnv', () => {
-  it('defaults to the all-zeros team, write access and the wildcard scope', () => {
+  it('defaults to the all-zeros team, admin access and the wildcard scope', () => {
     const parsed = staticConfigFromEnv({ LISTEN_FIRE_API_KEY: 'sekrit' });
 
     expect(parsed.teamId).toBe('00000000-0000-0000-0000-000000000000');
     expect(parsed.teamName).toBe('Local');
-    expect(parsed.access).toBe('write');
+    expect(parsed.access).toBe('admin');
     expect(parsed.scopes).toEqual(['*']);
     expect(parsed.directory.users).toEqual([]);
   });
@@ -48,9 +48,11 @@ describe('staticConfigFromEnv', () => {
   });
 
   it('rejects malformed identity settings rather than falling back', () => {
-    expect(() => staticConfigFromEnv({ LISTEN_FIRE_API_KEY: 'k', LISTEN_FIRE_ACCESS: 'admin' })).toThrow(
+    expect(() => staticConfigFromEnv({ LISTEN_FIRE_API_KEY: 'k', LISTEN_FIRE_ACCESS: 'owner' })).toThrow(
       /LISTEN_FIRE_ACCESS/,
     );
+    expect(staticConfigFromEnv({ LISTEN_FIRE_API_KEY: 'k', LISTEN_FIRE_ACCESS: 'write' }).access).toBe('write');
+    expect(staticConfigFromEnv({ LISTEN_FIRE_API_KEY: 'k', LISTEN_FIRE_ACCESS: 'admin' }).access).toBe('admin');
     expect(() => staticConfigFromEnv({ LISTEN_FIRE_API_KEY: 'k', LISTEN_FIRE_ALLOW_ANONYMOUS: 'yes' })).toThrow(
       /LISTEN_FIRE_ALLOW_ANONYMOUS/,
     );

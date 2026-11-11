@@ -14,6 +14,14 @@ import {
 } from '@/components/ui';
 
 // ─── Shared input / button class mirror from web settings ─────────────
+/** A member's level on a team: each holds everything the one below it does; an admin also manages the team. */
+type TeamAccess = 'read' | 'write' | 'admin';
+
+/** A select's value as a level; only the options it offers can arrive. */
+function teamAccessOf(value: string): TeamAccess {
+  return value === 'admin' || value === 'read' ? value : 'write';
+}
+
 const inputClass =
   'w-full rounded-md border border-gray-200 px-3 py-2 text-[13px] focus:border-gray-400 focus:outline-none disabled:opacity-50';
 const selectClass =
@@ -303,7 +311,7 @@ function TeamDetailLevelControl({ team }: { team: TeamResult }) {
 function AddUserToTeamForm({ team }: { team: TeamResult }) {
   const { mutateAsync: addUser } = trpc.views.admin.userManagement.addUserToTeam.useMutation();
 
-  const [access, setAccess] = useState<'read' | 'write'>('write');
+  const [access, setAccess] = useState<TeamAccess>('write');
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [busy, setBusy] = useState(false);
@@ -343,10 +351,11 @@ function AddUserToTeamForm({ team }: { team: TeamResult }) {
           <select
             className={`${selectClass} w-full`}
             value={access}
-            onChange={(e) => setAccess(e.target.value === 'read' ? 'read' : 'write')}
+            onChange={(e) => setAccess(teamAccessOf(e.target.value))}
             disabled={busy}
           >
-            <option value="write">Write (admin)</option>
+            <option value="admin">Admin</option>
+            <option value="write">Write</option>
             <option value="read">Read-only</option>
           </select>
         </div>
@@ -552,7 +561,7 @@ function UserDetail({
 
   // ── Grant team access ──────────────────────────────────────────────
   const [grantTeamId, setGrantTeamId] = useState('');
-  const [grantAccessLevel, setGrantAccessLevel] = useState<'read' | 'write'>('write');
+  const [grantAccessLevel, setGrantAccessLevel] = useState<TeamAccess>('write');
   const [grantBusy, setGrantBusy] = useState(false);
   const [grantError, setGrantError] = useState<string | null>(null);
   const [grantSuccess, setGrantSuccess] = useState<string | null>(null);
@@ -732,8 +741,8 @@ function UserDetail({
                       <span className="flex-1 truncate text-[13px] text-gray-800">
                         {m.teamName}
                       </span>
-                      <Badge tone={m.access === 'write' ? 'blue' : 'gray'}>
-                        {m.access === 'write' ? 'admin' : 'read'}
+                      <Badge tone={m.access === 'read' ? 'gray' : 'blue'}>
+                        {m.access}
                       </Badge>
                       {m.isHomeTeam && <Badge tone="violet">home</Badge>}
                       {m.isPersonal && <Badge tone="amber">personal</Badge>}
@@ -774,9 +783,10 @@ function UserDetail({
               <select
                 className={selectClass}
                 value={grantAccessLevel}
-                onChange={(e) => setGrantAccessLevel(e.target.value === 'read' ? 'read' : 'write')}
+                onChange={(e) => setGrantAccessLevel(teamAccessOf(e.target.value))}
                 disabled={grantBusy}
               >
+                <option value="admin">Admin</option>
                 <option value="write">Write</option>
                 <option value="read">Read</option>
               </select>

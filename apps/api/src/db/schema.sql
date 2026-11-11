@@ -6034,7 +6034,9 @@ CREATE TRIGGER magic_link_token_audit AFTER INSERT OR DELETE OR UPDATE ON core.m
 
 -- Flat membership: the single source of "what teams a user can access" and at
 -- what level. Replaces the legacy user_role -> role -> role_permission ->
--- permission RBAC chain. access = 'read' (READ) | 'write' (MANAGE).
+-- permission RBAC chain. access = 'read' (reads) | 'write' (builds
+-- automations) | 'admin' (also manages the team's members and may change any
+-- access list on it); each level holds everything the one below it does.
 
 CREATE TABLE core.team_membership (
     id uuid DEFAULT pg_catalog.gen_random_uuid() NOT NULL,
@@ -6043,7 +6045,8 @@ CREATE TABLE core.team_membership (
     access text NOT NULL,
     is_personal boolean DEFAULT false NOT NULL,
     created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+    updated_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    CONSTRAINT team_membership_access_check CHECK (access IN ('read', 'write', 'admin'))
 );
 
 ALTER TABLE ONLY core.team_membership

@@ -36,7 +36,7 @@ class User extends ModelService<'user'> {
   }
 
   async addToTeamAsAdmin({ userId, teamId }: { userId: string; teamId: string }): Promise<void> {
-    await PermissionService.grantMembership({ userId, teamId, access: 'write' });
+    await PermissionService.grantMembership({ userId, teamId, access: 'admin' });
   }
 
   async create({ email, teamId, publicProfileId, username }: UserCreateArgs): Promise<db.User> {
@@ -183,12 +183,12 @@ class User extends ModelService<'user'> {
       })
       .executeTakeFirstOrThrow();
 
-    // The membership is what lets them act in the team they were just given;
-    // the column on `user` only says where they land (C-6).
+    // The membership is what lets them act in the team they were just given,
+    // as its founder; the column on `user` only says where they land (C-6).
     await PermissionService.grantMembership({
       userId: user.id,
       teamId: user.default_team_id,
-      access: 'write',
+      access: 'admin',
     });
 
     await getAutomationsQb(['phone_number'])

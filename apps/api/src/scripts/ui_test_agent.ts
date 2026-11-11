@@ -503,7 +503,7 @@ async function seedTestTeam(): Promise<{ teamId: TeamId; token: string; template
     id: randomUUID(),
     user_id: userId,
     team_id: teamId,
-    access: 'write',
+    access: 'admin',
   } as any).execute();
 
   // Materialize ontology

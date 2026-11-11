@@ -11,8 +11,10 @@ import {
   listRefusalSentence,
   listOfDraft,
   listPhrases,
+  managesTeam,
   outsiderOf,
   unreadableOutsiders,
+  writesOnTeam,
   type ListDraft,
   type ListedGrantee,
   type Member,
@@ -107,6 +109,20 @@ describe("choosing at creation", () => {
       write: [{ kind: "user", userId: ME }, { kind: "user", userId: BOB }],
       fire: [{ kind: "user", userId: CAROL }],
     });
+  });
+
+  it("counts a team admin as someone who may write, so they go on the write list too", () => {
+    const DANA = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+    const withAdmin = { viewerUserId: ME, members: [...members, { userId: DANA, username: "Dana", email: "dana@acme.com", access: "admin" as const }] };
+    expect(automationStatements({ see: "people", seePeople: [DANA, CAROL], fire: "people", firePeople: [CAROL] }, withAdmin)?.write).toEqual([
+      { kind: "user", userId: ME },
+      { kind: "user", userId: DANA },
+    ]);
+    expect([writesOnTeam("admin"), writesOnTeam("write"), writesOnTeam("read")]).toEqual([true, true, false]);
+  });
+
+  it("offers team management to an admin alone", () => {
+    expect([managesTeam("admin"), managesTeam("write"), managesTeam("read")]).toEqual([true, false, false]);
   });
 
   it("waits for at least one person when specific people may set it off", () => {

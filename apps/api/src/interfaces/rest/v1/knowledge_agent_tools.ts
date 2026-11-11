@@ -134,12 +134,13 @@ import {
   decidingRouter,
   readableAmong,
   refusalOn,
+  seenAmong,
   unseen,
   type Decision,
 } from '../../access_route';
 import { Whose } from '../../../services/access/whose';
 import { automationAccess, connectionAccess, type ConnectionAccess } from '../../../services/access/listing';
-import { StatementRefusedError, setStatement } from '../../../services/access/decide';
+import { StatementRefusedError, adminOf, administered, maySeeStatement, setStatement } from '../../../services/access/decide';
 import { StatementStore, type Grantee, type Target } from '../../../services/access/statement';
 import {
   ToolTeamError,
@@ -277,26 +278,45 @@ async function helpFor(input: {
   return { route, asked: pin !== undefined, ...(teamId !== undefined ? { teamId } : {}) };
 }
 
-async function rowByIdOrName(input: { idOrName: string; team?: string | undefined }): Promise<MovementRow | null> {
+async function rowByIdOrName(input: {
+  idOrName: string;
+  team?: string | undefined;
+  forItsLists?: boolean;
+}): Promise<MovementRow | null> {
   const teams = input.team !== undefined ? [await resolveToolTeam(input.team)] : await teamSetForReads();
-  return findAutomation({ idOrName: input.idOrName, teams });
+  return findAutomation({ idOrName: input.idOrName, teams, forItsLists: input.forItsLists });
 }
 
 /**
  * The automation an id or exact name names in these teams: an id first, then
  * a name, team by team. An automation the caller may not read is passed over,
  * so it is answered exactly as one that does not exist, and the same name in a
- * later team is still found.
+ * later team is still found. Looked up `forItsLists`, one the caller may read
+ * is still found first, and only when there is none is an automation found by
+ * an admin of its team, who may see and change who may reach it: a name that
+ * is locked in one team never shadows a readable one in another.
  */
-async function findAutomation(input: { idOrName: string; teams: readonly string[] }): Promise<MovementRow | null> {
-  const readable = async (row: MovementRow | null) =>
-    row !== null && (await refusalOn({ automationId: row.id, verb: 'read' })) === undefined ? row : null;
+async function findAutomation(input: {
+  idOrName: string;
+  teams: readonly string[];
+  forItsLists?: boolean;
+}): Promise<MovementRow | null> {
+  const readable = await firstNamed(input, async (id) => (await refusalOn({ automationId: id, verb: 'read' })) === undefined);
+  if (readable !== null || input.forItsLists !== true) return readable;
+  return firstNamed(input, (id) => maySeeStatement(currentPrincipal(), { thing: 'automation', id }));
+}
+
+async function firstNamed(
+  input: { idOrName: string; teams: readonly string[] },
+  seen: (id: string) => Promise<boolean>,
+): Promise<MovementRow | null> {
+  const found = async (row: MovementRow | null) => (row !== null && (await seen(row.id)) ? row : null);
   for (const teamId of input.teams) {
-    const byId = await readable(await getMovementRow({ teamId, id: input.idOrName }).catch(() => null));
+    const byId = await found(await getMovementRow({ teamId, id: input.idOrName }).catch(() => null));
     if (byId) return byId;
   }
   for (const teamId of input.teams) {
-    const named = await readable(await getMovementRowByName({ teamId, name: input.idOrName }));
+    const named = await found(await getMovementRowByName({ teamId, name: input.idOrName }));
     if (named) return named;
   }
   return null;
@@ -580,6 +600,36 @@ const ontologyMutationHandler = (name: (typeof ONTOLOGY_MUTATION_TOOLS)[number])
 // catalog.read — listCatalog, describeInstance
 // ---------------------------------------------------------------------------
 
+/**
+ * The team's connections the caller may not use but, as its admin, is shown:
+ * by name and its list alone, marked locked. The list is there because setAccess
+ * replaces a list whole, so the admin must read it before adding themselves.
+ * None for anyone else.
+ */
+async function lockedConnectionsOf(
+  teamId: string,
+): Promise<{ lockedConnections?: { id: string; name: string; locked: true; access: ConnectionAccess | undefined }[] }> {
+  if (!(await administered(currentPrincipal(), [teamId])).has(teamId)) return {};
+  const rows = await getAutomationsQb(['external_service_credentials'])
+    .selectFrom('external_service_credentials')
+    .where('team_id', '=', teamId)
+    .select(['id', 'name'])
+    .orderBy('name', 'asc')
+    .execute();
+  const seen = await seenAmong(rows, { thing: 'connection', idOf: (row) => String(row.id), teamId });
+  const locked = await Promise.all(
+    seen
+      .filter(({ locked }) => locked)
+      .map(async ({ item }) => ({
+        id: String(item.id),
+        name: item.name,
+        locked: true as const,
+        access: await connectionAccess(String(item.id)),
+      })),
+  );
+  return locked.length > 0 ? { lockedConnections: locked } : {};
+}
+
 const listCatalogHandler: RequestHandler = async (req, res) => {
   try {
     const stringOf = (value: unknown) => (typeof value === 'string' ? value : undefined);
@@ -587,11 +637,12 @@ const listCatalogHandler: RequestHandler = async (req, res) => {
     const help = await helpFor({ team, automation: stringOf(req.query.automation), languageVersion: stringOf(req.query.languageVersion) });
     if ('error' in help) return res.status(400).json(help);
     const resolvedTeam = help.teamId ?? (await resolveToolTeam(team));
+    const locked = await lockedConnectionsOf(resolvedTeam);
     if (help.route.kind === 'carried') {
-      return res.status(200).json({ ...(await catalogUnderCarried(help.route.lane, { teamId: resolvedTeam, audience: callerAudience() })), language: languageOf(help.route) });
+      return res.status(200).json({ ...(await catalogUnderCarried(help.route.lane, { teamId: resolvedTeam, audience: callerAudience() })), ...locked, language: languageOf(help.route) });
     }
     const catalog = await movementCatalogSnapshotForTeam(resolvedTeam as TeamId, { audience: callerAudience() });
-    return res.status(200).json(toAgentCatalogView(catalog));
+    return res.status(200).json({ ...toAgentCatalogView(catalog), ...locked });
   } catch (err) {
     return internalError(res, err);
   }
@@ -986,16 +1037,30 @@ const listMovementsHandler: RequestHandler = async (_req, res) => {
   try {
     const teams = await teamSetForReads();
     const names = await teamNames(teams);
+    // An admin is also shown every automation on the team they may not read, locked: its name and
+    // its lists, which they need to read before setAccess (a whole replace) adds them to one.
     const perTeam = await Promise.all(
-      teams.map(async (t) =>
-        (await readableAmong(await listMovements(t), { automationOf: (m) => m.id, teamIds: [t] })).map((m) => ({
-          ...m,
-          teamId: t,
-          teamName: names.get(t) ?? t,
-        })),
-      ),
+      teams.map(async (t) => {
+        const seen = await seenAmong(await listMovements(t), { thing: 'automation', idOf: (m) => m.id, teamId: t });
+        const team = { teamId: t, teamName: names.get(t) ?? t };
+        return {
+          readable: seen.flatMap(({ item, locked }) => (locked ? [] : [{ ...item, ...team }])),
+          locked: await Promise.all(
+            seen
+              .filter(({ locked }) => locked)
+              .map(async ({ item }) => ({
+                id: item.id,
+                name: item.name,
+                ...team,
+                locked: true as const,
+                access: await automationAccess(item.id),
+              })),
+          ),
+        };
+      }),
     );
-    const movements = perTeam.flat();
+    const movements = perTeam.flatMap((team) => team.readable);
+    const locked = perTeam.flatMap((team) => team.locked);
     // One batched mint across every team's rows — the picture link is
     // offerable straight from the list, without a getAutomation round-trip
     // per row.
@@ -1003,11 +1068,14 @@ const listMovementsHandler: RequestHandler = async (_req, res) => {
       movements.map((m) => ({ movementId: m.id, teamId: m.teamId })),
     );
     return res.status(200).json({
-      movements: movements.map((m) => {
-        const token = tokens.get(m.id);
-        if (!token) throw new Error(`storyTokensForMovements did not mint a token for movement ${m.id}`);
-        return { ...withLanguageVersionView(m), storyUrl: storyUrl(token) };
-      }),
+      movements: [
+        ...movements.map((m) => {
+          const token = tokens.get(m.id);
+          if (!token) throw new Error(`storyTokensForMovements did not mint a token for movement ${m.id}`);
+          return { ...withLanguageVersionView(m), storyUrl: storyUrl(token) };
+        }),
+        ...locked,
+      ],
     });
   } catch (err) {
     return internalError(res, err);
@@ -1396,15 +1464,29 @@ type SetAccessInput = z.infer<typeof setAccessSchema>;
  * The connection an id or exact name names in these teams, if the caller may
  * use it: an id first, then a name, team by team, as an automation is found. One
  * they may not use is passed over, so it is answered exactly as one that does not
- * exist, and the same name in a later team is still found.
+ * exist, and the same name in a later team is still found. Looked up `forItsList`,
+ * one the caller may use is still found first, and only when there is none is one
+ * found by an admin of its team, who may see and change who may use it.
  */
-async function usableConnectionNamed(input: { idOrName: string; team: string | undefined }): Promise<{ id: string; name: string } | null> {
+async function usableConnectionNamed(input: {
+  idOrName: string;
+  team: string | undefined;
+  forItsList?: boolean;
+}): Promise<{ id: string; name: string } | null> {
   const teams = input.team !== undefined ? [await resolveToolTeam(input.team)] : await teamSetForReads();
+  const usable = await connectionNamedAmong({ idOrName: input.idOrName, teams }, async (id) => !(await connectionUnseen(id)));
+  if (usable !== null || input.forItsList !== true) return usable;
+  return connectionNamedAmong({ idOrName: input.idOrName, teams }, (id) => maySeeStatement(currentPrincipal(), { thing: 'connection', id }));
+}
+
+async function connectionNamedAmong(
+  input: { idOrName: string; teams: readonly string[] },
+  seen: (id: string) => Promise<boolean>,
+): Promise<{ id: string; name: string } | null> {
   const qb = getAutomationsQb(['external_service_credentials']);
-  const usable = async (row: { id: string; name: string } | undefined) =>
-    row !== undefined && !(await connectionUnseen(row.id)) ? row : null;
-  for (const teamId of teams) {
-    const byId = await usable(
+  const found = async (row: { id: string; name: string } | undefined) => (row !== undefined && (await seen(row.id)) ? row : null);
+  for (const teamId of input.teams) {
+    const byId = await found(
       await qb
         .selectFrom('external_service_credentials')
         .where('team_id', '=', teamId)
@@ -1415,8 +1497,8 @@ async function usableConnectionNamed(input: { idOrName: string; team: string | u
     );
     if (byId !== null) return byId;
   }
-  for (const teamId of teams) {
-    const named = await usable(
+  for (const teamId of input.teams) {
+    const named = await found(
       await qb
         .selectFrom('external_service_credentials')
         .where('team_id', '=', teamId)
@@ -1436,7 +1518,7 @@ async function listNow(target: Target, verb: SetAccessInput['verb']): Promise<Gr
 }
 
 const SET_ACCESS_DESCRIPTION =
-  'Change who may reach one automation or one connection: replace one of its lists. An automation has three — read, write (change, run, delete, and change these lists; whoever may write may also read) and fire (set it off through its listens) — and a connection one, use. Body: { automation | connection (id or exact name), verb, grantees, team? }. Read, write and use take { kind: "team" } or { kind: "user", userId }; fire also takes { kind: "anyone" }, { kind: "domain", domain }, { kind: "email", address } and { kind: "phone", digits } (digits, country code first). A list is never empty, and names only people on the team. Ask the person you are working for who should be on it; never choose for them. Changing an automation\'s lists needs write on it; a connection\'s needs use. Returns the list as stored. The current lists are in getAutomation\'s and describeConnection\'s `access`; leave out anyone marked `onTeam: false`, who has left the team. Also the top-level "setAccess" tool.';
+  'Change who may reach one automation or one connection: replace one of its lists. An automation has three — read, write (change, run, delete, and change these lists; whoever may write may also read) and fire (set it off through its listens) — and a connection one, use. Body: { automation | connection (id or exact name), verb, grantees, team? }. Read, write and use take { kind: "team" } or { kind: "user", userId }; fire also takes { kind: "anyone" }, { kind: "domain", domain }, { kind: "email", address } and { kind: "phone", digits } (digits, country code first). A list is never empty, and names only people on the team. Ask the person you are working for who should be on it; never choose for them. This REPLACES the whole list: read the current list first (getAutomation\'s or describeConnection\'s `access`, or a locked entry\'s `access` in listAutomations and listConnections), then pass it back with your change made. Never pass just the one person to add, which would remove everyone else. Changing an automation\'s lists needs write on it; a connection\'s needs use; a team admin may change any on the team. Returns the list as stored. The current lists are in getAutomation\'s and describeConnection\'s `access`; leave out anyone marked `onTeam: false`, who has left the team. Also the top-level "setAccess" tool.';
 
 const READ_ONLY_CONNECTION_MESSAGE = 'You may use this connection but not change who may.';
 
@@ -1456,27 +1538,30 @@ const setAccessHandler: RequestHandler = async (req, res) => {
     let named: { automation: { id: string; name: string } } | { connection: { id: string; name: string } };
     if (input.automation !== undefined) {
       const missing = { error: `No automation '${input.automation}'.` };
-      const row = await rowByIdOrName({ idOrName: input.automation, team: input.team });
+      const row = await rowByIdOrName({ idOrName: input.automation, team: input.team, forItsLists: true });
       if (row === null) return res.status(404).json(missing);
-      const refused = await refusedChange({ automationId: row.id, missing });
-      if (refused instanceof Forbidden) return res.status(403).json({ error: refused.message });
-      if (refused !== null) return res.status(404).json(refused);
-      if (input.verb === 'use') return res.status(400).json({ error: WRONG_VERB });
       const automation: Target<'automation'> = { thing: 'automation', id: row.id };
+      // A team admin may change any automation's lists; anyone else, one they may write.
+      if (!(await adminOf(currentPrincipal(), automation))) {
+        const refused = await refusedChange({ automationId: row.id, missing });
+        if (refused instanceof Forbidden) return res.status(403).json({ error: refused.message });
+        if (refused !== null) return res.status(404).json(refused);
+      }
+      if (input.verb === 'use') return res.status(400).json({ error: WRONG_VERB });
       await setStatement(currentPrincipal(), { target: automation, verb: input.verb, grantees: input.grantees });
       target = automation;
       named = { automation: { id: row.id, name: row.name } };
     } else {
       const asked = input.connection ?? '';
-      const row = await usableConnectionNamed({ idOrName: asked, team: input.team });
+      const row = await usableConnectionNamed({ idOrName: asked, team: input.team, forItsList: true });
       if (row === null) return res.status(404).json({ error: `No connection '${asked}' in this team.` });
       if (input.verb !== 'use') return res.status(400).json({ error: WRONG_VERB });
       const connection: Target<'connection'> = { thing: 'connection', id: row.id };
       try {
         await setStatement(currentPrincipal(), { target: connection, verb: input.verb, grantees: input.grantees });
       } catch (err) {
-        // The caller may use it (else it was not found above), so the one way
-        // this refuses is that they only read on its team.
+        // The caller may use it or is a team admin (else it was not found
+        // above), so the one way this refuses is that they only read on its team.
         if (err instanceof StatementRefusedError && err.refusal === 'not_allowed') return res.status(403).json({ error: READ_ONLY_CONNECTION_MESSAGE });
         throw err;
       }
@@ -2115,7 +2200,7 @@ function registerAutomationToolRoutes(): void {
   reg(
     'GET',
     '/teams',
-    'List the teams this connection can act in: each one\'s teamId, name, access, and isPersonal (true marks the user\'s personal workspace vs a shared team). Pass a teamId as `team` to tools that read or change a specific team. Also the top-level "listTeams" tool.',
+    'List the teams this connection can act in: each one\'s teamId, name, access (read, write or admin), and isPersonal (true marks the user\'s personal workspace vs a shared team). Pass a teamId as `team` to tools that read or change a specific team. Also the top-level "listTeams" tool.',
     { readOnly: true, latency: 'fast' },
   );
   reg(
@@ -2157,7 +2242,7 @@ function registerAutomationToolRoutes(): void {
   reg('POST', '/access', SET_ACCESS_DESCRIPTION, { inputSchema: setAccessSchema, latency: 'fast' });
 
   // automations
-  reg('GET', '/automations', 'List saved automations: id, name, status, listeners. Spans every team the connection covers; each item is tagged with its teamId + teamName.', { readOnly: true, latency: 'fast' });
+  reg('GET', '/automations', 'List saved automations: id, name, status, listeners. Spans every team the connection covers; each item is tagged with its teamId + teamName. A team admin also sees the ones they may not read, `locked: true`, by id, name and `access` (their lists) alone.', { readOnly: true, latency: 'fast' });
   reg('GET', '/automations/:idOrName', 'Get one saved automation by id or name (across the teams the connection covers): its program, status, listeners, `revision` — a fingerprint of its current source — and `storyUrl`, a link to a picture of what it does that anyone can open (hand it to the user as a labelled link, e.g. [See what this does](url); it needs no login and always shows the current version) and `access` — who may read, write and fire it, in the shape setAccess takes. Re-read this (don\'t reuse an old copy) before editing an automation you already have, then pass its `revision` back as `expectedRevision` when you save.', { readOnly: true, latency: 'fast' });
   reg('GET', '/automations/:idOrName/source', 'Read an automation\'s program text a window at a time, by id or name — cheaper than getAutomation when you only need to see (or re-check) part of a long file. Pass ?offset= (1-based line number, default 1) and ?limit= (line count, default the rest of the file). Returns { id, name, revision, totalLines, offset, lines: [{ n, text }] }. Line numbers are only valid against THIS read — anything else that edits the file moves them, so anchor an edit on the text itself (editAutomation), not on `n`.', { readOnly: true, latency: 'fast' });
   reg('POST', '/automations/:idOrName/edit', 'Change one saved automation by splicing a snippet, without resending the whole program: pass the automation\'s id or name and { oldString, newString, replaceAll?, expectedRevision?, acknowledgeErrors? }. oldString must appear in the CURRENT source exactly once (read it first — readAutomation or getAutomation — and quote enough surrounding text to pin one spot), or the edit is refused with a 400 explaining why: not found, or found more than once (pass replaceAll: true to change every match instead of widening the anchor). Once the anchor resolves, this is exactly saveAutomation with the spliced result as the new source — same expectedRevision conflict check, same check first (an edit with errors is not saved; the diagnostics come back), same acknowledgeErrors consent. Returns save\'s result plus the new `revision`.', { latency: 'medium' });
@@ -2186,7 +2271,7 @@ function registerKnowledgeAgentToolRoutes(): void {
   reg(
     'GET',
     '/teams',
-    'List the teams this connection can act in: each one\'s teamId, name, access, and isPersonal (true marks the user\'s personal workspace vs a shared team). Pass a teamId as `team` to tools that read or change a specific team. Also the top-level "listTeams" tool.',
+    'List the teams this connection can act in: each one\'s teamId, name, access (read, write or admin), and isPersonal (true marks the user\'s personal workspace vs a shared team). Pass a teamId as `team` to tools that read or change a specific team. Also the top-level "listTeams" tool.',
     { readOnly: true, latency: 'fast' },
   );
 

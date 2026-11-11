@@ -29,7 +29,7 @@ async function makeTeam(): Promise<TeamId> {
 
 async function makeAdmin(teamId: TeamId): Promise<{ userId: UserId; email: string }> {
   const email = `admin-${randomUUID().slice(0, 8)}@example.com`;
-  const { userId } = await ProvisioningService.provisionUser({ teamId, email, access: 'write' });
+  const { userId } = await ProvisioningService.provisionUser({ teamId, email, access: 'admin' });
   return { userId, email };
 }
 

@@ -23,7 +23,7 @@ import { replayThroughListen } from '../listen_replay';
 import { showDeliveryRequest } from '../show_request';
 
 const ADAPTER = 'door_test';
-const ADMIN = { userId: randomUUID(), access: 'write' as const };
+const ADMIN = { userId: randomUUID(), access: 'admin' as const };
 
 let teamId: TeamId;
 let otherTeamId: TeamId;
@@ -115,8 +115,8 @@ describe('showing a kept request (ruling 3)', () => {
     });
   });
 
-  it('is refused to a member who is not an admin, and records nothing', async () => {
-    const shown = await showDeliveryRequest({ teamId, deliveryId, reader: { userId: randomUUID(), access: 'read' } });
+  it.each(['read', 'write'] as const)('is refused to a %s member who is not an admin, and records nothing', async (access) => {
+    const shown = await showDeliveryRequest({ teamId, deliveryId, reader: { userId: randomUUID(), access } });
 
     expect(shown).toEqual({ outcome: 'refused', reason: "only the team's admins may read a delivery's request" });
     expect(await reads(deliveryId)).toEqual([]);

@@ -23,6 +23,7 @@ import { ChevronDown, History, Inbox, Loader2 } from "lucide-react";
 
 import { trpc, type RouterOutputs } from "@/lib/trpc";
 import { Badge, EmptyState } from "@/components/ui";
+import { managesTeam } from "@/components/access/grantees";
 import { RecentActivityDetail } from "@/components/automations/recent-activity-detail";
 import { laneShortForm } from "@/lib/trigger-name";
 import { formatRunCostUsd } from "@/lib/run-cost";
@@ -371,7 +372,7 @@ function EventsReceived({
   // A kept request is the team admins' to read (each read recorded), so
   // only they are offered it.
   const viewer = trpc.views.teamMembers.overview.useQuery();
-  const isAdmin = viewer.data?.viewer.access === "write";
+  const isAdmin = viewer.data !== undefined && managesTeam(viewer.data.viewer.access);
   const shown = trpc.views.triggers.showDeliveryRequest.useMutation();
 
   const replay = trpc.views.triggers.replayDelivery.useMutation({

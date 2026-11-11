@@ -50,7 +50,7 @@ describe('ensureDevLoopLogin', () => {
       .where('team_id', '=', teamId)
       .select('access')
       .executeTakeFirst();
-    expect(member?.access).toBe('write');
+    expect(member?.access).toBe('admin');
   });
 
   it('is idempotent', async () => {

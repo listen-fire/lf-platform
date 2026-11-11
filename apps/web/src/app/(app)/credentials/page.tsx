@@ -19,9 +19,12 @@
  * own projection) so the page renders from a single payload and stays a
  * dumb list.
  *
+ * A team admin also sees the accounts they may not use, locked: such a row
+ * offers only who may use it, where they can add themselves.
  */
 
 import { useState } from "react";
+import { Lock } from "lucide-react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import { trpc } from "@/lib/trpc";
@@ -154,7 +157,32 @@ export default function ConnectionsPage() {
               <EmptyRow text="No accounts connected yet." />
             ) : (
               <CardList>
-                {integrations.map((integration) => (
+                {integrations.map((integration) => integration.locked ? (
+                  <ListRow key={integration.id} className="group">
+                    <div className="min-w-0 flex-1" data-testid="connection-locked">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate text-[13px] font-medium text-gray-500">
+                          {integration.name}
+                        </span>
+                        <Badge tone="gray">
+                          <Lock size={10} />
+                          Locked
+                        </Badge>
+                      </div>
+                      <div className="mt-0.5 text-[12px] text-gray-400">
+                        You may not use this account. As a team admin you can see and change who may.
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setAccessTarget(integration)}
+                      title="Who may use this account"
+                      data-testid={`connection-access-${integration.name}`}
+                      className="cursor-pointer rounded-md px-2 py-1 text-[12px] font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                    >
+                      Access
+                    </button>
+                  </ListRow>
+                ) : (
                   <ListRow key={integration.id} className="group">
                     <ServiceIcon
                       type={integration.type}

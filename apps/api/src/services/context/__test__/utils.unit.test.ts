@@ -1,4 +1,6 @@
-import { currentContext } from '..';
+import type { Access } from 'principal';
+
+import { Context, currentContext } from '..';
 import { runInSystemContext } from '../utils';
 
 /**
@@ -43,5 +45,19 @@ describe('runInSystemContext', () => {
       // the outer context is restored once the nested one exits
       expect(currentContext()).toBe(outer);
     });
+  });
+});
+
+describe('the pool a principal is given', () => {
+  const as = (access: Access) => {
+    const ctx = new Context();
+    ctx.bindPrincipal({ teamId: 'team', userId: 'user', access, scopes: ['*'], pinnedTeamId: null });
+    return ctx.isReadonlyPrisma;
+  };
+
+  it('is the writable one for a write member and an admin, and the readonly one for a read member', () => {
+    expect(as('admin')).toBe(false);
+    expect(as('write')).toBe(false);
+    expect(as('read')).toBe(true);
   });
 });

@@ -426,7 +426,7 @@ export async function ensureDevLoopLogin(options: {
         id: randomUUID(),
         user_id: userId,
         team_id: teamId,
-        access: 'write',
+        access: 'admin',
       } as any)
       .execute();
   }

@@ -112,14 +112,14 @@ const testHarnessRouter = (procedure: typeof trpc.procedure) => {
           })
           .execute();
 
-        // Grant write membership of the team
+        // An admin of the team, as its only member
         await getCoreQb(['team_membership'])
           .insertInto('team_membership')
           .values({
             id: randomUUID() as any,
             user_id: testUserId as any,
             team_id: teamId as TeamId,
-            access: 'write',
+            access: 'admin',
           })
           .execute();
       }

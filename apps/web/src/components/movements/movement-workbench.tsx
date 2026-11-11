@@ -776,7 +776,7 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
               return "/plugins";
             case "file": {
               const movements = await utils.views.movement.list.fetch();
-              const match = movements.find((m) => m.name === target.name);
+              const match = movements.find((m) => !m.locked && m.name === target.name);
               return match ? `/movements/${match.id}` : undefined;
             }
           }

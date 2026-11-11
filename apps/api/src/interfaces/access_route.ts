@@ -6,15 +6,18 @@
 // The decision itself sits in each handler, ahead of what it reads or changes:
 // a list keeps only what the caller may read and never refuses; anything named
 // that the caller may not read is answered exactly as a name that does not
-// exist, so a refusal never confirms the name.
+// exist, so a refusal never confirms the name. A team's admin is the one
+// exception, and only for the lists of who may reach a thing: they are shown
+// every thing on the team, the ones they may not read as locked, and may read
+// and change a locked thing's lists.
 
 import { currentPrincipal } from 'principal';
 import { neverAsAny } from 'movement-engine/public/types';
 
 import type { RequestHandler, Router } from 'express';
-import type { AskedVerb, Target } from '../services/access/statement';
+import type { AskedVerb, Target, Thing } from '../services/access/statement';
 
-import { accessTo, readableIds } from '../services/access/decide';
+import { accessTo, administered, readableIds } from '../services/access/decide';
 
 /** One decision about one kind of thing. */
 type ThingDecision = { thing: 'automation'; verb: AskedVerb<'automation'> } | { thing: 'connection'; verb: AskedVerb<'connection'> };
@@ -52,7 +55,7 @@ const EXEMPT = {
 /** The decision of every route that reads, changes or lists connections. */
 const USE_CONNECTION = { thing: 'connection', verb: 'use' } satisfies Decision;
 
-/** Changing who may reach a thing: whoever may write the automation, or use the connection. */
+/** Changing who may reach a thing: whoever may write the automation, or use the connection (or a team admin). */
 const CHANGE_STATEMENT = { byTarget: { automation: 'write', connection: 'use' } } satisfies Decision;
 
 const decisions = new Map<string, Decision>();
@@ -189,6 +192,31 @@ async function usableAmong<T>(
   });
 }
 
+/** An item of a list as the caller is shown it: in full, or locked to an admin who may not read it. */
+type Seen<T> = { item: T; locked: boolean };
+
+/**
+ * The items of one team's list the caller is shown: the ones whose thing they
+ * may read (or use), and, to an admin of the team, every other one too,
+ * locked. A locked item is shown by its name and its lists alone.
+ */
+async function seenAmong<T>(
+  items: readonly T[],
+  options: { thing: Thing; idOf: (item: T) => string; teamId: string },
+): Promise<Seen<T>[]> {
+  if (items.length === 0) return [];
+  const principal = currentPrincipal();
+  const [readable, admins] = await Promise.all([
+    readableIds(principal, { thing: options.thing, teamIds: [options.teamId] }),
+    administered(principal, [options.teamId]),
+  ]);
+  const administers = admins.has(options.teamId);
+  return items.flatMap((item): Seen<T>[] => {
+    if (readable.has(options.idOf(item))) return [{ item, locked: false }];
+    return administers ? [{ item, locked: true }] : [];
+  });
+}
+
 export {
   decides,
   decidesEach,
@@ -201,6 +229,7 @@ export {
   readableOwned,
   connectionUnseen,
   usableAmong,
+  seenAmong,
   USE_CONNECTION,
   CHANGE_STATEMENT,
   EXEMPT,
@@ -209,4 +238,5 @@ export {
   type Decision,
   type DecidingRouter,
   type Refusal,
+  type Seen,
 };

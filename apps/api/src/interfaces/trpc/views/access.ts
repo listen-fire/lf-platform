@@ -1,8 +1,9 @@
 // Who may reach one automation or one connection, as the web reads and
 // changes it: an automation's read, write and fire lists, a connection's use
 // list. The same decisions as REST `setAccess`: reading the lists needs read
-// on the automation (use on the connection), changing one needs write (use).
-// What the caller may not see is answered as what is not there.
+// on the automation (use on the connection), changing one needs write (use);
+// a team admin may read and change every thing's lists on their team. What the
+// caller may not see is answered as what is not there.
 
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -12,7 +13,13 @@ import { neverAsAny } from 'movement-engine/public/types';
 import type { StatedVerb, Target, Thing } from '../../../services/access/statement';
 
 import { automationView, connectionView, type AccessView, type Shown } from '../../../services/access/listing';
-import { StatementRefusedError, accessTo, setStatement, type StatementRefusal } from '../../../services/access/decide';
+import {
+  StatementRefusedError,
+  adminOf,
+  maySeeStatement,
+  setStatement,
+  type StatementRefusal,
+} from '../../../services/access/decide';
 import { GranteesInput } from '../../../services/access/stated_input';
 import { CHANGE_STATEMENT, decidesEach, type Decision } from '../../access_route';
 import { cannotChange } from '../access';
@@ -72,13 +79,11 @@ const accessRouter = (procedure: typeof trpc.procedure) => {
   return trpc.router({
     /** Who may reach the thing, and whether the caller may change that. */
     get: userProcedure.input(ThingInput).query(async ({ input }): Promise<AccessView> => {
-      const principal = currentPrincipal();
+      if (!(await maySeeStatement(currentPrincipal(), { thing: input.thing, id: input.id }))) throw notFound(input.thing);
       switch (input.thing) {
         case 'automation':
-          if (!(await accessTo(principal, { target: { thing: 'automation', id: input.id }, verb: 'read' }))) throw notFound('automation');
           return automationViewOrNotFound(input.id);
         case 'connection':
-          if (!(await accessTo(principal, { target: { thing: 'connection', id: input.id }, verb: 'use' }))) throw notFound('connection');
           return connectionViewOrNotFound(input.id);
         default:
           return neverAsAny(input.thing);
@@ -90,8 +95,8 @@ const accessRouter = (procedure: typeof trpc.procedure) => {
       const principal = currentPrincipal();
       switch (input.thing) {
         case 'automation': {
-          if (await cannotChange(input.id)) throw notFound('automation');
           const target: Target<'automation'> = { thing: 'automation', id: input.id };
+          if (!(await adminOf(principal, target)) && (await cannotChange(input.id))) throw notFound('automation');
           try {
             await setStatement(principal, { target, verb: input.verb, grantees: input.grantees });
           } catch (error) {
@@ -101,11 +106,11 @@ const accessRouter = (procedure: typeof trpc.procedure) => {
         }
         case 'connection': {
           const target: Target<'connection'> = { thing: 'connection', id: input.id };
-          if (!(await accessTo(principal, { target, verb: 'use' }))) throw notFound('connection');
+          if (!(await maySeeStatement(principal, target))) throw notFound('connection');
           try {
             await setStatement(principal, { target, verb: input.verb, grantees: input.grantees });
           } catch (error) {
-            // The caller may use it, so the one way this refuses them is that they only read on its team.
+            // The caller may use it (an admin is never refused), so the one way this refuses them is that they only read on its team.
             if (error instanceof StatementRefusedError && error.refusal === 'not_allowed') {
               throw new TRPCError({ code: 'FORBIDDEN', message: READ_ONLY_CONNECTION_MESSAGE });
             }
@@ -120,6 +125,7 @@ const accessRouter = (procedure: typeof trpc.procedure) => {
   });
 };
 
+/** Reading who may reach a thing: whoever may read the automation or use the connection (or a team admin). */
 const READS_THE_THING = { byTarget: { automation: 'read', connection: 'use' } } satisfies Decision;
 
 decidesEach('access', {

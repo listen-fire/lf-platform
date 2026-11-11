@@ -4,7 +4,7 @@ import EventEmitter from 'node:events';
 
 import * as db from '@prisma/client';
 import { Kysely, sql } from 'kysely';
-import { maybePrincipal, runWithoutPrincipal, runWithPrincipalSync, type Principal } from 'principal';
+import { maybePrincipal, meets, runWithoutPrincipal, runWithPrincipalSync, type Principal } from 'principal';
 
 import { prismaClient, prismaReadonlyClient } from '../../prisma';
 import { Dataloaders, getDataloaders } from '../../lib/datasources/dataloaders';
@@ -118,15 +118,16 @@ class Context extends EventEmitter implements ClsStorage {
   }
 
   /**
-   * Which pool this Context reads and writes through. A `write` principal gets
-   * the writable one; a read-only membership, or no identity at all, gets the
-   * readonly one. That is the whole rule — the ability no longer has a say
+   * Which pool this Context reads and writes through. A principal that may
+   * write (a `write` member or an admin) gets the writable one; a read-only
+   * membership, or no identity at all, gets the readonly one. That is the whole rule — the ability no longer has a say
    * (D15), and `access` comes from `team_membership` where the Principal is
    * minted (D44b).
    */
   private selectConnection() {
+    const principal = this.actingPrincipal;
     this.isReadonlyPrisma =
-      !this._systemWritable && this.actingPrincipal?.access !== 'write';
+      !this._systemWritable && (principal === undefined || !meets(principal.access, 'write'));
     this.prisma = this.isReadonlyPrisma ? prismaReadonlyClient : prismaClient;
   }
 

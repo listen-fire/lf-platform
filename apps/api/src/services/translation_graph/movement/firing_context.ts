@@ -33,7 +33,7 @@ import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type { ActingUser } from 'movement-engine/public/adapter';
 import type { ActingUserTriggerContext } from '../adapters/acting_user_shared';
-import type { Principal } from 'principal';
+import { isAccess, meets, type Principal } from 'principal';
 
 import { Context, runWithoutAmbientIdentity } from '../../context';
 import { runInSystemContext } from '../../context/utils';
@@ -179,7 +179,7 @@ async function teamActor(input: {
   if (preferred !== null && members.some((m) => (m.user_id as unknown as string) === preferred)) {
     return preferred;
   }
-  const fallback = members.find((m) => m.access === 'write') ?? members[0];
+  const fallback = members.find((m) => isAccess(m.access) && meets(m.access, 'write')) ?? members[0];
   return fallback === undefined ? undefined : (fallback.user_id as unknown as string);
 }
 

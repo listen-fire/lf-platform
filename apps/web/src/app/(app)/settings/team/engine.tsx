@@ -39,7 +39,8 @@ export interface EngineCardProps {
   changedAt: string | null;
   /** The member's name, or null for the operator CLI or someone no longer on the team. */
   changedByName: string | null;
-  canWrite: boolean;
+  /** Only a team admin switches the engine: it moves every automation the team has. */
+  canSwitch: boolean;
   /** The first click happened; the consequence is on screen awaiting the second. */
   confirming: boolean;
   busy: boolean;
@@ -65,9 +66,9 @@ export function EngineCard(props: EngineCardProps) {
           {new Date(props.changedAt).toLocaleDateString()}.
         </p>
       )}
-      {!props.canWrite ? (
+      {!props.canSwitch ? (
         <p className="mt-3 text-[12px] text-slate-500" data-testid="team-engine-read-only">
-          Only members with full access can switch it.
+          Only team admins can switch it.
         </p>
       ) : props.confirming ? (
         <div className="mt-3" data-testid="team-engine-confirm">

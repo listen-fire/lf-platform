@@ -22,6 +22,7 @@ jest.mock('../../../../lib/knowledge/library', () => ({
 const describeMovementInstanceMock = jest.fn(async () => ({ schema: null, notes: [] }));
 jest.mock('../../../../services/translation_graph/movement/catalog', () => ({
   describeMovementInstance: (...args: unknown[]) => describeMovementInstanceMock(...(args as [])),
+  describedConnectionOf: jest.fn(async () => undefined),
   movementCatalogSnapshotForTeam: jest.fn(),
   toAgentCatalogView: jest.fn(),
 }));

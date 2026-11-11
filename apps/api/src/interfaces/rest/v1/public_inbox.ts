@@ -4,7 +4,7 @@
 // service's (`adapters/email/public_inbox.ts`); this is its REST face, which
 // the MCP tools and any API client share.
 //
-// Claiming and releasing take write access on the team, the role that manages
+// Claiming and releasing take admin access on the team, the role that manages
 // its members, because a public inbox lets anyone who learns the address start
 // the team's automations. The person claiming is who a run acts as when the
 // sender is not on the team, so a machine credential (no person) cannot claim.
@@ -15,7 +15,7 @@ import { randomUUID } from 'node:crypto';
 
 import { Router, type RequestHandler, type Response } from 'express';
 import { z } from 'zod';
-import { currentPrincipal } from 'principal';
+import { currentPrincipal, meets } from 'principal';
 import { neverAsAny } from 'movement-engine/public/types';
 
 import {
@@ -47,11 +47,11 @@ function view(inbox: PublicInbox) {
 }
 
 /** The team a change lands in, when the caller may make it there. */
-async function writableTeam(requested: string | undefined): Promise<{ teamId: string } | { refusal: string }> {
+async function administeredTeam(requested: string | undefined): Promise<{ teamId: string } | { refusal: string }> {
   const teamId = await resolveToolTeam(requested);
   const team = (await listAccessibleTeams()).find((candidate) => candidate.teamId === teamId);
-  if (team?.access !== 'write') {
-    return { refusal: "Only members with write access can change the team's public inboxes." };
+  if (team === undefined || !meets(team.access, 'admin')) {
+    return { refusal: "Only a team admin can change the team's public inboxes." };
   }
   return { teamId };
 }
@@ -89,7 +89,7 @@ const claimHandler: RequestHandler = async (req, res) => {
           'A public inbox acts as the person who claims it when the sender is not on the team, and this connection authenticates as a machine with no person behind it. Claim it with a user-anchored credential.',
       });
     }
-    const team = await writableTeam(parsed.data.team);
+    const team = await administeredTeam(parsed.data.team);
     if ('refusal' in team) return res.status(403).json({ error: team.refusal });
 
     const result = await claimPublicInbox({ teamId: team.teamId, key: parsed.data.key, claimedByUserId: userId });
@@ -118,7 +118,7 @@ const releaseHandler: RequestHandler = async (req, res) => {
     return res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() });
   }
   try {
-    const team = await writableTeam(parsed.data.team);
+    const team = await administeredTeam(parsed.data.team);
     if ('refusal' in team) return res.status(403).json({ error: team.refusal });
 
     const result = await releasePublicInbox({ teamId: team.teamId, key: parsed.data.key });
@@ -144,8 +144,9 @@ function mountPublicInboxRoutes(router: ReturnType<typeof Router>): void {
   const route = decidingRouter(router, '/v1/automation');
   const teamInbox: Decision = { exempt: "a team's public inbox address, no automation" };
   route.get('/inboxes', teamInbox, listHandler);
-  route.post('/inboxes/claim', teamInbox, claimHandler);
-  route.post('/inboxes/release', teamInbox, releaseHandler);
+  const adminOnlyInbox: Decision = { exempt: "a team's public inbox address, no automation; claiming or releasing needs team admin" };
+  route.post('/inboxes/claim', adminOnlyInbox, claimHandler);
+  route.post('/inboxes/release', adminOnlyInbox, releaseHandler);
 }
 
 export { mountPublicInboxRoutes };

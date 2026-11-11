@@ -7,7 +7,7 @@
 // Reads go through Kysely rather than `PermissionService`: membership is a
 // two-column read, and core owns it (D15).
 
-import { TeamScopeError, type Access, type Principal, type TeamRef } from 'principal';
+import { TeamScopeError, isAccess, meets, type Access, type Principal, type TeamRef } from 'principal';
 
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { UserId } from '../../generated/kysely/core/User';
@@ -29,9 +29,15 @@ async function membershipsOf(userId: string): Promise<Membership[]> {
 
   return rows.map((row) => ({
     teamId: row.team_id,
-    access: row.access === 'read' ? 'read' : 'write',
+    access: accessOf(row.access),
     isPersonal: row.is_personal,
   }));
+}
+
+/** A stored level as the Principal carries it; an unknown one is refused rather than read as some level. */
+function accessOf(stored: string): Access {
+  if (isAccess(stored)) return stored;
+  throw new Error(`A team membership has an unknown access level: ${stored}.`);
 }
 
 /**
@@ -59,7 +65,7 @@ async function accessFor({
   if (userId === undefined) return 'write';
   const inTeam = (await membershipsOf(userId)).filter((m) => m.teamId === teamId);
   if (inTeam.length === 0) return null;
-  return inTeam.every((m) => m.access === 'read') ? 'read' : 'write';
+  return inTeam.reduce<Access>((highest, m) => (meets(m.access, highest) ? m.access : highest), 'read');
 }
 
 async function teamNames(teamIds: readonly string[]): Promise<Map<string, string>> {

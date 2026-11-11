@@ -20,12 +20,45 @@ export type ListedGrantee =
 export type AutomationVerb = "read" | "write" | "fire";
 export type Verb = AutomationVerb | "use";
 
+/** A member's level on the team: each holds everything the one below it does. */
+export type TeamAccess = "read" | "write" | "admin";
+
+/** Whether a member at this level may write on the team, and so hold a write list. */
+export function writesOnTeam(access: TeamAccess): boolean {
+  switch (access) {
+    case "read":
+      return false;
+    case "write":
+    case "admin":
+      return true;
+    default: {
+      const unreachable: never = access;
+      return unreachable;
+    }
+  }
+}
+
+/** Whether a member at this level is a team admin, whom the server lets manage the team. */
+export function managesTeam(access: TeamAccess): boolean {
+  switch (access) {
+    case "read":
+    case "write":
+      return false;
+    case "admin":
+      return true;
+    default: {
+      const unreachable: never = access;
+      return unreachable;
+    }
+  }
+}
+
 /** Someone on the team, as the team page lists them. */
 export interface Member {
   userId: string;
   username: string;
   email: string | null;
-  access: "read" | "write";
+  access: TeamAccess;
 }
 
 /** Who is choosing: the lists name them as "you". */
@@ -179,7 +212,7 @@ export function automationStatements(
       break;
     case "people": {
       const people = withViewer(viewerUserId, choice.seePeople);
-      const writers = new Set(members.filter((m) => m.access === "write").map((m) => m.userId));
+      const writers = new Set(members.filter((m) => writesOnTeam(m.access)).map((m) => m.userId));
       read = people.map(user);
       write = people.filter((id) => id === viewerUserId || writers.has(id)).map(user);
       break;
@@ -325,8 +358,8 @@ export function listRefusalSentence(refusal: ListRefusal, thing: "automation" | 
       return `This ${thing} could not be found. Reload the page.`;
     case "not_allowed":
       return thing === "automation"
-        ? "Only someone who may change this automation can change who may reach it."
-        : "Only someone who may use this connection, with write access on the team, can change who may.";
+        ? "Only someone who may change this automation, or a team admin, can change who may reach it."
+        : "Only someone who may use this connection, with write access on the team, or a team admin, can change who may.";
     case "outsider":
       return "People outside the team can only be allowed to set an automation off.";
     case "not_a_member":

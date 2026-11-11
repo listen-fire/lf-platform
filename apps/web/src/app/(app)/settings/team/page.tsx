@@ -5,8 +5,9 @@
  * needs to manage its own people. Inviting an address IS the invitation:
  * nothing is emailed and the person joins the next time they sign in, so the
  * page says that rather than promising a link. Adding someone directly puts
- * them on the team at once. Removing a member signs them out. A read-only
- * member sees the roster and nothing they could change.
+ * them on the team at once. Removing a member signs them out. Only the
+ * team's admins manage its people; anyone else sees the roster and nothing
+ * they could change there.
  *
  * Where automations is mounted, the page also says which engine runs the
  * team's automations (the platform or a cloud lf) and switches it (engine.tsx).
@@ -23,10 +24,16 @@ import { useCapabilities } from "@/lib/capabilities-provider";
 import { Button } from "@/components/ui";
 import { usePageTitle } from "@/components/page-title";
 
+import { type TeamAccess as Access } from "@/components/access/grantees";
+
 import { Card } from "../card";
 import { EngineCard, otherEngine } from "./engine";
 
-type Access = "read" | "write";
+const ACCESS_LABELS: Record<Access, string> = {
+  admin: "Admin",
+  write: "Write",
+  read: "Read-only",
+};
 
 const INPUT_CLASS =
   "w-64 max-w-full rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[13px] text-slate-900 outline-none focus:border-primary/40 focus:ring-1 focus:ring-primary/20 disabled:bg-slate-50 disabled:text-slate-400";
@@ -44,10 +51,10 @@ function AccessToggle({
   disabled?: boolean;
   testId?: string;
 }) {
-  const options: { access: Access; label: string }[] = [
-    { access: "write", label: "Full access" },
-    { access: "read", label: "Read-only" },
-  ];
+  const options: { access: Access; label: string }[] = (["admin", "write", "read"] as const).map((access) => ({
+    access,
+    label: ACCESS_LABELS[access],
+  }));
   return (
     <div
       className="inline-flex shrink-0 rounded-md border border-slate-200 p-0.5"
@@ -274,24 +281,25 @@ function identityLockedReason(member: Member): string | null {
   return null;
 }
 
-/** Remove, and demoting yourself, take a second click — neither is easy to undo. */
+/** Remove, and giving up your own admin, take a second click — neither is easy to undo. */
 type Confirming = "remove" | "demote-self";
 
 type Editor = "rename" | "email" | "phone";
 
 function MemberRow({
   member,
-  canWrite,
+  canManage,
   isSelf,
   onChanged,
 }: {
   member: Member;
-  canWrite: boolean;
+  canManage: boolean;
   isSelf: boolean;
   onChanged: () => void;
 }) {
   const [editor, setEditor] = useState<Editor | null>(null);
   const [confirming, setConfirming] = useState<Confirming | null>(null);
+  const [demoteTo, setDemoteTo] = useState<Access>("write");
   const [value, setValue] = useState("");
   const [makePrimary, setMakePrimary] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -351,8 +359,9 @@ function MemberRow({
   };
 
   const changeAccess = (next: Access) => {
-    if (isSelf && next === "read") {
+    if (isSelf && next !== "admin") {
       setError(null);
+      setDemoteTo(next);
       setConfirming("demote-self");
       return;
     }
@@ -366,7 +375,7 @@ function MemberRow({
         remove.mutate({ userId: member.userId });
         return;
       case "demote-self":
-        setAccess.mutate({ userId: member.userId, access: "read" });
+        setAccess.mutate({ userId: member.userId, access: demoteTo });
         return;
       default:
         neverAsAny(confirming);
@@ -403,22 +412,22 @@ function MemberRow({
           {member.phoneNumber && (
             <p className="truncate text-[11px] text-slate-400">{member.phoneNumber}</p>
           )}
-          {canWrite && lockedReason !== null && (
+          {canManage && lockedReason !== null && (
             <p className="text-[11px] text-slate-400" data-testid="team-member-identity-locked">
               {lockedReason}
             </p>
           )}
         </div>
-        {!canWrite ? (
+        {!canManage ? (
           <span className="shrink-0 text-[11px] font-medium text-slate-500" data-testid="team-member-access-label">
-            {member.access === "write" ? "Full access" : "Read-only"}
+            {ACCESS_LABELS[member.access]}
           </span>
         ) : confirming !== null ? (
           <div className="flex shrink-0 items-center gap-1" data-testid="team-member-confirm">
             <span className="text-[12px] text-slate-500">
               {confirming === "remove"
                 ? `Remove ${member.username}? They are signed out.`
-                : "Make yourself read-only? You will no longer be able to manage the team."}
+                : `Make yourself ${demoteTo === "read" ? "read-only" : "a write member"}? You will no longer be able to manage the team.`}
             </span>
             <button
               onClick={confirm}
@@ -475,7 +484,7 @@ function MemberRow({
           </div>
         )}
       </div>
-      {canWrite && editor !== null && (
+      {canManage && editor !== null && (
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <input
             autoFocus
@@ -527,7 +536,7 @@ function MemberRow({
 }
 
 /** The team's engine, where automations is mounted (it owns the setting). */
-function EngineSection({ canWrite, members }: { canWrite: boolean; members: Member[] }) {
+function EngineSection({ canSwitch, members }: { canSwitch: boolean; members: Member[] }) {
   const setting = trpc.views.teamEngine.get.useQuery();
   const utils = trpc.useUtils();
   const [confirming, setConfirming] = useState(false);
@@ -556,7 +565,7 @@ function EngineSection({ canWrite, members }: { canWrite: boolean; members: Memb
       engine={engine}
       changedAt={changedAt}
       changedByName={changedByName}
-      canWrite={canWrite}
+      canSwitch={canSwitch}
       confirming={confirming}
       busy={change.isLoading}
       error={error}
@@ -591,18 +600,18 @@ export default function TeamPage() {
   }
 
   const { viewer, members, invites } = overview.data;
-  const canWrite = viewer.access === "write";
+  const canManage = viewer.access === "admin";
 
   return (
     <div className="space-y-5">
-      {canWrite ? (
+      {canManage ? (
         <>
           <AddMemberCard onChanged={refresh} />
           <ServiceAccountCard onChanged={refresh} />
         </>
       ) : (
         <p className="text-[12px] text-slate-500" data-testid="team-read-only">
-          You have read-only access, so you can see the team but not change it.
+          Only the team&apos;s admins can change who is on it, so you can see the team but not change it.
         </p>
       )}
 
@@ -624,7 +633,7 @@ export default function TeamPage() {
                     Added {new Date(i.createdAt).toLocaleDateString()}
                   </p>
                 </div>
-                {canWrite && (
+                {canManage && (
                   <button
                     onClick={() => revoke.mutate({ inviteId: i.id })}
                     disabled={revoke.isLoading}
@@ -649,7 +658,7 @@ export default function TeamPage() {
             <MemberRow
               key={m.userId}
               member={m}
-              canWrite={canWrite}
+              canManage={canManage}
               isSelf={m.userId === viewer.userId}
               onChanged={refresh}
             />
@@ -657,7 +666,7 @@ export default function TeamPage() {
         </div>
       </Card>
 
-      {automationsMounted && <EngineSection canWrite={canWrite} members={members} />}
+      {automationsMounted && <EngineSection canSwitch={canManage} members={members} />}
     </div>
   );
 }

@@ -5,8 +5,8 @@
 // they share live in `TeamMembershipService` so the two cannot drift.
 //
 // Inviting is unlimited and sends nothing: `TeamInviteService.addInvite` writes
-// a pending membership and the person joins the next time they sign in. Any
-// write-access member may manage the team.
+// a pending membership and the person joins the next time they sign in. Only
+// the team's admins manage its people; anyone on it may see who is.
 
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -18,8 +18,8 @@ import type { TeamInviteId } from '../../../generated/kysely/core/TeamInvite';
 import { currentContext } from '../../../services/context';
 import { TeamInviteService } from '../../../services/team_invite';
 import {
+  ActorNotAdminError,
   TeamMembershipService,
-  type Access,
   type CreatedMember,
 } from '../../../services/team_membership';
 import { trpc } from '../trpc';
@@ -29,19 +29,32 @@ import { userProcedure as sharedUserProcedure } from '../procedures';
 import { decidesEach, type Decision } from '../../access_route';
 import { neverAsAny } from 'movement-engine/public/types';
 
-/** Throw unless the acting user holds write access on the team. */
-async function requireWriteAccess(teamId: TeamId, userId: UserId): Promise<void> {
+/** Throw unless the acting user is an admin of the team. */
+async function requireAdmin(teamId: TeamId, userId: UserId): Promise<void> {
   const membership = await getCoreQb(['team_membership'])
     .selectFrom('team_membership')
     .select('access')
     .where('team_id', '=', teamId)
     .where('user_id', '=', userId)
     .executeTakeFirst();
-  if (membership?.access !== 'write') {
+  if (membership?.access !== 'admin') {
     throw new TRPCError({
       code: 'FORBIDDEN',
-      message: 'Only members with write access can manage the team.',
+      message: "Only the team's admins can manage its members.",
     });
+  }
+}
+
+/**
+ * A change to membership, refused as the admin check refuses when the actor
+ * was demoted or removed while it waited for the team's rows.
+ */
+async function whileAdmin<T>(change: () => Promise<T>): Promise<T> {
+  try {
+    return await change();
+  } catch (error) {
+    if (error instanceof ActorNotAdminError) throw new TRPCError({ code: 'FORBIDDEN', message: error.message });
+    throw error;
   }
 }
 
@@ -111,16 +124,16 @@ async function requireMember(
 async function managedTeam(): Promise<TeamId> {
   const ctx = currentContext();
   const teamId = ctx.user.teamId as TeamId;
-  await requireWriteAccess(teamId, ctx.user.id as UserId);
+  await requireAdmin(teamId, ctx.user.id as UserId);
   return teamId;
 }
 
-const accessSchema = z.enum(['read', 'write']);
+const accessSchema = z.enum(['read', 'write', 'admin']);
 
 const ADDRESS_TAKEN_MESSAGE = 'That address is already in use.';
 
 const LAST_ADMIN_MESSAGE =
-  'This is the team’s last admin — give another member write access before changing this one.';
+  'This is the team’s last admin — make another member an admin before changing this one.';
 
 const teamMembersRouter = (procedure: typeof trpc.procedure) => {
   const userProcedure = sharedUserProcedure(procedure);
@@ -216,7 +229,7 @@ const teamMembersRouter = (procedure: typeof trpc.procedure) => {
         const ctx = currentContext();
         const teamId = ctx.user.teamId as TeamId;
         const userId = ctx.user.id as UserId;
-        await requireWriteAccess(teamId, userId);
+        await requireAdmin(teamId, userId);
 
         const result = await TeamInviteService.addInvite({
           teamId,
@@ -245,7 +258,7 @@ const teamMembersRouter = (procedure: typeof trpc.procedure) => {
       .mutation(async ({ input }) => {
         const ctx = currentContext();
         const teamId = ctx.user.teamId as TeamId;
-        await requireWriteAccess(teamId, ctx.user.id as UserId);
+        await requireAdmin(teamId, ctx.user.id as UserId);
         await TeamInviteService.revokeInvite({
           teamId,
           inviteId: input.inviteId as TeamInviteId,
@@ -259,14 +272,13 @@ const teamMembersRouter = (procedure: typeof trpc.procedure) => {
       .mutation(async ({ input }) => {
         const ctx = currentContext();
         const teamId = ctx.user.teamId as TeamId;
-        await requireWriteAccess(teamId, ctx.user.id as UserId);
+        await requireAdmin(teamId, ctx.user.id as UserId);
 
         // One transaction, so what only they held passes on as they leave.
         await ctx.enterTransaction();
-        const result = await TeamMembershipService.removeMember({
-          teamId,
-          userId: input.userId as UserId,
-        });
+        const result = await whileAdmin(() =>
+          TeamMembershipService.removeMember({ teamId, userId: input.userId as UserId, actor: ctx.user.id as UserId }),
+        );
 
         switch (result.status) {
           case 'removed':
@@ -298,7 +310,9 @@ const teamMembersRouter = (procedure: typeof trpc.procedure) => {
       .mutation(async ({ input }): Promise<{ id: UserId; email: string }> => {
         const teamId = await managedTeam();
         await currentContext().enterTransaction();
-        const result = await TeamMembershipService.addMember({ teamId, ...input });
+        const result = await whileAdmin(() =>
+          TeamMembershipService.addMember({ teamId, ...input, actor: currentContext().user.id as UserId }),
+        );
         switch (result.status) {
           case 'added':
             return result.member;
@@ -330,17 +344,20 @@ const teamMembersRouter = (procedure: typeof trpc.procedure) => {
 
     setAccess: userProcedure
       .input(z.object({ userId: z.string().uuid(), access: accessSchema }))
-      .mutation(async ({ input }): Promise<{ access: Access }> => {
+      .mutation(async ({ input }): Promise<{ access: z.infer<typeof accessSchema> }> => {
         const teamId = await managedTeam();
         const userId = await requireMember(teamId, input.userId);
 
         // One transaction, so a write list they alone held passes on as they lose write.
         await currentContext().enterTransaction();
-        const result = await TeamMembershipService.changeAccess({
-          teamId,
-          userId,
-          access: input.access,
-        });
+        const result = await whileAdmin(() =>
+          TeamMembershipService.changeAccess({
+            teamId,
+            userId,
+            access: input.access,
+            actor: currentContext().user.id as UserId,
+          }),
+        );
         switch (result.status) {
           case 'changed':
             return { access: input.access };

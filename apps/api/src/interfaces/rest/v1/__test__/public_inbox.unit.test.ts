@@ -1,5 +1,5 @@
 // The public inbox routes the MCP tools call: claiming takes a person (who
-// runs act as) and write access on the team, a clash is a 409 that names the
+// runs act as) and admin access on the team, a clash is a 409 that names the
 // key but not the team holding it, and releasing is the holding team's alone.
 
 import { createServer, type Server } from 'node:http';
@@ -12,7 +12,7 @@ import type { AddressInfo } from 'node:net';
 const claimPublicInbox = jest.fn();
 const releasePublicInbox = jest.fn();
 const listPublicInboxes = jest.fn();
-let teamAccess: 'read' | 'write' = 'write';
+let teamAccess: 'read' | 'write' | 'admin' = 'admin';
 
 jest.mock('../../../../services/translation_graph/adapters/email/public_inbox', () => ({
   claimPublicInbox: (input: unknown) => claimPublicInbox(input),
@@ -28,7 +28,7 @@ jest.mock('../team_scope', () => ({
 
 import { mountPublicInboxRoutes } from '../public_inbox';
 
-const HUMAN: Principal = { teamId: 'team-1', userId: 'user-1', access: 'write', scopes: ['*'], pinnedTeamId: null };
+const HUMAN: Principal = { teamId: 'team-1', userId: 'user-1', access: 'admin', scopes: ['*'], pinnedTeamId: null };
 const MACHINE: Principal = { teamId: 'team-1', access: 'write', scopes: ['*'], pinnedTeamId: 'team-1', credentialId: 'key-1' };
 
 const INBOX = {
@@ -64,7 +64,7 @@ afterAll((done) => {
 beforeEach(() => {
   jest.clearAllMocks();
   acting = HUMAN;
-  teamAccess = 'write';
+  teamAccess = 'admin';
 });
 
 function post(path: string, body: unknown) {
@@ -115,17 +115,28 @@ describe('claiming', () => {
     expect(claimPublicInbox).not.toHaveBeenCalled();
   });
 
-  it('needs write access on the team', async () => {
-    teamAccess = 'read';
+  it.each(['read', 'write'] as const)('needs admin access on the team: a %s member is refused', async (access) => {
+    teamAccess = access;
 
     const res = await post('/inboxes/claim', { key: 'deals' });
 
     expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "Only a team admin can change the team's public inboxes." });
     expect(claimPublicInbox).not.toHaveBeenCalled();
   });
 });
 
 describe('releasing and listing', () => {
+  it.each(['read', 'write'] as const)('release needs admin access on the team: a %s member is refused', async (access) => {
+    teamAccess = access;
+
+    const res = await post('/inboxes/release', { key: 'deals' });
+
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "Only a team admin can change the team's public inboxes." });
+    expect(releasePublicInbox).not.toHaveBeenCalled();
+  });
+
   it('is refused for a key another team holds', async () => {
     releasePublicInbox.mockResolvedValue({ status: 'held_by_another_team', key: 'deals', teamId: 'team-2' });
 

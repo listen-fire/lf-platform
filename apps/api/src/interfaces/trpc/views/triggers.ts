@@ -19,7 +19,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { sql } from 'kysely';
 import { TRPCError } from '@trpc/server';
-import { runWithPrincipal } from 'principal';
+import { currentPrincipal, runWithPrincipal } from 'principal';
 import { logger } from 'movement-engine/public/log';
 import { observable } from '@trpc/server/observable';
 
@@ -956,7 +956,7 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
         const { user } = currentContext();
         const reader: RequestReader = {
           userId: user.id,
-          access: user.isTeamReadonly ? 'read' : 'write',
+          access: currentPrincipal().access,
           ...(user.apiKeyId !== undefined ? { credentialId: user.apiKeyId } : {}),
         };
         // A kept request is what reached each of those automations' listens.

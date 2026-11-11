@@ -21,6 +21,7 @@ import {
   type Verb,
   takesOutsiders,
   unreadableOutsiders,
+  writesOnTeam,
 } from "./grantees";
 
 /**
@@ -106,7 +107,7 @@ export function PeoplePicker({
   writersOnly?: boolean;
   team?: { checked: boolean; onChange: (checked: boolean) => void };
 }) {
-  const offered = members.filter((m) => !writersOnly || m.access === "write");
+  const offered = members.filter((m) => !writersOnly || writesOnTeam(m.access));
   if (offered.length === 0 && team === undefined) {
     return <p className="text-[12px] text-gray-400">Nobody on the team yet.</p>;
   }

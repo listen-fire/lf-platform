@@ -24,7 +24,7 @@ const userSchema = z.object({
   username: z.string().min(1),
 });
 
-const accessSchema = z.enum(['read', 'write']);
+const accessSchema = z.enum(['read', 'write', 'admin']);
 
 const userManagementRouter = (procedure: typeof trpc.procedure) => {
   return trpc.router({
@@ -98,6 +98,7 @@ const userManagementRouter = (procedure: typeof trpc.procedure) => {
               teamId,
               email: userData.email,
               username: userData.username,
+              access: 'admin',
             });
             return { id: userId, username: userData.username, email: userData.email };
           }),
@@ -347,7 +348,7 @@ const userManagementRouter = (procedure: typeof trpc.procedure) => {
             await TeamMembershipService.grantAccess(membership);
             break;
           case 'last_admin':
-            throw new Error("Can't take write access from the team's last admin. Grant another member write access first.");
+            throw new Error("Can't change the team's last admin. Make another member an admin first.");
           default:
             return neverAsAny(changed);
         }
@@ -423,7 +424,7 @@ const userManagementRouter = (procedure: typeof trpc.procedure) => {
             throw new Error("This user isn't a member of that team.");
           case 'last_admin':
             throw new Error(
-              "Can't remove the team's last admin (write-access member). Grant another member write access first.",
+              "Can't remove the team's last admin. Make another member an admin first.",
             );
           default:
             return neverAsAny(removed);

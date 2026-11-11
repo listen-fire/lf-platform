@@ -19,6 +19,7 @@
 // survive.
 
 import type { Kysely } from 'kysely';
+import { isAccess, meets, type Access } from 'principal';
 import type { TeamId } from '../generated/kysely/core/Team';
 import type { UserId } from '../generated/kysely/core/User';
 import type CoreSchema from '../generated/kysely/core/CoreSchema';
@@ -28,9 +29,18 @@ import { logger } from 'movement-engine/public/log';
 import { ProvisioningService } from './provisioning';
 import { passOnWhatTheyHeld } from './access/decide';
 
-type Access = 'read' | 'write';
-
 type MembershipDb = Kysely<Pick<CoreSchema, 'team_membership'>>;
+
+/**
+ * The acting member is no longer an admin of the team: they were demoted or
+ * removed between the check that let them in and the lock this change takes.
+ */
+class ActorNotAdminError extends Error {
+  constructor() {
+    super("Only the team's admins can manage its members.");
+    this.name = 'ActorNotAdminError';
+  }
+}
 
 type RemoveMemberResult =
   | { status: 'removed'; signedOut: boolean }
@@ -94,12 +104,18 @@ async function grantAccess(input: { teamId: TeamId; userId: UserId; access: Acce
     .where('user_id', '=', input.userId)
     .executeTakeFirst();
   await upsertMembership(db, input);
-  await afterAccessChange({ ...input, wasWrite: before?.access === 'write' });
+  await afterAccessChange({ ...input, wasWrite: before !== undefined && writes(before.access) });
+}
+
+/** Whether a stored membership level writes on the team: an admin does too. */
+function writes(stored: string): boolean {
+  return isAccess(stored) && meets(stored, 'write');
 }
 
 /**
- * A member who loses write access no longer holds a write list on the team, so
- * any write list they were the last to hold passes on, as when someone leaves.
+ * A member who loses write access (an admin or a write member made read-only)
+ * no longer holds a write list on the team, so any write list they were the
+ * last to hold passes on, as when someone leaves.
  * In the caller's transaction, when it has one, so the two commit together.
  */
 async function afterAccessChange(input: {
@@ -108,24 +124,30 @@ async function afterAccessChange(input: {
   access: Access;
   wasWrite: boolean;
 }): Promise<void> {
-  if (input.wasWrite && input.access !== 'write') {
+  if (input.wasWrite && !meets(input.access, 'write')) {
     await passOnWhatTheyHeld({ teamId: input.teamId, userId: input.userId, because: 'lost_write' });
   }
 }
 
 /**
- * Apply a change that may take write access away from a member, unless it
- * would leave the team with NOBODY holding write access — a team nobody can
- * administer cannot invite anybody back, so that is the one change with no
- * undo. The team's membership rows are locked for the check AND the write:
- * two admins demoting each other at once would otherwise each see the other
- * still standing and leave the team with none.
+ * Apply a change that may take admin away from a member, unless it would leave
+ * the team with NO admin — a team nobody can administer cannot invite anybody
+ * back, so that is the one change with no undo. The team's membership rows are
+ * locked for the check AND the write: two admins demoting each other at once
+ * would otherwise each see the other still standing and leave the team with
+ * none.
  */
 async function withoutLosingLastAdmin(input: {
   teamId: TeamId;
   userId: UserId;
-  /** Whether the target ends up without write access after `write`. */
-  losesWriteAccess: boolean;
+  /**
+   * The member making the change, when a person is: checked again under the
+   * lock, because a demotion committed since their first check would otherwise
+   * let them complete one more management act. Throws ActorNotAdminError.
+   */
+  actor?: UserId | undefined;
+  /** Whether the target ends up no longer an admin after `write`. */
+  losesAdmin: boolean;
   write: (db: MembershipDb) => Promise<void>;
 }): Promise<{ status: 'done'; wasWrite: boolean } | { status: 'not_a_member' } | { status: 'last_admin' }> {
   const run = async (db: MembershipDb) => {
@@ -136,16 +158,20 @@ async function withoutLosingLastAdmin(input: {
       .forUpdate()
       .execute();
 
+    if (input.actor !== undefined && memberships.find((m) => m.user_id === input.actor)?.access !== 'admin') {
+      throw new ActorNotAdminError();
+    }
+
     const target = memberships.find((m) => m.user_id === input.userId);
     if (!target) return { status: 'not_a_member' as const };
 
-    const admins = memberships.filter((m) => m.access === 'write');
-    if (target.access === 'write' && input.losesWriteAccess && admins.length === 1) {
+    const admins = memberships.filter((m) => m.access === 'admin');
+    if (target.access === 'admin' && input.losesAdmin && admins.length === 1) {
       return { status: 'last_admin' as const };
     }
 
     await input.write(db);
-    return { status: 'done' as const, wasWrite: target.access === 'write' };
+    return { status: 'done' as const, wasWrite: writes(target.access) };
   };
 
   const db = getCoreQb(['team_membership']);
@@ -157,11 +183,13 @@ async function changeAccess(input: {
   teamId: TeamId;
   userId: UserId;
   access: Access;
+  actor?: UserId | undefined;
 }): Promise<ChangeAccessResult> {
   const result = await withoutLosingLastAdmin({
     teamId: input.teamId,
     userId: input.userId,
-    losesWriteAccess: input.access !== 'write',
+    actor: input.actor,
+    losesAdmin: input.access !== 'admin',
     write: (db) => upsertMembership(db, input),
   });
   if (result.status !== 'done') return result;
@@ -182,6 +210,7 @@ async function addMember(input: {
   email: string;
   username: string;
   access: Access;
+  actor?: UserId | undefined;
 }): Promise<AddMemberResult> {
   const lower = input.email.toLowerCase().trim();
 
@@ -198,7 +227,7 @@ async function addMember(input: {
     id = existing.user_id;
     // Someone already on this team is changing access, and must not take the
     // team's last admin with them; anyone else simply joins.
-    const changed = await changeAccess({ teamId: input.teamId, userId: id, access: input.access });
+    const changed = await changeAccess({ teamId: input.teamId, userId: id, access: input.access, actor: input.actor });
     if (changed.status === 'last_admin') return changed;
     if (changed.status === 'not_a_member') {
       await grantAccess({ teamId: input.teamId, userId: id, access: input.access });
@@ -283,17 +312,19 @@ async function createServiceAccount(input: {
 }
 
 /**
- * Remove someone from a team. Refuses to take the LAST write-access member off
- * a team (see `withoutLosingLastAdmin`).
+ * Remove someone from a team. Refuses to take the LAST admin off a team (see
+ * `withoutLosingLastAdmin`).
  */
 async function removeMember(input: {
   teamId: TeamId;
   userId: UserId;
+  actor?: UserId | undefined;
 }): Promise<RemoveMemberResult> {
   const guarded = await withoutLosingLastAdmin({
     teamId: input.teamId,
     userId: input.userId,
-    losesWriteAccess: true,
+    actor: input.actor,
+    losesAdmin: true,
     write: async (db) => {
       await db
         .deleteFrom('team_membership')
@@ -350,6 +381,8 @@ async function removeMember(input: {
   });
   return { status: 'removed', signedOut: true };
 }
+
+export { ActorNotAdminError };
 
 export const TeamMembershipService = {
   grantAccess,

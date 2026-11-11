@@ -5,10 +5,13 @@
 // varies is what's listed under "Listens on" — a trigger, several, "On
 // demand" for a manual-only script, or nothing at all for one that only
 // runs when another script calls it. Clicking a row opens the saved script
-// in the editor.
+// in the editor. A team admin also sees the automations they may not read,
+// locked: such a row opens only who may reach it, where they can add
+// themselves.
 
+import { useState } from "react";
 import Link from "next/link";
-import { FileCode2, Plus } from "lucide-react";
+import { FileCode2, Lock, Plus } from "lucide-react";
 
 import { trpc, type RouterOutputs } from "@/lib/trpc";
 import { TAB_ORIGIN_ID } from "@/lib/tab-origin";
@@ -16,6 +19,8 @@ import { usePageTitle } from "@/components/page-title";
 import { ValidityBadge } from "@/components/movements/movement-workbench";
 import { LanguageVersionCell } from "@/components/movements/language-version";
 import { ONLY_YOU } from "@/components/access/access-panel-view";
+import { AccessPanel } from "@/components/access/access-panel";
+import { Modal } from "@/components/ontology/modal";
 import {
   Badge,
   ButtonLink,
@@ -25,7 +30,9 @@ import {
   PageIntro,
 } from "@/components/ui";
 
-type MovementListItem = RouterOutputs["views"]["movement"]["list"][number];
+type MovementListEntry = RouterOutputs["views"]["movement"]["list"][number];
+type MovementListItem = Extract<MovementListEntry, { locked: false }>;
+type LockedMovement = Extract<MovementListEntry, { locked: true }>;
 type MovementListener = MovementListItem["listeners"][number];
 function formatRelativeTime(date: string | Date) {
   const d = new Date(date);
@@ -148,10 +155,39 @@ function ListensOnCell({ movement }: { movement: MovementListItem }) {
   );
 }
 
-function AutomationsTable({ movements }: { movements: MovementListItem[] }) {
+/** An automation the viewer may not read, which as a team admin they see by name: it opens only its access. */
+function LockedRow({ movement, onOpen }: { movement: LockedMovement; onOpen: (movement: LockedMovement) => void }) {
+  return (
+    <tr className="transition-colors hover:bg-gray-50" data-testid="automation-locked">
+      <td className="py-0 pr-4" colSpan={5}>
+        <button
+          type="button"
+          onClick={() => onOpen(movement)}
+          title="You may not read this automation. As a team admin you can see and change who may."
+          className="flex cursor-pointer items-center gap-2 py-3 pl-4 text-left font-medium text-gray-500"
+        >
+          {movement.name}
+          <Badge tone="gray">
+            <Lock size={10} />
+            Locked
+          </Badge>
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+function AutomationsTable({
+  movements,
+  onOpenLocked,
+}: {
+  movements: MovementListEntry[];
+  onOpenLocked: (movement: LockedMovement) => void;
+}) {
   return (
     <MovementsTable columns={["Name", "Status", "Listens on", "Version", "Last run"]}>
       {movements.map((m) => {
+        if (m.locked) return <LockedRow key={m.id} movement={m} onOpen={onOpenLocked} />;
         const latest = mostRecentRun(m.listeners);
         return (
           <tr key={m.id} className="transition-colors hover:bg-gray-50">
@@ -176,6 +212,7 @@ export default function AutomationsPage() {
   usePageTitle("Automations — Listen-Fire");
 
   const { data: movements, isLoading } = trpc.views.movement.list.useQuery();
+  const [accessTarget, setAccessTarget] = useState<LockedMovement | null>(null);
 
   // A movement was saved or deleted elsewhere (another tab, or an agent over
   // MCP) — refresh the list so the
@@ -223,10 +260,19 @@ export default function AutomationsPage() {
               }
             />
           ) : (
-            <AutomationsTable movements={movements} />
+            <AutomationsTable movements={movements} onOpenLocked={setAccessTarget} />
           )}
         </div>
       </PageBody>
+      <Modal
+        isOpen={accessTarget !== null}
+        onClose={() => setAccessTarget(null)}
+        title={accessTarget === null ? "Access" : `Who may reach ${accessTarget.name}`}
+      >
+        <div className="p-5">
+          {accessTarget !== null && <AccessPanel thing="automation" id={accessTarget.id} />}
+        </div>
+      </Modal>
     </div>
   );
 }

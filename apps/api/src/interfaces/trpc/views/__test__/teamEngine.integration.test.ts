@@ -1,5 +1,5 @@
 // The team's engine on its settings page, against a REAL DB: any member reads
-// it; only a member with write access switches it, and only on their own team.
+// it; only a team admin switches it, and only on their own team.
 
 import { randomUUID } from 'node:crypto';
 
@@ -12,7 +12,7 @@ import { readTeamEngine } from '../../../../services/lf_engine/team_engine';
 import { trpc } from '../../trpc';
 import { teamEngineRouter } from '../teamEngine';
 
-type Actor = { userId: string; teamId: TeamId; access: 'read' | 'write' };
+type Actor = { userId: string; teamId: TeamId; access: 'read' | 'write' | 'admin' };
 
 function callerFor() {
   return teamEngineRouter(trpc.procedure).createCaller({ authorise: async () => {} });
@@ -34,15 +34,17 @@ function actingAs<T>(actor: Actor, fn: (caller: ReturnType<typeof callerFor>) =>
 let teamId: TeamId;
 let otherTeamId: TeamId;
 let admin: Actor;
+let writer: Actor;
 let reader: Actor;
 let outsider: Actor;
 
 beforeEach(() => {
   teamId = randomUUID() as TeamId;
   otherTeamId = randomUUID() as TeamId;
-  admin = { userId: randomUUID(), teamId, access: 'write' };
+  admin = { userId: randomUUID(), teamId, access: 'admin' };
+  writer = { userId: randomUUID(), teamId, access: 'write' };
   reader = { userId: randomUUID(), teamId, access: 'read' };
-  outsider = { userId: randomUUID(), teamId: otherTeamId, access: 'write' };
+  outsider = { userId: randomUUID(), teamId: otherTeamId, access: 'admin' };
 });
 
 afterEach(async () => {
@@ -54,7 +56,7 @@ describe("the team's engine on its settings page", () => {
     expect(await actingAs(reader, (c) => c.get())).toEqual({ ok: { engine: 'platform', changedAt: null, changedBy: null } });
   });
 
-  it('a member with write access switches it, and is recorded as the one who did', async () => {
+  it('a team admin switches it, and is recorded as the one who did', async () => {
     expect(await actingAs(admin, (c) => c.set({ engine: 'lf' }))).toEqual({ ok: { engine: 'lf', changed: true, notes: [] } });
     const read = await actingAs(reader, (c) => c.get());
     expect(read).toEqual({ ok: { engine: 'lf', changedAt: expect.any(String), changedBy: admin.userId } });
@@ -63,8 +65,8 @@ describe("the team's engine on its settings page", () => {
     expect((await readTeamEngine(teamId)).engine).toBe('platform');
   });
 
-  it('a read-only member is refused, and the setting does not move', async () => {
-    const refused = await actingAs(reader, (c) => c.set({ engine: 'lf' }));
+  it.each(['reader', 'writer'] as const)('a %s is refused, and the setting does not move', async (who) => {
+    const refused = await actingAs({ reader, writer }[who], (c) => c.set({ engine: 'lf' }));
     expect(refused).toEqual({ error: expect.objectContaining({ code: 'FORBIDDEN' }) });
     expect(await readTeamEngine(teamId)).toEqual({ engine: 'platform', changedAt: null, changedBy: null });
   });

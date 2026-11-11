@@ -5,11 +5,15 @@
 // A statement sits beside team membership, never in place of it. The database
 // pool already holds a read member to reads, so membership caps every answer
 // and a statement only ever narrows what membership allows.
+//
+// A team's admins see that every thing on it exists and may change any of its
+// lists, but reading a file or using a connection still takes a list that
+// admits them: an admin who wants in adds themselves, where the list shows it.
 
 import { logger } from 'movement-engine/public/log';
 import { neverAsAny } from 'movement-engine/public/types';
 
-import type { Access, Principal } from 'principal';
+import { meets, narrower, type Access, type Principal } from 'principal';
 
 import { isLfEngineTeam } from '../lf_engine/team_engine';
 import { StatementStore, type AskedVerb, type Grantee, type StatedVerb, type Target, type Thing, type Verb } from './statement';
@@ -37,15 +41,6 @@ class StatementRefusedError extends Error {
 
 /** Who the principal is on one team: its access there, and the user a grant may name. */
 type Standing = { access: Access; userId: string | undefined };
-
-function narrower(a: Access, b: Access): Access {
-  return a === 'write' && b === 'write' ? 'write' : 'read';
-}
-
-/** Whether team access `held` is at least `needed`. */
-function meets(held: Access, needed: Access): boolean {
-  return needed === 'read' || held === 'write';
-}
 
 /**
  * The principal's standing on each of these teams it may act in at all. A user
@@ -147,7 +142,7 @@ async function accessTo<T extends Thing>(
 }
 
 /** The verb that lets a thing be seen in a list. */
-function seenBy(thing: Thing): Verb {
+function seenBy(thing: Thing): AskedVerb<Thing> {
   switch (thing) {
     case 'automation':
       return 'read';
@@ -190,23 +185,53 @@ function changedBy(thing: Thing): AskedVerb<Thing> {
   }
 }
 
+/** How the principal may change a thing's statement: through a list that admits them, or as an admin of its team. */
+type ChangeRight = 'listed' | 'admin';
+
 /**
- * Whether the principal may change this thing's statement: whoever may write
- * the automation or use the connection, and only while they may write on the
- * team, since changing a statement is a write. A thing with nothing stated
- * about it at all is being created, so any write member may state it.
+ * How the principal may change this thing's statement, or undefined when they
+ * may not: whoever may write the automation or use the connection, and only
+ * while they may write on the team, since changing a statement is a write; and
+ * a team admin, any thing's on their team. A thing with nothing stated about it
+ * at all is being created, so any write member may state it.
  */
-async function mayChange(principal: Principal, target: Target, teamId: string): Promise<boolean> {
+async function changeRight(principal: Principal, target: Target, teamId: string): Promise<ChangeRight | undefined> {
   const standing = (await standingsIn(principal, [teamId])).get(teamId);
-  if (standing?.access !== 'write') return false;
-  if (!(await StatementStore.hasAnyStatement(target))) return true;
-  return accessTo<Thing>(principal, { target, verb: changedBy(target.thing) });
+  if (standing === undefined || !meets(standing.access, 'write')) return undefined;
+  if (!(await StatementStore.hasAnyStatement(target))) return 'listed';
+  if (await accessTo<Thing>(principal, { target, verb: changedBy(target.thing) })) return 'listed';
+  return standing.access === 'admin' ? 'admin' : undefined;
+}
+
+async function mayChange(principal: Principal, target: Target, teamId: string): Promise<boolean> {
+  return (await changeRight(principal, target, teamId)) !== undefined;
 }
 
 /** Whether the principal may change this thing's statement; never for a thing that does not exist. */
 async function mayChangeStatement(principal: Principal, target: Target): Promise<boolean> {
   const teamId = await StatementStore.teamOf(target);
   return teamId !== undefined && mayChange(principal, target, teamId);
+}
+
+/** Of these teams, the ones the principal is an admin of: there they see that every thing exists. */
+async function administered(principal: Principal, teamIds: readonly string[]): Promise<Set<string>> {
+  const standings = await standingsIn(principal, teamIds);
+  return new Set([...standings].filter(([, standing]) => standing.access === 'admin').map(([teamId]) => teamId));
+}
+
+/** Whether the principal is an admin of the team this thing belongs to; never for a thing that does not exist. */
+async function adminOf(principal: Principal, target: Target): Promise<boolean> {
+  const teamId = await StatementStore.teamOf(target);
+  return teamId !== undefined && (await administered(principal, [teamId])).has(teamId);
+}
+
+/**
+ * Whether the principal may see who may reach this thing: whoever may see the
+ * thing itself, and an admin of its team, who sees every thing's lists there
+ * though not its content. Never for a thing that does not exist.
+ */
+async function maySeeStatement(principal: Principal, target: Target): Promise<boolean> {
+  return (await accessTo<Thing>(principal, { target, verb: seenBy(target.thing) })) || adminOf(principal, target);
 }
 
 /**
@@ -351,7 +376,8 @@ function listFor(verb: Verb, grantees: readonly Grantee[]): Grantee[] {
  * Replace one verb's whole list on one thing. A list is never emptied, every
  * user it names must be able to hold it (on the thing's team, and a write
  * member for the write list), and only someone who may change the statement
- * may replace it.
+ * may replace it. A change an admin makes by their power alone, on a thing no
+ * list let them change, is logged with who made it.
  */
 async function setStatement<T extends Thing>(
   principal: Principal,
@@ -362,14 +388,30 @@ async function setStatement<T extends Thing>(
   if (teamId === undefined) {
     throw new StatementRefusedError('not_found', `There is no such ${target.thing}.`);
   }
-  if (!(await mayChange(principal, target, teamId))) {
+  const right = await changeRight(principal, target, teamId);
+  if (right === undefined) {
     throw new StatementRefusedError(
       'not_allowed',
-      `Only someone who may ${changedBy(target.thing)} this ${target.thing} can change who may ${verb} it.`,
+      `Only someone who may ${changedBy(target.thing)} this ${target.thing}, or a team admin, can change who may ${verb} it.`,
     );
   }
   const list = await checkedList(teamId, { verb, grantees });
   await StatementStore.replaceGrants(target, { teamId, verb, grantees: list });
+  switch (right) {
+    case 'listed':
+      return;
+    case 'admin':
+      logger.info('[access] a team admin changed a list on a thing no list let them change', {
+        teamId,
+        actor: principal.userId?.toLowerCase(),
+        thing: target.thing,
+        thingId: target.id,
+        verb,
+      });
+      return;
+    default:
+      return neverAsAny(right);
+  }
 }
 
 /**
@@ -425,7 +467,7 @@ async function checkCreation(
 ): Promise<void> {
   const { teamId, statements } = asked;
   const standing = (await standingsIn(principal, [teamId])).get(teamId);
-  if (standing?.access !== 'write') {
+  if (standing === undefined || !meets(standing.access, 'write')) {
     throw new StatementRefusedError('not_allowed', 'Only someone with write access on the team can create an automation.');
   }
   const write = await checkedList(teamId, { verb: 'write', grantees: statements.write });
@@ -465,7 +507,7 @@ async function checkConnectionCreation(
   asked: { teamId: string; use: readonly Grantee[] },
 ): Promise<void> {
   const standing = (await standingsIn(principal, [asked.teamId])).get(asked.teamId);
-  if (standing?.access !== 'write') {
+  if (standing === undefined || !meets(standing.access, 'write')) {
     throw new StatementRefusedError('not_allowed', 'Only someone with write access on the team can create a connection.');
   }
   const use = await checkedList(asked.teamId, { verb: 'use', grantees: asked.use });
@@ -561,9 +603,9 @@ function reasonOf(because: StandingChange): string {
 /**
  * Called once a member has left a team or lost write access on it, with their
  * membership already changed. Every list that names them and now admits nobody
- * passes to the team's write members, by name, so nothing is left that nobody
- * on the team can reach; to the whole team when it has no write member left.
- * Each hand on is logged.
+ * passes to the team's admins, by name, so nothing is left that nobody on the
+ * team can reach; to the whole team when it has no admin left. Each hand on is
+ * logged.
  */
 async function passOnWhatTheyHeld(input: {
   teamId: string;
@@ -572,22 +614,22 @@ async function passOnWhatTheyHeld(input: {
 }): Promise<void> {
   const { teamId, because } = input;
   const userId = input.userId.toLowerCase();
-  let writers: string[] | undefined;
+  let admins: string[] | undefined;
   for (const { target, verb } of await StatementStore.listsNaming({ teamId, userId })) {
     const grantees = await StatementStore.grantsOf(target, { teamId, verb });
     if (await stillHeld(teamId, { verb, grantees })) continue;
-    writers ??= (await StatementStore.writeMembersOf(teamId)).filter((writer) => writer !== userId);
+    admins ??= (await StatementStore.adminsOf(teamId)).filter((admin) => admin !== userId);
     const heirs: Grantee[] =
-      writers.length > 0 ? writers.map((writer) => ({ kind: 'user', userId: writer })) : [{ kind: 'team' }];
+      admins.length > 0 ? admins.map((admin) => ({ kind: 'user', userId: admin })) : [{ kind: 'team' }];
     await StatementStore.replaceGrants(target, { teamId, verb, grantees: heirs });
-    logger.info(`[access] a list’s last holder ${reasonOf(because)}; it passes to the team’s write members`, {
+    logger.info(`[access] a list’s last holder ${reasonOf(because)}; it passes to the team’s admins`, {
       teamId,
       userId,
       because,
       thing: target.thing,
       thingId: target.id,
       verb,
-      to: writers.length > 0 ? writers : 'team',
+      to: admins.length > 0 ? admins : 'team',
     });
   }
 }
@@ -597,6 +639,9 @@ export {
   readableIds,
   setStatement,
   mayChangeStatement,
+  maySeeStatement,
+  adminOf,
+  administered,
   seenOnlyBy,
   checkCreation,
   stateCreation,

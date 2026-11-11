@@ -1,4 +1,5 @@
 import * as db from '@prisma/client';
+import type { Access } from 'principal';
 
 import type { UserId } from '../generated/kysely/core/User';
 import type { TeamId } from '../generated/kysely/core/Team';
@@ -9,7 +10,7 @@ import { getCoreQb } from '../lib/kysely';
 /**
  * Flat team-membership access. `team_membership(user_id, team_id, access)` is
  * the single source of truth for which teams a user can act in and at what
- * level ('read' | 'write'). It replaced the legacy
+ * level ('read' | 'write' | 'admin'). It replaced the legacy
  * user_role -> role -> role_permission -> permission RBAC chain.
  */
 class Permission {
@@ -31,7 +32,7 @@ class Permission {
   }: {
     userId: string;
     teamId: string;
-    access: 'read' | 'write';
+    access: Access;
   }): Promise<db.TeamMembership> {
     const row = await getCoreQb(['team_membership'])
       .insertInto('team_membership')

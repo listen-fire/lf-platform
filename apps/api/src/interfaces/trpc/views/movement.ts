@@ -116,7 +116,7 @@ import { reportedFailureReason } from '../../../services/translation_graph/runs/
 import { UserService } from '../../../services/user';
 import { movementEventsImpl, type MovementEventItem } from '../../../services/inbound/arrival_ledger';
 import { userProcedure as sharedUserProcedure } from '../procedures';
-import { EXEMPT, USE_CONNECTION, decidesEach, readableAmong, unseen, type Decision } from '../../access_route';
+import { EXEMPT, USE_CONNECTION, decidesEach, readableAmong, seenAmong, unseen, type Decision } from '../../access_route';
 import { cannotChange } from '../access';
 import { Whose } from '../../../services/access/whose';
 
@@ -298,12 +298,16 @@ type MovementListenerWithRun = MovementListenerInfo & {
 
 /** List rows carry the file's text-derived facets + who imports it. */
 type MovementListItemResponse = Omit<MovementListItem, 'listeners'> & {
+  locked: false;
   /** How many other files import this one. */
   usedBy: number;
   listeners: MovementListenerWithRun[];
   /** Whether only the caller may see it. */
   onlyYou: boolean;
 };
+
+/** An automation a team admin may not read, shown by its name alone: its lists are its access panel's. */
+type LockedMovementListItem = { locked: true; id: string; name: string };
 
 /**
  * How the editor treats a pin. `kind`: whose checker lints it (`legacy`: the
@@ -680,14 +684,16 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
         return storyViewForMovement({ teamId: ctx.user.teamId, id: input.id });
       }),
 
-    list: userProcedure.query(async (): Promise<MovementListItemResponse[]> => {
+    list: userProcedure.query(async (): Promise<(MovementListItemResponse | LockedMovementListItem)[]> => {
       const ctx = currentContext();
       const teamId = ctx.user.teamId as TeamId;
       const [listed, rows] = await Promise.all([
         listMovements(teamId),
         listMovementRows(teamId),
       ]);
-      const items = await readableAmong(listed, { automationOf: (item) => item.id, teamIds: [teamId] });
+      // An admin is shown every automation on the team; the ones they may not read, by name alone.
+      const seen = await seenAmong(listed, { thing: 'automation', idOf: (item) => item.id, teamId });
+      const items = seen.flatMap(({ item, locked }) => (locked ? [] : [item]));
       // Who imports a file counts only the importers the caller may read.
       const readable = new Set(items.map((item) => item.id));
       const usage = movementUsageIndex(rows.filter((row) => readable.has(row.id)));
@@ -698,18 +704,23 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
         seenOnlyBy(currentPrincipal(), { thing: 'automation', teamId, ids: items.map((item) => item.id) }),
       ]);
 
-      return items.map((item) => ({
-        ...item,
-        usedBy: usage.get(item.name)?.length ?? 0,
-        onlyYou: onlyYours.has(item.id),
-        listeners: item.listeners.map((l) => ({
-          ...l,
-          lastRun: (() => {
-            const run = latestRuns.get(l.triggerId);
-            return run ? { ...run, lane: l.name } : null;
-          })(),
-        })),
-      }));
+      return seen.map(({ item, locked }): MovementListItemResponse | LockedMovementListItem =>
+        locked
+          ? { locked: true, id: item.id, name: item.name }
+          : {
+              ...item,
+              locked: false,
+              usedBy: usage.get(item.name)?.length ?? 0,
+              onlyYou: onlyYours.has(item.id),
+              listeners: item.listeners.map((l) => ({
+                ...l,
+                lastRun: (() => {
+                  const run = latestRuns.get(l.triggerId);
+                  return run ? { ...run, lane: l.name } : null;
+                })(),
+              })),
+            },
+      );
     }),
 
     delete: userProcedure

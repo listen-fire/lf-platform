@@ -8,13 +8,14 @@
 //   1. team
 //   2. user            — granted_access_at + completed_registration_at stamped
 //   3. user_email       — primary email (the email -> user auth mapping)
-//   4. team_membership  — admin ('write') access
+//   4. team_membership  — 'admin' for a team's founder, 'write' by default
 //
 // Written in Kysely (`getQb`), not the authorised Prisma client: that client's
 // `team_membership.upsert` is a generated `notImplemented` stub, which is what
 // broke the original self-serve signup. Self-serve layers its trial grant +
 // waitlist flip on top of this; nothing account-shaped lives only there.
 
+import type { Access } from 'principal';
 import type { TeamId } from '../generated/kysely/core/Team';
 import type { UserId } from '../generated/kysely/core/User';
 
@@ -95,7 +96,7 @@ async function provisionUser({
   /** Human display name collected at signup (OAuth profile / form field). Stored
    *  on `user.name`; distinct from `username` (the email-local handle). */
   name?: string | null;
-  access?: 'read' | 'write';
+  access?: Access;
   /** Stamp `user.terms_accepted_at` — set by self-serve signup/login (which show
    *  the terms), left false for admin-provisioned accounts. */
   termsAccepted?: boolean;
@@ -182,6 +183,7 @@ async function provisionTeamWithAdmin({
     email: lower,
     username,
     name,
+    access: 'admin',
     termsAccepted,
     personal,
   });

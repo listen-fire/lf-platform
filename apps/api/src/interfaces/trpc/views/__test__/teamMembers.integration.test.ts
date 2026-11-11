@@ -1,12 +1,15 @@
 // The team's own member management against a REAL DB: the three rules that
 // keep a team manageable from its settings page.
 //
-//   • a per-member act only reaches people on the acting team;
-//   • the last write-access member cannot be demoted, as they cannot be removed;
+//   • only the team's admins manage it, and a per-member act only reaches
+//     people on the acting team;
+//   • the last admin cannot be demoted, as they cannot be removed;
 //   • adding an address that already has an account adds THAT account;
 //   • no address or number this team writes can open a door to another team.
 
 import { randomUUID } from 'node:crypto';
+
+import type { Access } from 'principal';
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { UserId } from '../../../../generated/kysely/core/User';
@@ -22,7 +25,7 @@ import { cleanupTeam } from '../../../../test/harness/cleanup';
 import { trpc } from '../../trpc';
 import { teamMembersRouter } from '../teamMembers';
 import { userManagementRouter } from '../admin/userManagement';
-import { TeamMembershipService } from '../../../../services/team_membership';
+import { ActorNotAdminError, TeamMembershipService } from '../../../../services/team_membership';
 
 async function makeTeam(): Promise<TeamId> {
   const teamId = randomUUID() as TeamId;
@@ -35,7 +38,7 @@ async function makeTeam(): Promise<TeamId> {
 
 async function makeUser(
   teamId: TeamId,
-  access: 'read' | 'write',
+  access: Access,
 ): Promise<{ userId: UserId; email: string }> {
   const email = `member-${randomUUID().slice(0, 8)}@example.com`;
   const { userId } = await ProvisioningService.provisionUser({ teamId, email, access });
@@ -91,7 +94,7 @@ describe('team members — managing the team from its own settings', () => {
   beforeEach(async () => {
     teamId = await makeTeam();
     otherTeamId = await makeTeam();
-    admin = await makeUser(teamId, 'write');
+    admin = await makeUser(teamId, 'admin');
   });
   afterEach(async () => {
     // Memberships of a user homed on the other team go with that team's users,
@@ -234,17 +237,46 @@ describe('team members — managing the team from its own settings', () => {
     }
   });
 
-  it('refuses to remove the last write-access member as PRECONDITION_FAILED', async () => {
+  it('refuses to remove the last admin as PRECONDITION_FAILED, however many write members there are', async () => {
+    await makeUser(teamId, 'write');
     expect(
       await refusalOf({ userId: admin.userId, teamId }, (c) => c.remove({ userId: admin.userId })),
     ).toMatchObject({ code: 'PRECONDITION_FAILED' });
-    expect(await accessOn(teamId, admin.userId)).toBe('write');
+    expect(await accessOn(teamId, admin.userId)).toBe('admin');
   });
 
-  it('passes what a removed member alone held to the team’s write members', async () => {
+  it('lets only an admin manage the team: a write member sees it, and is refused every change as FORBIDDEN', async () => {
+    const writer = await makeUser(teamId, 'write');
+    const reader = await makeUser(teamId, 'read');
+    const as = { userId: writer.userId, teamId };
+    const overview = await asMember(as, (c) => c.overview());
+    expect(overview.viewer).toEqual({ userId: writer.userId, access: 'write' });
+    expect(new Map(overview.members.map((m) => [m.userId, m.access])).get(admin.userId)).toBe('admin');
+
+    const email = `invited-${randomUUID().slice(0, 8)}@example.com`;
+    expect(await refusalOf(as, (c) => c.invite({ email }))).toMatchObject({ code: 'FORBIDDEN' });
+    expect(await refusalOf(as, (c) => c.addMember({ email, username: 'Nope', access: 'read' }))).toMatchObject({ code: 'FORBIDDEN' });
+    expect(await refusalOf(as, (c) => c.createServiceAccount({ email, access: 'read' }))).toMatchObject({ code: 'FORBIDDEN' });
+    expect(await refusalOf(as, (c) => c.setAccess({ userId: reader.userId, access: 'admin' }))).toMatchObject({ code: 'FORBIDDEN' });
+    expect(await refusalOf(as, (c) => c.setAccess({ userId: writer.userId, access: 'admin' }))).toMatchObject({ code: 'FORBIDDEN' });
+    expect(await refusalOf(as, (c) => c.remove({ userId: reader.userId }))).toMatchObject({ code: 'FORBIDDEN' });
+    expect(await refusalOf(as, (c) => c.rename({ userId: reader.userId, username: 'Renamed' }))).toMatchObject({ code: 'FORBIDDEN' });
+
+    await asMember({ userId: admin.userId, teamId }, (c) => c.invite({ email }));
+    const [invite] = (await asMember(as, (c) => c.overview())).invites;
+    if (invite === undefined) throw new Error('the admin’s invite is not listed');
+    expect(invite.email).toBe(email);
+    expect(await refusalOf(as, (c) => c.revokeInvite({ inviteId: invite.id }))).toMatchObject({ code: 'FORBIDDEN' });
+
+    expect(await accessOn(teamId, writer.userId)).toBe('write');
+    expect(await accessOn(teamId, reader.userId)).toBe('read');
+  });
+
+  it('passes what a removed member alone held to the team’s admins', async () => {
     const leaver = await makeUser(teamId, 'write');
-    // On the team but not a write member, so never an heir.
+    // On the team but not admins, so never heirs.
     await makeUser(teamId, 'read');
+    await makeUser(teamId, 'write');
     const deals: Target<'automation'> = { thing: 'automation', id: randomUUID() };
     await getAutomationsQb(['movement'])
       .insertInto('movement')
@@ -332,7 +364,7 @@ describe('team members — managing the team from its own settings', () => {
     }
   });
 
-  it('passes a write list a demoted member alone held to the team’s write members, and keeps their read', async () => {
+  it('passes a write list a demoted member alone held to the team’s admins, and keeps their read', async () => {
     const demoted = await makeUser(teamId, 'write');
     const deals: Target<'automation'> = { thing: 'automation', id: randomUUID() };
     await getAutomationsQb(['movement'])
@@ -365,13 +397,14 @@ describe('team members — managing the team from its own settings', () => {
     ).toMatchObject({ code: 'FORBIDDEN' });
   });
 
-  it('refuses to demote the last write-access member, and allows it once there is another', async () => {
-    expect(
-      await refusalOf({ userId: admin.userId, teamId }, (c) =>
-        c.setAccess({ userId: admin.userId, access: 'read' }),
-      ),
-    ).toMatchObject({ code: 'PRECONDITION_FAILED' });
-    expect(await accessOn(teamId, admin.userId)).toBe('write');
+  it('refuses to demote the last admin, even to write, and allows it once there is another', async () => {
+    const writer = await makeUser(teamId, 'write');
+    for (const access of ['write', 'read'] as const) {
+      expect(
+        await refusalOf({ userId: admin.userId, teamId }, (c) => c.setAccess({ userId: admin.userId, access })),
+      ).toMatchObject({ code: 'PRECONDITION_FAILED' });
+    }
+    expect(await accessOn(teamId, admin.userId)).toBe('admin');
 
     // Re-adding an existing member is an access change, under the same rule.
     expect(
@@ -379,16 +412,40 @@ describe('team members — managing the team from its own settings', () => {
         c.addMember({ email: admin.email, username: 'ignored', access: 'read' }),
       ),
     ).toMatchObject({ code: 'PRECONDITION_FAILED' });
-    expect(await accessOn(teamId, admin.userId)).toBe('write');
+    expect(await accessOn(teamId, admin.userId)).toBe('admin');
 
-    const second = await makeUser(teamId, 'read');
     await asMember({ userId: admin.userId, teamId }, (c) =>
-      c.setAccess({ userId: second.userId, access: 'write' }),
+      c.setAccess({ userId: writer.userId, access: 'admin' }),
     );
     await asMember({ userId: admin.userId, teamId }, (c) =>
-      c.setAccess({ userId: admin.userId, access: 'read' }),
+      c.setAccess({ userId: admin.userId, access: 'write' }),
     );
-    expect(await accessOn(teamId, admin.userId)).toBe('read');
+    expect(await accessOn(teamId, admin.userId)).toBe('write');
+    expect(await accessOn(teamId, writer.userId)).toBe('admin');
+  });
+
+  it('refuses a change by an actor who was demoted after the first admin check, under the same lock', async () => {
+    const second = await makeUser(teamId, 'admin');
+    const victim = await makeUser(teamId, 'write');
+    // The demotion has committed; the actor's earlier check had already passed.
+    await TeamMembershipService.changeAccess({ teamId, userId: second.userId, access: 'write' });
+
+    const inContext = <T>(fn: () => Promise<T>) => {
+      const ctx = new Context();
+      ctx.bindPrincipal(userPrincipal({ userId: second.userId, teamId }));
+      return ctx.runAsync(() => fn().then((value) => value, (err: unknown) => err));
+    };
+
+    expect(await inContext(() => TeamMembershipService.removeMember({ teamId, userId: victim.userId, actor: second.userId }))).toBeInstanceOf(
+      ActorNotAdminError,
+    );
+    expect(
+      await inContext(() => TeamMembershipService.changeAccess({ teamId, userId: victim.userId, access: 'admin', actor: second.userId })),
+    ).toBeInstanceOf(ActorNotAdminError);
+    expect(await accessOn(teamId, victim.userId)).toBe('write');
+
+    // The same changes by a standing admin go through.
+    expect(await TeamMembershipService.removeMember({ teamId, userId: victim.userId, actor: admin.userId })).toMatchObject({ status: 'removed' });
   });
 
   it('adds an existing account by its address instead of creating a second one', async () => {

@@ -11,7 +11,7 @@ const card = (overrides: Partial<EngineCardProps>) =>
       engine: "platform",
       changedAt: null,
       changedByName: null,
-      canWrite: true,
+      canSwitch: true,
       confirming: false,
       busy: false,
       error: null,
@@ -52,8 +52,8 @@ describe("the team engine toggle", () => {
   });
 
   it("offers no switch to a read-only member", () => {
-    const readOnly = card({ canWrite: false, confirming: true });
-    expect(readOnly).toContain("Only members with full access can switch it.");
+    const readOnly = card({ canSwitch: false, confirming: true });
+    expect(readOnly).toContain("Only team admins can switch it.");
     expect(readOnly).not.toContain('data-testid="team-engine-switch"');
     expect(readOnly).not.toContain('data-testid="team-engine-confirm-yes"');
   });

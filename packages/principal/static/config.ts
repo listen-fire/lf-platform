@@ -106,8 +106,9 @@ function envFlag(env: Env, name: string): boolean {
 
 function envAccess(env: Env): Access {
   const raw = env.LISTEN_FIRE_ACCESS;
-  if (raw === undefined || raw === '') return 'write';
-  if (!isAccess(raw)) throw new Error(`LISTEN_FIRE_ACCESS must be "read" or "write" (got "${raw}").`);
+  // A static install has one operator, who is the whole team, so the default is its manager.
+  if (raw === undefined || raw === '') return 'admin';
+  if (!isAccess(raw)) throw new Error(`LISTEN_FIRE_ACCESS must be "read", "write" or "admin" (got "${raw}").`);
   return raw;
 }
 

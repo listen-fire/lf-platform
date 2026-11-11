@@ -10,7 +10,10 @@
 // list, and it must have asked the decision to get there. Again with read
 // alone stated for the caller: a read route answers as it does for the
 // automation, a list shows it, and a write route gives the read-only refusal.
-// Neither pass may reach what a write route changes.
+// Neither pass may reach what a write route changes. Then as an admin of the
+// team whom no list names: every route answers as for a missing name, except
+// the ones that read or change who may reach a thing, and the lists of
+// automations and connections, which show it locked, by name alone.
 
 import { EventEmitter } from 'node:events';
 
@@ -220,7 +223,18 @@ jest.mock('../../services/access/whose', () => {
   };
 });
 
-const mockPrincipal: Principal = { teamId: TEAM, userId: ALICE, access: 'write', scopes: ['*'], pinnedTeamId: null };
+/** The caller's level on its own team: a write member, unless a pass makes them an admin. */
+let mockAccess: Access = 'write';
+
+const mockPrincipal: Principal = {
+  teamId: TEAM,
+  userId: ALICE,
+  get access() {
+    return mockAccess;
+  },
+  scopes: ['*'],
+  pinnedTeamId: null,
+};
 
 jest.mock('../../services/context', () => ({
   ...jest.requireActual('../../services/context'),
@@ -1197,6 +1211,28 @@ function verbOf(route: string): 'read' | 'write' | undefined {
   return decision?.thing === 'automation' ? decision.verb : undefined;
 }
 
+/**
+ * The routes that, ahead of the automation they act on, need the team's admin
+ * (ruling 62): a write member is refused by the route itself, before any
+ * automation is asked about. Their automation decision is exercised as an admin.
+ */
+const ADMIN_FIRST = new Set(['views.triggers.showDeliveryRequest']);
+
+/** Run `call` at the level the route needs: an admin for an admin-first route, otherwise the pass's own. */
+async function atRouteLevel<T>(route: string, call: () => Promise<T>): Promise<T> {
+  if (!ADMIN_FIRST.has(route)) return call();
+  const [was, membership] = [mockAccess, mockState.members.get(`${TEAM}:${ALICE}`)];
+  mockAccess = 'admin';
+  mockState.members.set(`${TEAM}:${ALICE}`, 'admin');
+  try {
+    return await call();
+  } finally {
+    mockAccess = was;
+    if (membership === undefined) mockState.members.delete(`${TEAM}:${ALICE}`);
+    else mockState.members.set(`${TEAM}:${ALICE}`, membership);
+  }
+}
+
 describe('as a write member, on an automation whose statements name only someone else', () => {
   it('knows how to call every route that decides', () => {
     const restCovered = new Set([...restDecided, ...restUses].map((r) => r.key));
@@ -1231,7 +1267,7 @@ describe('as a write member, on an automation whose statements name only someone
   it.each(trpcDecided)('%s refuses it as it refuses a missing name, or leaves it out', async (name) => {
     const how = TRPC_CALLS[name];
     if (how === undefined) throw new Error(`no call for ${name}`);
-    const seen = await callTrpc(name, how.input(SEEDED));
+    const seen = await atRouteLevel(name, () => callTrpc(name, how.input(SEEDED)));
     expect(mockState.asked).toBeGreaterThan(0);
     expect(mentionsConnection(seen)).toBe(false);
     if (how.list) {
@@ -1241,7 +1277,7 @@ describe('as a write member, on an automation whose statements name only someone
     }
     mockState.automations = [];
     mockState.things = new Map();
-    const missing = await callTrpc(name, how.input(MISSING));
+    const missing = await atRouteLevel(name, () => callTrpc(name, how.input(MISSING)));
     expect(seen).toEqual(asIfSeeded(missing));
     if (seen.status === 'thrown') expect(JSON.stringify(seen.body)).toMatch(/not(\s+be)?[\s_]found/i);
     expect(effectsReached()).toEqual([]);
@@ -1281,7 +1317,7 @@ describe('as a write member who may only read the automation', () => {
   it.each(trpcDecided)('%s reads it, or gives the read-only refusal', async (name) => {
     const how = TRPC_CALLS[name];
     if (how === undefined) throw new Error(`no call for ${name}`);
-    const seen = await callTrpc(name, how.input(SEEDED));
+    const seen = await atRouteLevel(name, () => callTrpc(name, how.input(SEEDED)));
     expect(mentionsConnection(seen)).toBe(false);
     if (verbOf(name) === 'write') {
       expect(seen).toEqual({ status: 'thrown', body: { code: 'FORBIDDEN', message: READ_ONLY_MESSAGE } });
@@ -1289,7 +1325,7 @@ describe('as a write member who may only read the automation', () => {
     } else if (how.list) {
       expect(mentionsSeeded(seen)).toBe(true);
     } else {
-      expect(seen).not.toEqual(await missingAnswer(() => callTrpc(name, how.input(MISSING))));
+      expect(seen).not.toEqual(await missingAnswer(() => atRouteLevel(name, () => callTrpc(name, how.input(MISSING)))));
     }
   });
 });
@@ -1416,6 +1452,172 @@ describe('as a write member who may use the connection', () => {
     const how = TRPC_CONNECTION_CALLS[name];
     if (how === undefined) throw new Error(`no call for ${name}`);
     await granted((refs) => callTrpc(name, how.ask(refs)), how);
+  });
+});
+
+/** The routes that read or change who may reach a thing, which a team admin reaches on any thing of the team. */
+const ADMIN_REACHES_LISTS = new Set(['views.access.get', 'views.access.set', 'POST /v1/automation/access']);
+
+/** The lists of automations and connections, which show a team admin every one on the team: the ones they may not reach, locked. */
+const ADMIN_SEES_LOCKED = new Set([
+  'views.movement.list',
+  'GET /v1/automation/automations',
+  'views.connections.getAll',
+  'GET /v1/automation/connections',
+]);
+
+/** The locked entry a list shows for this id, if any: an object carrying `locked: true`, wherever it sits in the answer. */
+function lockedEntry(body: unknown, id: string): Record<string, unknown> | undefined {
+  if (Array.isArray(body)) {
+    for (const item of body) {
+      const found = lockedEntry(item, id);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  }
+  if (body === null || typeof body !== 'object') return undefined;
+  const entries = Object.entries(body);
+  const record = Object.fromEntries(entries);
+  if (record.id === id && record.locked === true) return record;
+  for (const [, value] of entries) {
+    const found = lockedEntry(value, id);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
+/** What a locked entry may say: its name and where it lives, nothing of its content. */
+const LOCKED_KEYS = ['locked', 'id', 'name', 'teamId', 'teamName'];
+
+/**
+ * Over MCP a locked entry also carries its lists (setAccess replaces a list whole, so an admin must
+ * read it first to add themselves); the web's access panel serves that purpose there.
+ */
+function lockedKeysFor(key: string): string[] {
+  return key.startsWith('GET ') ? [...LOCKED_KEYS, 'access'] : LOCKED_KEYS;
+}
+
+/** The lists a locked entry carries over MCP, and nothing of its content. */
+function expectListsOnly(entry: Record<string, unknown> | undefined, key: string, verbs: string[]): void {
+  if (!key.startsWith('GET ')) return;
+  const access = entry?.access;
+  expect(access).toBeDefined();
+  expect(Object.keys(access ?? {}).sort()).toEqual([...verbs, 'mayChange', 'onlyYou'].sort());
+}
+
+describe('as a team admin whom no list names', () => {
+  beforeEach(() => {
+    mockAccess = 'admin';
+    mockState.members.set(`${TEAM}:${ALICE}`, 'admin');
+  });
+  afterEach(() => {
+    mockAccess = 'write';
+  });
+
+  async function asAdmin(asked: { key: string; call: (refs: Refs) => Promise<Outcome>; list: boolean }): Promise<void> {
+    const seen = await asked.call(SEEDED);
+    expect(mockState.asked).toBeGreaterThan(0);
+    expect(seen.status).not.toBe(500);
+    expect(mentionsConnection(seen)).toBe(false);
+    if (ADMIN_REACHES_LISTS.has(asked.key)) {
+      expect(seen.status).toBe(200);
+      expect(mentionsSeeded(seen) || JSON.stringify(seen.body).includes('"lists"')).toBe(true);
+      return;
+    }
+    if (asked.list) {
+      expect(seen.status).toBe(200);
+      if (!ADMIN_SEES_LOCKED.has(asked.key)) {
+        expect(mentionsSeeded(seen)).toBe(false);
+        return;
+      }
+      const entry = lockedEntry(seen.body, SEEDED.automationId);
+      expect(entry).toMatchObject({ locked: true, id: SEEDED.automationId, name: SEEDED.automationName });
+      expect(Object.keys(entry ?? {}).filter((field) => !lockedKeysFor(asked.key).includes(field))).toEqual([]);
+      expectListsOnly(entry, asked.key, ['read', 'write', 'fire']);
+      return;
+    }
+    mockState.automations = [];
+    mockState.things = new Map();
+    const missing = await asked.call(MISSING);
+    expect(seen).toEqual(asIfSeeded(missing));
+    expect(effectsReached()).toEqual([]);
+  }
+
+  it.each(restDecided.map((r) => [r.key, r.handler] as const))('%s answers as for a missing name, unless it is about who may reach it', async (key, handler) => {
+    const how = REST_CALLS[key];
+    if (how === undefined) throw new Error(`no call for ${key}`);
+    await asAdmin({ key, call: (refs) => callRest(handler, how.call(refs)), list: how.list === true });
+  });
+
+  it.each(trpcDecided)('%s answers as for a missing name, unless it is about who may reach it', async (name) => {
+    const how = TRPC_CALLS[name];
+    if (how === undefined) throw new Error(`no call for ${name}`);
+    await asAdmin({ key: name, call: (refs) => callTrpc(name, how.input(refs)), list: how.list === true });
+  });
+
+  it('changes an automation’s lists it is not on, and then reads it', async () => {
+    const changed = await callTrpc('views.access.set', TRPC_CALLS['views.access.set']?.input(SEEDED));
+    expect(changed).toMatchObject({ status: 200, body: { ok: true } });
+    expect(effectsReached()).toContain('write:access_statement');
+    const read = await callTrpc('views.movement.get', TRPC_CALLS['views.movement.get']?.input(SEEDED));
+    expect(mentionsSeeded(read)).toBe(true);
+  });
+
+  it('changes the list of the readable automation of that name in another team, not the locked one it can only administer', async () => {
+    mockState.teams = [TEAM, OTHER_TEAM];
+    mockState.automations.push({ id: SECOND_DEALS, teamId: OTHER_TEAM, name: SEEDED.automationName });
+    statesOnly(SECOND_DEALS, OTHER_TEAM, { kind: 'user', userId: ALICE });
+    const set = restRoutes.find((route) => route.key === 'POST /v1/automation/access');
+    if (set === undefined) throw new Error('setAccess is not mounted');
+    const answer = await callRest(set.handler, { body: { automation: SEEDED.automationName, verb: 'read', grantees: [{ kind: 'team' }] } });
+    expect(answer.status).toBe(200);
+    const readers = (id: string) => mockState.rows.filter((r) => r.target.id === id && r.verb === 'read').map((r) => r.grantee);
+    expect(readers(SECOND_DEALS)).toEqual([{ kind: 'team' }]);
+    expect(readers(SEEDED.automationId)).toEqual([{ kind: 'user', userId: BOB }]);
+  });
+
+  async function asAdminOnConnection(asked: { key: string; call: (refs: ConnectionRefs) => Promise<Outcome>; how: ConnectionCall<unknown> }): Promise<void> {
+    const { key, how } = asked;
+    const seen = await asked.call(CONNECTION);
+    expect(mockState.asked).toBeGreaterThan(0);
+    expect(seen.status).not.toBe(500);
+    if (ADMIN_REACHES_LISTS.has(key)) {
+      expect(seen.status).toBe(200);
+      if (how.effect !== undefined) expect(effectsReached()).toContain(how.effect);
+      return;
+    }
+    expect(effectsReached()).toEqual([]);
+    if (how.list) {
+      expect(seen.status).toBe(200);
+      if (!ADMIN_SEES_LOCKED.has(key)) {
+        expect(mentionsConnection(seen)).toBe(false);
+        return;
+      }
+      const entry = lockedEntry(seen.body, CONNECTION.connectionId);
+      expect(entry).toMatchObject({ locked: true, id: CONNECTION.connectionId, name: CONNECTION.connectionName });
+      expect(Object.keys(entry ?? {}).filter((field) => !lockedKeysFor(key).includes(field))).toEqual([]);
+      expectListsOnly(entry, key, ['use']);
+      return;
+    }
+    if (how.refusal !== undefined) {
+      expect(JSON.stringify(seen.body)).toMatch(how.refusal);
+      return;
+    }
+    withoutConnection();
+    const missing = await asked.call(NO_CONNECTION);
+    expect(seen).toEqual(asIf(missing, { from: NO_CONNECTION, to: CONNECTION }));
+  }
+
+  it.each(restUses.map((r) => [r.key, r.handler] as const))('%s answers for a connection as for a missing one, unless it is about who may use it', async (key, handler) => {
+    const how = REST_CONNECTION_CALLS[key];
+    if (how === undefined) throw new Error(`no call for ${key}`);
+    await asAdminOnConnection({ key, call: (refs) => callRest(handler, how.ask(refs)), how });
+  });
+
+  it.each(trpcUses)('%s answers for a connection as for a missing one, unless it is about who may use it', async (name) => {
+    const how = TRPC_CONNECTION_CALLS[name];
+    if (how === undefined) throw new Error(`no call for ${name}`);
+    await asAdminOnConnection({ key: name, call: (refs) => callTrpc(name, how.ask(refs)), how });
   });
 });
 

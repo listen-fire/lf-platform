@@ -49,7 +49,7 @@ import {
   mintTelegramToken,
   telegramStartUrl,
 } from '../../../services/translation_graph/adapters/telegram/handshake';
-import { USE_CONNECTION, connectionUnseen, decidesEach, readableAmong, usableAmong } from '../../access_route';
+import { USE_CONNECTION, connectionUnseen, decidesEach, readableAmong, seenAmong } from '../../access_route';
 import { seenOnlyBy } from '../../../services/access/decide';
 import { GranteesInput } from '../../../services/access/stated_input';
 import { useForNewConnection } from './connection_creation';
@@ -59,6 +59,7 @@ import { useForNewConnection } from './connection_creation';
 const DEV_FIXTURE_NAME_RE = /^(Test |Dev Loop |Mock )/i;
 
 export type ConnectionsIntegration = {
+  locked: false;
   id: string;
   name: string;
   type: string;
@@ -82,6 +83,9 @@ export type ConnectionsIntegration = {
   onlyYou: boolean;
 };
 
+/** A connection a team admin may not use, shown by its name alone: its list is its access panel's. */
+export type LockedConnection = { locked: true; id: string; name: string };
+
 export type ConnectionsSourceChannel = {
   /** Stable key matching the trigger.kind for this built-in receiver. */
   kind: string;
@@ -99,7 +103,7 @@ export type ConnectionsCustomRow = {
 };
 
 export type ConnectionsPayload = {
-  integrations: ConnectionsIntegration[];
+  integrations: (ConnectionsIntegration | LockedConnection)[];
   sourceChannels: ConnectionsSourceChannel[];
   custom: ConnectionsCustomRow[];
 };
@@ -305,14 +309,18 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
           // shows exactly what the language resolves, the team's own modules
           // (`#acme_crm`) among them.
           teamAdapterManifests(teamId, []),
-          // Only names the rows below; the one filter on what the page lists is `usableAmong`, and a
+          // Only names the rows below; the one filter on what the page lists is `seenAmong`, and a
           // row's import name is its own, so a row left out here is never looked up.
           loadCredentialRows(teamId, { for: 'run' }),
           listRemoteAdapters({ teamId }),
         ]);
       // The page shows the connections the caller may use, and the listens of
-      // the automations they may read.
-      const credentialRows = await usableAmong(teamCredentialRows, { connectionOf: (c) => c.id, teamIds: [teamId] });
+      // the automations they may read; an admin also sees every other
+      // connection on the team, by name alone.
+      const seenCredentials = (
+        await seenAmong(teamCredentialRows, { thing: 'connection', idOf: (c) => String(c.id), teamId })
+      ).filter(({ item }) => isProd || !DEV_FIXTURE_NAME_RE.test(item.name));
+      const credentialRows = seenCredentials.flatMap(({ item, locked }) => (locked ? [] : [item]));
       const triggerRows = await readableAmong(teamTriggerRows, { automationOf: (t) => t.movement_id, teamIds: [teamId] });
       const onlyYours = await seenOnlyBy(currentPrincipal(), {
         thing: 'connection',
@@ -338,33 +346,33 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
         installsBySecretId.set(secretId, [...(installsBySecretId.get(secretId) ?? []), install.adapter_type]);
       }
 
-      const integrations: ConnectionsIntegration[] = credentialRows
-        .filter((c) => isProd || !DEV_FIXTURE_NAME_RE.test(c.name))
-        .map((c) => {
-          const credId = c.id as unknown as string;
-          // A credential's automations are the triggers bound to it (a
-          // movement listens to its credentialed source). Read/write
-          // attribution lived in TG bodies (retired, kill-tg phase 6) and
-          // now lives in the movement source, so it isn't cheaply derivable
-          // here; report the binding as a read.
-          const boundTriggers = triggerRows
-            .filter((t) => (t.credentials_id as unknown as string | null) === credId)
-            .map((t) => t.id as unknown as string);
-          return {
-            id: credId,
-            name: c.name,
-            type: c.type,
-            reads: boundTriggers.length > 0,
-            writes: false,
-            automationCount: boundTriggers.length,
-            importNames: (importedByCredentialId.get(credId) ?? []).map(({ name }) => name),
-            connectLines: connectLinesOf({
-              imported: importedByCredentialId.get(credId) ?? [],
-              secretOf: installsBySecretId.get(credId) ?? [],
-            }),
-            onlyYou: onlyYours.has(credId),
-          };
-        });
+      const integrations = seenCredentials.map(({ item: c, locked }): ConnectionsIntegration | LockedConnection => {
+        const credId = c.id as unknown as string;
+        if (locked) return { locked: true, id: credId, name: c.name };
+        // A credential's automations are the triggers bound to it (a
+        // movement listens to its credentialed source). Read/write
+        // attribution lived in TG bodies (retired, kill-tg phase 6) and
+        // now lives in the movement source, so it isn't cheaply derivable
+        // here; report the binding as a read.
+        const boundTriggers = triggerRows
+          .filter((t) => (t.credentials_id as unknown as string | null) === credId)
+          .map((t) => t.id as unknown as string);
+        return {
+          locked: false,
+          id: credId,
+          name: c.name,
+          type: c.type,
+          reads: boundTriggers.length > 0,
+          writes: false,
+          automationCount: boundTriggers.length,
+          importNames: (importedByCredentialId.get(credId) ?? []).map(({ name }) => name),
+          connectLines: connectLinesOf({
+            imported: importedByCredentialId.get(credId) ?? [],
+            secretOf: installsBySecretId.get(credId) ?? [],
+          }),
+          onlyYou: onlyYours.has(credId),
+        };
+      });
 
       // Model A: `trigger.kind` is the adapter slug now. Resolving every
       // first-class kind to its canonical slug lets one membership test cover

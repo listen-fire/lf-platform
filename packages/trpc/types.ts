@@ -1,3 +1,4 @@
+import * as zod from 'zod';
 import { Arrival } from 'engine-contracts';
 import { CapturedWrite } from 'movement-engine/public/adapter';
 import * as _prisma_client_runtime_library from '@prisma/client/runtime/library';
@@ -1842,6 +1843,7 @@ export type ConnectKind = 'oauth' | 'key-entry' | 'intrinsic' | 'handshake' | 'i
 export type ConnectMethod = Exclude<ConnectKind, 'item-picker'> | 'app-only';
 
 export type ConnectionsIntegration = {
+    locked: false;
     id: string;
     name: string;
     type: string;
@@ -1864,6 +1866,12 @@ export type ConnectionsIntegration = {
     /** Whether only the caller may use it. */
     onlyYou: boolean;
 };
+/** A connection a team admin may not use, shown by its name alone: its list is its access panel's. */
+export type LockedConnection = {
+    locked: true;
+    id: string;
+    name: string;
+};
 export type ConnectionsSourceChannel = {
     /** Stable key matching the trigger.kind for this built-in receiver. */
     kind: string;
@@ -1879,7 +1887,7 @@ export type ConnectionsCustomRow = {
     configSummary: string;
 };
 export type ConnectionsPayload = {
-    integrations: ConnectionsIntegration[];
+    integrations: (ConnectionsIntegration | LockedConnection)[];
     sourceChannels: ConnectionsSourceChannel[];
     custom: ConnectionsCustomRow[];
 };
@@ -1953,7 +1961,6 @@ export type LlmUsageId = string & {
     __brand: 'public.llm_usage';
 };
 
-export type Access = 'read' | 'write';
 export type CreatedMember = {
     id: UserId;
     username: string;
@@ -2844,13 +2851,13 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     };
                     _input_in: {
                         teamId: string;
-                        access: "read" | "write";
+                        access: "read" | "write" | "admin";
                         email: string;
                         username: string;
                     };
                     _input_out: {
                         teamId: string;
-                        access: "read" | "write";
+                        access: "read" | "write" | "admin";
                         email: string;
                         username: string;
                     };
@@ -2880,12 +2887,12 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     };
                     _input_in: {
                         teamId: string;
-                        access: "read" | "write";
+                        access: "read" | "write" | "admin";
                         email: string;
                     };
                     _input_out: {
                         teamId: string;
-                        access: "read" | "write";
+                        access: "read" | "write" | "admin";
                         email: string;
                     };
                     _output_in: typeof _trpc_server.unsetMarker;
@@ -2911,19 +2918,19 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     _input_in: {
                         userId: string;
                         teamId: string;
-                        access: "read" | "write";
+                        access: "read" | "write" | "admin";
                     };
                     _input_out: {
                         userId: string;
                         teamId: string;
-                        access: "read" | "write";
+                        access: "read" | "write" | "admin";
                     };
                     _output_in: typeof _trpc_server.unsetMarker;
                     _output_out: typeof _trpc_server.unsetMarker;
                 }, {
                     username: string;
                     teamName: string;
-                    access: "read" | "write";
+                    access: "read" | "write" | "admin";
                 }>;
                 addEmailToUser: _trpc_server.BuildProcedure<"mutation", {
                     _config: _trpc_server.RootConfig<{
@@ -3079,13 +3086,13 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     _input_in: {
                         userEmail: string;
                         newTeamId: string;
-                        access: "read" | "write";
+                        access: "read" | "write" | "admin";
                         newUsername?: string | undefined;
                     };
                     _input_out: {
                         userEmail: string;
                         newTeamId: string;
-                        access: "read" | "write";
+                        access: "read" | "write" | "admin";
                         newUsername?: string | undefined;
                     };
                     _output_in: typeof _trpc_server.unsetMarker;
@@ -9231,12 +9238,17 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _input_out: typeof _trpc_server.unsetMarker;
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
-            }, (Omit<MovementListItem, "listeners"> & {
+            }, ((Omit<MovementListItem, "listeners"> & {
+                locked: false;
                 usedBy: number;
                 listeners: (MovementListenerInfo & {
                     lastRun: MovementRunItem | null;
                 })[];
                 onlyYou: boolean;
+            }) | {
+                locked: true;
+                id: string;
+                name: string;
             })[]>;
             delete: _trpc_server.BuildProcedure<"mutation", {
                 _config: _trpc_server.RootConfig<{
@@ -13181,7 +13193,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
             }, {
                 viewer: {
                     userId: UserId;
-                    access: "read" | "write";
+                    access: "read" | "write" | "admin";
                 };
                 members: {
                     userId: UserId;
@@ -13192,7 +13204,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         isPrimary: boolean;
                     }[];
                     phoneNumber: string | null;
-                    access: "read" | "write";
+                    access: "read" | "write" | "admin";
                     isServiceAccount: boolean;
                     soleTeam: boolean;
                     platformAdmin: boolean;
@@ -13304,12 +13316,12 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _input_in: {
                     email: string;
                     username: string;
-                    access: "read" | "write";
+                    access: "read" | "write" | "admin";
                 };
                 _input_out: {
                     email: string;
                     username: string;
-                    access: "read" | "write";
+                    access: "read" | "write" | "admin";
                 };
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
@@ -13336,11 +13348,11 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 };
                 _input_in: {
                     email: string;
-                    access: "read" | "write";
+                    access: "read" | "write" | "admin";
                 };
                 _input_out: {
                     email: string;
-                    access: "read" | "write";
+                    access: "read" | "write" | "admin";
                 };
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
@@ -13364,16 +13376,20 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 };
                 _input_in: {
                     userId: string;
-                    access: "read" | "write";
+                    access: "read" | "write" | "admin";
                 };
                 _input_out: {
                     userId: string;
-                    access: "read" | "write";
+                    access: "read" | "write" | "admin";
                 };
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
             }, {
-                access: Access;
+                access: zod.infer<zod.ZodEnum<{
+                    read: "read";
+                    write: "write";
+                    admin: "admin";
+                }>>;
             }>;
             rename: _trpc_server.BuildProcedure<"mutation", {
                 _config: _trpc_server.RootConfig<{

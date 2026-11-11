@@ -81,9 +81,9 @@ jest.mock('../statement', () => {
             .filter(([key]) => key.startsWith(`${teamId}:`))
             .map(([key, access]) => [key.slice(teamId.length + 1), access] as const),
         ),
-      writeMembersOf: async (teamId: string) =>
+      adminsOf: async (teamId: string) =>
         mockTable.memberSince
-          .filter((key) => key.startsWith(`${teamId}:`) && mockTable.members.get(key) === 'write')
+          .filter((key) => key.startsWith(`${teamId}:`) && mockTable.members.get(key) === 'admin')
           .map((key) => key.slice(teamId.length + 1)),
     },
   };
@@ -96,10 +96,13 @@ jest.mock('../../lf_engine/team_engine', () => ({
 
 import {
   accessTo,
+  administered,
+  adminOf,
   checkConnectionCreation,
   checkCreation,
   stateAtCreation,
   mayChangeStatement,
+  maySeeStatement,
   membersAdmitted,
   passOnWhatTheyHeld,
   seenOnlyBy,
@@ -501,11 +504,11 @@ describe('mayChangeStatement', () => {
 });
 
 describe('passOnWhatTheyHeld, when a member leaves the team', () => {
-  it('passes a verb they were the last named holder of to the team’s write members, and logs it', async () => {
+  it('passes a verb they were the last named holder of to the team’s admins, and logs it', async () => {
     const info = jest.spyOn(logger, 'info').mockImplementation(() => undefined);
     member(TEAM, ALICE, 'write');
-    member(TEAM, BOB, 'write');
-    member(TEAM, CAROL, 'read');
+    member(TEAM, BOB, 'admin');
+    member(TEAM, CAROL, 'write');
     stated(DEALS, 'read', [user(ALICE)]);
     stated(DEALS, 'write', [user(ALICE), user(BOB)]);
     stated(FINANCE, 'use', [user(ALICE)]);
@@ -528,7 +531,7 @@ describe('passOnWhatTheyHeld, when a member leaves the team', () => {
   it('counts a named holder who already left as nobody', async () => {
     jest.spyOn(logger, 'info').mockImplementation(() => undefined);
     member(TEAM, ALICE, 'write');
-    member(TEAM, BOB, 'write');
+    member(TEAM, BOB, 'admin');
     stated(DEALS, 'read', [user(ALICE), user(CAROL)]);
 
     leaves(TEAM, ALICE);
@@ -539,7 +542,7 @@ describe('passOnWhatTheyHeld, when a member leaves the team', () => {
   it('counts a read member on a write list as nobody who can write', async () => {
     jest.spyOn(logger, 'info').mockImplementation(() => undefined);
     member(TEAM, ALICE, 'write');
-    member(TEAM, BOB, 'write');
+    member(TEAM, BOB, 'admin');
     member(TEAM, CAROL, 'read');
     stated(DEALS, 'write', [user(ALICE), user(CAROL)]);
 
@@ -551,7 +554,7 @@ describe('passOnWhatTheyHeld, when a member leaves the team', () => {
   it('finds what a leaver held whatever case their id arrives in', async () => {
     jest.spyOn(logger, 'info').mockImplementation(() => undefined);
     member(TEAM, ALICE, 'write');
-    member(TEAM, BOB, 'write');
+    member(TEAM, BOB, 'admin');
     stated(DEALS, 'read', [user(ALICE)]);
 
     leaves(TEAM, ALICE);
@@ -570,9 +573,10 @@ describe('passOnWhatTheyHeld, when a member leaves the team', () => {
     expect(listOf(DEALS, 'fire')).toEqual([user(ALICE), { kind: 'domain', domain: 'acme.com' }]);
   });
 
-  it('gives it to the team when the team has no write members left', async () => {
+  it('gives it to the team when the team has no admin left, however many write members it has', async () => {
     jest.spyOn(logger, 'info').mockImplementation(() => undefined);
-    member(TEAM, ALICE, 'write');
+    member(TEAM, ALICE, 'admin');
+    member(TEAM, BOB, 'write');
     member(TEAM, CAROL, 'read');
     stated(DEALS, 'read', [user(ALICE)]);
 
@@ -583,10 +587,10 @@ describe('passOnWhatTheyHeld, when a member leaves the team', () => {
 });
 
 describe('passOnWhatTheyHeld, when a member loses write access', () => {
-  it('passes a write list they alone held to the remaining write members, and keeps what they still hold', async () => {
+  it('passes a write list they alone held to the team’s admins, and keeps what they still hold', async () => {
     const info = jest.spyOn(logger, 'info').mockImplementation(() => undefined);
-    member(TEAM, ALICE, 'write');
-    member(TEAM, BOB, 'write');
+    member(TEAM, ALICE, 'admin');
+    member(TEAM, BOB, 'admin');
     stated(DEALS, 'write', [user(ALICE)]);
     stated(DEALS, 'read', [user(ALICE)]);
     stated(FINANCE, 'use', [user(ALICE)]);
@@ -606,12 +610,102 @@ describe('passOnWhatTheyHeld, when a member loses write access', () => {
 
   it('gives the write list to the team when nobody on it has write access any more', async () => {
     jest.spyOn(logger, 'info').mockImplementation(() => undefined);
-    member(TEAM, ALICE, 'write');
+    member(TEAM, ALICE, 'admin');
     stated(DEALS, 'write', [user(ALICE)]);
 
     mockTable.members.set(`${TEAM}:${ALICE}`, 'read');
     await passOnWhatTheyHeld({ teamId: TEAM, userId: ALICE, because: 'lost_write' });
     expect(listOf(DEALS, 'write')).toEqual([team]);
+  });
+});
+
+describe('a team admin', () => {
+  beforeEach(() => {
+    member(TEAM, ALICE, 'admin');
+    member(TEAM, BOB, 'write');
+    member(TEAM, CAROL, 'read');
+    stated(DEALS, 'write', [user(BOB)]);
+    stated(DEALS, 'read', [user(BOB)]);
+    stated(DEALS, 'fire', [{ kind: 'anyone' }]);
+    stated(FINANCE, 'use', [user(BOB)]);
+  });
+
+  it('sees that a thing exists and who may reach it, but not its content, unless a list admits them', async () => {
+    expect(await administered(person(ALICE), [TEAM, OTHER_TEAM])).toEqual(new Set([TEAM]));
+    expect(await adminOf(person(ALICE), DEALS)).toBe(true);
+    expect(await maySeeStatement(person(ALICE), DEALS)).toBe(true);
+    expect(await maySeeStatement(person(ALICE), FINANCE)).toBe(true);
+    expect(await accessTo(person(ALICE), { target: DEALS, verb: 'read' })).toBe(false);
+    expect(await accessTo(person(ALICE), { target: FINANCE, verb: 'use' })).toBe(false);
+    expect(await readableIds(person(ALICE), { thing: 'automation', teamIds: [TEAM] })).toEqual(new Set());
+  });
+
+  it('may change any list on the team, and once on it, reads the thing; the change is logged with who made it', async () => {
+    const info = jest.spyOn(logger, 'info').mockImplementation(() => undefined);
+    expect(await mayChangeStatement(person(ALICE), DEALS)).toBe(true);
+    await setStatement(person(ALICE), { target: DEALS, verb: 'read', grantees: [user(BOB), user(ALICE)] });
+    expect(listOf(DEALS, 'read')).toEqual([user(BOB), user(ALICE)]);
+    expect(await accessTo(person(ALICE), { target: DEALS, verb: 'read' })).toBe(true);
+    expect(await accessTo(person(ALICE), { target: DEALS, verb: 'write' })).toBe(false);
+    expect(info).toHaveBeenCalledWith(
+      expect.stringContaining('a team admin changed a list'),
+      expect.objectContaining({ teamId: TEAM, actor: ALICE, thing: 'automation', thingId: DEALS.id, verb: 'read' }),
+    );
+
+    await setStatement(person(ALICE), { target: FINANCE, verb: 'use', grantees: [team] });
+    expect(await accessTo(person(ALICE), { target: FINANCE, verb: 'use' })).toBe(true);
+  });
+
+  it('logs nothing of its own when a list already let them change it', async () => {
+    const info = jest.spyOn(logger, 'info').mockImplementation(() => undefined);
+    stated(NOTES, 'write', [user(ALICE)]);
+    await setStatement(person(ALICE), { target: NOTES, verb: 'read', grantees: [team] });
+    expect(info).not.toHaveBeenCalled();
+  });
+
+  it('holds everything a write member does: a team grant on the write list admits them', async () => {
+    stated(NOTES, 'write', [team]);
+    expect(await accessTo(person(ALICE), { target: NOTES, verb: 'write' })).toBe(true);
+    await setStatement(person(BOB), { target: DEALS, verb: 'write', grantees: [user(BOB), user(ALICE)] });
+    expect(listOf(DEALS, 'write')).toEqual([user(BOB), user(ALICE)]);
+  });
+
+  it('is no power of a write or read member, nor of an admin on another team or through a read-only credential', async () => {
+    member(OTHER_TEAM, BOB, 'admin');
+    expect(await maySeeStatement(person(CAROL), DEALS)).toBe(false);
+    expect(await mayChangeStatement(person(CAROL), DEALS)).toBe(false);
+    stated(NOTES, 'read', [user(ALICE)]);
+    stated(NOTES, 'write', [user(ALICE)]);
+    expect(await maySeeStatement(person(BOB), NOTES)).toBe(false);
+    expect(await mayChangeStatement(person(BOB), NOTES)).toBe(false);
+    await expect(setStatement(person(BOB), { target: NOTES, verb: 'read', grantees: [team] })).rejects.toMatchObject({ refusal: 'not_allowed' });
+    expect(await administered(person(BOB), [TEAM, OTHER_TEAM])).toEqual(new Set([OTHER_TEAM]));
+    const readOnlyKey = person(ALICE, { access: 'read', pinnedTeamId: TEAM });
+    expect(await administered(readOnlyKey, [TEAM])).toEqual(new Set());
+    expect(await maySeeStatement(readOnlyKey, DEALS)).toBe(false);
+    expect(await mayChangeStatement(readOnlyKey, DEALS)).toBe(false);
+  });
+
+  it('is never counted as one who sees a thing: "only you" stays about the lists alone', async () => {
+    expect(await seenOnlyBy(person(BOB), { thing: 'automation', teamId: TEAM, ids: [DEALS.id] })).toEqual(new Set([DEALS.id]));
+    expect(await seenOnlyBy(person(ALICE), { thing: 'automation', teamId: TEAM, ids: [DEALS.id] })).toEqual(new Set());
+  });
+
+  it('must still be on the write list of an automation they create, and the use list of a connection', async () => {
+    await expect(
+      checkCreation(person(ALICE), { teamId: TEAM, statements: { read: [user(BOB)], write: [user(BOB)], fire: [{ kind: 'anyone' }] } }),
+    ).rejects.toMatchObject({ refusal: 'not_allowed' });
+    await expect(checkConnectionCreation(person(ALICE), { teamId: TEAM, use: [user(BOB)] })).rejects.toMatchObject({ refusal: 'not_allowed' });
+    await expect(
+      checkCreation(person(ALICE), { teamId: TEAM, statements: { read: [team], write: [user(ALICE)], fire: [{ kind: 'anyone' }] } }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('cannot see or change what does not exist', async () => {
+    const missing: Target<'automation'> = { thing: 'automation', id: 'd0000000-0000-4000-8000-00000000dead' };
+    expect(await maySeeStatement(person(ALICE), missing)).toBe(false);
+    expect(await mayChangeStatement(person(ALICE), missing)).toBe(false);
+    expect(await adminOf(person(ALICE), missing)).toBe(false);
   });
 });
 
