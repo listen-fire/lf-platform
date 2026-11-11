@@ -4,16 +4,19 @@
 // field that may be absent. The catalog offers it on each landing of a module
 // that reports who acted (`graftActorField`), and the door writes it into each
 // arrival before the arrival is judged or logged (`withActors`), so a filter,
-// a run and a wait read one answer.
+// a run and a wait read one answer. A run's read of it is the platform's to
+// answer (`answeringActor`), since the module never described it.
 
 import { isDeepStrictEqual } from 'node:util';
 
+import { isCurrent } from '@listen-fire/language-versions';
 import { memberPlans, normalisedActor, type ActorCandidate, type ActorIdentity, type Arrival, type AwaitLanding, type NormalisedActor } from 'engine-contracts';
+import { positionData } from 'movement-engine/public/catalog';
 import { arrivalTriggerOf } from 'movement-engine/public/inbound';
 import { logger } from 'movement-engine/public/log';
 
 import type { Adapter } from 'movement-engine/public/adapter';
-import type { InstanceSchema, PositionSchema, ResolveFile, SchemaFieldType } from 'movement-lang';
+import type { CatalogSnapshot, InstanceSchema, LanguageVersion, PositionSchema, ResolveFile, SchemaFieldType } from 'movement-lang';
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { DeliveredBy, SavedListen } from './listen_door';
 
@@ -116,10 +119,12 @@ function declaresOwnActor(position: PositionSchema): boolean {
  * which no projection writes: a saved listen whose field ids name it was
  * planned over this offer, and the door reads that. A position nobody has
  * described is left alone, since nothing says it has no `Actor` of its own.
+ * Only a program pinned to the current version is offered it: a pinned
+ * program must not see a change, and its run reads what its check read.
  */
-export function graftActorField(input: { adapterType: string; methods: readonly string[]; schema: InstanceSchema }): InstanceSchema {
+export function graftActorField(input: { adapterType: string; methods: readonly string[]; schema: InstanceSchema; languageVersion: LanguageVersion }): InstanceSchema {
   const { schema } = input;
-  if (!reportsWhoActed(input.methods)) return schema;
+  if (!isCurrent(input.languageVersion) || !reportsWhoActed(input.methods)) return schema;
   const named = schema.positions[ACTOR_TYPE];
   if (named !== undefined && !isOfferedType(named)) {
     sayTypeTaken(input.adapterType);
@@ -141,6 +146,52 @@ export function graftActorField(input: { adapterType: string; methods: readonly 
   }
   if (positions === schema.positions) return schema;
   return { ...schema, positions: { ...positions, [ACTOR_TYPE]: ACTOR_POSITION } };
+}
+
+// ── The run ─────────────────────────────────────────────────────────────────
+
+/** The catalog a run was checked against, and the connection each credential
+ *  import name in it is. */
+export interface CheckedCatalog {
+  snapshot: CatalogSnapshot;
+  credentialIds: Record<string, string>;
+}
+
+/** The schemas `catalog` holds for one instance: its module's, under each
+ *  import name of its connection, at every entry position. */
+function instanceSchemas(catalog: CheckedCatalog, instance: { adapterType: string; credentialsId?: string }): InstanceSchema[] {
+  const names =
+    instance.credentialsId === undefined
+      ? ['']
+      : Object.entries(catalog.credentialIds).flatMap(([name, id]) => (id === instance.credentialsId ? [name] : []));
+  const schemas = catalog.snapshot.adapters[instance.adapterType]?.schemas ?? {};
+  return Object.entries(schemas).flatMap(([key, schema]) => (names.some((name) => key === name || key.startsWith(`${name}::`)) ? [schema] : []));
+}
+
+/**
+ * `adapter` answering a read of `Actor` itself, from what the door wrote, on
+ * each record type the catalog the run was checked against offers it on: the
+ * module never described it, and a module resolving field names refuses one it
+ * does not know. A record reached by reading has none. A module's own `Actor`
+ * is never offered, so it stays the module's to read, and a catalog offering
+ * nothing (a pin before the offer) leaves the module as it is.
+ */
+export function answeringActor(adapter: Adapter, input: { catalog: CheckedCatalog; adapterType: string; credentialsId?: string }): Adapter {
+  const offered = new Set(
+    instanceSchemas(input.catalog, input).flatMap((schema) =>
+      Object.entries(schema.positions).flatMap(([name, position]) => (isOffered(position.properties[ACTOR]) ? [name] : [])),
+    ),
+  );
+  if (offered.size === 0) return adapter;
+  const read = adapter.getFieldValue;
+  const answering: Adapter = Object.create(adapter);
+  answering.getFieldValue = async (call) => {
+    const { position, fieldId } = call;
+    if (fieldId !== ACTOR || position.recordType === null || !offered.has(position.recordType)) return read.call(adapter, call);
+    const data = positionData(position);
+    return (typeof data === 'object' && data !== null ? Reflect.get(data, ACTOR) : undefined) ?? null;
+  };
+  return answering;
 }
 
 // ── The door ────────────────────────────────────────────────────────────────

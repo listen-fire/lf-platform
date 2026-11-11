@@ -286,7 +286,8 @@ export function staticCatalogFromManifests(
       // STUB — construction arguments are ignored; see module header for
       // the real per-credential seam.
       // `Actor` as a team's catalog offers it, so a text checked here checks there.
-      const offer = (schema: InstanceSchema) => graftActorField({ adapterType: adapterName, methods: manifests.get(adapterName)?.methods ?? [], schema });
+      const offer = (schema: InstanceSchema) =>
+        graftActorField({ adapterType: adapterName, methods: manifests.get(adapterName)?.methods ?? [], schema, languageVersion: LANGUAGE_VERSION });
       const schema = options.instanceSchemas?.[adapterName] ?? THIN_INSTANCE_SCHEMAS[adapterName];
       if (schema === undefined) {
         const unit = UNIT_SCHEMAS[adapterName];
@@ -998,10 +999,11 @@ async function assembleTeamCatalog(
 
   // Who acted: the platform's own field on each landing of a module that
   // reports one (inbound/actors.ts). Last, so a position the passes above
-  // grafted is offered it too; the door writes what it reads.
+  // grafted is offered it too; the door writes what it reads, and the run
+  // reads what this offered (`answeringActor`).
   for (const [key, projection] of schemaByAdapterAndCred) {
     const [slug = ''] = key.split('::');
-    const schema = graftActorField({ adapterType: slug, methods: manifestBySlug.get(slug)?.methods ?? [], schema: projection.schema });
+    const schema = graftActorField({ adapterType: slug, methods: manifestBySlug.get(slug)?.methods ?? [], schema: projection.schema, languageVersion: rootPin });
     if (schema !== projection.schema) schemaByAdapterAndCred.set(key, { ...projection, schema });
   }
 

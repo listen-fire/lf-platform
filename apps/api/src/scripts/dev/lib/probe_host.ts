@@ -8,16 +8,20 @@ import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { EngineHost } from 'movement-engine/public/host';
 import type { LiveAdapterResolver } from 'movement-engine/public/host';
 import type { DryRunWriteSink } from 'movement-engine/public/adapter';
+import type { CheckedCatalog } from '../../../services/inbound/actors';
 
 import { productionEngineHost } from '../../../services/translation_graph/movement/engine_host';
 
 export function probeEngineHost(input: {
   teamId: TeamId;
+  /** The catalog the probe runs against, as a run's host is handed its own. */
+  catalog: CheckedCatalog;
   resolve: LiveAdapterResolver;
   writeSink?: DryRunWriteSink;
 }): EngineHost {
   return productionEngineHost({
     teamId: input.teamId,
+    catalog: input.catalog,
     resolveLive: input.resolve,
     // The probe's credential ids name no vault row: its adapters ignore them.
     credentials: { belongsTo: () => true },

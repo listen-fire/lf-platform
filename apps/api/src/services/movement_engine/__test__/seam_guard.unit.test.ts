@@ -1545,6 +1545,7 @@ describe('the production host crosses as JSON', () => {
     const host = roundTripHost(
       productionEngineHost({
         teamId: ROUND_TRIP_TEAM,
+        catalog: { snapshot: manifestCatalog, credentialIds: { acme_main: 'cred-attio-1' } },
         resolveLive: ({ adapterType }) =>
           adapterType === 'email'
             ? createEmailAdapter({ teamId: ROUND_TRIP_TEAM })

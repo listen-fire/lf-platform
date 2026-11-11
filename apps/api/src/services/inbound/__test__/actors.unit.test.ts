@@ -11,10 +11,11 @@
 import { randomUUID } from 'node:crypto';
 
 import { LANGUAGE_VERSION, checkSourceInRust, parseProgram, type CatalogSnapshot, type InstanceSchema } from 'movement-lang';
-import { instanceSchemaFromDescriptors } from 'movement-engine/public/catalog';
+import { instanceSchemaFromDescriptors, makeStablePosition } from 'movement-engine/public/catalog';
 import { logger } from 'movement-engine/public/log';
 
 import type { ActorCandidate, Arrival } from 'engine-contracts';
+import type { Adapter } from 'movement-engine/public/adapter';
 import type { SchemaTypeDescriptor } from 'engine-contracts/catalog';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
@@ -38,7 +39,7 @@ import { resolveAdapter as resolveAdapterImport } from '../../translation_graph/
 import { lookupTeamUserByEmail as lookupTeamUserByEmailImport } from '../../translation_graph/adapters/acting_user_shared';
 import { plannedListensOfSource } from '../../translation_graph/movement/listen_plans';
 import { invocationArrival } from '../../translation_graph/adapters/manual';
-import { ACTOR, ACTOR_TYPE, automationReadsActor, graftActorField, withActors } from '../actors';
+import { ACTOR, ACTOR_TYPE, answeringActor, automationReadsActor, graftActorField, withActors } from '../actors';
 import { judgeArrivals, type SavedListen } from '../listen_door';
 
 const getAutomationsQb = getAutomationsQbImport as jest.Mock;
@@ -87,7 +88,7 @@ async function listenOver(schema: InstanceSchema, where: string, fire: SavedList
   return { ...planned, triggerId: randomUUID() as TriggerId, teamId: TEAM, file: 'chat.lf', credentialsId: null, fire };
 }
 
-const offered = () => graftActorField({ adapterType: 'chat', methods: REPORTS, schema: chatSchema() });
+const offered = () => graftActorField({ adapterType: 'chat', methods: REPORTS, schema: chatSchema(), languageVersion: LANGUAGE_VERSION });
 
 /** A message from Slack user `U1`, whom the source system vouched for. */
 function posted(user = 'U1'): Exclude<Arrival, { gone: true }> {
@@ -149,7 +150,7 @@ describe('graftActorField', () => {
     const base = chatSchema();
     const before = JSON.stringify(base);
 
-    graftActorField({ adapterType: 'chat', methods: REPORTS, schema: base });
+    graftActorField({ adapterType: 'chat', methods: REPORTS, schema: base, languageVersion: LANGUAGE_VERSION });
 
     expect(JSON.stringify(base)).toEqual(before);
   });
@@ -157,16 +158,63 @@ describe('graftActorField', () => {
   it('offers nothing on a module that reports nobody', () => {
     const base = chatSchema();
 
-    expect(graftActorField({ adapterType: 'chat', methods: ['getFieldValue'], schema: base })).toBe(base);
+    expect(graftActorField({ adapterType: 'chat', methods: ['getFieldValue'], schema: base, languageVersion: LANGUAGE_VERSION })).toBe(base);
   });
 
   it('offers nothing on a landing with an Actor of its own', () => {
     const base = chatSchema(message([TEXT, { fieldId: 'fldActor', displayName: 'Actor', kind: 'string', writable: false, required: false }]));
 
-    const schema = graftActorField({ adapterType: 'chat', methods: REPORTS, schema: base });
+    const schema = graftActorField({ adapterType: 'chat', methods: REPORTS, schema: base, languageVersion: LANGUAGE_VERSION });
 
     expect(schema).toBe(base);
     expect(schema.positions.Message?.properties[ACTOR]).toBe('text');
+  });
+
+  it.each(['4', '0.12.13'])('offers nothing to a program pinned to %s, which must not see a change', (pin) => {
+    const base = chatSchema();
+
+    expect(graftActorField({ adapterType: 'chat', methods: REPORTS, schema: base, languageVersion: pin })).toBe(base);
+  });
+});
+
+describe('answeringActor', () => {
+  /** A module that knows only `Text`, refusing any other name as drift. */
+  const module = (): Adapter => ({
+    adapterType: 'chat',
+    supportedTriggers: ['webhook'],
+    runtimeCapabilities: () => ({ traversal: { incoming: false, edgeProperties: false }, resources: false }),
+    listEntryPoints: async () => [],
+    describe: async () => null,
+    resolveEntity: async () => ({ candidates: [] }),
+    getFieldValue: async ({ fieldId }) => {
+      if (fieldId === 'Text') return 'hi';
+      throw new Error(`'${fieldId}' is not a known field of 'Message' in this connection — its schema has changed (drift).`);
+    },
+    getRelated: async () => [],
+    createRecord: async () => ({ adapterType: 'chat', externalId: 'x', data: {} }),
+    updateRecord: async (input) => ({ adapterType: 'chat', externalId: input.externalId, data: {}, association: 'none' }),
+    deleteRecord: async () => ({}),
+  });
+  const landed = makeStablePosition({ adapterType: 'chat', recordType: 'Message', recordId: 'm1', data: { text: 'hi', [ACTOR]: { Id: 'U1', Member: true } } });
+  /** The catalog a run of a program pinned to `pin` was checked against, on the connection `acme`. */
+  const checkedFor = (pin: string) => ({
+    snapshot: { adapters: { chat: { constructionArgs: [], schemas: { acme: graftActorField({ adapterType: 'chat', methods: REPORTS, schema: chatSchema(), languageVersion: pin }) } } }, credentials: {}, plugins: {} },
+    credentialIds: { acme: 'cred-1' },
+  });
+
+  it('answers Actor from what the door wrote where the catalog offered it, and asks the module everything else', async () => {
+    const answering = answeringActor(module(), { catalog: checkedFor(LANGUAGE_VERSION), adapterType: 'chat', credentialsId: 'cred-1' });
+
+    await expect(answering.getFieldValue({ position: landed, fieldId: ACTOR })).resolves.toEqual({ Id: 'U1', Member: true });
+    await expect(answering.getFieldValue({ position: { ...landed, identity: { kind: 'stable', recordId: 'm2', data: { text: 'hi' } } }, fieldId: ACTOR })).resolves.toBeNull();
+    await expect(answering.getFieldValue({ position: landed, fieldId: 'Text' })).resolves.toBe('hi');
+  });
+
+  it('leaves the module as it is on another connection, and for a pin the catalog offered nothing to', () => {
+    const chat = module();
+
+    expect(answeringActor(chat, { catalog: checkedFor(LANGUAGE_VERSION), adapterType: 'chat', credentialsId: 'cred-2' })).toBe(chat);
+    expect(answeringActor(chat, { catalog: checkedFor('4'), adapterType: 'chat', credentialsId: 'cred-1' })).toBe(chat);
   });
 });
 
@@ -336,6 +384,7 @@ describe('withActors', () => {
       adapterType: 'chatlog',
       methods: REPORTS,
       schema: chatSchema(message([TEXT, { fieldId: 'fldActor', displayName: 'Actor', kind: 'string', writable: false, required: false }])),
+      languageVersion: LANGUAGE_VERSION,
     });
     // Nothing stated, which is not anyone.
     const listen = { ...(await listenOver(own, 'm.Text == "hi"', [])), fieldIds: { Message: { Actor: 'fldActor' } } };

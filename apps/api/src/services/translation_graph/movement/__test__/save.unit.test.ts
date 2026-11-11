@@ -164,7 +164,7 @@ jest.mock('../upgrade_holds', () => ({ holdsOnMoving: jest.fn(async () => []), e
 jest.mock('../../../movement_engine/run_host_deliveries', () => ({ ...jest.requireActual('../../../movement_engine/run_host_deliveries'), holdDoorsAlone: jest.fn(async () => new Date(0)) }));
 jest.mock('../catalog', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { mockCatalog, mockCatalogSnapshot } = require('movement-lang');
+  const { LANGUAGE_VERSION: PIN, mockCatalog, mockCatalogSnapshot } = require('movement-lang');
   // The run host's manual and cron units, as a team's catalog describes them.
   const { unitInstanceSchema } = jest.requireActual('../../adapters/unit_surface');
   const { MANUAL_ADAPTER_TYPE, MANUAL_SURFACE } = jest.requireActual('../../adapters/manual');
@@ -183,6 +183,7 @@ jest.mock('../catalog', () => {
       collections: { posts: { target: 'Post', readable: true } },
       writableRoots: {},
     },
+    languageVersion: PIN,
   });
   const LIB_SOURCE = [
     'export node Lead {',

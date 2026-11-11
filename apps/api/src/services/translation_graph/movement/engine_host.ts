@@ -38,6 +38,7 @@ import {
   SegmentDirectory,
   type ActingUserLookup,
 } from 'movement-engine/public/host';
+import { answeringActor, type CheckedCatalog } from '../../inbound/actors';
 import { ledgeredAdapters } from '../../inbound/loop_breaker';
 import { runWriteKeeper } from '../../movement_engine/run_writes';
 import { makeRecorderParks } from '../../movement_engine/park_sink';
@@ -69,6 +70,9 @@ import { transformInvokerFor, type TransformInvoker } from './transform_invoker'
 
 export function productionEngineHost(input: {
   teamId: TeamId;
+  /** The catalog the run is checked against: what the platform offers on what
+   *  lands, which the host answers itself. */
+  catalog: CheckedCatalog;
   /** Where live adapter instances come from. Absent ⇒ the adapter registry
    *  (a dev probe supplies a client pointed at its fake server). */
   resolveLive?: LiveAdapterResolver;
@@ -116,17 +120,23 @@ export function productionEngineHost(input: {
   // The live instances, per segment. Production resolution is per (type,
   // credential, construction args); the role is a test seam. Each call runs
   // inside the segment it was resolved for.
+  const live: LiveAdapterResolver =
+    input.resolveLive ??
+    (({ adapterType, teamId, credentialsId, constructionArgs }) =>
+      resolveAdapter({
+        adapterType,
+        teamId: teamOfTenant(teamId),
+        credentialsId,
+        ...(constructionArgs !== undefined ? { constructionArgs } : {}),
+      }));
   const adapters = adapterTable({
     segments,
-    resolveLive:
-      input.resolveLive ??
-      (({ adapterType, teamId, credentialsId, constructionArgs }) =>
-        resolveAdapter({
-          adapterType,
-          teamId: teamOfTenant(teamId),
-          credentialsId,
-          ...(constructionArgs !== undefined ? { constructionArgs } : {}),
-        })),
+    resolveLive: async (resolution) =>
+      answeringActor(await live(resolution), {
+        catalog: input.catalog,
+        adapterType: resolution.adapterType,
+        ...(resolution.credentialsId !== undefined ? { credentialsId: resolution.credentialsId } : {}),
+      }),
     credentials: input.credentials ?? teamCredentials,
     ...segmentScopedCalls,
     ...(input.writeSink !== undefined ? { writeSink: input.writeSink } : {}),
