@@ -2096,7 +2096,8 @@
                 "identifier": "U001",
                 "scheme": "opaque",
                 "adapterType": "slack",
-                "label": "U001"
+                "label": "U001",
+                "proven": true
               },
               "occurredAt": "2025-07-04T03:33:20.000Z"
             }
@@ -2147,7 +2148,8 @@
                 "identifier": "U002",
                 "scheme": "opaque",
                 "adapterType": "slack",
-                "label": "U002"
+                "label": "U002",
+                "proven": true
               },
               "occurredAt": "2025-07-04T03:35:00.000Z"
             }
@@ -2199,7 +2201,8 @@
                 "identifier": "U002",
                 "scheme": "opaque",
                 "adapterType": "slack",
-                "label": "U002"
+                "label": "U002",
+                "proven": true
               },
               "occurredAt": "2025-07-04T03:36:40.000Z"
             }
@@ -2253,7 +2256,8 @@
                 "identifier": "U001",
                 "scheme": "opaque",
                 "adapterType": "slack",
-                "label": "U001"
+                "label": "U001",
+                "proven": true
               },
               "occurredAt": "2025-07-04T03:38:20.000Z"
             }
@@ -2996,7 +3000,8 @@
           "identifier": "U001",
           "scheme": "opaque",
           "adapterType": "slack",
-          "label": "U001"
+          "label": "U001",
+          "proven": true
         }
       },
       {
@@ -3019,7 +3024,8 @@
           "identifier": "U001",
           "scheme": "opaque",
           "adapterType": "slack",
-          "label": "U001"
+          "label": "U001",
+          "proven": true
         }
       },
       {
@@ -3040,12 +3046,12 @@
         "step": "post with a mention",
         "answer": {
           "adapterType": "slack",
-          "externalId": "C002:1793720631.958189",
+          "externalId": "C002:1794407524.551499",
           "data": {
             "channelId": "C002",
-            "ts": "1793720631.958189",
+            "ts": "1794407524.551499",
             "name": "Hi <@U001>, see the deck",
-            "url": "slack://archives/C002/p1793720631958189"
+            "url": "slack://archives/C002/p1794407524551499"
           }
         }
       },
@@ -3053,13 +3059,13 @@
         "step": "reply in the thread",
         "answer": {
           "adapterType": "slack",
-          "externalId": "C002:1793720631.961463",
+          "externalId": "C002:1794407524.554409",
           "data": {
             "channelId": "C002",
-            "ts": "1793720631.961463",
+            "ts": "1794407524.554409",
             "threadTs": "1751500000.000100",
             "name": "On it",
-            "url": "slack://archives/C002/p1793720631961463"
+            "url": "slack://archives/C002/p1794407524554409"
           }
         }
       },
@@ -3067,13 +3073,13 @@
         "step": "reply to a composite id",
         "answer": {
           "adapterType": "slack",
-          "externalId": "C002:1793720631.963584",
+          "externalId": "C002:1794407524.555934",
           "data": {
             "channelId": "C002",
-            "ts": "1793720631.963584",
+            "ts": "1794407524.555934",
             "threadTs": "1751500000.000100",
             "name": "composite",
-            "url": "slack://archives/C002/p1793720631963584"
+            "url": "slack://archives/C002/p1794407524555934"
           }
         }
       },
@@ -3081,10 +3087,10 @@
         "step": "post blocks",
         "answer": {
           "adapterType": "slack",
-          "externalId": "C002:1793720631.965604",
+          "externalId": "C002:1794407524.557008",
           "data": {
             "channelId": "C002",
-            "ts": "1793720631.965604",
+            "ts": "1794407524.557008",
             "blocks": [
               {
                 "type": "section",
@@ -3095,7 +3101,7 @@
               }
             ],
             "name": "fallback",
-            "url": "slack://archives/C002/p1793720631965604"
+            "url": "slack://archives/C002/p1794407524557008"
           }
         }
       },
@@ -3368,6 +3374,17 @@
       },
       {
         "method": "POST",
+        "path": "/users.info",
+        "authorization": "Bearer xoxb-parity",
+        "headers": {
+          "content-type": "application/x-www-form-urlencoded"
+        },
+        "body": "user=U001",
+        "status": 200,
+        "response": "{\"ok\":true,\"user\":{\"id\":\"U001\",\"name\":\"ada\",\"real_name\":\"Ada Okafor\",\"deleted\":false,\"profile\":{\"display_name\":\"ada\",\"real_name\":\"Ada Okafor\",\"email\":\"ada@example.com\"}}}"
+      },
+      {
+        "method": "POST",
         "path": "/users.list",
         "authorization": "Bearer xoxb-parity",
         "headers": {
@@ -3386,7 +3403,7 @@
         },
         "body": "channel=C002&text=Hi%20%3C%40U001%3E%2C%20see%20the%20deck&unfurl_links=false&unfurl_media=false",
         "status": 200,
-        "response": "{\"ok\":true,\"ts\":\"1793720631.958189\"}"
+        "response": "{\"ok\":true,\"ts\":\"1794407524.551499\"}"
       },
       {
         "method": "POST",
@@ -3397,7 +3414,7 @@
         },
         "body": "channel=C002&thread_ts=1751500000.000100&text=On%20it&unfurl_links=false&unfurl_media=false",
         "status": 200,
-        "response": "{\"ok\":true,\"ts\":\"1793720631.961463\"}"
+        "response": "{\"ok\":true,\"ts\":\"1794407524.554409\"}"
       },
       {
         "method": "POST",
@@ -3408,7 +3425,7 @@
         },
         "body": "channel=C002&thread_ts=1751500000.000100&text=composite&unfurl_links=false&unfurl_media=false",
         "status": 200,
-        "response": "{\"ok\":true,\"ts\":\"1793720631.963584\"}"
+        "response": "{\"ok\":true,\"ts\":\"1794407524.555934\"}"
       },
       {
         "method": "POST",
@@ -3419,7 +3436,7 @@
         },
         "body": "channel=C002&text=fallback&blocks=%5B%7B%22type%22%3A%22section%22%2C%22text%22%3A%7B%22type%22%3A%22mrkdwn%22%2C%22text%22%3A%22*hi*%22%7D%7D%5D&unfurl_links=false&unfurl_media=false",
         "status": 200,
-        "response": "{\"ok\":true,\"ts\":\"1793720631.965604\"}"
+        "response": "{\"ok\":true,\"ts\":\"1794407524.557008\"}"
       },
       {
         "method": "POST",
@@ -4981,7 +4998,7 @@
               "recordType": "Message",
               "identity": {
                 "kind": "stable",
-                "recordId": "C002:1793720631.965604",
+                "recordId": "C002:1794407524.557008",
                 "data": {
                   "channel": "C002",
                   "text": "fallback",
@@ -4995,7 +5012,7 @@
                     }
                   ],
                   "thread_ts": null,
-                  "ts": "1793720631.965604",
+                  "ts": "1794407524.557008",
                   "user": "bot",
                   "unfurl_links": "false",
                   "unfurl_media": "false"
@@ -5009,13 +5026,13 @@
               "recordType": "Message",
               "identity": {
                 "kind": "stable",
-                "recordId": "C002:1793720631.958189",
+                "recordId": "C002:1794407524.551499",
                 "data": {
                   "channel": "C002",
                   "text": "Hi <@U001>, see the deck",
                   "blocks": null,
                   "thread_ts": null,
-                  "ts": "1793720631.958189",
+                  "ts": "1794407524.551499",
                   "user": "bot",
                   "unfurl_links": "false",
                   "unfurl_media": "false"
@@ -5128,7 +5145,7 @@
               "recordType": "Message",
               "identity": {
                 "kind": "stable",
-                "recordId": "C002:1793720631.965604",
+                "recordId": "C002:1794407524.557008",
                 "data": {
                   "channel": "C002",
                   "text": "fallback",
@@ -5142,7 +5159,7 @@
                     }
                   ],
                   "thread_ts": null,
-                  "ts": "1793720631.965604",
+                  "ts": "1794407524.557008",
                   "user": "bot",
                   "unfurl_links": "false",
                   "unfurl_media": "false"
@@ -5459,13 +5476,13 @@
               "recordType": "Message",
               "identity": {
                 "kind": "stable",
-                "recordId": "C002:1793720631.961463",
+                "recordId": "C002:1794407524.554409",
                 "data": {
                   "channel": "C002",
                   "text": "On it",
                   "blocks": null,
                   "thread_ts": "1751500000.000100",
-                  "ts": "1793720631.961463",
+                  "ts": "1794407524.554409",
                   "user": "bot",
                   "unfurl_links": "false",
                   "unfurl_media": "false"
@@ -5479,13 +5496,13 @@
               "recordType": "Message",
               "identity": {
                 "kind": "stable",
-                "recordId": "C002:1793720631.963584",
+                "recordId": "C002:1794407524.555934",
                 "data": {
                   "channel": "C002",
                   "text": "composite",
                   "blocks": null,
                   "thread_ts": "1751500000.000100",
-                  "ts": "1793720631.963584",
+                  "ts": "1794407524.555934",
                   "user": "bot",
                   "unfurl_links": "false",
                   "unfurl_media": "false"
@@ -5651,7 +5668,8 @@
                 "identifier": "U001",
                 "scheme": "opaque",
                 "adapterType": "slack",
-                "label": "U001"
+                "label": "U001",
+                "proven": true
               },
               "occurredAt": "2025-07-04T03:33:20.000Z"
             }
@@ -5702,7 +5720,8 @@
                 "identifier": "U002",
                 "scheme": "opaque",
                 "adapterType": "slack",
-                "label": "U002"
+                "label": "U002",
+                "proven": true
               },
               "occurredAt": "2025-07-04T03:35:00.000Z"
             }
@@ -5754,7 +5773,8 @@
                 "identifier": "U002",
                 "scheme": "opaque",
                 "adapterType": "slack",
-                "label": "U002"
+                "label": "U002",
+                "proven": true
               },
               "occurredAt": "2025-07-04T03:36:40.000Z"
             }
@@ -5808,7 +5828,8 @@
                 "identifier": "U001",
                 "scheme": "opaque",
                 "adapterType": "slack",
-                "label": "U001"
+                "label": "U001",
+                "proven": true
               },
               "occurredAt": "2025-07-04T03:38:20.000Z"
             }
@@ -6560,7 +6581,8 @@
           "identifier": "U001",
           "scheme": "opaque",
           "adapterType": "slack",
-          "label": "U001"
+          "label": "U001",
+          "proven": true
         }
       },
       {
@@ -6583,7 +6605,8 @@
           "identifier": "U001",
           "scheme": "opaque",
           "adapterType": "slack",
-          "label": "U001"
+          "label": "U001",
+          "proven": true
         }
       },
       {
@@ -6604,12 +6627,12 @@
         "step": "post with a mention",
         "answer": {
           "adapterType": "slack",
-          "externalId": "C002:1793720632.013625",
+          "externalId": "C002:1794407524.596708",
           "data": {
             "channelId": "C002",
-            "ts": "1793720632.013625",
+            "ts": "1794407524.596708",
             "name": "Hi <@U001>, see the deck",
-            "url": "slack://archives/C002/p1793720632013625"
+            "url": "slack://archives/C002/p1794407524596708"
           }
         }
       },
@@ -6617,13 +6640,13 @@
         "step": "reply in the thread",
         "answer": {
           "adapterType": "slack",
-          "externalId": "C002:1793720632.015563",
+          "externalId": "C002:1794407524.597260",
           "data": {
             "channelId": "C002",
-            "ts": "1793720632.015563",
+            "ts": "1794407524.597260",
             "threadTs": "1751500000.000100",
             "name": "On it",
-            "url": "slack://archives/C002/p1793720632015563"
+            "url": "slack://archives/C002/p1794407524597260"
           }
         }
       },
@@ -6631,13 +6654,13 @@
         "step": "reply to a composite id",
         "answer": {
           "adapterType": "slack",
-          "externalId": "C002:1793720632.017064",
+          "externalId": "C002:1794407524.599098",
           "data": {
             "channelId": "C002",
-            "ts": "1793720632.017064",
+            "ts": "1794407524.599098",
             "threadTs": "1751500000.000100",
             "name": "composite",
-            "url": "slack://archives/C002/p1793720632017064"
+            "url": "slack://archives/C002/p1794407524599098"
           }
         }
       },
@@ -6645,10 +6668,10 @@
         "step": "post blocks",
         "answer": {
           "adapterType": "slack",
-          "externalId": "C002:1793720632.019805",
+          "externalId": "C002:1794407524.600468",
           "data": {
             "channelId": "C002",
-            "ts": "1793720632.019805",
+            "ts": "1794407524.600468",
             "blocks": [
               {
                 "type": "section",
@@ -6659,7 +6682,7 @@
               }
             ],
             "name": "fallback",
-            "url": "slack://archives/C002/p1793720632019805"
+            "url": "slack://archives/C002/p1794407524600468"
           }
         }
       },
@@ -6818,7 +6841,7 @@
         },
         "body": "channel=C002&limit=200",
         "status": 200,
-        "response": "{\"ok\":true,\"messages\":[{\"channel\":\"C002\",\"text\":\"fallback\",\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*hi*\"}}],\"thread_ts\":null,\"ts\":\"1793720631.965604\",\"user\":\"bot\",\"unfurl_links\":\"false\",\"unfurl_media\":\"false\"},{\"channel\":\"C002\",\"text\":\"Hi <@U001>, see the deck\",\"blocks\":null,\"thread_ts\":null,\"ts\":\"1793720631.958189\",\"user\":\"bot\",\"unfurl_links\":\"false\",\"unfurl_media\":\"false\"},{\"channel\":\"C002\",\"ts\":\"1751500100.000200\",\"user\":\"U002\",\"text\":\"Metrics deck attached for Foo Corp\"},{\"channel\":\"C002\",\"ts\":\"1751500000.000100\",\"user\":\"U001\",\"text\":\"New deal: Acme wants a term sheet\",\"reactions\":[{\"name\":\"rocket\",\"users\":[\"bot\"],\"count\":1}]}],\"has_more\":false,\"response_metadata\":{\"next_cursor\":\"\"}}"
+        "response": "{\"ok\":true,\"messages\":[{\"channel\":\"C002\",\"text\":\"fallback\",\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*hi*\"}}],\"thread_ts\":null,\"ts\":\"1794407524.557008\",\"user\":\"bot\",\"unfurl_links\":\"false\",\"unfurl_media\":\"false\"},{\"channel\":\"C002\",\"text\":\"Hi <@U001>, see the deck\",\"blocks\":null,\"thread_ts\":null,\"ts\":\"1794407524.551499\",\"user\":\"bot\",\"unfurl_links\":\"false\",\"unfurl_media\":\"false\"},{\"channel\":\"C002\",\"ts\":\"1751500100.000200\",\"user\":\"U002\",\"text\":\"Metrics deck attached for Foo Corp\"},{\"channel\":\"C002\",\"ts\":\"1751500000.000100\",\"user\":\"U001\",\"text\":\"New deal: Acme wants a term sheet\",\"reactions\":[{\"name\":\"rocket\",\"users\":[\"bot\"],\"count\":1}]}],\"has_more\":false,\"response_metadata\":{\"next_cursor\":\"\"}}"
       },
       {
         "method": "POST",
@@ -6840,7 +6863,7 @@
         },
         "body": "channel=C002&limit=200",
         "status": 200,
-        "response": "{\"ok\":true,\"messages\":[{\"channel\":\"C002\",\"text\":\"fallback\",\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*hi*\"}}],\"thread_ts\":null,\"ts\":\"1793720631.965604\",\"user\":\"bot\",\"unfurl_links\":\"false\",\"unfurl_media\":\"false\"},{\"channel\":\"C002\",\"text\":\"Hi <@U001>, see the deck\",\"blocks\":null,\"thread_ts\":null,\"ts\":\"1793720631.958189\",\"user\":\"bot\",\"unfurl_links\":\"false\",\"unfurl_media\":\"false\"},{\"channel\":\"C002\",\"ts\":\"1751500100.000200\",\"user\":\"U002\",\"text\":\"Metrics deck attached for Foo Corp\"},{\"channel\":\"C002\",\"ts\":\"1751500000.000100\",\"user\":\"U001\",\"text\":\"New deal: Acme wants a term sheet\",\"reactions\":[{\"name\":\"rocket\",\"users\":[\"bot\"],\"count\":1}]}],\"has_more\":false,\"response_metadata\":{\"next_cursor\":\"\"}}"
+        "response": "{\"ok\":true,\"messages\":[{\"channel\":\"C002\",\"text\":\"fallback\",\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*hi*\"}}],\"thread_ts\":null,\"ts\":\"1794407524.557008\",\"user\":\"bot\",\"unfurl_links\":\"false\",\"unfurl_media\":\"false\"},{\"channel\":\"C002\",\"text\":\"Hi <@U001>, see the deck\",\"blocks\":null,\"thread_ts\":null,\"ts\":\"1794407524.551499\",\"user\":\"bot\",\"unfurl_links\":\"false\",\"unfurl_media\":\"false\"},{\"channel\":\"C002\",\"ts\":\"1751500100.000200\",\"user\":\"U002\",\"text\":\"Metrics deck attached for Foo Corp\"},{\"channel\":\"C002\",\"ts\":\"1751500000.000100\",\"user\":\"U001\",\"text\":\"New deal: Acme wants a term sheet\",\"reactions\":[{\"name\":\"rocket\",\"users\":[\"bot\"],\"count\":1}]}],\"has_more\":false,\"response_metadata\":{\"next_cursor\":\"\"}}"
       },
       {
         "method": "POST",
@@ -6862,7 +6885,7 @@
         },
         "body": "channel=C002&ts=1751500000.000100&limit=200",
         "status": 200,
-        "response": "{\"ok\":true,\"messages\":[{\"channel\":\"C002\",\"ts\":\"1751500000.000100\",\"user\":\"U001\",\"text\":\"New deal: Acme wants a term sheet\",\"reactions\":[{\"name\":\"rocket\",\"users\":[\"bot\"],\"count\":1}]},{\"channel\":\"C002\",\"ts\":\"1751500200.000300\",\"user\":\"U002\",\"text\":\"Acme follow-up: revenue is 1.2M ARR\",\"thread_ts\":\"1751500000.000100\"},{\"channel\":\"C002\",\"text\":\"On it\",\"blocks\":null,\"thread_ts\":\"1751500000.000100\",\"ts\":\"1793720631.961463\",\"user\":\"bot\",\"unfurl_links\":\"false\",\"unfurl_media\":\"false\"},{\"channel\":\"C002\",\"text\":\"composite\",\"blocks\":null,\"thread_ts\":\"1751500000.000100\",\"ts\":\"1793720631.963584\",\"user\":\"bot\",\"unfurl_links\":\"false\",\"unfurl_media\":\"false\"}]}"
+        "response": "{\"ok\":true,\"messages\":[{\"channel\":\"C002\",\"ts\":\"1751500000.000100\",\"user\":\"U001\",\"text\":\"New deal: Acme wants a term sheet\",\"reactions\":[{\"name\":\"rocket\",\"users\":[\"bot\"],\"count\":1}]},{\"channel\":\"C002\",\"ts\":\"1751500200.000300\",\"user\":\"U002\",\"text\":\"Acme follow-up: revenue is 1.2M ARR\",\"thread_ts\":\"1751500000.000100\"},{\"channel\":\"C002\",\"text\":\"On it\",\"blocks\":null,\"thread_ts\":\"1751500000.000100\",\"ts\":\"1794407524.554409\",\"user\":\"bot\",\"unfurl_links\":\"false\",\"unfurl_media\":\"false\"},{\"channel\":\"C002\",\"text\":\"composite\",\"blocks\":null,\"thread_ts\":\"1751500000.000100\",\"ts\":\"1794407524.555934\",\"user\":\"bot\",\"unfurl_links\":\"false\",\"unfurl_media\":\"false\"}]}"
       },
       {
         "method": "POST",
@@ -6932,6 +6955,17 @@
       },
       {
         "method": "POST",
+        "path": "/users.info",
+        "authorization": "Bearer xoxb-harness",
+        "headers": {
+          "content-type": "application/x-www-form-urlencoded"
+        },
+        "body": "user=U001",
+        "status": 200,
+        "response": "{\"ok\":true,\"user\":{\"id\":\"U001\",\"name\":\"ada\",\"real_name\":\"Ada Okafor\",\"deleted\":false,\"profile\":{\"display_name\":\"ada\",\"real_name\":\"Ada Okafor\",\"email\":\"ada@example.com\"}}}"
+      },
+      {
+        "method": "POST",
         "path": "/users.list",
         "authorization": "Bearer xoxb-harness",
         "headers": {
@@ -6950,7 +6984,7 @@
         },
         "body": "channel=C002&text=Hi%20%3C%40U001%3E%2C%20see%20the%20deck&unfurl_links=false&unfurl_media=false",
         "status": 200,
-        "response": "{\"ok\":true,\"ts\":\"1793720632.013625\"}"
+        "response": "{\"ok\":true,\"ts\":\"1794407524.596708\"}"
       },
       {
         "method": "POST",
@@ -6961,7 +6995,7 @@
         },
         "body": "channel=C002&thread_ts=1751500000.000100&text=On%20it&unfurl_links=false&unfurl_media=false",
         "status": 200,
-        "response": "{\"ok\":true,\"ts\":\"1793720632.015563\"}"
+        "response": "{\"ok\":true,\"ts\":\"1794407524.597260\"}"
       },
       {
         "method": "POST",
@@ -6972,7 +7006,7 @@
         },
         "body": "channel=C002&thread_ts=1751500000.000100&text=composite&unfurl_links=false&unfurl_media=false",
         "status": 200,
-        "response": "{\"ok\":true,\"ts\":\"1793720632.017064\"}"
+        "response": "{\"ok\":true,\"ts\":\"1794407524.599098\"}"
       },
       {
         "method": "POST",
@@ -6983,7 +7017,7 @@
         },
         "body": "channel=C002&text=fallback&blocks=%5B%7B%22type%22%3A%22section%22%2C%22text%22%3A%7B%22type%22%3A%22mrkdwn%22%2C%22text%22%3A%22*hi*%22%7D%7D%5D&unfurl_links=false&unfurl_media=false",
         "status": 200,
-        "response": "{\"ok\":true,\"ts\":\"1793720632.019805\"}"
+        "response": "{\"ok\":true,\"ts\":\"1794407524.600468\"}"
       },
       {
         "method": "POST",
@@ -8402,7 +8436,8 @@
                 "identifier": "U001",
                 "scheme": "opaque",
                 "adapterType": "slack",
-                "label": "U001"
+                "label": "U001",
+                "proven": true
               },
               "occurredAt": "2025-07-04T03:33:20.000Z"
             }
@@ -8456,7 +8491,8 @@
                 "identifier": "U002",
                 "scheme": "opaque",
                 "adapterType": "slack",
-                "label": "U002"
+                "label": "U002",
+                "proven": true
               },
               "occurredAt": "2025-07-04T03:35:00.000Z"
             }
@@ -8514,7 +8550,8 @@
                 "identifier": "U002",
                 "scheme": "opaque",
                 "adapterType": "slack",
-                "label": "U002"
+                "label": "U002",
+                "proven": true
               },
               "occurredAt": "2025-07-04T03:36:40.000Z"
             }
@@ -8571,7 +8608,8 @@
                 "identifier": "U001",
                 "scheme": "opaque",
                 "adapterType": "slack",
-                "label": "U001"
+                "label": "U001",
+                "proven": true
               },
               "occurredAt": "2025-07-04T03:38:20.000Z"
             }
@@ -9213,7 +9251,9 @@
       },
       {
         "step": "getActorCandidates message",
-        "answer": []
+        "answer": {
+          "error": "slack: who acted could not be looked up, the connection has no usable Slack client"
+        }
       },
       {
         "step": "extractActor message",
@@ -9221,12 +9261,15 @@
           "identifier": "U001",
           "scheme": "opaque",
           "adapterType": "slack",
-          "label": "U001"
+          "label": "U001",
+          "proven": true
         }
       },
       {
         "step": "getActorCandidates reaction",
-        "answer": []
+        "answer": {
+          "error": "slack: who acted could not be looked up, the connection has no usable Slack client"
+        }
       },
       {
         "step": "extractActor reaction",
@@ -9234,7 +9277,8 @@
           "identifier": "U001",
           "scheme": "opaque",
           "adapterType": "slack",
-          "label": "U001"
+          "label": "U001",
+          "proven": true
         }
       },
       {

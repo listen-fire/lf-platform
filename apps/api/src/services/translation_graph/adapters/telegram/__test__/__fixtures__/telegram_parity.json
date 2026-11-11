@@ -590,7 +590,8 @@
                 "adapterType": "telegram",
                 "email": "ada@example.com",
                 "name": "Ada",
-                "label": "@adas"
+                "label": "@adas",
+                "proven": true
               }
             }
           ]
@@ -980,7 +981,8 @@
           "adapterType": "telegram",
           "email": "ada@example.com",
           "name": "Ada",
-          "label": "@adas"
+          "label": "@adas",
+          "proven": true
         }
       },
       {
@@ -997,7 +999,8 @@
               "adapterType": "telegram",
               "email": "ada@example.com",
               "name": "Ada",
-              "label": "@adas"
+              "label": "@adas",
+              "proven": true
             },
             "source": "originator"
           }
@@ -1819,7 +1822,8 @@
                 "adapterType": "telegram",
                 "email": "ada@example.com",
                 "name": "Ada",
-                "label": "@adas"
+                "label": "@adas",
+                "proven": true
               }
             }
           ]
@@ -2209,7 +2213,8 @@
           "adapterType": "telegram",
           "email": "ada@example.com",
           "name": "Ada",
-          "label": "@adas"
+          "label": "@adas",
+          "proven": true
         }
       },
       {
@@ -2226,7 +2231,8 @@
               "adapterType": "telegram",
               "email": "ada@example.com",
               "name": "Ada",
-              "label": "@adas"
+              "label": "@adas",
+              "proven": true
             },
             "source": "originator"
           }
@@ -3048,7 +3054,8 @@
                 "adapterType": "telegram",
                 "email": "ada@example.com",
                 "name": "Ada",
-                "label": "@adas"
+                "label": "@adas",
+                "proven": true
               }
             }
           ]
@@ -3434,7 +3441,8 @@
           "adapterType": "telegram",
           "email": "ada@example.com",
           "name": "Ada",
-          "label": "@adas"
+          "label": "@adas",
+          "proven": true
         }
       },
       {
@@ -3451,7 +3459,8 @@
               "adapterType": "telegram",
               "email": "ada@example.com",
               "name": "Ada",
-              "label": "@adas"
+              "label": "@adas",
+              "proven": true
             },
             "source": "originator"
           }

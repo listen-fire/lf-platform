@@ -395,6 +395,7 @@ describe('TelegramAdapter actor resolution (telegram_user_id → email via the s
       email: EMAIL_A,
       name: 'Ada',
       label: '@adas',
+      proven: true,
     });
 
     const candidates = await a.getActorCandidates({ event: fired });
@@ -407,6 +408,7 @@ describe('TelegramAdapter actor resolution (telegram_user_id → email via the s
           email: EMAIL_A,
           name: 'Ada',
           label: '@adas',
+          proven: true,
         },
         source: 'originator',
       },

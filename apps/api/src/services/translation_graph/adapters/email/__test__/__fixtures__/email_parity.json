@@ -104,6 +104,15 @@
               "description": "The plain-text body, when present."
             },
             {
+              "fieldId": "forwardedThrough",
+              "displayName": "Forwarded Through",
+              "kind": "string",
+              "cardinality": "many",
+              "writable": false,
+              "required": false,
+              "description": "The inboxes that forwarded the message on, from its forwarding headers (`X-Forwarded-For`, `Delivered-To` and the like), lower case. Empty when none did; the address it was finally sent to is not one."
+            },
+            {
               "fieldId": "content",
               "displayName": "Body",
               "kind": "string",
@@ -243,6 +252,15 @@
               "writable": false,
               "required": false,
               "description": "The plain-text body, when present."
+            },
+            {
+              "fieldId": "forwardedThrough",
+              "displayName": "Forwarded Through",
+              "kind": "string",
+              "cardinality": "many",
+              "writable": false,
+              "required": false,
+              "description": "The inboxes that forwarded the message on, from its forwarding headers (`X-Forwarded-For`, `Delivered-To` and the like), lower case. Empty when none did; the address it was finally sent to is not one."
             },
             {
               "fieldId": "content",
@@ -420,6 +438,15 @@
                   "description": "The plain-text body, when present."
                 },
                 {
+                  "fieldId": "forwardedThrough",
+                  "displayName": "Forwarded Through",
+                  "kind": "string",
+                  "cardinality": "many",
+                  "writable": false,
+                  "required": false,
+                  "description": "The inboxes that forwarded the message on, from its forwarding headers (`X-Forwarded-For`, `Delivered-To` and the like), lower case. Empty when none did; the address it was finally sent to is not one."
+                },
+                {
                   "fieldId": "content",
                   "displayName": "Body",
                   "kind": "string",
@@ -505,6 +532,15 @@
                 "writable": false,
                 "required": false,
                 "description": "The plain-text body, when present."
+              },
+              {
+                "fieldId": "forwardedThrough",
+                "displayName": "Forwarded Through",
+                "kind": "string",
+                "cardinality": "many",
+                "writable": false,
+                "required": false,
+                "description": "The inboxes that forwarded the message on, from its forwarding headers (`X-Forwarded-For`, `Delivered-To` and the like), lower case. Empty when none did; the address it was finally sent to is not one."
               },
               {
                 "fieldId": "content",
@@ -2063,6 +2099,15 @@
               "description": "The plain-text body, when present."
             },
             {
+              "fieldId": "forwardedThrough",
+              "displayName": "Forwarded Through",
+              "kind": "string",
+              "cardinality": "many",
+              "writable": false,
+              "required": false,
+              "description": "The inboxes that forwarded the message on, from its forwarding headers (`X-Forwarded-For`, `Delivered-To` and the like), lower case. Empty when none did; the address it was finally sent to is not one."
+            },
+            {
               "fieldId": "content",
               "displayName": "Body",
               "kind": "string",
@@ -2202,6 +2247,15 @@
               "writable": false,
               "required": false,
               "description": "The plain-text body, when present."
+            },
+            {
+              "fieldId": "forwardedThrough",
+              "displayName": "Forwarded Through",
+              "kind": "string",
+              "cardinality": "many",
+              "writable": false,
+              "required": false,
+              "description": "The inboxes that forwarded the message on, from its forwarding headers (`X-Forwarded-For`, `Delivered-To` and the like), lower case. Empty when none did; the address it was finally sent to is not one."
             },
             {
               "fieldId": "content",
@@ -2379,6 +2433,15 @@
                   "description": "The plain-text body, when present."
                 },
                 {
+                  "fieldId": "forwardedThrough",
+                  "displayName": "Forwarded Through",
+                  "kind": "string",
+                  "cardinality": "many",
+                  "writable": false,
+                  "required": false,
+                  "description": "The inboxes that forwarded the message on, from its forwarding headers (`X-Forwarded-For`, `Delivered-To` and the like), lower case. Empty when none did; the address it was finally sent to is not one."
+                },
+                {
                   "fieldId": "content",
                   "displayName": "Body",
                   "kind": "string",
@@ -2464,6 +2527,15 @@
                 "writable": false,
                 "required": false,
                 "description": "The plain-text body, when present."
+              },
+              {
+                "fieldId": "forwardedThrough",
+                "displayName": "Forwarded Through",
+                "kind": "string",
+                "cardinality": "many",
+                "writable": false,
+                "required": false,
+                "description": "The inboxes that forwarded the message on, from its forwarding headers (`X-Forwarded-For`, `Delivered-To` and the like), lower case. Empty when none did; the address it was finally sent to is not one."
               },
               {
                 "fieldId": "content",

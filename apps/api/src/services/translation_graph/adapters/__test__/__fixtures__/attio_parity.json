@@ -5813,7 +5813,8 @@
               "identifier": "1",
               "scheme": "opaque",
               "adapterType": "attio",
-              "label": "1"
+              "label": "1",
+              "proven": true
             }
           }
         ]
@@ -5825,7 +5826,8 @@
         "identifier": "1",
         "scheme": "opaque",
         "adapterType": "attio",
-        "label": "1"
+        "label": "1",
+        "proven": true
       }
     },
     {
@@ -5883,7 +5885,8 @@
               "identifier": "token-1",
               "scheme": "opaque",
               "adapterType": "attio",
-              "label": "token-1"
+              "label": "token-1",
+              "proven": true
             }
           }
         ]
@@ -5895,7 +5898,8 @@
         "identifier": "token-1",
         "scheme": "opaque",
         "adapterType": "attio",
-        "label": "token-1"
+        "label": "token-1",
+        "proven": true
       }
     },
     {

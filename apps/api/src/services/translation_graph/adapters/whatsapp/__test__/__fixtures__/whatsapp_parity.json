@@ -847,7 +847,8 @@
               "scheme": "phone",
               "adapterType": "whatsapp",
               "name": "Ada",
-              "label": "Ada"
+              "label": "Ada",
+              "proven": true
             },
             "occurredAt": "2023-11-14T22:13:20.000Z"
           },
@@ -886,7 +887,8 @@
               "scheme": "phone",
               "adapterType": "whatsapp",
               "name": "Ada",
-              "label": "Ada"
+              "label": "Ada",
+              "proven": true
             },
             "occurredAt": "2023-11-14T22:13:21.000Z"
           },
@@ -925,7 +927,8 @@
               "scheme": "phone",
               "adapterType": "whatsapp",
               "name": "Ada",
-              "label": "Ada"
+              "label": "Ada",
+              "proven": true
             },
             "occurredAt": "2023-11-14T22:13:22.000Z"
           },
@@ -956,7 +959,8 @@
               "scheme": "phone",
               "adapterType": "whatsapp",
               "name": "Ada",
-              "label": "Ada"
+              "label": "Ada",
+              "proven": true
             },
             "about": {
               "recordType": "Message",
@@ -995,7 +999,8 @@
               "scheme": "phone",
               "adapterType": "whatsapp",
               "name": "Ada",
-              "label": "Ada"
+              "label": "Ada",
+              "proven": true
             },
             "occurredAt": "2023-11-14T22:13:24.000Z"
           }
@@ -1395,7 +1400,8 @@
         "scheme": "phone",
         "adapterType": "whatsapp",
         "name": "Ada",
-        "label": "Ada"
+        "label": "Ada",
+        "proven": true
       }
     },
     {
@@ -1418,7 +1424,8 @@
         "scheme": "phone",
         "adapterType": "whatsapp",
         "name": "Ada",
-        "label": "Ada"
+        "label": "Ada",
+        "proven": true
       }
     },
     {
@@ -1441,7 +1448,8 @@
         "scheme": "phone",
         "adapterType": "whatsapp",
         "name": "Ada",
-        "label": "Ada"
+        "label": "Ada",
+        "proven": true
       }
     },
     {
@@ -1464,7 +1472,8 @@
         "scheme": "phone",
         "adapterType": "whatsapp",
         "name": "Ada",
-        "label": "Ada"
+        "label": "Ada",
+        "proven": true
       }
     },
     {
@@ -1487,7 +1496,8 @@
         "scheme": "phone",
         "adapterType": "whatsapp",
         "name": "Ada",
-        "label": "Ada"
+        "label": "Ada",
+        "proven": true
       }
     },
     {

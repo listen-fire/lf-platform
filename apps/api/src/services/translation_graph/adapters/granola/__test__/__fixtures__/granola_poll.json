@@ -67,7 +67,8 @@
               "scheme": "email",
               "adapterType": "granola",
               "email": "priya@fund.com",
-              "name": "Priya Owner"
+              "name": "Priya Owner",
+              "proven": true
             }
           },
           {
@@ -101,7 +102,8 @@
               "identifier": "sam@fund.com",
               "scheme": "email",
               "adapterType": "granola",
-              "email": "sam@fund.com"
+              "email": "sam@fund.com",
+              "proven": true
             }
           },
           {
@@ -159,7 +161,8 @@
               "scheme": "email",
               "adapterType": "granola",
               "email": "priya@fund.com",
-              "name": "Priya Owner"
+              "name": "Priya Owner",
+              "proven": true
             }
           }
         ],
@@ -228,7 +231,8 @@
               "scheme": "email",
               "adapterType": "granola",
               "email": "priya@fund.com",
-              "name": "Priya Owner"
+              "name": "Priya Owner",
+              "proven": true
             }
           }
         ],
@@ -259,7 +263,8 @@
         "scheme": "email",
         "adapterType": "granola",
         "email": "priya@fund.com",
-        "name": "Priya Owner"
+        "name": "Priya Owner",
+        "proven": true
       }
     },
     {
@@ -271,7 +276,8 @@
             "scheme": "email",
             "adapterType": "granola",
             "email": "priya@fund.com",
-            "name": "Priya Owner"
+            "name": "Priya Owner",
+            "proven": true
           },
           "source": "originator"
         }
@@ -283,7 +289,8 @@
         "identifier": "sam@fund.com",
         "scheme": "email",
         "adapterType": "granola",
-        "email": "sam@fund.com"
+        "email": "sam@fund.com",
+        "proven": true
       }
     },
     {
@@ -294,7 +301,8 @@
             "identifier": "sam@fund.com",
             "scheme": "email",
             "adapterType": "granola",
-            "email": "sam@fund.com"
+            "email": "sam@fund.com",
+            "proven": true
           },
           "source": "originator"
         }
@@ -307,7 +315,8 @@
         "scheme": "email",
         "adapterType": "granola",
         "email": "priya@fund.com",
-        "name": "Priya Owner"
+        "name": "Priya Owner",
+        "proven": true
       }
     },
     {
@@ -319,7 +328,8 @@
             "scheme": "email",
             "adapterType": "granola",
             "email": "priya@fund.com",
-            "name": "Priya Owner"
+            "name": "Priya Owner",
+            "proven": true
           },
           "source": "originator"
         }
