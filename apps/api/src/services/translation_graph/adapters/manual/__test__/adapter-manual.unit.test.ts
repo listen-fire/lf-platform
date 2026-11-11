@@ -310,6 +310,8 @@ describe('ManualAdapter actor parsing', () => {
       edge: 'Invocations',
       identity: 'invocation:inv-1',
       landing: { recordType: 'Invocation', fields: { ...SAMPLE } },
+      // The platform signed the caller in, so it vouches for who they are.
+      actor: { identifier: 'ada@example.com', scheme: 'email', adapterType: MANUAL_ADAPTER_TYPE, email: 'ada@example.com', name: 'Ada', label: 'Ada', proven: true },
     });
     expect(await adapter.extractActor({ event: fired })).toEqual(expect.objectContaining({ email: 'ada@example.com', name: 'Ada' }));
   });

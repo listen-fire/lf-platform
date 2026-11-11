@@ -71,6 +71,7 @@ import { deriveCapabilityNote, deriveIdentityNote } from './adapter_notes';
 import { normaliseSchemaForAgent } from './agent_schema';
 import { landingOf, walkedNodeFrom, type WalkedDescribedNode, type WalkedNode } from './walk';
 import { graftGenericLandings } from './generic_landings';
+import { graftActorField } from '../../inbound/actors';
 import { narrowForInspection, refineInstanceSchema } from './refinements';
 import { getMovementRowByName, listMovementRows } from './store';
 import { loadShippedFileByName } from './version_store';
@@ -284,15 +285,20 @@ export function staticCatalogFromManifests(
     instantiate(adapterName): InstanceSchema | undefined {
       // STUB — construction arguments are ignored; see module header for
       // the real per-credential seam.
+      // `Actor` as a team's catalog offers it, so a text checked here checks there.
+      const offer = (schema: InstanceSchema) => graftActorField({ adapterType: adapterName, methods: manifests.get(adapterName)?.methods ?? [], schema });
       const schema = options.instanceSchemas?.[adapterName] ?? THIN_INSTANCE_SCHEMAS[adapterName];
-      if (schema === undefined) return UNIT_SCHEMAS[adapterName];
+      if (schema === undefined) {
+        const unit = UNIT_SCHEMAS[adapterName];
+        return unit === undefined ? undefined : offer(unit);
+      }
       // These fixtures stand opposite FAKE adapters, and a fake declares the
       // permissive runtime capabilities — inline edge properties included. So
       // the fixture says so too, or the checker calls a name a mistake that
       // the adapter under test answers at run time. The real per-credential
       // projection reads the capability off the adapter itself
       // (`instance_cache`), where it is a fact rather than a fixture.
-      return { ...schema, edgesCarryProperties: true };
+      return { ...offer(schema), edgesCarryProperties: true };
     },
   };
 }
@@ -988,6 +994,15 @@ async function assembleTeamCatalog(
     if (schema !== projection.schema) {
       schemaByAdapterAndCred.set(key, { ...projection, schema });
     }
+  }
+
+  // Who acted: the platform's own field on each landing of a module that
+  // reports one (inbound/actors.ts). Last, so a position the passes above
+  // grafted is offered it too; the door writes what it reads.
+  for (const [key, projection] of schemaByAdapterAndCred) {
+    const [slug = ''] = key.split('::');
+    const schema = graftActorField({ adapterType: slug, methods: manifestBySlug.get(slug)?.methods ?? [], schema: projection.schema });
+    if (schema !== projection.schema) schemaByAdapterAndCred.set(key, { ...projection, schema });
   }
 
   // Entry-position ARG OPTIONS (the enum the checker warns against): the

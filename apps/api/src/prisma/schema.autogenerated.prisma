@@ -474,6 +474,7 @@ model Movement {
   languageVersion                                          String               @default("1") @map("language_version")
   upgradeDiagnostics                                       Json?                @map("upgrade_diagnostics")
   upgradeCheckedAgainst                                    String?              @map("upgrade_checked_against")
+  readsActor                                               Boolean              @default(false) @map("reads_actor")
   movementVersionMovementCurrentVersionIdTomovementVersion MovementVersion?     @relation("movement_current_version_idTomovement_version", fields: [currentVersionId], references: [id])
   triggerMovementTriggerIdTotrigger                        Trigger?             @relation("movement_trigger_idTotrigger", fields: [triggerId], references: [id])
   movementIssues                                           MovementIssue[]

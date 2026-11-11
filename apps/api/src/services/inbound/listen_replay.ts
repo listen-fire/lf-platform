@@ -12,6 +12,8 @@
 //   the poll; any other, only by a listen on the module it came from.
 // - Only the arrivals the delivery brought are judged, by the named listen
 //   alone. Every other listen on the delivery is left as it is.
+// - Who acted (`Actor`, actors.ts) is written again at replay time, a kept
+//   page's arrivals included: the answer is not kept with the arrival.
 // - A run it fires is kept as a delivery's is, in one write: a replay
 //   delivery of its own (`replay_of`), its `fire_event` row and its waits.
 //   Its arrivals were logged with the delivery replayed, and are not again.
@@ -36,6 +38,7 @@ import { pollSubscriptionId } from '../poll_source/worker';
 import { readKeptRequest, type CapturedRequest } from './captured_request';
 import { listenEdgeKeysOf } from './listen_edge';
 import { judgeArrivals, keepJudgedDelivery, savedListenOf, unjudgedFacts, type SavedListen } from './listen_door';
+import { withActors } from './actors';
 
 /** What a replay did, said in lines a person reads. */
 export type ReplayOutcome =
@@ -180,6 +183,9 @@ export async function replayThroughListen(input: { teamId: TeamId; triggerId: Tr
     arrivals = await reread(listen, adapterType, kept.request);
     credentialsId = listen.credentialsId;
   }
+  // Asked afresh, as listen-fire's replay asks: who acted and whether they are
+  // a member are as they stand now, not as they stood when it first came.
+  ({ arrivals } = await withActors(arrivals, { team: teamId, listens: [listen], adapter: { adapterType, credentialsId } }));
 
   const lines: string[] = [];
   const attempt = await nextAttempt(teamId, listen.pipeline, arrivals);

@@ -51,28 +51,10 @@ export async function resolveActingUser(input: {
   if (override.overridden) return override.user;
 
   const candidates = await input.getCandidates();
-  const emailOf = (c: ActorCandidate) => c.identity.email ?? c.identity.identifier;
 
-  // 2. Originators → non-service team users. The candidate's `scheme` says
-  //    how it resolves: `'phone'` (WhatsApp) matches against `phone_number`;
-  //    `'email'` matches against non-service `user_email`. `'opaque'`
-  //    candidates carry no email/phone the team-user tables can match, so
-  //    they're skipped (resolution falls through to the next candidate /
-  //    creator fallback) rather than triggering a bogus email lookup.
-  for (const c of candidates.filter((c) => c.source === 'originator')) {
-    if (c.identity.scheme === 'opaque') continue;
-    const u = c.identity.scheme === 'phone'
-      ? await lookupTeamUserByPhone({
-          phone: c.identity.identifier,
-          teamId: input.teamId,
-        })
-      : await lookupTeamUserByEmail({
-          email: emailOf(c),
-          teamId: input.teamId,
-          requireServiceEmail: false,
-        });
-    if (u) return u;
-  }
+  // 2. Originators → non-service team users.
+  const originator = await originatorTeamUser({ teamId: input.teamId, candidates });
+  if (originator) return originator;
 
   // 3. Relays → service team users. Relays are always email-addressed
   //    (forwarding / service inboxes); an `'opaque'` relay has no email to
@@ -101,5 +83,41 @@ export async function resolveActingUser(input: {
   if (claimant) return claimant;
 
   // 6. No signal — reject.
+  return null;
+}
+
+function emailOf(c: ActorCandidate): string {
+  return c.identity.email ?? c.identity.identifier;
+}
+
+/**
+ * Step 2 of the chain alone: the first originator candidate that is a
+ * non-service team user. The door asks it too, for `Actor.Member`
+ * (inbound/actors.ts), so a member there is a member here.
+ *
+ * The candidate's `scheme` says how it resolves: `'phone'` (WhatsApp) matches
+ * against `phone_number`; `'email'` matches against non-service `user_email`.
+ * `'opaque'` candidates carry no email/phone the team-user tables can match, so
+ * they're skipped (resolution falls through to the next candidate / creator
+ * fallback) rather than triggering a bogus email lookup.
+ */
+export async function originatorTeamUser(input: {
+  teamId: TeamId;
+  candidates: readonly ActorCandidate[];
+}): Promise<ActingUser | null> {
+  for (const c of input.candidates.filter((c) => c.source === 'originator')) {
+    if (c.identity.scheme === 'opaque') continue;
+    const u = c.identity.scheme === 'phone'
+      ? await lookupTeamUserByPhone({
+          phone: c.identity.identifier,
+          teamId: input.teamId,
+        })
+      : await lookupTeamUserByEmail({
+          email: emailOf(c),
+          teamId: input.teamId,
+          requireServiceEmail: false,
+        });
+    if (u) return u;
+  }
   return null;
 }

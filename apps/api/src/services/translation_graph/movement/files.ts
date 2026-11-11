@@ -64,6 +64,25 @@ export async function assembleMovementFileSources(input: {
   return sources;
 }
 
+/**
+ * Whether `needle` appears in the text of any file `rootSource` imports,
+ * transitively, as `resolveFile` serves them (the checker's own view of this
+ * save). An import it cannot serve counts as a mention: the check cannot see
+ * that file either, and the safe answer to not knowing is yes.
+ */
+export async function importedFilesMention(input: { rootSource: string; resolveFile: ResolveFile; needle: string }): Promise<boolean> {
+  let unserved = false;
+  const sources = await assembleMovementFileSources({
+    rootSource: input.rootSource,
+    load: async (path) => {
+      const file = input.resolveFile(path);
+      if (file === undefined) unserved = true;
+      return file?.source ?? null;
+    },
+  });
+  return unserved || [...sources.values()].some((source) => source.includes(input.needle));
+}
+
 /** A checker `ResolveFile` over a prefetched path → source map. */
 export function resolverOverSources(sources: Map<string, string>): ResolveFile {
   return (path) => {

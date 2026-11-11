@@ -399,17 +399,7 @@ export class ManualAdapter extends BaseAdapter implements Adapter {
   }
 
   async extractActor(input: { event: TriggerEvent }): Promise<ActorIdentity | null> {
-    const payload = invocationOfEvent(input.event);
-    const email = payload.actorEmail?.trim().toLowerCase();
-    if (!email || !email.includes('@')) return null;
-    return {
-      identifier: email,
-      scheme: 'email',
-      adapterType: this.adapterType,
-      email,
-      name: payload.actorName ?? undefined,
-      label: payload.actorName ?? email,
-    };
+    return invokerOf(invocationOfEvent(input.event));
   }
 
   // ── Byte resolution (owner-side) ─────────────────────────────────────────
@@ -459,14 +449,33 @@ function invocationOfEvent(event: TriggerEvent): Partial<ManualInvocationPayload
   return fields !== null && typeof fields === 'object' ? (fields as Partial<ManualInvocationPayload>) : {};
 }
 
+/** The member who pressed Run now, as who acted. */
+function invokerOf(payload: Partial<ManualInvocationPayload>): ActorIdentity | null {
+  const email = payload.actorEmail?.trim().toLowerCase();
+  if (!email || !email.includes('@')) return null;
+  return {
+    identifier: email,
+    scheme: 'email',
+    adapterType: MANUAL_ADAPTER_TYPE,
+    email,
+    name: payload.actorName ?? undefined,
+    label: payload.actorName ?? email,
+  };
+}
+
 /** A Run-now press as the arrival it is on `Invocations`: what the person
- *  supplied, by field id, landing on an `Invocation`. Its identity is the
- *  request's own, so a retried request is the same arrival. */
+ *  supplied, by field id, landing on an `Invocation`, and who pressed it.
+ *  Its identity is the request's own, so a retried request is the same
+ *  arrival. */
 export function invocationArrival(payload: ManualInvocationPayload & { submissionId: string }): Exclude<Arrival, { gone: true }> {
+  const invoker = invokerOf(payload);
   return {
     edge: MANUAL_INVOCATIONS_EDGE,
     identity: `invocation:${payload.submissionId}`,
     landing: { recordType: MANUAL_INVOCATION_DISPLAY_NAME, fields: { ...payload } },
+    // Proven: the platform signed the caller in before it took the press. A
+    // machine principal presses as nobody, so it carries no actor at all.
+    ...(invoker !== null ? { actor: { ...invoker, proven: true } } : {}),
   };
 }
 

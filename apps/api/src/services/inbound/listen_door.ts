@@ -52,6 +52,7 @@ import { resolveAdapter } from '../translation_graph/adapters/resolve';
 import { deliveryRowStore } from '../movement_engine/run_host_deliveries';
 import { chainBefore, loopSettings } from './loop_breaker';
 import { armResolveForArrivals, withWatching, withWatchingOne } from './listen_resolve';
+import { withActors } from './actors';
 
 // ── A saved listen, as its trigger row keeps it ─────────────────────────────
 
@@ -110,6 +111,11 @@ export const listenConfigSchema = z.object({
      *  kept before it was that version's), and whether it polls on the cursor it
      *  brought rather than sharing a poll (inbound/listen_edge.ts). */
     carriedFrom: z.object({ at: z.string(), pollsAlone: z.boolean().optional() }).optional(),
+    /** Its automation reads `Actor`, so the door writes who acted for it
+     *  (inbound/actors.ts). The same fact the save records on the automation,
+     *  which a wait reads. Absent reads as false: a listen saved before the
+     *  platform offered `Actor` could not read it. */
+    readsActor: z.boolean().optional(),
   }),
 });
 export type ListenConfig = z.infer<typeof listenConfigSchema>['listen'];
@@ -585,14 +591,16 @@ export async function deliverArrivals(input: {
   const all = input.listens ?? (await savedListens({ teamId: input.teamId, adapterType: input.delivered.adapterType }));
   const { keptAt } = input;
   const listens = keptAt === undefined ? all : all.filter((listen) => listen.carriedFrom === undefined || Date.parse(listen.carriedFrom.at) <= keptAt.getTime());
-  const judged = judgeArrivals({ listens, delivery: input.delivered, arrivals: input.arrivals, now });
+  // Logged as judged, so a wait its arrival wakes reads who acted too.
+  const { arrivals } = await withActors(input.arrivals, { team: input.teamId, listens, adapter: input.delivered });
+  const judged = judgeArrivals({ listens, delivery: input.delivered, arrivals, now });
   const result = await keepJudgedDelivery({
     teamId: input.teamId,
     subscriptionId: input.subscriptionId,
     adapterType: input.delivered.adapterType,
     externalId: input.externalId,
     source: input.source,
-    arrivals: input.arrivals,
+    arrivals,
     judged,
     ...('checkpoint' in input ? { checkpoint: input.checkpoint } : {}),
     ...(input.request !== undefined ? { request: input.request } : {}),
@@ -604,7 +612,7 @@ export async function deliverArrivals(input: {
   // is listed again, so a base or table made, renamed or removed moves what it
   // watches.
   if (result.kept.kept) {
-    const edges = [...new Set(input.arrivals.flatMap((arrival) => ('gone' in arrival ? [] : [arrival.edge])))];
+    const edges = [...new Set(arrivals.flatMap((arrival) => ('gone' in arrival ? [] : [arrival.edge])))];
     await armResolveForArrivals({ edges, listens });
   }
   return result;

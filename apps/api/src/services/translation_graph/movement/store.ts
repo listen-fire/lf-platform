@@ -354,6 +354,18 @@ export async function recordValidityOutcome(input: {
     .execute();
 }
 
+/** Record whether the movement reads `Actor` (`automationReadsActor`), as a
+ *  save found it. Keyed by its unique name, which the row carries as plain
+ *  text, so no id is asserted to be the store's. */
+export async function recordReadsActor(row: Pick<MovementRow, 'teamId' | 'name'>, readsActor: boolean): Promise<void> {
+  await getAutomationsQb(['movement'])
+    .updateTable('movement')
+    .set({ reads_actor: readsActor })
+    .where('team_id', '=', row.teamId)
+    .where('name', '=', row.name)
+    .execute();
+}
+
 /** Record what validating a movement under `checkedAgainst` (a version newer
  *  than its pin) found — only its errors and warnings, the diagnostics that
  *  keep the pin where it is. An empty list is stored as nothing. */

@@ -103,6 +103,10 @@ export function plannedListensOfSource(input: {
   program: Program;
   snapshot: CatalogSnapshot;
   pin: LanguageVersion;
+  /** Whether the automation reads `Actor` (`automationReadsActor`), as this
+   *  save records it on the automation: each listen carries it, so the door
+   *  decides a delivery's listens without asking the store. */
+  readsActor: boolean;
 }): { listens: ListenConfig[]; refused: string[] } {
   // Not refused on the program's errors: a save whose author consented to
   // them ships, and its listens fire (and its runs fail) as written.
@@ -135,6 +139,7 @@ export function plannedListensOfSource(input: {
       fieldIds: fieldIdsOf(schema),
       ...(landing !== undefined ? { landing } : {}),
       ...listenShapeOf(schema, listen.plan),
+      ...(input.readsActor ? { readsActor: true } : {}),
     });
   }
   return { listens, refused };

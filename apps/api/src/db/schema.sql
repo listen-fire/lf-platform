@@ -3058,6 +3058,10 @@ CREATE TABLE automations.movement (
     -- NULL = nothing recorded (never checked, or the pin is already current).
     upgrade_diagnostics jsonb,
     upgrade_checked_against text,
+    -- Whether its text, or a file it imports, says `Actor`, as its last save
+    -- found. An arrival a run of it waits on is then written with who acted,
+    -- whichever trigger started the run. False until a save says otherwise.
+    reads_actor boolean DEFAULT false NOT NULL,
     created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT movement_validity_status_check CHECK (validity_status IN ('valid', 'invalid', 'unverified'))

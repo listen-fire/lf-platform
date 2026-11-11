@@ -124,6 +124,7 @@ import {
   listenersFiringMovementNames,
   pendingUpgradeDiagnostics,
   recordDerivedTriggerLink,
+  recordReadsActor,
   recordValidityOutcome,
   writeMovementRow,
   MovementGoneError,
@@ -150,6 +151,7 @@ import { modulePlatform } from './carried_run';
 import { listeningOf, type ListeningLane } from '@listen-fire/language-versions';
 import { runningOf } from '@listen-fire/language-versions';
 import { plannedListensOfSource } from './listen_plans';
+import { automationReadsActor } from '../../inbound/actors';
 import { carriedPauses, listenIdentityOf, type CarriedPause } from './carried_pauses';
 import { carriedRunTriggerId } from './carried_names';
 import { revokeCallbacksForRuns } from '../../movement_engine/callback_store';
@@ -892,8 +894,13 @@ async function provisionListeners(input: {
   ): Extract<TriggerRunMode, 'live' | 'dry_run'> =>
     movementWriteRunMode(program, movementName).mode === 'dry_run' ? 'dry_run' : 'live';
 
+  // Whether it reads `Actor` is the automation's, not one trigger's: a run any
+  // trigger started may wait on a press that must say who pressed it. Over
+  // the files the check of this very save saw, so the two agree.
+  const readsActor = await automationReadsActor({ source: input.source, resolveFile: teamCatalog.resolveFile });
+  await recordReadsActor(input.movementRow, readsActor);
   // Each listen as the check plans it: the trigger row is its projection.
-  const planned = plannedListensOfSource({ file: input.movementRow.name, source: input.source, program, snapshot, pin: route.pin });
+  const planned = plannedListensOfSource({ file: input.movementRow.name, source: input.source, program, snapshot, pin: route.pin, readsActor });
   if (planned.refused.length > 0 && input.provisionDespiteErrors !== true) {
     return { ok: false, errors: planned.refused, catalogNotes: teamCatalog.notes };
   }

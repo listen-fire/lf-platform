@@ -166,6 +166,21 @@ jest.mock('../catalog', () => {
   const { unitInstanceSchema } = jest.requireActual('../../adapters/unit_surface');
   const { MANUAL_ADAPTER_TYPE, MANUAL_SURFACE } = jest.requireActual('../../adapters/manual');
   const { CRON_ADAPTER_TYPE, CRON_SURFACE } = jest.requireActual('../../adapters/cron');
+  // A chat whose posts are pressed, reporting who pressed, with the platform's
+  // `Actor` offered on a press as a team's catalog offers it.
+  const { graftActorField } = jest.requireActual('../../../inbound/actors');
+  const chatSchema = graftActorField({
+    adapterType: 'chat',
+    methods: ['getActorCandidates'],
+    schema: {
+      positions: {
+        Post: { properties: { Text: 'text' }, edges: { Presses: { target: 'Press', listenable: true } } },
+        Press: { properties: { Value: 'text' }, edges: {} },
+      },
+      collections: { posts: { target: 'Post', readable: true } },
+      writableRoots: {},
+    },
+  });
   const LIB_SOURCE = [
     'export node Lead {',
     '  name: <text>',
@@ -191,6 +206,7 @@ jest.mock('../catalog', () => {
       },
       manual: { constructionArgs: [], schema: unitInstanceSchema(MANUAL_ADAPTER_TYPE, MANUAL_SURFACE) },
       cron: { constructionArgs: [], schema: unitInstanceSchema(CRON_ADAPTER_TYPE, CRON_SURFACE) },
+      chat: { constructionArgs: [], schema: chatSchema },
     },
     plugins: {
       fetch_pages: { args: ['urls'], output: { kind: 'value', type: 'text' } },
@@ -937,6 +953,36 @@ describe('saveMovement — a shipped schedule is armed promptly', () => {
   it('a file without listens asks for nothing', async () => {
     await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: NO_LISTEN });
     expect(reconcileCalls()).toEqual([]);
+  });
+});
+
+// Whether an automation reads `Actor` is the automation's, so a run its
+// schedule started has the press it waits on written with who pressed it,
+// though no listen of it hears presses.
+describe('saveMovement — an automation on a schedule that reads who pressed', () => {
+  const scheduled = (onPress: string) =>
+    [
+      'import { chat } from adapters',
+      'c = connect chat',
+      'function tick(t: <cron-[:Ticks]->>) {',
+      '  post = only(c-[:posts]->)',
+      '  if (post != null) {',
+      '    p = await new post-[:Presses]->',
+      `    if (exists(p)) { ${onPress} }`,
+      '  }',
+      '}',
+      'listen to cron-[t:Ticks WHERE t.Schedule == "0 9 * * *"]-> fire tick',
+      '',
+    ].join('\n');
+
+  it('records it on the automation, and each re-save records it again', async () => {
+    const first = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: scheduled('who = p.Actor?.Email') });
+    if (!first.ok) throw new Error(`a scheduled automation reading Actor should ship: ${JSON.stringify(first)}`);
+    expect(db.__tables.movement).toMatchObject([{ id: first.movementId, reads_actor: true }]);
+
+    const second = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, id: first.movementId, source: scheduled('said = p.Value') });
+    expect(second.ok).toBe(true);
+    expect(db.__tables.movement).toMatchObject([{ id: first.movementId, reads_actor: false }]);
   });
 });
 

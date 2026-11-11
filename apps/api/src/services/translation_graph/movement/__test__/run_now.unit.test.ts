@@ -77,6 +77,8 @@ function makeQbStub(row: unknown) {
     'set',
     'where',
     'select',
+    'innerJoin',
+    'distinct',
   ]) {
     builder[m] = jest.fn(() => builder);
   }
@@ -181,6 +183,7 @@ describe('runMovementAsync', () => {
           recordType: 'Invocation',
           fields: expect.objectContaining({ actorEmail: 'ada@example.com', actorName: 'Ada', firedAt: expect.any(String) }),
         },
+        actor: { identifier: 'ada@example.com', scheme: 'email', adapterType: 'manual', email: 'ada@example.com', name: 'Ada', label: 'Ada', proven: true },
       },
     ]);
     expect(kept.judged.minted).toHaveLength(1);

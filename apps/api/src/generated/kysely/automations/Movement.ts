@@ -47,6 +47,8 @@ export default interface MovementTable {
   upgrade_diagnostics: ColumnType<unknown | null, unknown | null, unknown | null>;
 
   upgrade_checked_against: ColumnType<string | null, string | null, string | null>;
+
+  reads_actor: ColumnType<boolean, boolean | undefined, boolean>;
 }
 
 export type Movement = Selectable<MovementTable>;
