@@ -17,9 +17,9 @@
   "dependencies": {
     "@listen-fire/kg": "workspace:*",
     "@listen-fire/lang-0.12": "workspace:*",
-    "@listen-fire/slack": "0.13.4",
+    "@listen-fire/slack": "0.13.5",
     "legacy-lang": "workspace:@listen-fire/legacy-lang@*",
-    "module-kit": "npm:@listen-fire/module-kit@0.14.0",
+    "module-kit": "npm:@listen-fire/module-kit@0.14.1",
     "movement-engine": "catalog:",
     "movement-lang": "catalog:"
   },
