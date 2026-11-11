@@ -14,7 +14,7 @@ import type { Grantee, StatedVerb, Target, Thing, Verb } from '../../../services
 
 import { getCoreQb } from '../../../lib/kysely';
 import { StatementStore } from '../../../services/access/statement';
-import { StatementRefusedError, accessTo, mayChangeStatement, seenOnlyBy, setStatement } from '../../../services/access/decide';
+import { StatementRefusedError, accessTo, mayChangeStatement, seenOnlyBy, setStatement, type StatementRefusal } from '../../../services/access/decide';
 import { GranteesInput } from '../../../services/access/stated_input';
 import { CHANGE_STATEMENT, decidesEach, type Decision } from '../../access_route';
 import { cannotChange } from '../access';
@@ -41,6 +41,13 @@ type Shown<T extends Thing> = {
 };
 
 export type AccessView = Shown<'automation'> | Shown<'connection'>;
+
+/**
+ * A change of a list: the thing as it now stands, or why the list was refused.
+ * The page says each reason in its own words, never the decision's text,
+ * which is written for agents.
+ */
+export type SetResult = { ok: true; view: AccessView } | { ok: false; refusal: StatementRefusal };
 
 const AUTOMATION_VERBS = ['read', 'write', 'fire'] as const satisfies readonly StatedVerb<'automation'>[];
 
@@ -142,8 +149,8 @@ async function connectionView(id: string): Promise<Shown<'connection'>> {
 }
 
 /** A list the decision refused, as the page is told it. */
-function refusedList(error: unknown): never {
-  if (error instanceof StatementRefusedError) throw new TRPCError({ code: 'BAD_REQUEST', message: error.message });
+function refusedList(error: unknown): SetResult {
+  if (error instanceof StatementRefusedError) return { ok: false, refusal: error.refusal };
   throw error;
 }
 
@@ -174,26 +181,32 @@ const accessRouter = (procedure: typeof trpc.procedure) => {
     }),
 
     /** Replace one of the thing's lists, as the caller chose it. Answers with the thing as it now stands. */
-    set: userProcedure.input(SetInput).mutation(async ({ input }): Promise<AccessView> => {
+    set: userProcedure.input(SetInput).mutation(async ({ input }): Promise<SetResult> => {
       const principal = currentPrincipal();
       switch (input.thing) {
         case 'automation': {
           if (await cannotChange(input.id)) throw notFound('automation');
           const target: Target<'automation'> = { thing: 'automation', id: input.id };
-          await setStatement(principal, { target, verb: input.verb, grantees: input.grantees }).catch(refusedList);
-          return automationView(input.id);
+          try {
+            await setStatement(principal, { target, verb: input.verb, grantees: input.grantees });
+          } catch (error) {
+            return refusedList(error);
+          }
+          return { ok: true, view: await automationView(input.id) };
         }
         case 'connection': {
           const target: Target<'connection'> = { thing: 'connection', id: input.id };
           if (!(await accessTo(principal, { target, verb: 'use' }))) throw notFound('connection');
-          await setStatement(principal, { target, verb: input.verb, grantees: input.grantees }).catch((error: unknown) => {
+          try {
+            await setStatement(principal, { target, verb: input.verb, grantees: input.grantees });
+          } catch (error) {
             // The caller may use it, so the one way this refuses them is that they only read on its team.
             if (error instanceof StatementRefusedError && error.refusal === 'not_allowed') {
               throw new TRPCError({ code: 'FORBIDDEN', message: READ_ONLY_CONNECTION_MESSAGE });
             }
-            refusedList(error);
-          });
-          return connectionView(input.id);
+            return refusedList(error);
+          }
+          return { ok: true, view: await connectionView(input.id) };
         }
         default:
           return neverAsAny(input);

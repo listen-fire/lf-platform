@@ -21,6 +21,8 @@ import { TeamInviteService } from '../../../../services/team_invite';
 import { cleanupTeam } from '../../../../test/harness/cleanup';
 import { trpc } from '../../trpc';
 import { teamMembersRouter } from '../teamMembers';
+import { userManagementRouter } from '../admin/userManagement';
+import { TeamMembershipService } from '../../../../services/team_membership';
 
 async function makeTeam(): Promise<TeamId> {
   const teamId = randomUUID() as TeamId;
@@ -272,6 +274,59 @@ describe('team members — managing the team from its own settings', () => {
           { kind: 'user', userId: admin.userId },
         ]),
       );
+    } finally {
+      await getAutomationsQb(['movement']).deleteFrom('movement').where('id', '=', deals.id as MovementId).execute();
+    }
+  });
+
+  // The platform admin's own doors change membership too, and must pass on
+  // what the member held as the team's do.
+  const asPlatformAdmin = <T>(fn: (caller: ReturnType<typeof adminCaller>) => Promise<T>): Promise<T> => {
+    const ctx = new Context();
+    ctx.bindPrincipal(userPrincipal({ userId: admin.userId, teamId }));
+    return ctx.runAsync(() => fn(adminCaller()));
+  };
+  const adminCaller = () => userManagementRouter(trpc.procedure).createCaller({ authorise: async () => {} });
+
+  it('passes what a member alone held when a platform admin removes them from the team', async () => {
+    // Homed elsewhere, since an admin may not remove someone from their home team.
+    const leaver = await makeUser(otherTeamId, 'write');
+    await TeamMembershipService.grantAccess({ teamId, userId: leaver.userId, access: 'write' });
+    const deals: Target<'automation'> = { thing: 'automation', id: randomUUID() };
+    await getAutomationsQb(['movement'])
+      .insertInto('movement')
+      .values({ id: deals.id as MovementId, team_id: teamId, name: 'Deals', source: '' })
+      .execute();
+    const theirs = [{ kind: 'user' as const, userId: leaver.userId }];
+    await StatementStore.replaceGrants(deals, { teamId, verb: 'write', grantees: theirs });
+    await StatementStore.replaceGrants(deals, { teamId, verb: 'read', grantees: theirs });
+
+    try {
+      await asPlatformAdmin((c) => c.removeUserFromTeam({ teamId, userId: leaver.userId }));
+
+      expect(await accessOn(teamId, leaver.userId)).toBeUndefined();
+      expect(await StatementStore.grantsOf(deals, { teamId, verb: 'write' })).toEqual([{ kind: 'user', userId: admin.userId }]);
+      expect(await StatementStore.grantsOf(deals, { teamId, verb: 'read' })).toEqual([{ kind: 'user', userId: admin.userId }]);
+    } finally {
+      await getAutomationsQb(['movement']).deleteFrom('movement').where('id', '=', deals.id as MovementId).execute();
+    }
+  });
+
+  it('passes a write list a member alone held when a platform admin moves them onto the team with less access', async () => {
+    const demoted = await makeUser(teamId, 'write');
+    const deals: Target<'automation'> = { thing: 'automation', id: randomUUID() };
+    await getAutomationsQb(['movement'])
+      .insertInto('movement')
+      .values({ id: deals.id as MovementId, team_id: teamId, name: 'Deals', source: '' })
+      .execute();
+    const theirs = [{ kind: 'user' as const, userId: demoted.userId }];
+    await StatementStore.replaceGrants(deals, { teamId, verb: 'write', grantees: theirs });
+
+    try {
+      await asPlatformAdmin((c) => c.moveUserToTeam({ userEmail: demoted.email, newTeamId: teamId, access: 'read' }));
+
+      expect(await accessOn(teamId, demoted.userId)).toBe('read');
+      expect(await StatementStore.grantsOf(deals, { teamId, verb: 'write' })).toEqual([{ kind: 'user', userId: admin.userId }]);
     } finally {
       await getAutomationsQb(['movement']).deleteFrom('movement').where('id', '=', deals.id as MovementId).execute();
     }

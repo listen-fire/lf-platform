@@ -3,9 +3,10 @@
 // instead of the automation.
 //
 // Each answer comes from the rows the engine and its host write, never from what
-// a caller supplied. Two kinds of thing belong to no automation, and only team
+// a caller supplied. Some things belong to no automation, and only team
 // membership decides them, as it did before statements existed: a listen whose
-// movement is gone, and a question a REST caller asked. Anything else whose
+// movement is gone and every run it starts, and a question a REST caller
+// asked. Anything else whose
 // automation cannot be traced (a run whose listen and version are both gone, a
 // question a run asked that no traced run or automation is recorded on) is left
 // out of every answer, so a route refuses it as it refuses something missing.
@@ -25,9 +26,6 @@ import { QUEUED_RUN_WORK_KINDS } from '../work/kinds';
 
 /** Where something lives, and the automation it belongs to (null: none, so team membership decides it). */
 type Owner = { teamId: string; automationId: string | null };
-
-/** Where a run lives, and its automation. A run always belongs to one: one that cannot be traced is not answered. */
-type RunOwner = { teamId: string; automationId: string };
 
 const uuid = z.string().uuid();
 
@@ -72,7 +70,7 @@ function lfFileOf(triggerId: string): string | null {
  * its listen's, else (a Run now of a carried version, or an lf run) the
  * movement its trigger id names.
  */
-async function automationsOfRuns(asked: { runIds: readonly string[]; teamIds: readonly string[] }): Promise<Map<string, RunOwner>> {
+async function automationsOfRuns(asked: { runIds: readonly string[]; teamIds: readonly string[] }): Promise<Map<string, Owner>> {
   const runIds = uuids(asked.runIds);
   if (runIds.length === 0 || asked.teamIds.length === 0) return new Map();
   const runs = await getAutomationsQb(['trigger_run'])
@@ -106,13 +104,16 @@ async function automationsOfRuns(asked: { runIds: readonly string[]; teamIds: re
   const byListen = await automationsOfListens({ triggerIds: all.map((run) => run.triggerId), teamIds: asked.teamIds });
   const movements = await movementsNamedBy(all);
 
-  const owners = new Map<string, RunOwner>();
+  const owners = new Map<string, Owner>();
   for (const run of all) {
+    const listen = byListen.get(run.triggerId);
     const automationId =
       (run.versionId !== null ? byVersion.get(run.versionId) : undefined) ??
-      byListen.get(run.triggerId)?.automationId ??
+      listen?.automationId ??
       movements.get(`${run.teamId}:${run.triggerId}`);
     if (automationId !== undefined) owners.set(run.runId, { teamId: run.teamId, automationId });
+    // A run of a listen with no automation is the team's, as the listen is.
+    else if (listen !== undefined) owners.set(run.runId, { teamId: run.teamId, automationId: null });
   }
   return owners;
 }
@@ -248,19 +249,18 @@ async function automationsOfAsks(asked: { askIds: readonly string[]; teamIds: re
             .execute()
         ).map((row) => String(row.id)),
   );
-  const automationOfRun = (runId: string | undefined) => (runId === undefined ? undefined : runOwners.get(runId)?.automationId);
+  const ownerOfRun = (runId: string | undefined) => (runId === undefined ? undefined : runOwners.get(runId));
 
   const owners = new Map<string, Owner>();
   for (const ask of asks) {
     const askId = String(ask.id);
     const provenance = recorded.get(askId) ?? {};
     const movementId = provenance.movementId;
-    const automationId =
-      automationOfRun(waitingRun.get(askId)) ??
-      automationOfRun(provenance.runId) ??
-      (movementId !== undefined && movements.has(movementId) ? movementId : undefined);
-    if (automationId !== undefined) owners.set(askId, { teamId: ask.team_id, automationId });
-    else if (!askedInARun(provenance)) owners.set(askId, { teamId: ask.team_id, automationId: null });
+    const run = ownerOfRun(waitingRun.get(askId)) ?? ownerOfRun(provenance.runId);
+    const automationId = run?.automationId ?? (movementId !== undefined && movements.has(movementId) ? movementId : undefined);
+    if (automationId !== undefined && automationId !== null) owners.set(askId, { teamId: ask.team_id, automationId });
+    // A question a team's run asked is the team's, as the run is.
+    else if (run !== undefined || !askedInARun(provenance)) owners.set(askId, { teamId: ask.team_id, automationId: null });
   }
   return owners;
 }
@@ -289,7 +289,7 @@ async function automationsReachedBy(asked: {
   for (const run of runs) {
     const owner = runOwners.get(run.id);
     if (owner === undefined) reached.untraced = true;
-    else reached.automationIds.add(owner.automationId);
+    else if (owner.automationId !== null) reached.automationIds.add(owner.automationId);
   }
   // A listen edited since keeps its facts under the pipeline it had: its file names its automation.
   const { rows: facts } = await sql<{ listened: boolean; movement_id: string | null; named: string | null }>`
@@ -306,7 +306,7 @@ async function automationsReachedBy(asked: {
   return reached;
 }
 
-async function automationOfRun(asked: { runId: string; teamIds: readonly string[] }): Promise<RunOwner | undefined> {
+async function automationOfRun(asked: { runId: string; teamIds: readonly string[] }): Promise<Owner | undefined> {
   return (await automationsOfRuns({ runIds: [asked.runId], teamIds: asked.teamIds })).get(asked.runId);
 }
 
@@ -322,17 +322,17 @@ async function automationOfAsk(asked: { askId: string; teamIds: readonly string[
  * The automation a firing belongs to by the trigger id its run records, for a
  * run whose row may not be written yet: its listen's, else the movement the
  * id names (a carried Run now's own id, an lf run's file). A firing is a run,
- * so one of no automation is not answered.
+ * so one of a listen with no automation is the team's, as the listen is.
  */
-async function automationOfTriggerId(asked: { triggerId: string; teamIds: readonly string[] }): Promise<RunOwner | undefined> {
+async function automationOfTriggerId(asked: { triggerId: string; teamIds: readonly string[] }): Promise<Owner | undefined> {
   const listen = (await automationsOfListens({ triggerIds: [asked.triggerId], teamIds: asked.teamIds })).get(asked.triggerId);
-  if (listen !== undefined && listen.automationId !== null) return { teamId: listen.teamId, automationId: listen.automationId };
+  if (listen !== undefined && listen.automationId !== null) return listen;
   const named = await movementsNamedBy(asked.teamIds.map((teamId) => ({ teamId, triggerId: asked.triggerId })));
   for (const teamId of asked.teamIds) {
     const automationId = named.get(`${teamId}:${asked.triggerId}`);
     if (automationId !== undefined) return { teamId, automationId };
   }
-  return undefined;
+  return listen;
 }
 
 const Whose = {
@@ -346,4 +346,4 @@ const Whose = {
   automationOfAsk,
 };
 
-export { Whose, type Owner, type RunOwner };
+export { Whose, type Owner };

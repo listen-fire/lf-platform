@@ -315,7 +315,7 @@ const userManagementRouter = (procedure: typeof trpc.procedure) => {
           newUsername: z.string().optional(),
         }),
       )
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input }): Promise<{ id: string; username: string; email: string }> => {
         const ctx = currentContext();
         await ctx.enterTransaction();
 
@@ -336,22 +336,21 @@ const userManagementRouter = (procedure: typeof trpc.procedure) => {
           },
         });
 
-        await ctx.prisma.teamMembership.upsert({
-          where: {
-            userId_teamId: {
-              userId: user.id,
-              teamId: input.newTeamId,
-            },
-          },
-          create: {
-            userId: user.id,
-            teamId: input.newTeamId,
-            access: input.access,
-          },
-          update: {
-            access: input.access,
-          },
-        });
+        // Through the membership service, in this transaction: someone already
+        // on the team who loses write passes on the write lists only they held.
+        const membership = { teamId: input.newTeamId as TeamId, userId: user.id as UserId, access: input.access };
+        const changed = await TeamMembershipService.changeAccess(membership);
+        switch (changed.status) {
+          case 'changed':
+            break;
+          case 'not_a_member':
+            await TeamMembershipService.grantAccess(membership);
+            break;
+          case 'last_admin':
+            throw new Error("Can't take write access from the team's last admin. Grant another member write access first.");
+          default:
+            return neverAsAny(changed);
+        }
 
         return { id: user.id, username: user.username, email: input.userEmail };
       }),
@@ -384,7 +383,7 @@ const userManagementRouter = (procedure: typeof trpc.procedure) => {
 
     removeUserFromTeam: procedure
       .input(z.object({ teamId: z.string().uuid(), userId: z.string().uuid() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input }): Promise<{ removed: true }> => {
         const teamId = input.teamId as TeamId;
         const userId = input.userId as UserId;
 
@@ -414,30 +413,21 @@ const userManagementRouter = (procedure: typeof trpc.procedure) => {
           );
         }
 
-        if (membership.access === 'write') {
-          const anotherAdmin = await getCoreQb(['team_membership'])
-            .selectFrom('team_membership')
-            .select('id')
-            .where('team_id', '=', teamId)
-            .where('access', '=', 'write')
-            .where('user_id', '!=', userId)
-            .limit(1)
-            .executeTakeFirst();
-
-          if (!anotherAdmin) {
+        // One transaction, so what only they held passes on as they leave.
+        await currentContext().enterTransaction();
+        const removed = await TeamMembershipService.removeMember({ teamId, userId });
+        switch (removed.status) {
+          case 'removed':
+            return { removed: true as const };
+          case 'not_a_member':
+            throw new Error("This user isn't a member of that team.");
+          case 'last_admin':
             throw new Error(
               "Can't remove the team's last admin (write-access member). Grant another member write access first.",
             );
-          }
+          default:
+            return neverAsAny(removed);
         }
-
-        await getCoreQb(['team_membership'])
-          .deleteFrom('team_membership')
-          .where('team_id', '=', teamId)
-          .where('user_id', '=', userId)
-          .execute();
-
-        return { removed: true as const };
       }),
   });
 };

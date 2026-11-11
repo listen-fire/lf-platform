@@ -11,18 +11,43 @@
 //     these pairs instead of the whole workspace.
 //
 // Detection is a cheap parse (`parseProgram` is fast) walking every
-// statement body for `name = adapter(credentials: cred)` assignments. While
+// statement, at any depth (`eachStatement`, below), for
+// `name = adapter(credentials: cred)` assignments. While
 // the program is mid-edit and doesn't parse, a line-level lexical fallback
 // keeps detection alive so schemas still stream in as you type — the
 // checker is silent on unknown schemas by design, so an over-approximate
 // fallback can never cause a wrong diagnostic, only an unnecessary fetch
 // (which the consumer's catalog membership check filters out anyway).
 
-import type { ConstructionCall, Program, Statement } from 'movement-lang/parser/ast';
+import type {
+  ArmExpression,
+  AwaitExpression,
+  CallArg,
+  CollectionOpExpression,
+  CombinatorExpression,
+  ConstructionCall,
+  ExprSlot,
+  ExtractStage,
+  ImportStatement,
+  LinkTarget,
+  MatchExpression,
+  NamedArg,
+  NodeLiteral,
+  PathHead,
+  PathRoot,
+  Program,
+  RValue,
+  Statement,
+  TraversalBlock,
+  WriteExpression,
+} from 'movement-lang/parser/ast';
+import type { MExpr } from 'movement-lang/parser/expression/tree';
 import { typeNameOf } from 'movement-lang/parser/ast';
-import { MovementParseError, parseProgram } from '../parser/parse';
+import { MovementParseError, parseNestedCall, parseProgram, type ParseOptions } from '../parser/parse';
 import { unwrapCredentialArg } from 'movement-lang/parser/scan';
 import { eventAddressOfHops } from '../checker/event_address';
+import { nestedCalls } from '../checker/nested_calls';
+import { treeOfSlot } from '../expression/bridge';
 import { CURRENT_LANGUAGE_VERSION, type LanguageVersion } from '../language_version';
 
 export interface ConstructionRef {
@@ -76,6 +101,21 @@ export function referencedConstructions(source: string): ConstructionRef[] {
     if (!(e instanceof MovementParseError)) throw e;
     refs = constructionsByLexicalScan(source);
   }
+  return distinctConstructions(refs);
+}
+
+/**
+ * The constructions a program that parses makes, with no lexical guess: a
+ * reader deciding who may reach the file must not widen on a scan that can
+ * miss a construction. Parsed under the pin the options name, so a file is
+ * read by the release it was written against. Throws `MovementParseError` when
+ * the source does not parse.
+ */
+export function parsedConstructions(source: string, options?: ParseOptions): ConstructionRef[] {
+  return distinctConstructions(constructionsOfProgram(parseProgram(source, options)));
+}
+
+function distinctConstructions(refs: readonly ConstructionRef[]): ConstructionRef[] {
   const seen = new Set<string>();
   const out: ConstructionRef[] = [];
   for (const ref of refs) {
@@ -105,63 +145,25 @@ interface ImportAliasMaps {
 }
 
 function constructionsOfProgram(program: Program): ConstructionRef[] {
-  const refs: Array<{ adapter: string; credential?: string; constructionArgs?: Record<string, string> }> = [];
+  const constructs: ConstructionCall[] = [];
   const aliases: ImportAliasMaps = { adapters: new Map(), credentials: new Map() };
-  const walk = (statements: Statement[]): void => {
-    for (const statement of statements) {
-      switch (statement.kind) {
-        case 'import':
-          if (statement.source.kind === 'builtin' && statement.source.namespace !== 'plugins') {
-            const map = aliases[statement.source.namespace];
-            for (const { name, alias } of statement.names) {
-              if (alias !== undefined) map.set(alias, name);
-            }
-          }
-          break;
-        case 'assign':
-          if (statement.value.kind === 'construct') {
-            const construct = statement.value.construct;
-            const credentialRaw = construct.args.find((a) => a.name === 'credentials')?.value.raw;
-            const credential =
-              credentialRaw !== undefined ? unwrapCredentialArg(credentialRaw) : null;
-            // Every non-credential arg, raw as authored — the entry position
-            // rides here (see `ConstructionRef.constructionArgs`).
-            const constructionArgs: Record<string, string> = {};
-            for (const arg of construct.args) {
-              if (arg.name === 'credentials') continue;
-              constructionArgs[arg.name] = arg.value.raw;
-            }
-            refs.push({
-              adapter: construct.callee,
-              ...(credential !== null ? { credential } : {}),
-              ...(Object.keys(constructionArgs).length > 0 ? { constructionArgs } : {}),
-            });
-          } else if (statement.value.kind === 'block') {
-            walk(statement.value.block.body);
-          }
-          break;
-        case 'listen':
-          // `listen to <name>` references a NAMED construction (handled by the
-          // `assign` case); inline constructions are rejected by the checker,
-          // so nothing to collect here.
-          break;
-        case 'movement':
-          walk(statement.body);
-          break;
-        case 'block':
-          walk(statement.block.body);
-          break;
-        case 'if':
-          for (const arm of statement.arms) walk(arm.body);
-          if (statement.elseArm) walk(statement.elseArm.body);
-          break;
-        default:
-          break;
-      }
-    }
-  };
-  walk(program.statements);
-  return refs.map((ref) => resolveAliases(ref, aliases));
+  eachStatement(program, (statement) => {
+    if (statement.kind === 'import') noteAliases(statement, aliases);
+    else if (statement.kind === 'assign' && statement.value.kind === 'construct') constructs.push(statement.value.construct);
+    // The checker refuses an inline construction in a listen, but a refused
+    // file can still be saved, so it is a construction all the same.
+    else if (statement.kind === 'listen' && statement.construct !== undefined) constructs.push(statement.construct);
+  });
+  // Aliases resolve once every import is seen, wherever it was written.
+  return constructs.map((construct) => constructionRefOf(construct, aliases));
+}
+
+function noteAliases(statement: ImportStatement, aliases: ImportAliasMaps): void {
+  if (statement.source.kind !== 'builtin' || statement.source.namespace === 'plugins') return;
+  const map = aliases[statement.source.namespace];
+  for (const { name, alias } of statement.names) {
+    if (alias !== undefined) map.set(alias, name);
+  }
 }
 
 /** Map a construction's local names back to original catalog-side names. */
@@ -288,53 +290,23 @@ export function referencedListens(source: string): ListenRef[] {
   const bindings = new Map<string, ConstructionRef>();
   const listens: ListenRef[] = [];
 
-  const walk = (statements: Statement[]): void => {
-    for (const statement of statements) {
-      switch (statement.kind) {
-        case 'import':
-          if (statement.source.kind === 'builtin' && statement.source.namespace !== 'plugins') {
-            const map = aliases[statement.source.namespace];
-            for (const { name, alias } of statement.names) {
-              if (alias !== undefined) map.set(alias, name);
-            }
-          }
-          break;
-        case 'assign':
-          if (statement.value.kind === 'construct') {
-            bindings.set(statement.name, constructionRefOf(statement.value.construct, aliases));
-          } else if (statement.value.kind === 'block') {
-            walk(statement.value.block.body);
-          }
-          break;
-        case 'listen': {
-          // The ambient `kg` and the rejected inline form ground in no
-          // construction — nothing for the host to walk.
-          const construction = bindings.get(statement.instance);
-          if (!construction) break;
-          const config: Record<string, string> = {};
-          for (const arg of statement.config) {
-            if (arg.isType === true) continue; // `type: <company>` — a kg listen's shape
-            config[arg.name] = unwrapStringLiteral(arg.value.raw) ?? arg.value.raw.trim();
-          }
-          listens.push({ construction, config, movement: statement.movement });
-          break;
-        }
-        case 'movement':
-          walk(statement.body);
-          break;
-        case 'block':
-          walk(statement.block.body);
-          break;
-        case 'if':
-          for (const arm of statement.arms) walk(arm.body);
-          if (statement.elseArm) walk(statement.elseArm.body);
-          break;
-        default:
-          break;
+  eachStatement(program, (statement) => {
+    if (statement.kind === 'import') noteAliases(statement, aliases);
+    else if (statement.kind === 'assign' && statement.value.kind === 'construct') {
+      bindings.set(statement.name, constructionRefOf(statement.value.construct, aliases));
+    } else if (statement.kind === 'listen') {
+      // The ambient `kg` and the rejected inline form ground in no
+      // construction — nothing for the host to walk.
+      const construction = bindings.get(statement.instance);
+      if (!construction) return;
+      const config: Record<string, string> = {};
+      for (const arg of statement.config) {
+        if (arg.isType === true) continue; // `type: <company>` — a kg listen's shape
+        config[arg.name] = unwrapStringLiteral(arg.value.raw) ?? arg.value.raw.trim();
       }
+      listens.push({ construction, config, movement: statement.movement });
     }
-  };
-  walk(program.statements);
+  });
   return listens;
 }
 
@@ -382,50 +354,22 @@ export function referencedEventAddresses(source: string): EventAddressRef[] {
   const bindings = new Map<string, ConstructionRef>();
   const addresses: EventAddressRef[] = [];
 
-  const walk = (statements: Statement[]): void => {
-    for (const statement of statements) {
-      switch (statement.kind) {
-        case 'import':
-          if (statement.source.kind === 'builtin' && statement.source.namespace !== 'plugins') {
-            const map = aliases[statement.source.namespace];
-            for (const { name, alias } of statement.names) {
-              if (alias !== undefined) map.set(alias, name);
-            }
-          }
-          break;
-        case 'assign':
-          if (statement.value.kind === 'construct') {
-            bindings.set(statement.name, constructionRefOf(statement.value.construct, aliases));
-          } else if (statement.value.kind === 'block') {
-            walk(statement.value.block.body);
-          }
-          break;
-        case 'movement': {
-          for (const param of statement.params) {
-            const type = typeNameOf(param.type);
-            if (type?.hopsRaw === undefined) continue;
-            const construction = bindings.get(type.graph);
-            if (!construction) break; // not an instance — the checker reports it
-            const address = addressOfHops(type.hopsRaw, CURRENT_LANGUAGE_VERSION);
-            if (address === undefined) continue; // not an address — stays silent
-            addresses.push({ construction, ...address, movement: statement.name });
-          }
-          walk(statement.body);
-          break;
-        }
-        case 'block':
-          walk(statement.block.body);
-          break;
-        case 'if':
-          for (const arm of statement.arms) walk(arm.body);
-          if (statement.elseArm) walk(statement.elseArm.body);
-          break;
-        default:
-          break;
+  eachStatement(program, (statement) => {
+    if (statement.kind === 'import') noteAliases(statement, aliases);
+    else if (statement.kind === 'assign' && statement.value.kind === 'construct') {
+      bindings.set(statement.name, constructionRefOf(statement.value.construct, aliases));
+    } else if (statement.kind === 'movement') {
+      for (const param of statement.params) {
+        const type = typeNameOf(param.type);
+        if (type?.hopsRaw === undefined) continue;
+        const construction = bindings.get(type.graph);
+        if (!construction) break; // not an instance — the checker reports it
+        const address = addressOfHops(type.hopsRaw, CURRENT_LANGUAGE_VERSION);
+        if (address === undefined) continue; // not an address — stays silent
+        addresses.push({ construction, ...address, movement: statement.name });
       }
     }
-  };
-  walk(program.statements);
+  });
   return addresses;
 }
 
@@ -480,31 +424,9 @@ export function referencedFileImports(source: string): string[] {
 
 function fileImportsOfProgram(program: Program): string[] {
   const paths: string[] = [];
-  const walk = (statements: Statement[]): void => {
-    for (const statement of statements) {
-      switch (statement.kind) {
-        case 'import':
-          if (statement.source.kind === 'file') paths.push(statement.source.path);
-          break;
-        case 'movement':
-          walk(statement.body);
-          break;
-        case 'block':
-          walk(statement.block.body);
-          break;
-        case 'if':
-          for (const arm of statement.arms) walk(arm.body);
-          if (statement.elseArm) walk(statement.elseArm.body);
-          break;
-        case 'assign':
-          if (statement.value.kind === 'block') walk(statement.value.block.body);
-          break;
-        default:
-          break;
-      }
-    }
-  };
-  walk(program.statements);
+  eachStatement(program, (statement) => {
+    if (statement.kind === 'import' && statement.source.kind === 'file') paths.push(statement.source.path);
+  });
   return paths;
 }
 
@@ -553,4 +475,343 @@ export function referencedNames(source: string): string[] {
     names.add(word);
   }
   return [...names];
+}
+
+// ── Every statement ──────────────────────────────────────────────────────────
+//
+// What a program constructs, listens to and imports is read off its statements
+// wherever they are written: a construction inside a closure runs when the
+// closure is called, and the save rule (a saver must be able to use every
+// connection the file names) is only as good as the set this walk yields. So
+// the walk is exhaustive by kind, and a kind added to the language fails to
+// type-check here until it is walked. It reads the calls an expression holds
+// too, since a closure handed to one (`COUNT(MAP(xs, (x) => { … }))`) is a
+// body written inside an expression, and the expression keeps it as text.
+
+/** Every statement of the program at any depth, each before the ones inside it. */
+export function eachStatement(program: Program, visit: (statement: Statement) => void): void {
+  const statements = (list: readonly Statement[]): void => {
+    for (const statement of list) visitStatement(statement);
+  };
+
+  const visitStatement = (statement: Statement): void => {
+    visit(statement);
+    switch (statement.kind) {
+      case 'import':
+      case 'shape':
+      case 'type':
+      case 'unlink':
+      case 'delete':
+      case 'refresh':
+        return;
+      case 'assign':
+      case 'return':
+        return value(statement.value);
+      case 'movement':
+        return statements(statement.body);
+      case 'listen':
+        if (statement.construct !== undefined) namedArgs(statement.construct.args);
+        namedArgs(statement.config);
+        if (statement.path !== undefined) head(statement.path);
+        return;
+      case 'write':
+        return written(statement.write);
+      case 'match':
+        return written(statement.match);
+      case 'call':
+        return callArgs(statement.args);
+      case 'block':
+        return block(statement.block);
+      case 'link':
+        return linkTarget(statement.link.to);
+      case 'if':
+        for (const arm of statement.arms) {
+          slot(arm.condition);
+          statements(arm.body);
+        }
+        if (statement.elseArm !== undefined) statements(statement.elseArm.body);
+        return;
+      case 'await':
+        return awaited(statement.await);
+      case 'combinator':
+        return combinator(statement.combinator);
+      case 'collection':
+        return collection(statement.collection);
+      case 'error':
+        return slot(statement.message);
+      default:
+        return unwalked(statement);
+    }
+  };
+
+  const value = (rvalue: RValue): void => {
+    switch (rvalue.kind) {
+      case 'construct':
+        return namedArgs(rvalue.construct.args);
+      case 'call':
+        return callArgs(rvalue.call.args);
+      case 'write':
+        return written(rvalue.write);
+      case 'match':
+        return written(rvalue.match);
+      case 'link':
+        return written(rvalue.link.to.match);
+      case 'extract':
+        for (const from of rvalue.extract.from) slot(from);
+        return extractStages(rvalue.extract.stages);
+      case 'extractCall': {
+        const { content, config, shape } = rvalue.extractCall;
+        slot(content);
+        if (config !== undefined) slot(config);
+        switch (shape.kind) {
+          case 'named':
+            return;
+          case 'inline':
+            return visitStatement(shape.declaration);
+          case 'computed':
+            return slot(shape.expr);
+          default:
+            return unwalked(shape);
+        }
+      }
+      case 'block':
+        return block(rvalue.block);
+      case 'await':
+        return awaited(rvalue.await);
+      case 'combinator':
+        return combinator(rvalue.combinator);
+      case 'collection':
+        return collection(rvalue.collection);
+      case 'members':
+        return;
+      case 'inlineBlock':
+        return statements(rvalue.inlineBlock.body);
+      case 'callback': {
+        const { subject, config } = rvalue.callback;
+        namedArgs(config);
+        switch (subject.kind) {
+          case 'inline':
+            return statements(subject.closure.body);
+          case 'named':
+            return callArgs(subject.args);
+          default:
+            return unwalked(subject);
+        }
+      }
+      case 'closure':
+        return statements(rvalue.closure.body);
+      case 'node':
+        return node(rvalue.node);
+      case 'lazy':
+        head(rvalue.lazy.head);
+        if (rvalue.lazy.mapping !== undefined) node(rvalue.lazy.mapping);
+        return;
+      case 'expr':
+        return slot(rvalue.expr);
+      default:
+        return unwalked(rvalue);
+    }
+  };
+
+  const callArgs = (args: readonly CallArg[]): void => {
+    for (const arg of args) {
+      switch (arg.kind) {
+        case 'expr':
+          slot(arg.expr);
+          break;
+        case 'write':
+          written(arg.write);
+          break;
+        case 'node':
+          node(arg.node);
+          break;
+        case 'call':
+          callArgs(arg.call.args);
+          break;
+        case 'closure':
+          statements(arg.closure.body);
+          break;
+        case 'type':
+          break;
+        default:
+          unwalked(arg);
+      }
+    }
+  };
+
+  const awaited = (expression: AwaitExpression): void => {
+    const source = expression.source;
+    switch (source.kind) {
+      case 'traversal':
+        return head(source.head);
+      case 'combinator':
+        return combinator(source.combinator);
+      case 'sleep':
+        return;
+      case 'until':
+        switch (source.condition.kind) {
+          case 'closure':
+            return statements(source.condition.closure.body);
+          case 'expr':
+            return slot(source.condition.expr);
+          default:
+            return unwalked(source.condition);
+        }
+      default:
+        return unwalked(source);
+    }
+  };
+
+  const combinator = (expression: CombinatorExpression): void => {
+    if (expression.settings !== undefined) slot(expression.settings);
+    const arms = expression.arms;
+    switch (arms.kind) {
+      case 'literal':
+      case 'arguments':
+        for (const written of arms.arms) arm(written);
+        return;
+      case 'dynamic':
+        return slot(arms.expr);
+      default:
+        return unwalked(arms);
+    }
+  };
+
+  const arm = (written: ArmExpression): void => {
+    switch (written.kind) {
+      case 'closure':
+        return statements(written.closure.body);
+      case 'ref':
+        return;
+      default:
+        return unwalked(written);
+    }
+  };
+
+  const collection = (op: CollectionOpExpression): void => {
+    slot(op.source);
+    if (op.init !== undefined) slot(op.init);
+    if (op.config !== undefined) slot(op.config);
+    arm(op.fn);
+  };
+
+  const block = (traversal: TraversalBlock): void => {
+    head(traversal.head);
+    statements(traversal.body);
+  };
+
+  const linkTarget = (target: LinkTarget): void => {
+    switch (target.kind) {
+      case 'handle':
+        return;
+      case 'match':
+        return written(target.match);
+      default:
+        return unwalked(target);
+    }
+  };
+
+  const written = (expression: WriteExpression | MatchExpression): void => {
+    const target = expression.target;
+    switch (target.kind) {
+      case 'linked':
+        head(target.path);
+        break;
+      case 'tuple':
+        for (const path of target.paths) head(path);
+        break;
+      case 'position':
+        root(target.root);
+        break;
+      default:
+        unwalked(target);
+    }
+    for (const clause of expression.uniqueBy) slot(clause.predicate);
+    for (const field of expression.fields) slot(field.value);
+  };
+
+  const node = (literal: NodeLiteral): void => {
+    for (const entry of literal.entries) {
+      switch (entry.kind) {
+        case 'value':
+          slot(entry.value);
+          break;
+        case 'nodes':
+          for (const nested of entry.nodes) node(nested);
+          break;
+        case 'declared':
+          break;
+        case 'traversal':
+          head(entry.head);
+          if (entry.mapping !== undefined) node(entry.mapping);
+          break;
+        default:
+          unwalked(entry);
+      }
+    }
+  };
+
+  const extractStages = (stages: readonly ExtractStage[]): void => {
+    for (const stage of stages) {
+      for (const plugin of stage.through ?? []) {
+        namedArgs(plugin.args);
+        for (const positional of plugin.positional ?? []) slot(positional);
+      }
+      for (const field of stage.fields) slot(field.description);
+      for (const child of stage.children) {
+        if (child.description !== undefined) slot(child.description);
+        extractStages(child.stages);
+      }
+    }
+  };
+
+  const head = (path: PathHead): void => {
+    if (path.root !== undefined) root(path.root);
+  };
+
+  const root = (pathRoot: PathRoot): void => {
+    switch (pathRoot.kind) {
+      case 'name':
+        return;
+      case 'expression':
+        return slot(pathRoot.expr);
+      default:
+        return unwalked(pathRoot);
+    }
+  };
+
+  const namedArgs = (args: readonly NamedArg[]): void => {
+    for (const arg of args) slot(arg.value);
+  };
+
+  // A call written inside an expression is read as the right-hand side it
+  // stands for, so a closure among its arguments is walked as a body. Every
+  // call is read, not only those the engine hoists: which those are depends
+  // on what the callee resolves to, and reading one too many only walks a body
+  // that is already a body. The statement nested in it is visited; the call
+  // itself is not a statement, and an expression constructs nothing.
+  const slot = (expression: ExprSlot): void => {
+    let tree: MExpr;
+    try {
+      tree = treeOfSlot(expression, CURRENT_LANGUAGE_VERSION);
+    } catch {
+      return; // an expression that does not parse runs nothing
+    }
+    for (const call of nestedCalls(tree, () => true)) {
+      let nested: RValue;
+      try {
+        nested = parseNestedCall(expression, call.at, CURRENT_LANGUAGE_VERSION);
+      } catch (e) {
+        if (!(e instanceof MovementParseError)) throw e;
+        continue;
+      }
+      value(nested);
+    }
+  };
+
+  statements(program.statements);
+}
+
+function unwalked(node: never): never {
+  throw new Error(`The statement walk does not know this node: ${JSON.stringify(node)}`);
 }

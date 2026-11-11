@@ -111,8 +111,8 @@ const READ_ONLY_MESSAGE = 'You may read this automation but not change it.';
 /**
  * Whether the caller may do `verb` to this automation, and if not, why not.
  * Something that belongs to no automation (null: a listen whose movement is
- * gone, a question a REST caller asked) has no statement; team membership,
- * which already admitted the request, decides it. A run always names one.
+ * gone and every run it starts, a question a REST caller asked) has no
+ * statement; team membership, which already admitted the request, decides it.
  */
 async function refusalOn(asked: {
   automationId: string | null;

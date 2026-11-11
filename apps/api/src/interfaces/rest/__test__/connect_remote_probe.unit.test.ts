@@ -91,6 +91,7 @@ beforeEach(() => {
       userId: 'user-1' as never,
       adapterSlug: 'acme_crm',
       credentialName: 'Acme CRM',
+      reusesConnection: false,
       serviceType: ExternalServiceType.REMOTE,
       connectKind: 'key-entry',
       use: [{ kind: 'team' }],

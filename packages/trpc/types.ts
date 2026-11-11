@@ -2008,6 +2008,18 @@ export type Shown<T extends Thing> = {
     viewerUserId: string | null;
 };
 export type AccessView = Shown<'automation'> | Shown<'connection'>;
+/**
+ * A change of a list: the thing as it now stands, or why the list was refused.
+ * The page says each reason in its own words, never the decision's text,
+ * which is written for agents.
+ */
+export type SetResult = {
+    ok: true;
+    view: AccessView;
+} | {
+    ok: false;
+    refusal: StatementRefusal;
+};
 
 declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig<{
     ctx: {
@@ -2234,7 +2246,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 };
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
-            }, AccessView>;
+            }, SetResult>;
         }>;
         account: _trpc_server.CreateRouterInner<_trpc_server.RootConfig<{
             ctx: {
@@ -3928,9 +3940,13 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
             }, {
+                ok: true;
                 id: string;
                 name: string;
                 created: boolean;
+            } | {
+                ok: false;
+                reason: "needs_use" | "not_usable" | "given_for_existing";
             }>;
         }>;
         credentials: _trpc_server.CreateRouterInner<_trpc_server.RootConfig<{

@@ -118,8 +118,7 @@ describe('connectTelegramTeam (Chunk 7 — connect the shared bot via an empty c
   it('inserts one empty TELEGRAM credential for the team when none exists', async () => {
     const res = await caller().connectTelegramTeam({ use: [{ kind: 'team' }] });
 
-    expect(res.created).toBe(true);
-    expect(typeof res.id).toBe('string');
+    expect(res).toMatchObject({ ok: true, created: true, id: expect.any(String) });
     expect(insertCapture.values).toBeDefined();
     expect(insertCapture.values?.type).toBe('TELEGRAM');
     expect(insertCapture.values?.team_id).toBe('team-1');
@@ -130,15 +129,13 @@ describe('connectTelegramTeam (Chunk 7 — connect the shared bot via an empty c
   });
 
   it('refuses to create it with no statement of who may use it, inserting nothing', async () => {
-    await expect(caller().connectTelegramTeam()).rejects.toThrow(/needs a statement of who may use it/);
+    await expect(caller().connectTelegramTeam()).resolves.toEqual({ ok: false, reason: 'needs_use' });
     expect(insertCapture.values).toBeUndefined();
   });
 
-  it('refuses with a code of its own for each reason, so the page need not read the text', async () => {
-    await expect(caller().connectTelegramTeam()).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
-
+  it('answers each refusal with a reason of its own, so the page need not read the text', async () => {
     existingCredential.row = { id: 'existing-cred' };
-    await expect(caller().connectTelegramTeam({ use: [{ kind: 'team' }] })).rejects.toMatchObject({ code: 'UNPROCESSABLE_CONTENT' });
+    await expect(caller().connectTelegramTeam({ use: [{ kind: 'team' }] })).resolves.toEqual({ ok: false, reason: 'given_for_existing' });
   });
 
   it('is idempotent — returns the existing credential without inserting a duplicate', async () => {
@@ -146,7 +143,7 @@ describe('connectTelegramTeam (Chunk 7 — connect the shared bot via an empty c
 
     const res = await caller().connectTelegramTeam();
 
-    expect(res).toEqual({ id: 'existing-cred', created: false });
+    expect(res).toEqual({ ok: true, id: 'existing-cred', created: false });
     expect(insertCapture.values).toBeUndefined();
   });
 });

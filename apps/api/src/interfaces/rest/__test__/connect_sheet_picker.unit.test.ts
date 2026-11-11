@@ -76,6 +76,7 @@ const pickerRow: ConnectTokenLookup = {
     userId: 'user-1' as never,
     adapterSlug: 'google_sheets',
     credentialName: 'Dev Loop Google',
+    reusesConnection: false,
     credentialsId: 'cred-9',
     serviceType: ExternalServiceType.GOOGLE,
     connectKind: 'item-picker',

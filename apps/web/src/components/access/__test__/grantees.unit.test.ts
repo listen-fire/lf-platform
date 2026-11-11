@@ -3,8 +3,10 @@ import {
   NO_CONNECTION_CHOICE,
   automationStatements,
   connectionUse,
+  departedOn,
   draftOf,
   fireOptionsFor,
+  listRefusalSentence,
   listOfDraft,
   listPhrases,
   outsiderOf,
@@ -124,6 +126,21 @@ describe("changing a list", () => {
       const stated = listOfDraft(draftOf(list, ME), { verb: "fire", viewerUserId: ME });
       expect(stated).toEqual(list.map((g) => (g.kind === "user" ? { kind: "user", userId: g.userId } : g)));
     }
+  });
+
+  it("leaves someone who has left the team off the draft, so saving it is not refused", () => {
+    const list: ListedGrantee[] = [
+      { kind: "user", userId: ME, name: "Me", email: null, onTeam: true },
+      { kind: "user", userId: BOB, name: "Bob", email: null, onTeam: false },
+    ];
+    expect(draftOf(list, ME).mode).toBe("me");
+    expect(departedOn(list)).toBe(1);
+  });
+
+  it("says each refusal of a changed list in the page's own words", () => {
+    expect(listRefusalSentence("not_a_member", "automation")).toBe("Someone you chose is no longer on the team. Choose again.");
+    expect(listRefusalSentence("not_allowed", "connection")).toContain("may use this connection");
+    expect(listRefusalSentence("lf_engine", "automation")).toContain("Anyone who reaches it");
   });
 
   it("opens a list naming the team beside people as the whole team, which loses nobody's access when saved", () => {

@@ -410,8 +410,9 @@ async function startTelegramHandshake(
       use: row.use,
     });
     if ('needsUse' in ensured) {
-      // The link reused the team's connection and carries no list; it is gone.
-      res.status(410).type('html').send(unavailablePage('connection_gone'));
+      // No list and no connection: the one it was minted to reuse is gone, or
+      // it was minted before links carried a list at all.
+      res.status(410).type('html').send(unavailablePage(row.reusesConnection ? 'connection_gone' : 'no_statement'));
       return;
     }
     const { token: startToken } = await mintTelegramToken({

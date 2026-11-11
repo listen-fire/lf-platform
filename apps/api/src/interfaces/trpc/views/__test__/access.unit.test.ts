@@ -188,23 +188,22 @@ describe('changing who may reach an automation', () => {
   });
 
   it('replaces one list and answers with the automation as it now stands', async () => {
-    const view = await as(ALICE, () =>
+    const set = await as(ALICE, () =>
       caller().set({ thing: 'automation', id: DEALS, verb: 'fire', grantees: [{ kind: 'email', address: 'Pat@Acme.com' }] }),
     );
-    expect(view.lists).toMatchObject({ fire: [{ kind: 'email', address: 'pat@acme.com' }] });
+    expect(set).toMatchObject({ ok: true, view: { lists: { fire: [{ kind: 'email', address: 'pat@acme.com' }] } } });
   });
 
   it('refuses a reader as read-only, and a list the decision refuses by its reason', async () => {
     await expect(
       as(BOB, () => caller().set({ thing: 'automation', id: DEALS, verb: 'read', grantees: [{ kind: 'team' }] })),
     ).rejects.toMatchObject({ code: 'FORBIDDEN', message: 'You may read this automation but not change it.' });
-    await expect(as(ALICE, () => caller().set({ thing: 'automation', id: DEALS, verb: 'write', grantees: [] }))).rejects.toMatchObject({
-      code: 'BAD_REQUEST',
-      message: expect.stringContaining("can't be emptied"),
+    // By its reason alone: the decision's text is for agents, and the page has its own sentence for each.
+    expect(await as(ALICE, () => caller().set({ thing: 'automation', id: DEALS, verb: 'write', grantees: [] }))).toEqual({ ok: false, refusal: 'empty' });
+    expect(await as(ALICE, () => caller().set({ thing: 'automation', id: DEALS, verb: 'read', grantees: [{ kind: 'anyone' }] }))).toEqual({
+      ok: false,
+      refusal: 'outsider',
     });
-    await expect(
-      as(ALICE, () => caller().set({ thing: 'automation', id: DEALS, verb: 'read', grantees: [{ kind: 'anyone' }] })),
-    ).rejects.toMatchObject({ code: 'BAD_REQUEST', message: expect.stringContaining('firing only') });
   });
 });
 
@@ -214,7 +213,7 @@ describe('a connection’s use list', () => {
     const before = await as(ALICE, () => caller().get({ thing: 'connection', id: FINANCE }));
     expect(before).toMatchObject({ mayChange: true, onlyYou: false });
     const after = await as(ALICE, () => caller().set({ thing: 'connection', id: FINANCE, verb: 'use', grantees: [{ kind: 'user', userId: ALICE }] }));
-    expect(after).toMatchObject({ lists: { use: [{ kind: 'user', userId: ALICE, name: 'Alice' }] }, onlyYou: true });
+    expect(after).toMatchObject({ ok: true, view: { lists: { use: [{ kind: 'user', userId: ALICE, name: 'Alice' }] }, onlyYou: true } });
 
     stated(connection, 'use', [{ kind: 'user', userId: BOB }]);
     mockState.members.set(BOB, 'read');

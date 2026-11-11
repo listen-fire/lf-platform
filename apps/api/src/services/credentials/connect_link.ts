@@ -397,6 +397,7 @@ export async function mintConnectLink(
       adapter_slug: slug,
       credential_name: credentialName,
       use_statement: use.statement === null ? null : JSON.stringify(use.statement),
+      reuses_connection: reusesConnection,
       expires_at: expiresAt,
     })
     .execute();
@@ -497,6 +498,9 @@ export interface ConnectTokenRow {
    *  Absent on a grant link, a Telegram link that reuses the team's
    *  connection, and a link minted before links carried one. */
   use?: readonly Grantee[];
+  /** A Telegram link minted to reuse the team's connection, which is why it
+   *  carries no use list; a link minted before links carried one says false. */
+  reusesConnection: boolean;
   serviceType: ExternalServiceType;
   connectKind: ConnectKind;
 }
@@ -509,7 +513,7 @@ export async function lookupConnectToken(token: string): Promise<ConnectTokenLoo
   const row = await getAutomationsQb(['connect_token'])
     .selectFrom('connect_token')
     .where('token', '=', token)
-    .select(['id', 'team_id', 'user_id', 'adapter_slug', 'credential_name', 'credentials_id', 'use_statement', 'expires_at', 'consumed_at'])
+    .select(['id', 'team_id', 'user_id', 'adapter_slug', 'credential_name', 'credentials_id', 'use_statement', 'reuses_connection', 'expires_at', 'consumed_at'])
     .executeTakeFirst();
 
   if (!row) return { ok: false, reason: 'not_found' };
@@ -544,6 +548,7 @@ export async function lookupConnectToken(token: string): Promise<ConnectTokenLoo
       credentialName: row.credential_name,
       ...(row.credentials_id !== null ? { credentialsId: row.credentials_id as string } : {}),
       ...(use !== undefined ? { use: use.data } : {}),
+      reusesConnection: row.reuses_connection,
       serviceType,
       connectKind,
     },

@@ -13,7 +13,7 @@ import { randomUUID } from 'node:crypto';
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { UserId } from '../../generated/kysely/core/User';
 
-import type { Grantee } from '../access/statement';
+import { StatementStore, type Grantee, type Target } from '../access/statement';
 
 import { forgetAffinityWorkspace } from '@listen-fire/affinity/api_client';
 import { encryptToken } from '../../lib/credentials';
@@ -48,6 +48,8 @@ interface PersistCredentialInput {
    * chose it may (`checkConnectionCreation`, at the request or when its
    * connect link was minted), or no person is in the request and it is
    * `connectionWithNoPerson`'s. A connection is never stored without one.
+   * A reconnect (`replaceExisting`) keeps the use list of the connection it
+   * replaces, and this applies only when there was none.
    */
   use: readonly Grantee[];
   type: ExternalServiceType;
@@ -89,7 +91,8 @@ interface PersistCredentialInput {
  * insert the `external_service_credentials` row. Returns the new row id.
  *
  * With `replaceExisting`, any prior credential of the same (team, type, name)
- * is removed first so the call upserts-by-name (reconnect / replace).
+ * is removed first so the call upserts-by-name (reconnect / replace), and the
+ * new row keeps the use list the old one had.
  */
 export async function persistCredential(input: PersistCredentialInput): Promise<string> {
   const { credentials } = input;
@@ -110,14 +113,16 @@ export async function persistCredential(input: PersistCredentialInput): Promise<
   // The row and who may use it commit together: a connection stored with no
   // statement would admit nobody.
   await inOneTransaction(async () => {
+    let replaced: { id: string }[] = [];
     if (input.replaceExisting) {
       // Triggers bound to the replaced credential are released by the vault's
       // in-schema ON DELETE SET NULL (restored with the vault's move, D7).
-      await getAutomationsQb(['external_service_credentials'])
+      replaced = await getAutomationsQb(['external_service_credentials'])
         .deleteFrom('external_service_credentials')
         .where('team_id', '=', input.teamId)
         .where('type', '=', input.type)
         .where('name', '=', input.name)
+        .returning('id')
         .execute();
     }
     try {
@@ -144,7 +149,15 @@ export async function persistCredential(input: PersistCredentialInput): Promise<
       }
       throw err;
     }
-    await stateAtCreation({ thing: 'connection', id }, { teamId: input.teamId, lists: [{ verb: 'use', grantees: input.use }] });
+    const created: Target<'connection'> = { thing: 'connection', id };
+    // A new key for the same connection is not a choice of who may use it: the
+    // people who could use it still can, and nobody else gains it.
+    let carried = false;
+    for (const row of replaced) {
+      const previous: Target<'connection'> = { thing: 'connection', id: row.id };
+      carried = (await StatementStore.carryStatements(previous, created, { teamId: input.teamId })) || carried;
+    }
+    if (!carried) await stateAtCreation(created, { teamId: input.teamId, lists: [{ verb: 'use', grantees: input.use }] });
   });
 
   // A workspace whose key was just (re)connected is a workspace somebody has

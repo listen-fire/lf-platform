@@ -110,6 +110,7 @@ import {
   unusableConnections,
   type SaveRefusal,
 } from './save_access';
+import { StatementStore } from '../../access/statement';
 import {
   deleteMovementRow,
   getMovementRow,
@@ -1894,7 +1895,11 @@ export async function deleteMovement(input: { teamId: string; id: string }): Pro
       .where('id', '=', triggerId as TriggerId)
       .execute();
   }
-  await deleteMovementRow(input);
+  // The automation and what is stated about it go together.
+  await inOneTransaction(async () => {
+    await deleteMovementRow(input);
+    await StatementStore.deleteStatementsOf({ thing: 'automation', id: input.id }, { teamId: input.teamId });
+  });
   // Retiring the file's listeners may have emptied an (adapter,
   // credential) channel — tear its external subscription down too.
   await syncListenSubscriptions({ teamId: input.teamId as TeamId });

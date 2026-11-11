@@ -168,7 +168,10 @@ beforeEach(() => {
 
 describe.each(CONNECTION_CREATIONS)('%s', (_, create, effect) => {
   it('refuses a connection with no statement of who may use it, naming what is missing, and stores nothing', async () => {
-    await expect(asAlice(() => create(undefined))).rejects.toThrow('A new connection needs a statement of who may use it.');
+    const refused = asAlice(() => create(undefined));
+    // Connecting the team to Telegram answers its refusals as a result, for the page to name in its own words.
+    if (effect === 'ensureTelegram') await expect(refused).resolves.toEqual({ ok: false, reason: 'needs_use' });
+    else await expect(refused).rejects.toThrow('A new connection needs a statement of who may use it.');
     expect(mockCreated[effect]).not.toHaveBeenCalled();
   });
 

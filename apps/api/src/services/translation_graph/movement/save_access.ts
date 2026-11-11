@@ -11,6 +11,7 @@
 // may not use and read everything through it.
 
 import { credentialImportNames } from 'movement-engine/public/catalog';
+import { MovementParseError, type LanguageVersion } from 'movement-lang';
 
 import type { AdapterManifest } from 'movement-engine/public/adapter';
 import type { Principal } from 'principal';
@@ -29,7 +30,7 @@ import { hasAdapter, indexManifestsByName, resolveAdapterSlug } from '../adapter
 import { getRemoteAdapter } from '../adapters/remote/store';
 import { SYSTEM_ADAPTER_TYPE } from '../adapters/system';
 import { teamAdapterManifests } from '../adapters/team_manifests';
-import { constructionsOf, loadCredentialRows } from './catalog';
+import { constructionsOf, loadCredentialRows, parsedConstructionsOf } from './catalog';
 import { assembleMovementFileSources } from './files';
 import { getMovementRowByName, type MovementRow } from './store';
 
@@ -154,9 +155,25 @@ export async function connectionsNamed(input: { teamId: string; file: string; so
  * The listens a file may have, as far as its text says before it is checked:
  * each module it constructs stands for a listen on it. That can only make the
  * fire list a run creates it with narrower than its listens alone would.
+ *
+ * The source is parsed strictly. A lexical guess at a file that does not parse
+ * can miss a Slack construction split over lines, and a file whose only Slack
+ * listen is missed would read as one every listen of which admits anyone. A
+ * file saved under an older pin is read under it when the caller gives it.
+ * Throws `MovementParseError`; the caller states the narrowest fire list.
  */
-export function listenReachesOf(source: string): ListenReach[] {
-  return constructionsOf(source).map((ref) => ({ module: ref.adapter, viaConnection: ref.credential !== undefined }));
+export function listenReachesOf(source: string, options?: { languageVersion?: LanguageVersion }): ListenReach[] {
+  return parsedConstructionsOf(source, options).map((ref) => ({ module: ref.adapter, viaConnection: ref.credential !== undefined }));
+}
+
+/** The listens of a source, or none when it does not parse: a file whose listens cannot be read is fired only by the team. */
+function listenReachesOrNoneOf(source: string): ListenReach[] {
+  try {
+    return listenReachesOf(source);
+  } catch (e) {
+    if (e instanceof MovementParseError) return [];
+    throw e;
+  }
 }
 
 /**
@@ -179,7 +196,7 @@ export async function stateRunCreation(created: {
   const statements =
     'statements' in given
       ? given.statements
-      : automationWithNoPerson({ listens: listenReachesOf(created.source), runsOnLf: await isLfEngineTeam(created.teamId) });
+      : automationWithNoPerson({ listens: listenReachesOrNoneOf(created.source), runsOnLf: await isLfEngineTeam(created.teamId) });
   await stateAtCreation(created.target, { teamId: created.teamId, lists: automationLists(statements) });
 }
 

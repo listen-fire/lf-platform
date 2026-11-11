@@ -28,6 +28,8 @@ jest.mock('../../../../lib/kysely', () => {
   type Row = Record<string, unknown>;
   const tables: Record<string, Row[]> = {
     movement: [],
+    // What is stated about an automation goes with it on delete.
+    access_statement: [],
     trigger: [],
     translation_graph: [],
     team: [],

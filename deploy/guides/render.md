@@ -68,7 +68,7 @@ The second half is the deploy check: once per release it re-validates every save
 
 It runs inside the API image, which carries the migration files and `pnpm`, after the image is pulled and before the new process serves. The migration runner takes the database as an **argument**. It does not read the ambient environment, which is why the URL is passed explicitly here and in the compose file.
 
-**Or by hand**, from a shell on the service, before the first deploy and before every upgrade (both commands, in that order). Migrations are forward-only, applied by file name, tracked in `_migrations.migrations`. Back up before an upgrade; there is no down-migration path.
+**Or by hand**, from a shell on the service, before the first deploy and before every upgrade: `bash src/db/migrate.sh "$DATABASE_URL"`, then `node build/scripts/state_unstated.js`, then `node build/scripts/deploy_check.js`, in that order. Migrations are forward-only, applied by file name, tracked in `_migrations.migrations`. Back up before an upgrade; there is no down-migration path.
 
 Whichever you choose, the ordering is the point: the schema must be current before the new process serves a request.
 

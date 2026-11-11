@@ -285,6 +285,36 @@ async function hasAnyStatement(target: Target): Promise<boolean> {
   return row !== undefined;
 }
 
+/**
+ * Delete everything stated about a thing that is itself deleted, in the
+ * caller's transaction when it has one, so the two go together and the table
+ * and a team's export never name a thing that is gone.
+ */
+async function deleteStatementsOf(target: Target, options: { teamId: string }): Promise<void> {
+  await getAutomationsQb(['access_statement'])
+    .deleteFrom('access_statement')
+    .where('team_id', '=', options.teamId)
+    .where('thing', '=', target.thing)
+    .where('thing_id', '=', target.id)
+    .execute();
+}
+
+/**
+ * Move everything stated about one thing onto another that takes its place,
+ * as it was stated: nothing is checked again, so a list naming someone who has
+ * since left moves as it is. Whether anything moved.
+ */
+async function carryStatements(from: Target, to: Target, options: { teamId: string }): Promise<boolean> {
+  const moved = await getAutomationsQb(['access_statement'])
+    .updateTable('access_statement')
+    .set({ thing_id: to.id })
+    .where('team_id', '=', options.teamId)
+    .where('thing', '=', from.thing)
+    .where('thing_id', '=', from.id)
+    .executeTakeFirst();
+  return moved.numUpdatedRows > 0n;
+}
+
 /** The team's members with write access, oldest first. */
 async function writeMembersOf(teamId: string): Promise<string[]> {
   const rows = await getCoreQb(['team_membership'])
@@ -305,6 +335,8 @@ const StatementStore = {
   grantedIds,
   listsNaming,
   hasAnyStatement,
+  deleteStatementsOf,
+  carryStatements,
   membershipsOf,
   membershipsAmong,
   membersOf,

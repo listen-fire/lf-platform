@@ -5,6 +5,7 @@
 
 import { randomUUID } from 'node:crypto';
 
+import { LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang';
 import { Client } from 'pg';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
@@ -45,11 +46,15 @@ afterEach(async () => {
   await cleanupTeam(teamId);
 });
 
-async function automation(name: string, source = ''): Promise<MovementId> {
+async function automation(
+  name: string,
+  source = '',
+  languageVersion: LanguageVersion = LANGUAGE_VERSION,
+): Promise<MovementId> {
   const id = randomUUID() as MovementId;
   await getAutomationsQb(['movement'])
     .insertInto('movement')
-    .values({ id, team_id: teamId, name, source })
+    .values({ id, team_id: teamId, name, source, language_version: languageVersion })
     .execute();
   return id;
 }
@@ -149,16 +154,48 @@ describe('stating what exists', () => {
     expect(await listOf({ thing: 'automation', id: mixed }, 'fire')).toEqual(TEAM);
   });
 
-  it('gives the team the fire list of a file whose source cannot be read, and says which', async () => {
-    const unreadable = await automation('Unreadable', EMAIL_LISTEN);
-    jest.spyOn(saveAccess, 'listenReachesOf').mockImplementation(() => {
-      throw new Error('cannot read');
-    });
+  // A lexical guess at this file finds the email listen and misses the Slack
+  // one written over two lines, so it would read as a file every listen of
+  // which admits anyone.
+  it('gives the team the fire list of a file whose source does not parse, and says which', async () => {
+    const unreadable = await automation(
+      'Unreadable',
+      [EMAIL_LISTEN, 'chat =', '  slack(credentials: `Slack`)', 'movement broken( {'].join('\n'),
+    );
 
     await stateTheTeam();
 
     expect(await listOf({ thing: 'automation', id: unreadable }, 'fire')).toEqual(TEAM);
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining(unreadable));
+  });
+
+  // The join was spelled `parallel` until the language replaced it with `all`,
+  // so one text is a file under the current release and a parse error under an
+  // older pin.
+  it("reads each file under its own pin: the listens its pin reads are kept, and the ones it cannot read give the team", async () => {
+    const joined = [EMAIL_LISTEN, 'movement m() {', '  r = await all([f, g])', '}'].join('\n');
+    const written = [EMAIL_LISTEN, 'movement m() {', '  r = await parallel([f, g])', '}'].join('\n');
+    const current = await automation('Current', joined);
+    const olderUnreadable = await automation('Older unreadable', joined, '4');
+    const olderReadable = await automation('Older readable', written, '4');
+
+    await stateTheTeam();
+
+    expect(await listOf({ thing: 'automation', id: current }, 'fire')).toEqual(ANYONE);
+    expect(await listOf({ thing: 'automation', id: olderReadable }, 'fire')).toEqual(ANYONE);
+    expect(await listOf({ thing: 'automation', id: olderUnreadable }, 'fire')).toEqual(TEAM);
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining(olderUnreadable));
+    expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining(olderReadable));
+  });
+
+  it('reads a Slack listen nested in a closure, so the file is fired only by the team', async () => {
+    const source = [EMAIL_LISTEN, 'movement m() {', '  later = () => {', `    ${SLACK_LISTEN}`, '  }', '}'].join('\n');
+    expect(saveAccess.listenReachesOf(source)).toContainEqual({ module: 'slack', viaConnection: true });
+    const nested = await automation('Nested Slack', source);
+
+    await stateTheTeam();
+
+    expect(await listOf({ thing: 'automation', id: nested }, 'fire')).toEqual(TEAM);
   });
 
   it("fires a file on the shared WhatsApp number for the team, and on the team's own number for anyone", async () => {

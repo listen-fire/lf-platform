@@ -258,11 +258,15 @@ function outsiderText(grantee: Grantee): string | undefined {
   }
 }
 
-/** A list as the editor opens on it. */
+/**
+ * A list as the editor opens on it. Someone who has left the team is left
+ * off: the server refuses a list naming them, so keeping them would make
+ * every save of it fail.
+ */
 export function draftOf(list: readonly ListedGrantee[], viewerUserId: string | null): ListDraft {
   const empty: ListDraft = { mode: "people", people: [], withTeam: false, outsiders: "" };
   if (list.some((g) => g.kind === "anyone")) return { ...empty, mode: "anyone" };
-  const people = list.flatMap((g) => (g.kind === "user" ? [g.userId] : []));
+  const people = list.flatMap((g) => (g.kind === "user" && g.onTeam ? [g.userId] : []));
   const outsiders = list.flatMap((g) => outsiderText(g) ?? []);
   const withTeam = list.some((g) => g.kind === "team");
   // A list naming the whole team beside named people opens as "Whole team":
@@ -271,6 +275,53 @@ export function draftOf(list: readonly ListedGrantee[], viewerUserId: string | n
   if (withTeam && outsiders.length === 0) return { ...empty, mode: "team" };
   if (!withTeam && outsiders.length === 0 && people.length === 1 && people[0] === viewerUserId) return { ...empty, mode: "me" };
   return { mode: "people", people, withTeam, outsiders: outsiders.join(", ") };
+}
+
+/** How many on the list have left the team, whom the editor leaves off. */
+export function departedOn(list: readonly ListedGrantee[]): number {
+  return list.filter((g) => g.kind === "user" && !g.onTeam).length;
+}
+
+/** Why the server refused a changed list. The server's `StatementRefusal` (services/access/decide.ts). */
+export type ListRefusal =
+  | "empty"
+  | "not_found"
+  | "not_allowed"
+  | "outsider"
+  | "not_a_member"
+  | "not_a_writer"
+  | "malformed"
+  | "lf_engine"
+  | "already_stated";
+
+/** Why a changed list was refused, in the page's words: the server's text is written for agents and is never shown. */
+export function listRefusalSentence(refusal: ListRefusal, thing: "automation" | "connection"): string {
+  switch (refusal) {
+    case "empty":
+      return "A list can't be empty: choose the whole team, or someone on it.";
+    case "not_found":
+      return `This ${thing} could not be found. Reload the page.`;
+    case "not_allowed":
+      return thing === "automation"
+        ? "Only someone who may change this automation can change who may reach it."
+        : "Only someone who may use this connection, with write access on the team, can change who may.";
+    case "outsider":
+      return "People outside the team can only be allowed to set an automation off.";
+    case "not_a_member":
+      return "Someone you chose is no longer on the team. Choose again.";
+    case "not_a_writer":
+      return "Someone you chose can only read on your team, so they can't be allowed to change it. Choose again.";
+    case "malformed":
+      return "Something you chose could not be read. Check the addresses, domains and phone numbers.";
+    case "lf_engine":
+      return "Your team's automations run on lf, which does not check who sets one off, so only \u201cAnyone who reaches it\u201d can be chosen.";
+    case "already_stated":
+      return `This ${thing} already says who may reach it. Reload the page to see it.`;
+    default: {
+      const unreachable: never = refusal;
+      return unreachable;
+    }
+  }
 }
 
 /**

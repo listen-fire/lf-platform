@@ -5,7 +5,8 @@
 import type { InstanceSchema } from '../../checker/catalog';
 import type { CatalogSnapshot } from 'movement-lang/service/snapshot';
 import { mergeInstanceSchema } from 'movement-lang/service/snapshot';
-import { constructionKey, referencedConstructions, referencedListens } from '../constructions';
+import { MovementParseError } from '../../parser/parse';
+import { constructionKey, parsedConstructions, referencedConstructions, referencedListens } from '../constructions';
 
 // A listen is a traversal of the instance's event edge, with a WHERE — and its
 // config is the ONLY place that WHERE is written. Nothing else in the pre-scan
@@ -146,6 +147,64 @@ movement m(item: <inbox-[:message]->>) {
     ]);
   });
 
+  // The save rule's connection set is this scan: a construction it misses is a
+  // connection a saver could name without being able to use it.
+  it('sees a construction inside a closure body', () => {
+    const refs = referencedConstructions(`
+import { slack } from adapters
+import { Finance } from credentials
+
+movement m() {
+  later = () => {
+    chat = slack(credentials: Finance)
+  }
+}
+`);
+    expect(refs).toEqual([{ adapter: 'slack', credential: 'Finance' }]);
+  });
+
+  it('sees a construction inside an await arm', () => {
+    const refs = referencedConstructions(`
+import { slack } from adapters
+import { Finance } from credentials
+
+movement m() {
+  first = await race([() => { chat = slack(credentials: Finance) }, () => { }])
+}
+`);
+    expect(refs).toEqual([{ adapter: 'slack', credential: 'Finance' }]);
+  });
+
+  it('sees a construction inside a closure handed to a call written in an expression', () => {
+    const refs = referencedConstructions(`
+import { slack } from adapters
+import { Finance } from credentials
+
+movement m() {
+  n = 1 + COUNT(MAP([1, 2], (x) => {
+    chat = slack(credentials: Finance)
+    return x
+  }))
+  if COUNT(MAP([1], (y) => { other = slack(credentials: Payroll) })) > 0 { }
+}
+`);
+    expect(refs).toEqual([
+      { adapter: 'slack', credential: 'Finance' },
+      { adapter: 'slack', credential: 'Payroll' },
+    ]);
+  });
+
+  it('sees an inline construction in a listen, which the checker refuses but a save can still carry', () => {
+    const refs = referencedConstructions(`
+import { slack } from adapters
+import { Finance } from credentials
+
+movement m() { }
+listen to slack(credentials: Finance) fire m
+`);
+    expect(refs).toContainEqual({ adapter: 'slack', credential: 'Finance' });
+  });
+
   it('de-duplicates repeated (adapter, credential) pairs but keeps distinct credentials apart', () => {
     const refs = referencedConstructions(`
 a = attio(credentials: main)
@@ -194,6 +253,22 @@ movement broken(m: <chat-[:message]->>) {
   write chat.
 `);
     expect(refs).toContainEqual({ adapter: 'slack', credential: 'Dev Loop Slack' });
+  });
+
+  it('reads strictly when asked: a source that does not parse throws, rather than being guessed at', () => {
+    expect(() => parsedConstructions('import { slack } from adapters\nchat = slack(\n  credentials: Finance)\nmovement m( {')).toThrow(
+      MovementParseError,
+    );
+    expect(parsedConstructions('import { email } from adapters\ninbox = email()\n')).toEqual([{ adapter: 'email' }]);
+  });
+
+  // The join was spelled `parallel` until the language replaced it with `all`.
+  it('reads strictly under the pin it is given: a file the pin cannot read throws, one it can read keeps its constructions', () => {
+    const joined = 'import { email } from adapters\ninbox = email()\nmovement m() {\n  r = await all([f, g])\n}\n';
+    const written = joined.replace('all([f, g])', 'parallel([f, g])');
+    expect(parsedConstructions(joined)).toEqual([{ adapter: 'email' }]);
+    expect(() => parsedConstructions(joined, { languageVersion: '4' })).toThrow(MovementParseError);
+    expect(parsedConstructions(written, { languageVersion: '4' })).toEqual([{ adapter: 'email' }]);
   });
 
   it('never throws on arbitrary text', () => {

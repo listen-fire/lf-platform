@@ -33,7 +33,7 @@
 
 import { LANGUAGE_VERSION, RUN_HOST_UNITS, entryPositionKeyOf, spellName, instanceSchemaKey, catalogSnapshotOf, type AdapterSpec, type Catalog, type CatalogSnapshot, type CredentialSpec, type SchemaFieldType, type InstanceSchema, type LanguageVersion, type PluginSpec, type ResolveFile } from 'movement-lang';
 import { isLegacyLanguageVersion, parseMovementExpression } from 'legacy-lang';
-import { parseTraversalPath, referencedConstructions, scanInstanceChains, surfaceNotEnumerated, type ConstructionRef, type InstanceChain } from 'legacy-lang';
+import { parseTraversalPath, parsedConstructions, referencedConstructions, scanInstanceChains, surfaceNotEnumerated, type ConstructionRef, type InstanceChain } from 'legacy-lang';
 
 import type { Expression } from 'movement-lang/expression/types';
 import type { TeamId } from '../../../generated/kysely/core/Team';
@@ -234,6 +234,13 @@ function packageOf(manifest: AdapterManifest): Pick<AdapterSpec, 'package'> {
  *  module installed from a package by that package (``connect `@lf/slack` ``). */
 export function constructionsOf(source: string): ConstructionRef[] {
   return referencedConstructions(source).map((ref) => ({ ...ref, adapter: adapterKeyNamed(ref.adapter) }));
+}
+
+/** `constructionsOf` with no lexical guess at a source that does not parse:
+ *  throws `MovementParseError` instead. Read under `languageVersion` when
+ *  given, else the current one. */
+export function parsedConstructionsOf(source: string, options?: { languageVersion?: LanguageVersion }): ConstructionRef[] {
+  return parsedConstructions(source, options).map((ref) => ({ ...ref, adapter: adapterKeyNamed(ref.adapter) }));
 }
 
 /**

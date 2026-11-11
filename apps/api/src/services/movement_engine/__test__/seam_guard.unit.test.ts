@@ -111,6 +111,7 @@ const HOST_SIDE_FILES = [
   'carried_records.ts',
   'run_host_waits.ts',
   'run_lease.ts',
+  'run_writes.ts',
   'single_flight.ts',
   'timer_resume.ts',
 ];

@@ -6,6 +6,7 @@
 
 import {
   FIRE_OPTIONS,
+  fireOptionsFor,
   SEE_OPTIONS,
   USE_OPTIONS,
   type AutomationChoice,
@@ -219,11 +220,10 @@ export function ConnectionAccessChoice({
   );
 }
 
-const DRAFT_OPTIONS: Record<Verb, readonly { value: ListDraft["mode"]; label: string }[]> = {
+const DRAFT_OPTIONS: Record<Exclude<Verb, "fire">, readonly { value: ListDraft["mode"]; label: string }[]> = {
   read: SEE_OPTIONS,
   write: SEE_OPTIONS,
   use: USE_OPTIONS,
-  fire: FIRE_OPTIONS,
 };
 
 /** One list being changed: the same choices as at creation, opened on the list as it stands. */
@@ -233,12 +233,15 @@ export function ListEditor({
   onChange,
   members,
   viewerUserId,
+  engine,
 }: {
   verb: Verb;
   draft: ListDraft;
   onChange: (draft: ListDraft) => void;
   members: readonly Member[];
   viewerUserId: string;
+  /** The engine the team's automations run on, which decides who may be chosen to fire. */
+  engine: "platform" | "lf";
 }) {
   const outsiders = takesOutsiders(verb);
   const unreadable = unreadableOutsiders(draft.outsiders);
@@ -246,7 +249,7 @@ export function ListEditor({
     <div className="space-y-2" data-testid={`list-editor-${verb}`}>
       <RadioGroup
         label={`Who may ${verb}`}
-        options={DRAFT_OPTIONS[verb]}
+        options={verb === "fire" ? fireOptionsFor(engine) : DRAFT_OPTIONS[verb]}
         value={draft.mode}
         onChange={(mode) => onChange({ ...draft, mode })}
       />

@@ -1039,7 +1039,7 @@ const TRPC_CONNECTION_CALLS: Record<string, ConnectionCall<unknown>> = {
   'views.connections.getAll': { ask: () => undefined, list: true },
   'views.connections.credentialDependents': { ask: (c) => ({ id: c.connectionId }) },
   // One shared Telegram connection per team: a hidden one is refused, and no second is made.
-  'views.connections.connectTelegramTeam': { ask: () => undefined, refusal: /Telegram connection is one you may not use/ },
+  'views.connections.connectTelegramTeam': { ask: () => undefined, refusal: /"reason":"not_usable"/ },
   'views.credentials.getCredentials': { ask: () => undefined, list: true },
   'views.credentials.updateCredential': {
     ask: (c) => ({ id: c.connectionId, name: c.connectionName, type: 'ATTIO', credentials: { accessToken: 'rotated' } }),

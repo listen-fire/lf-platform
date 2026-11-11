@@ -8,7 +8,10 @@ import { useState } from "react";
 import { trpc, type RouterInputs } from "@/lib/trpc";
 
 import { AccessLoadFailed, AccessPanelView, type AccessListing, type Thing } from "./access-panel-view";
-import { draftOf, listOfDraft, type Grantee, type ListDraft, type Member, type Verb } from "./grantees";
+import { draftOf, listOfDraft, listRefusalSentence, type Grantee, type ListDraft, type Member, type Verb } from "./grantees";
+
+/** What the page says when a change could not be made for a reason it has no sentence of its own for. */
+const NOT_SAVED = "Couldn't save the change. Reload the page and try again.";
 
 type SetInput = RouterInputs["views"]["access"]["set"];
 
@@ -51,15 +54,21 @@ export function AccessPanel({ thing, id }: { thing: Thing; id: string }) {
   const [editing, setEditing] = useState<{ verb: Verb; draft: ListDraft } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const team = useTeamMembers({ enabled: editing !== null });
+  const engine = trpc.views.teamEngine.get.useQuery(undefined, { enabled: editing !== null, refetchOnWindowFocus: false });
   const set = trpc.views.access.set.useMutation({
-    onSuccess: (view) => {
-      utils.views.access.get.setData({ thing, id }, view);
+    onSuccess: (result) => {
+      if (!result.ok) {
+        setError(listRefusalSentence(result.refusal, thing));
+        return;
+      }
+      utils.views.access.get.setData({ thing, id }, result.view);
       void utils.views.movement.list.invalidate();
       void utils.views.connections.getAll.invalidate();
       setEditing(null);
       setError(null);
     },
-    onError: (err) => setError(err.message),
+    // The server's text is written for agents; the page never shows it.
+    onError: () => setError(NOT_SAVED),
   });
 
   if (access.isError) return <AccessLoadFailed thing={thing} />;
@@ -78,6 +87,7 @@ export function AccessPanel({ thing, id }: { thing: Thing; id: string }) {
       listing={listing}
       editing={editing}
       members={team.members}
+      engine={engine.data?.engine ?? null}
       busy={set.isLoading}
       error={error}
       onEdit={(verb) => {

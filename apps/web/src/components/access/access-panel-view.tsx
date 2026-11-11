@@ -11,6 +11,7 @@ import { Badge, Button } from "@/components/ui";
 
 import { ListEditor } from "./choice";
 import {
+  departedOn,
   listOfDraft,
   listPhrases,
   unreadableOutsiders,
@@ -51,6 +52,8 @@ export interface AccessPanelViewProps {
   editing: { verb: Verb; draft: ListDraft } | null;
   /** The team, to choose people from; null until it has loaded. */
   members: readonly Member[] | null;
+  /** The engine the team's automations run on, which decides who may be chosen to fire; null until it has loaded. */
+  engine: "platform" | "lf" | null;
   busy: boolean;
   error: string | null;
   onEdit: (verb: Verb) => void;
@@ -139,12 +142,26 @@ function EditingList(props: AccessPanelViewProps & { verb: Verb; draft: ListDraf
   const { verb, draft, viewerUserId } = props;
   const stated = listOfDraft(draft, { verb, viewerUserId });
   const savable = stated.length > 0 && unreadableOutsiders(draft.outsiders).length === 0;
+  const departed = departedOn(props.listing.lists[verb] ?? []);
   return (
     <div className="mt-2 space-y-2">
-      {props.members === null ? (
+      {props.members === null || props.engine === null ? (
         <p className="text-[12px] text-gray-400">Loading the team…</p>
       ) : (
-        <ListEditor verb={verb} draft={draft} onChange={props.onDraft} members={props.members} viewerUserId={viewerUserId} />
+        <ListEditor
+          verb={verb}
+          draft={draft}
+          onChange={props.onDraft}
+          members={props.members}
+          viewerUserId={viewerUserId}
+          engine={props.engine}
+        />
+      )}
+      {departed > 0 && (
+        <p className="text-[11.5px] text-gray-500" data-testid="access-departed">
+          {departed === 1 ? "Someone on this list has left the team, and" : `${departed} people on this list have left the team, and`} saving
+          leaves them off.
+        </p>
       )}
       {props.error && <p className="text-[12px] text-red-600" data-testid="access-error">{props.error}</p>}
       <div className="flex items-center gap-2">

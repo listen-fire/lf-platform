@@ -30,6 +30,7 @@ const panel = (overrides: Partial<AccessPanelViewProps>) =>
       },
       editing: null,
       members,
+      engine: "platform",
       busy: false,
       error: null,
       onEdit: noop,
@@ -80,7 +81,7 @@ describe("the access panel", () => {
   it("opens the list being changed with its choice made, and says why a change was refused", () => {
     const html = panel({
       editing: { verb: "fire", draft: { mode: "people", people: [BOB], withTeam: false, outsiders: "@acme.com" } },
-      error: "Only people on the team can be named on the fire list.",
+      error: "Someone you chose is no longer on the team. Choose again.",
     });
     expect(html).toContain('data-testid="list-editor-fire"');
     expect(html).toContain('aria-checked="true" data-value="people"');
@@ -88,6 +89,27 @@ describe("the access panel", () => {
     expect(html).toContain('data-testid="access-error"');
     // One list at a time: no other list offers a change while one is open.
     expect(html).not.toContain('data-testid="access-edit-read"');
+  });
+
+  it("offers only \u201cAnyone who reaches it\u201d for firing on a team that runs on lf", () => {
+    const html = panel({ engine: "lf", editing: { verb: "fire", draft: { mode: "anyone", people: [], withTeam: false, outsiders: "" } } });
+    expect(html).toContain('data-value="anyone"');
+    expect(html).not.toContain('data-value="team"');
+    expect(html).not.toContain('data-value="people"');
+  });
+
+  it("says when someone on the list has left the team, and that saving leaves them off", () => {
+    const html = panel({
+      listing: {
+        thing: "automation",
+        lists: { read: [{ kind: "team" }], write: [{ kind: "user", userId: BOB, name: "Bob", email: null, onTeam: false }], fire: [{ kind: "team" }] },
+        mayChange: true,
+        onlyYou: false,
+        viewerUserId: ME,
+      },
+      editing: { verb: "write", draft: { mode: "people", people: [], withTeam: false, outsiders: "" } },
+    });
+    expect(html).toContain('data-testid="access-departed"');
   });
 
   it("offers no outsiders on a list other than firing", () => {

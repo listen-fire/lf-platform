@@ -16,8 +16,8 @@ import { accessTo } from '../../../access/decide';
 import { StatementStore } from '../../../access/statement';
 import { userPrincipal } from '../../../principal';
 import { ProvisioningService } from '../../../provisioning';
-import { saveMovement } from '../provision';
-import { inOneTransaction } from '../save_access';
+import { deleteMovement, saveMovement } from '../provision';
+import { inOneTransaction, stateRunCreation } from '../save_access';
 import { MovementGoneError, MovementNameTakenError, writeMovementRow } from '../store';
 
 jest.mock('../../../credentials/credential_lifecycle', () => ({ credentialLifecycle: () => undefined }));
@@ -114,5 +114,24 @@ describe('the save rule (real Postgres)', () => {
       MovementGoneError,
     );
     expect(await movements()).toEqual([]);
+  });
+  // A run's creation is fired by its listens as the source says them, read
+  // strictly: a lexical guess at a file that does not parse finds the email
+  // listen and misses the Slack one written over two lines.
+  it.each([
+    ['does not parse', ['inbox = email()', 'chat =', '  slack(credentials: `Slack`)', 'movement broken( {']],
+    ['listens to Slack inside a closure', ['inbox = email()', 'movement m() {', '  later = () => {', '    chat = slack(credentials: `Slack`)', '  }', '}']],
+  ])("gives a run's file that %s a fire list of the team", async (_, lines) => {
+    const row = await writeMovementRow({ teamId, intent: { kind: 'create' }, name: 'Run made', source: lines.join('\n') });
+    const target = { thing: 'automation', id: row.id } as const;
+    await stateRunCreation({ teamId, target, source: lines.join('\n'), given: undefined });
+    expect(await StatementStore.grantsOf(target, { teamId, verb: 'fire' })).toEqual([{ kind: 'team' }]);
+  });
+  it('deletes what is stated about an automation with it', async () => {
+    const row = await writeMovementRow({ teamId, intent: { kind: 'create' }, name: 'Going', source: RUN_NOW });
+    const target = { thing: 'automation', id: row.id } as const;
+    await stateRunCreation({ teamId, target, source: RUN_NOW, given: undefined });
+    await deleteMovement({ teamId, id: row.id });
+    expect(await StatementStore.hasAnyStatement(target)).toBe(false);
   });
 });

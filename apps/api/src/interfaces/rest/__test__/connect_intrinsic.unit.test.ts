@@ -71,6 +71,7 @@ const valuationsRow: ConnectTokenLookup = {
     userId: 'user-1' as never,
     adapterSlug: 'native-valuations',
     credentialName: 'Listen-Fire Valuations',
+    reusesConnection: false,
     serviceType: ExternalServiceType.NATIVE_VALUATIONS,
     connectKind: 'intrinsic',
     use: [{ kind: 'team' }],

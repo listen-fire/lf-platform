@@ -211,7 +211,7 @@ jest.mock('../catalog', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { mockCatalog, mockCatalogSnapshot } = require('movement-lang');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { referencedConstructions } = require('legacy-lang');
+  const { parsedConstructions, referencedConstructions } = require('legacy-lang');
   const { unitInstanceSchema } = jest.requireActual('../../adapters/unit_surface');
   const { MANUAL_ADAPTER_TYPE, MANUAL_SURFACE } = jest.requireActual('../../adapters/manual');
   const spec = {
@@ -248,6 +248,7 @@ jest.mock('../catalog', () => {
       gaps: [],
     })),
     constructionsOf: (source: string) => referencedConstructions(source),
+    parsedConstructionsOf: (source: string) => parsedConstructions(source),
     loadCredentialRows: jest.fn(async () => [
       { id: ids.Finance, name: 'Finance', type: 'LEDGER' },
       { id: ids.Sales, name: 'Sales', type: 'LEDGER' },
@@ -623,6 +624,28 @@ describe('every connection the file and its imports name needs use', () => {
       refused: { kind: 'connections', connections: [{ connection: 'Finance', file: 'deals' }] },
       errors: [expect.stringContaining('"Finance" (named in "deals")')],
     });
+    expect(stored()).toEqual(before);
+  });
+
+  // A construction runs where it is written, a closure's body included, so the
+  // rule reads every body the file holds.
+  it.each([
+    ['inside a closure body', ['  later = () => {', '    books = connect ledger using Finance', '  }']],
+    ['inside an await arm', ['  first = await race([() => { books = connect ledger using Finance }, () => { }])']],
+  ])('refuses a file naming a connection the saver may not use %s', async (_, body) => {
+    const source = [
+      'import { ledger } from adapters',
+      'import { Finance } from credentials',
+      '',
+      'function deals(go: <manual-[:Invocation]->>) {',
+      ...body,
+      '}',
+      '',
+      'listen to manual-[:Invocations]-> fire deals',
+    ].join('\n');
+    const before = stored();
+    const refused = await asAlice({ source, statements: STATEMENTS, acknowledgeErrors: true });
+    expect(refused).toMatchObject({ ok: false, refused: { kind: 'connections', connections: [{ connection: 'Finance', file: 'deals' }] } });
     expect(stored()).toEqual(before);
   });
 

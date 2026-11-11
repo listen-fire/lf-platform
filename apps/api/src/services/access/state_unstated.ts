@@ -74,23 +74,26 @@ async function teamRunsOnLf(client: Client, teamId: string): Promise<boolean> {
  * function a save uses, so a file's listens have one derivation. The trigger
  * rows are not the file: the deploy check deletes an automation's unpaused ones
  * when it stops it, so a mixed file can look narrower there than its source is.
- * A source that cannot be read gets no listens, which states the narrowest fire
- * list (the team): migration never widens who may fire.
+ * Each file is parsed under its own pin, since a file written for an older
+ * release can use spellings the current one refuses. A source that does not
+ * parse under its pin, or whose listens cannot otherwise be read, gets no
+ * listens, which states the narrowest fire list (the team): migration never
+ * widens who may fire. The source is parsed strictly, never guessed at.
  */
 async function listensOf(
   client: Client,
   teamId: string,
   movementIds: readonly string[],
 ): Promise<Map<string, ListenReach[]>> {
-  const files = await client.query<{ id: string; source: string }>(
-    `SELECT id::text AS id, source FROM automations.movement
+  const files = await client.query<{ id: string; source: string; language_version: string }>(
+    `SELECT id::text AS id, source, language_version FROM automations.movement
       WHERE team_id = $1::uuid AND id = ANY($2::uuid[])`,
     [teamId, movementIds],
   );
   const byMovement = new Map<string, ListenReach[]>();
   for (const file of files.rows) {
     try {
-      byMovement.set(file.id, listenReachesOf(file.source));
+      byMovement.set(file.id, listenReachesOf(file.source, { languageVersion: file.language_version }));
     } catch (err) {
       console.warn(
         `[state-unstated] could not read the listens of automation ${file.id} in team ${teamId}; treating it as having none, so only the team may fire it: ${

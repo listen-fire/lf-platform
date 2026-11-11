@@ -536,7 +536,27 @@ function ConnectTelegramRow() {
     try {
       // 1. Connect the team to the shared bot (creates the team credential).
       //    Idempotent — safe to call on every "New link" too.
-      await connectTelegramTeam(chosenUse === undefined ? undefined : { use: chosenUse });
+      const connected = await connectTelegramTeam(chosenUse === undefined ? undefined : { use: chosenUse });
+      if (!connected.ok) {
+        const next = telegramStepAfter(connected.reason);
+        switch (next.step) {
+          case "ask_use":
+            setAsking(true);
+            return;
+          case "connect_without_use":
+            setAsking(false);
+            resetUse();
+            await connect(undefined);
+            return;
+          case "say":
+            setError(next.sentence);
+            return;
+          default: {
+            const unreachable: never = next;
+            return unreachable;
+          }
+        }
+      }
       setAsking(false);
       resetUse();
       setTeamConnected(true);
@@ -547,31 +567,11 @@ function ConnectTelegramRow() {
       const res = await connectTelegram();
       setLink({ url: res.url, expiresAt: String(res.expiresAt) });
     } catch (e) {
-      const next = telegramStepAfter(e);
-      switch (next.step) {
-        case "ask_use":
-          setAsking(true);
-          return;
-        case "connect_without_use":
-          setAsking(false);
-          resetUse();
-          await connect(undefined);
-          return;
-        case "say":
-          setError(next.sentence);
-          return;
-        case "other":
-          setError(
-            e instanceof Error && /not configured/i.test(e.message)
-              ? "Telegram linking isn't set up for this workspace yet."
-              : "Couldn't create a Telegram link. Please try again.",
-          );
-          return;
-        default: {
-          const unreachable: never = next;
-          return unreachable;
-        }
-      }
+      setError(
+        e instanceof Error && /not configured/i.test(e.message)
+          ? "Telegram linking isn't set up for this workspace yet."
+          : "Couldn't create a Telegram link. Please try again.",
+      );
     }
   };
 

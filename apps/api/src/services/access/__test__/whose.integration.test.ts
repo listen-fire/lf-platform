@@ -152,11 +152,21 @@ describe('whose — the automation behind a run, a listen or a question', () => 
 
   it('leaves out a run whose automation cannot be traced, as one that is not there', async () => {
     const gone = await makeRun(teamId, { triggerId: randomUUID() });
-    const ofOrphanListen = await makeRun(teamId, { triggerId: await makeListen(teamId, null) });
-    const owners = await Whose.automationsOfRuns({ runIds: [gone, ofOrphanListen], teamIds: [teamId] });
+    const owners = await Whose.automationsOfRuns({ runIds: [gone], teamIds: [teamId] });
     expect(owners.has(gone)).toBe(false);
-    expect(owners.has(ofOrphanListen)).toBe(false);
-    expect(await Whose.automationOfTriggerId({ triggerId: await makeListen(teamId, null), teamIds: [teamId] })).toBeUndefined();
+    expect(await Whose.automationOfTriggerId({ triggerId: randomUUID(), teamIds: [teamId] })).toBeUndefined();
+  });
+
+  // Ruling 54: the listen is the team's, so what it starts is too.
+  it('gives a run of a listen with no automation, and the question it asks, to the team', async () => {
+    const orphanListen = await makeListen(teamId, null);
+    const run = await makeRun(teamId, { triggerId: orphanListen });
+    expect(await Whose.automationOfRun({ runId: run, teamIds: [teamId] })).toEqual({ teamId, automationId: null });
+    expect(await Whose.automationOfTriggerId({ triggerId: orphanListen, teamIds: [teamId] })).toEqual({ teamId, automationId: null });
+
+    const asked = await makeAsk(teamId, ENGINE_ASKED);
+    await runWriteKeeper({ teamId, runId: run })({ adapterType: ASK_ADAPTER_TYPE, recordType: 'Check', externalId: asked, at: new Date().toISOString() });
+    expect(await Whose.automationOfAsk({ askId: asked, teamIds: [teamId] })).toEqual({ teamId, automationId: null });
   });
 
   it('finds a firing’s automation by the trigger id its run records, before the run row exists', async () => {

@@ -81,18 +81,19 @@ beforeEach(() => {
 // credentialName is whatever mintConnectLink promised the agent (their
 // requested name, an existing credential's name, or the default) — the route
 // must thread it into the ensure so the promise is kept on creation.
-const telegramRow: ConnectTokenLookup = {
-  ok: true,
+const telegramRow = {
+  ok: true as const,
   row: {
     id: 'tok-id-t',
     teamId: 'team-1' as never,
     userId: 'user-1' as never,
     adapterSlug: 'telegram',
     credentialName: 'telegram_main',
+    reusesConnection: false,
     serviceType: ExternalServiceType.TELEGRAM,
-    connectKind: 'handshake',
+    connectKind: 'handshake' as const,
   },
-};
+} satisfies ConnectTokenLookup;
 
 describe('GET /api/connect/:token (handshake)', () => {
   it('renders a confirm page walking through the Telegram Start step (no side effects on load)', async () => {
@@ -191,7 +192,7 @@ describe('POST /api/connect/:token (handshake start)', () => {
 
 describe('POST /api/connect/:token (handshake start) after the connection the link reused is gone', () => {
   it('says the connection is gone, not that the link predates statements, and starts no handshake', async () => {
-    lookupConnectToken.mockResolvedValue(telegramRow);
+    lookupConnectToken.mockResolvedValue({ ok: true, row: { ...telegramRow.row, reusesConnection: true } });
     consumeConnectToken.mockResolvedValue(true);
     ensureSharedTelegramTeamCredential.mockResolvedValue({ needsUse: true });
 
@@ -206,6 +207,26 @@ describe('POST /api/connect/:token (handshake start) after the connection the li
     const html = await res.text();
     expect(html).toContain('The connection this link was for is gone.');
     expect(html).not.toContain('made before');
+    expect(mintTelegramToken).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/connect/:token (handshake start) on a link minted before links carried who may use', () => {
+  it('says the link predates statements, on a team with no Telegram connection, and starts no handshake', async () => {
+    lookupConnectToken.mockResolvedValue(telegramRow);
+    consumeConnectToken.mockResolvedValue(true);
+    ensureSharedTelegramTeamCredential.mockResolvedValue({ needsUse: true });
+
+    const res = await fetch(`${baseUrl}/api/connect/abc`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({}),
+      redirect: 'manual',
+    });
+
+    expect(res.status).toBe(410);
+    const html = await res.text();
+    expect(html).toContain('This link was made before links said who may use what they connect.');
     expect(mintTelegramToken).not.toHaveBeenCalled();
   });
 });

@@ -21,7 +21,6 @@
 
 
 import { TRPCError } from '@trpc/server';
-import type { TRPC_ERROR_CODE_KEY } from '@trpc/server/rpc';
 import { currentPrincipal } from 'principal';
 import { z } from 'zod';
 
@@ -52,7 +51,7 @@ import {
 } from '../../../services/translation_graph/adapters/telegram/handshake';
 import { USE_CONNECTION, connectionUnseen, decidesEach, readableAmong, usableAmong } from '../../access_route';
 import { seenOnlyBy } from '../../../services/access/decide';
-import { GranteesInput, MISSING_USE_REFUSAL } from '../../../services/access/stated_input';
+import { GranteesInput } from '../../../services/access/stated_input';
 import { useForNewConnection } from './connection_creation';
 
 
@@ -259,18 +258,18 @@ function summariseConfig(config: unknown): string {
 }
 
 /**
- * What connecting the team to Telegram refuses with, each by a code of its own
- * so the page tells them apart by the code and never by the text, which is
- * written for agents.
+ * What connecting the team to Telegram answers: the connection, or why it was
+ * refused. A refusal is a result with a reason of its own, so the page tells
+ * them apart by the reason and never by text written for agents.
+ *   - `needs_use`: the team has no Telegram connection and no statement of who
+ *     may use the one this would create.
+ *   - `not_usable`: the connection exists and the caller may not use it.
+ *   - `given_for_existing`: a use list was given for a connection that exists,
+ *     where it would not be applied.
  */
-const TELEGRAM_TEAM_REFUSED = {
-  /** The team has no Telegram connection and no statement of who may use the one this would create. */
-  needsUse: 'PRECONDITION_FAILED',
-  /** The connection exists and the caller may not use it. */
-  notUsable: 'CONFLICT',
-  /** A use list was given for a connection that exists, where it would not be applied. */
-  exists: 'UNPROCESSABLE_CONTENT',
-} as const satisfies Record<string, TRPC_ERROR_CODE_KEY>;
+type TelegramTeamConnect =
+  | { ok: true; id: string; name: string; created: boolean }
+  | { ok: false; reason: 'needs_use' | 'not_usable' | 'given_for_existing' };
 
 const connectionsRouter = (procedure: typeof trpc.procedure) => {
   const userProcedure = sharedUserProcedure(procedure);
@@ -566,7 +565,7 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
      */
     connectTelegramTeam: userProcedure
       .input(z.object({ use: GranteesInput.optional() }).optional())
-      .mutation(async ({ input }): Promise<{ id: string; name: string; created: boolean }> => {
+      .mutation(async ({ input }): Promise<TelegramTeamConnect> => {
         const ctx = currentContext();
         const teamId = ctx.user.teamId as TeamId;
         const existing = await getAutomationsQb(['external_service_credentials'])
@@ -577,25 +576,19 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
           .executeTakeFirst();
         // Who may use it is asked only of a connection this creates; one given
         // for the team's existing connection would not be applied, so it is refused.
-        if (existing !== undefined && input?.use !== undefined) {
-          throw new TRPCError({ code: TELEGRAM_TEAM_REFUSED.exists, message: "The team's Telegram connection exists already: change who may use it with setAccess." });
-        }
-        if (existing === undefined && input?.use === undefined) {
-          throw new TRPCError({ code: TELEGRAM_TEAM_REFUSED.needsUse, message: MISSING_USE_REFUSAL });
-        }
+        if (existing !== undefined && input?.use !== undefined) return { ok: false, reason: 'given_for_existing' };
+        if (existing === undefined && input?.use === undefined) return { ok: false, reason: 'needs_use' };
         const use = existing === undefined ? await useForNewConnection({ teamId, use: input?.use }) : undefined;
         const ensured = await ensureSharedTelegramTeamCredential({
           teamId,
           userId: ctx.user.id as UserId,
           use,
         });
-        if ('needsUse' in ensured) throw new TRPCError({ code: TELEGRAM_TEAM_REFUSED.needsUse, message: MISSING_USE_REFUSAL });
+        if ('needsUse' in ensured) return { ok: false, reason: 'needs_use' };
         // A team holds one shared Telegram connection: one the caller may not
         // use is not handed to them, and no second is made beside it.
-        if (!ensured.created && (await connectionUnseen(ensured.id))) {
-          throw new TRPCError({ code: TELEGRAM_TEAM_REFUSED.notUsable, message: "The team's Telegram connection is one you may not use." });
-        }
-        return ensured;
+        if (!ensured.created && (await connectionUnseen(ensured.id))) return { ok: false, reason: 'not_usable' };
+        return { ok: true, ...ensured };
       }),
   });
 };

@@ -63,6 +63,7 @@ function oauthRow(adapterSlug: string, serviceType: ExternalServiceType): Connec
       userId: 'user-1' as never,
       adapterSlug,
       credentialName: `${adapterSlug}_main`,
+      reusesConnection: false,
       serviceType,
       connectKind: 'oauth',
     },

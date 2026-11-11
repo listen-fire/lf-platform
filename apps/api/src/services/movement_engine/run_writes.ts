@@ -33,7 +33,7 @@ function askerKeeper(run: { teamId: TeamId; runId: string }): KeepWrite {
       teamId: run.teamId,
       askId: write.externalId,
       runId: run.runId,
-      ...(owner !== undefined ? { automationId: owner.automationId } : {}),
+      ...(owner !== undefined && owner.automationId !== null ? { automationId: owner.automationId } : {}),
     });
   };
 }

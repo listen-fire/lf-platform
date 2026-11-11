@@ -382,7 +382,7 @@ External mode with the drain-once job, and nothing draining between rows: a wake
 
 The system endpoints (`/api/v1/system/*`, the drain tick among them) accept whoever one of the configured verifiers accepts. `SYSTEM_AUTH_MODES` names them, comma-separated, asked in that order:
 
-- **`api_key`** (the default): an API key holding the `system` scope, as `Authorization: Bearer lf_…`.
+- **`api_key`** (the default): an API key holding the `system` scope, as `Authorization: Bearer lf_…`. A `system` key reads every automation and run of its tenant, whatever the access lists say, so it is never handed to a person.
 - **`oidc`**: an OpenID Connect identity token as the bearer. It is accepted when it is signed by one of the issuer's published keys, has not expired, names `SYSTEM_AUTH_OIDC_ISSUER` as its issuer and `SYSTEM_AUTH_OIDC_AUDIENCE` as its audience, and its `sub` (or verified `email`) is on `SYSTEM_AUTH_OIDC_ALLOWED_SUBJECTS`. For Google the issuer is `https://accounts.google.com` (tokens naming it as `accounts.google.com`, which Google also issues, are accepted too), the audience is the drain URL, and the subject is the push subscription's or the scheduler job's service account email. An oidc caller may drain; the run listings act in a tenant and still need the key.
 
 Naming `oidc` without all three of its settings, or an issuer that is not `https` in production, fails boot naming what is missing. So does `oidc` without `api_key` while `AUTOMATIONS_TICK_URLS` is set, since the notifier sends the key. A refused call answers `403` with each verifier's reason, and the refusal is logged at most once a minute per caller address and verifier; tokens are never logged.

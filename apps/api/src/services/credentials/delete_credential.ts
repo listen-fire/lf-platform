@@ -7,6 +7,8 @@ import type { TeamId } from '../../generated/kysely/core/Team';
 
 import { logger } from 'movement-engine/public/log';
 import { getAutomationsQb } from '../../lib/kysely';
+import { StatementStore } from '../access/statement';
+import { inOneTransaction } from '../context/one_transaction';
 import { decryptToken } from '../../lib/credentials';
 import { services } from '../../adapters/registry';
 import { clearClientByCredentialsId } from '../../adapters/airtable/apiClient';
@@ -104,9 +106,13 @@ export async function deleteCredential({ teamId, id }: { teamId: TeamId; id: Ext
     }
   }
 
-  await getAutomationsQb(['external_service_credentials'])
-    .deleteFrom('external_service_credentials')
-    .where('id', '=', id)
-    .where('team_id', '=', teamId)
-    .execute();
+  // The connection and what is stated about it go together.
+  await inOneTransaction(async () => {
+    await getAutomationsQb(['external_service_credentials'])
+      .deleteFrom('external_service_credentials')
+      .where('id', '=', id)
+      .where('team_id', '=', teamId)
+      .execute();
+    await StatementStore.deleteStatementsOf({ thing: 'connection', id }, { teamId });
+  });
 }
