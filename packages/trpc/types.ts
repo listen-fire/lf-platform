@@ -1986,7 +1986,7 @@ export type AdapterCatalogEntry = {
     connectedCount: number;
 };
 
-/** One entry on a list as the page shows it: a named user with who they are. */
+/** One entry on a list: a named user with who they are, anything else as stored. */
 export type ShownGrantee = Exclude<Grantee, {
     kind: 'user';
 }> | {
@@ -2000,14 +2000,15 @@ export type Shown<T extends Thing> = {
     thing: T;
     id: string;
     lists: Record<StatedVerb<T>, ShownGrantee[]>;
-    /** Whether the caller may change these lists; otherwise the page shows them read-only. */
+    /** Whether the caller may change these lists; otherwise they are read-only. */
     mayChange: boolean;
     /** Whether the lists that let someone see it admit the caller alone. */
     onlyYou: boolean;
-    /** The caller's own user id as the lists store it, so the page can say "you". */
+    /** The caller's own user id as the lists store it, so a page can say "you". */
     viewerUserId: string | null;
 };
 export type AccessView = Shown<'automation'> | Shown<'connection'>;
+
 /**
  * A change of a list: the thing as it now stands, or why the list was refused.
  * The page says each reason in its own words, never the decision's text,

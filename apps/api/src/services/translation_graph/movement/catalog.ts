@@ -2008,7 +2008,7 @@ async function resolveDescribeTarget(input: {
   adapter: string;
   credentialName?: string;
 }): Promise<
-  | { about: DescribedAbout; credentialsId?: string }
+  | { about: DescribedAbout; credentialsId?: string; connectionName?: string }
   | { note: string; about?: DescribedAbout }
 > {
   const adapterType = input.adapter;
@@ -2036,7 +2036,25 @@ async function resolveDescribeTarget(input: {
     credentialType: manifest.requiredCredentialType,
   });
   if ('note' in resolved) return { note: `${input.adapter}: ${resolved.note}`, about };
-  return { about, credentialsId: resolved.row.id };
+  return { about, credentialsId: resolved.row.id, connectionName: resolved.row.rowName };
+}
+
+/**
+ * The connection a describe of this system reads, when one stands behind it:
+ * the same resolution as `describeMovementInstance`, so what is said about who
+ * may use it is said of the connection the description came from. None for a
+ * system that needs no connection, or when no connection the caller may use
+ * serves it.
+ */
+export async function describedConnectionOf(input: {
+  teamId: TeamId;
+  audience: CatalogAudience;
+  adapter: string;
+  credentialName?: string;
+}): Promise<{ id: string; name: string } | undefined> {
+  const target = await resolveDescribeTarget(input);
+  if (!('credentialsId' in target) || target.credentialsId === undefined || target.connectionName === undefined) return undefined;
+  return { id: target.credentialsId, name: target.connectionName };
 }
 
 /**

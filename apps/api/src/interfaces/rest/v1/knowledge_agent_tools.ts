@@ -65,6 +65,7 @@ import {
 import { describeConnectionCompact } from '../../../services/translation_graph/movement/describe_connection';
 import { renderGetStarted } from '../../../services/translation_graph/movement/get_started';
 import {
+  describedConnectionOf,
   describeMovementInstance,
   movementCatalogSnapshotForTeam,
   toAgentCatalogView,
@@ -137,6 +138,7 @@ import {
   type Decision,
 } from '../../access_route';
 import { Whose } from '../../../services/access/whose';
+import { automationAccess, connectionAccess, type ConnectionAccess } from '../../../services/access/listing';
 import { StatementRefusedError, setStatement } from '../../../services/access/decide';
 import { StatementStore, type Grantee, type Target } from '../../../services/access/statement';
 import {
@@ -640,24 +642,31 @@ const describeInstanceHandler: RequestHandler = async (req, res) => {
     const help = await helpFor(input);
     if ('error' in help) return res.status(400).json(help);
     const teamId = (help.teamId ?? (await resolveToolTeam(input.team))) as TeamId;
+    const systems = Array.isArray(input.system) ? input.system : [input.system];
+    const scoped = !Array.isArray(input.system);
+    // Who may use a connection is said at the system's root only: deeper
+    // positions would repeat it on every hop.
+    const standings = await Promise.all(
+      systems.map((system) =>
+        atRoot(input) ? standingOf({ teamId, system, ...(scoped && input.connection !== undefined ? { connection: input.connection } : {}) }) : undefined,
+      ),
+    );
     if (help.route.kind === 'carried') {
       const text = await describeUnderCarried(help.route, {
         teamId,
         audience: callerAudience(),
-        systems: Array.isArray(input.system) ? input.system : [input.system],
+        systems,
         ...(input.connection !== undefined ? { connection: input.connection } : {}),
         asked: { types: input.types, position: input.position, narrow: input.narrow, detail: input.detail === 'full' ? input.detail : undefined },
       });
-      return res.status(200).type('text/markdown').send(text);
+      return res.status(200).type('text/markdown').send([text, ...standings.map(standingText)].join(''));
     }
-    if (input.detail === 'full') return res.status(200).json(await describeInstanceFull(teamId, input));
+    if (input.detail === 'full') return res.status(200).json(await describeInstanceFull(teamId, input, standings));
     // Batch form: each system at its root, one block apiece, described
     // concurrently. Per-system scoping is single-system only.
-    const systems = Array.isArray(input.system) ? input.system : [input.system];
-    const scoped = !Array.isArray(input.system);
     const blocks = await Promise.all(
-      systems.map((system) =>
-        describeConnectionCompact({
+      systems.map(async (system, index) =>
+        (await describeConnectionCompact({
           teamId,
           audience: callerAudience(),
           system,
@@ -665,7 +674,7 @@ const describeInstanceHandler: RequestHandler = async (req, res) => {
           ...(scoped && input.types !== undefined ? { types: input.types } : {}),
           ...(scoped && input.position !== undefined ? { position: input.position } : {}),
           ...(scoped && input.narrow !== undefined ? { narrow: input.narrow } : {}),
-        }),
+        })) + standingText(standings[index]),
       ),
     );
     return res.status(200).type('text/markdown').send(blocks.join('\n\n'));
@@ -674,7 +683,37 @@ const describeInstanceHandler: RequestHandler = async (req, res) => {
   }
 };
 
-async function describeInstanceFull(teamId: TeamId, input: z.infer<typeof describeInstanceSchema>) {
+/** Whether a describe asks for the system itself, not a place or types inside it. */
+function atRoot(input: z.infer<typeof describeInstanceSchema>): boolean {
+  return (input.position === undefined || input.position.trim() === '') && input.types === undefined && input.narrow === undefined;
+}
+
+/** The connection a describe of one system reads, and who may use it. */
+type Standing = { connection: { id: string; name: string }; access: ConnectionAccess };
+
+async function standingOf(asked: { teamId: TeamId; system: string; connection?: string }): Promise<Standing | undefined> {
+  const connection = await describedConnectionOf({
+    teamId: asked.teamId,
+    audience: callerAudience(),
+    adapter: asked.system,
+    ...(asked.connection !== undefined ? { credentialName: asked.connection } : {}),
+  });
+  if (connection === undefined) return undefined;
+  const access = await connectionAccess(connection.id);
+  return access === undefined ? undefined : { connection, access };
+}
+
+/** A standing as the compact text says it: the list in the shape `setAccess` takes back. */
+function standingText(standing: Standing | undefined): string {
+  if (standing === undefined) return '';
+  return `\n\nAccess to connection "${standing.connection.name}" (setAccess changes it):\n\`\`\`json\n${JSON.stringify(standing.access)}\n\`\`\``;
+}
+
+async function describeInstanceFull(
+  teamId: TeamId,
+  input: z.infer<typeof describeInstanceSchema>,
+  standings: readonly (Standing | undefined)[],
+) {
   // Batch form: describe every named system in one call (concurrently) so
   // an automation touching several systems needs one round trip, not one
   // per system. Per-system `connection`/`types` scoping is single-system
@@ -686,23 +725,27 @@ async function describeInstanceFull(teamId: TeamId, input: z.infer<typeof descri
   // otherwise still be hiding for up to the TTL.
   if (Array.isArray(input.system)) {
     const connections = await Promise.all(
-      input.system.map(async (system) => ({
+      input.system.map(async (system, index) => ({
         system,
         ...(await describeMovementInstance({ teamId, audience: callerAudience(), adapter: system, forceRefresh: true })),
+        ...standings[index],
       })),
     );
     return { connections };
   }
-  return describeMovementInstance({
-    teamId,
-    audience: callerAudience(),
-    adapter: input.system,
-    forceRefresh: true,
-    ...(input.connection !== undefined ? { credentialName: input.connection } : {}),
-    ...(input.types !== undefined ? { types: input.types } : {}),
-    ...(input.position !== undefined ? { position: input.position } : {}),
-    ...(input.narrow !== undefined ? { narrow: input.narrow } : {}),
-  });
+  return {
+    ...(await describeMovementInstance({
+      teamId,
+      audience: callerAudience(),
+      adapter: input.system,
+      forceRefresh: true,
+      ...(input.connection !== undefined ? { credentialName: input.connection } : {}),
+      ...(input.types !== undefined ? { types: input.types } : {}),
+      ...(input.position !== undefined ? { position: input.position } : {}),
+      ...(input.narrow !== undefined ? { narrow: input.narrow } : {}),
+    })),
+    ...standings[0],
+  };
 }
 
 const connectCredentialSchema = z.object({
@@ -980,7 +1023,9 @@ export const getMovementHandler: RequestHandler = jsonHandler(getMovementSchema,
   const row = await findAutomation({ idOrName: input.idOrName, teams: await teamSetForReads() });
   if (row === null) return missing;
   const found = await getMovement({ teamId: row.teamId, id: row.id });
-  return found ? withStoryUrl(row.teamId, found) : missing;
+  if (!found) return missing;
+  // The caller may read it (found above), which is all this asks.
+  return { ...(await withStoryUrl(row.teamId, found)), access: await automationAccess(row.id) };
 });
 
 /**
@@ -1391,7 +1436,7 @@ async function listNow(target: Target, verb: SetAccessInput['verb']): Promise<Gr
 }
 
 const SET_ACCESS_DESCRIPTION =
-  'Change who may reach one automation or one connection: replace one of its lists. An automation has three — read, write (change, run, delete, and change these lists; whoever may write may also read) and fire (set it off through its listens) — and a connection one, use. Body: { automation | connection (id or exact name), verb, grantees, team? }. Read, write and use take { kind: "team" } or { kind: "user", userId }; fire also takes { kind: "anyone" }, { kind: "domain", domain }, { kind: "email", address } and { kind: "phone", digits } (digits, country code first). A list is never empty, and names only people on the team. Ask the person you are working for who should be on it; never choose for them. Changing an automation\'s lists needs write on it; a connection\'s needs use. Returns the list as stored. Also the top-level "setAccess" tool.';
+  'Change who may reach one automation or one connection: replace one of its lists. An automation has three — read, write (change, run, delete, and change these lists; whoever may write may also read) and fire (set it off through its listens) — and a connection one, use. Body: { automation | connection (id or exact name), verb, grantees, team? }. Read, write and use take { kind: "team" } or { kind: "user", userId }; fire also takes { kind: "anyone" }, { kind: "domain", domain }, { kind: "email", address } and { kind: "phone", digits } (digits, country code first). A list is never empty, and names only people on the team. Ask the person you are working for who should be on it; never choose for them. Changing an automation\'s lists needs write on it; a connection\'s needs use. Returns the list as stored. The current lists are in getAutomation\'s and describeConnection\'s `access`; leave out anyone marked `onTeam: false`, who has left the team. Also the top-level "setAccess" tool.';
 
 const READ_ONLY_CONNECTION_MESSAGE = 'You may use this connection but not change who may.';
 
@@ -2106,14 +2151,14 @@ function registerAutomationToolRoutes(): void {
 
   // connected systems
   reg('GET', '/connections', 'The connected systems list: the workspace\'s systems (construction args + listener-config keys + `triggerExpectation` — what a listener actually fires on; ground trigger-surface claims in it), connections, plugins, and knowledge-graph type names — the ONLY names valid in automation imports/constructions. Also the top-level "listConnections" tool.', { readOnly: true, latency: 'medium' });
-  reg('POST', '/connections/describe', 'The live schema of one (system, connection) at one position. Body: { system, connection?, types?, position?, narrow?, detail? }. By default answers compact markdown in getStarted\'s notation (the node\'s fields, its edges with their targets\' fields one level deep; at the root, how to construct and listen); `detail: "full"` answers the JSON described below. Call before authoring an automation against a system; every call re-reads the live schema, so call again after adding a field in the external workspace. Returns the system\'s description + triggerExpectation, plus an identity note (who a movement runs as, and whose activity triggers a listener) and a capability note (what it can read/write), even when no connection exists yet. A type listing `members` is POLYMORPHIC: it shows only what all its members share (often nothing), and you reach one member\'s real fields and edges by describing again with `narrow` — see `narrowBy` for the fields to test and `narrowingHint` for a worked example.', { inputSchema: describeInstanceSchema, readOnly: true, latency: 'medium' });
+  reg('POST', '/connections/describe', 'The live schema of one (system, connection) at one position. Body: { system, connection?, types?, position?, narrow?, detail? }. By default answers compact markdown in getStarted\'s notation (the node\'s fields, its edges with their targets\' fields one level deep; at the root, how to construct and listen); `detail: "full"` answers the JSON described below. Call before authoring an automation against a system; every call re-reads the live schema, so call again after adding a field in the external workspace. At the root it also returns `access`, who may use the connection, in the shape setAccess takes. Returns the system\'s description + triggerExpectation, plus an identity note (who a movement runs as, and whose activity triggers a listener) and a capability note (what it can read/write), even when no connection exists yet. A type listing `members` is POLYMORPHIC: it shows only what all its members share (often nothing), and you reach one member\'s real fields and edges by describing again with `narrow` — see `narrowBy` for the fields to test and `narrowingHint` for a worked example.', { inputSchema: describeInstanceSchema, readOnly: true, latency: 'medium' });
   reg('POST', '/connections/connect', 'AUTHOR-TIME: if a system the automation needs isn\'t connected yet, mint a single-use link for the user to open in their browser — no popup needed. Works for OAuth systems (the link opens a browser sign-in), API-key systems (the link opens a form to paste/replace the key), intrinsic systems (one-click confirm), and handshake systems (Telegram — the link opens Telegram with the Listen-Fire bot; the user presses Start there to finish). Body: { system, connection?, use? } — `use` says who may use the connection the link creates (ask the person you work for, never choose), and is required unless the link only reuses the team\'s Telegram connection. Returns a link to send the user, the connect kind ("oauth" | "key-entry" | "intrinsic" | "handshake"), the name the connection will be stored under, and when the link expires. Hand the url to the user; after they connect, poll listConnections — the connection shows up in the results. Also the top-level "connectSystem" tool.', { inputSchema: connectCredentialSchema, latency: 'fast' });
   reg('POST', '/connections/grant-access', 'AUTHOR-TIME: some systems need access granted to specific items inside an already-connected account (Google Sheets: the Drive picker — under drive.file, picking is the only way to reach an existing file). Mint a single-use link where the user picks the item(s) to grant. Body: { system, connection? }. Returns { url, connection, expiresAt }. Systems without a grant flow return a clear error. Also the top-level "grantAccess" tool.', { inputSchema: grantAccessSchema, latency: 'fast' });
   reg('POST', '/access', SET_ACCESS_DESCRIPTION, { inputSchema: setAccessSchema, latency: 'fast' });
 
   // automations
   reg('GET', '/automations', 'List saved automations: id, name, status, listeners. Spans every team the connection covers; each item is tagged with its teamId + teamName.', { readOnly: true, latency: 'fast' });
-  reg('GET', '/automations/:idOrName', 'Get one saved automation by id or name (across the teams the connection covers): its program, status, listeners, `revision` — a fingerprint of its current source — and `storyUrl`, a link to a picture of what it does that anyone can open (hand it to the user as a labelled link, e.g. [See what this does](url); it needs no login and always shows the current version). Re-read this (don\'t reuse an old copy) before editing an automation you already have, then pass its `revision` back as `expectedRevision` when you save.', { readOnly: true, latency: 'fast' });
+  reg('GET', '/automations/:idOrName', 'Get one saved automation by id or name (across the teams the connection covers): its program, status, listeners, `revision` — a fingerprint of its current source — and `storyUrl`, a link to a picture of what it does that anyone can open (hand it to the user as a labelled link, e.g. [See what this does](url); it needs no login and always shows the current version) and `access` — who may read, write and fire it, in the shape setAccess takes. Re-read this (don\'t reuse an old copy) before editing an automation you already have, then pass its `revision` back as `expectedRevision` when you save.', { readOnly: true, latency: 'fast' });
   reg('GET', '/automations/:idOrName/source', 'Read an automation\'s program text a window at a time, by id or name — cheaper than getAutomation when you only need to see (or re-check) part of a long file. Pass ?offset= (1-based line number, default 1) and ?limit= (line count, default the rest of the file). Returns { id, name, revision, totalLines, offset, lines: [{ n, text }] }. Line numbers are only valid against THIS read — anything else that edits the file moves them, so anchor an edit on the text itself (editAutomation), not on `n`.', { readOnly: true, latency: 'fast' });
   reg('POST', '/automations/:idOrName/edit', 'Change one saved automation by splicing a snippet, without resending the whole program: pass the automation\'s id or name and { oldString, newString, replaceAll?, expectedRevision?, acknowledgeErrors? }. oldString must appear in the CURRENT source exactly once (read it first — readAutomation or getAutomation — and quote enough surrounding text to pin one spot), or the edit is refused with a 400 explaining why: not found, or found more than once (pass replaceAll: true to change every match instead of widening the anchor). Once the anchor resolves, this is exactly saveAutomation with the spliced result as the new source — same expectedRevision conflict check, same check first (an edit with errors is not saved; the diagnostics come back), same acknowledgeErrors consent. Returns save\'s result plus the new `revision`.', { latency: 'medium' });
   reg('GET', '/automations/grep', 'Search across a team\'s automations for a literal snippet (or, with isRegex: true, a regular expression) and get back every matching line: { matches: [{ id, name, teamId, line, text, before, after }], truncated }. Query: pattern, isRegex?, contextLines? (lines of surrounding context per match, default 0), team? (default: every team the connection covers). Capped at 200 matches. Use it to find where something is defined or imported before editing it.', { inputSchema: grepAutomationsSchema, readOnly: true, latency: 'fast' });
