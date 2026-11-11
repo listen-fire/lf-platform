@@ -1,6 +1,8 @@
 import {
   NO_AUTOMATION_CHOICE,
   NO_CONNECTION_CHOICE,
+  SEE_OPTIONS,
+  USE_OPTIONS,
   automationStatements,
   connectionUse,
   departedOn,
@@ -58,8 +60,20 @@ describe("a list in plain words", () => {
 
 describe("who may set a new automation off", () => {
   it("offers every choice on the platform and only anyone on a team that runs on lf, which the server refuses the rest on", () => {
-    expect(fireOptionsFor("platform").map((o) => o.value)).toEqual(["me", "team", "anyone", "people"]);
-    expect(fireOptionsFor("lf")).toEqual([{ value: "anyone", label: "Anyone who reaches it" }]);
+    expect(fireOptionsFor("platform", { outsiders: true }).map((o) => o.value)).toEqual(["me", "team", "anyone", "people"]);
+    expect(fireOptionsFor("lf", { outsiders: true }).map((o) => o.label)).toEqual(["Anyone who reaches it"]);
+  });
+
+  it("says people outside the team may be picked only where they can be named", () => {
+    const people = (outsiders: boolean) => fireOptionsFor("platform", { outsiders }).find((o) => o.value === "people")?.description;
+    expect(people(true)).toBe("Pick people on the team, or outside it.");
+    expect(people(false)).toBe("Pick people on the team.");
+  });
+
+  it("describes every choice in one line, so each can be told apart without a hint beside the question", () => {
+    for (const option of [...SEE_OPTIONS, ...USE_OPTIONS, ...fireOptionsFor("platform", { outsiders: true })]) {
+      expect(option.description).not.toBe("");
+    }
   });
 });
 

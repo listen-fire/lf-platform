@@ -116,7 +116,11 @@ export function AccessPanelView(props: AccessPanelViewProps) {
                     <span className="text-[12px] text-gray-400">Nobody yet</span>
                   ) : (
                     listPhrases(list, viewer).map((phrase, i) => (
-                      <span key={`${phrase}${i}`} className="rounded-full bg-gray-100 px-2 py-0.5 text-[11.5px] text-gray-700">
+                      <span
+                        key={`${phrase}${i}`}
+                        title={phrase}
+                        className="max-w-full truncate rounded-full bg-gray-100 px-2 py-0.5 text-[11.5px] text-gray-700"
+                      >
                         {phrase}
                       </span>
                     ))

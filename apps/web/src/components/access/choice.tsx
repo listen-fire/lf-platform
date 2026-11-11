@@ -4,13 +4,18 @@
 // (nothing chosen until they choose), and as they change one of its lists.
 // Drawn from props alone, so the pages own the queries.
 
+import { useEffect, useId, useState } from "react";
+
+import { Select } from "@/components/select";
+
 import {
-  FIRE_OPTIONS,
   fireOptionsFor,
   SEE_OPTIONS,
   USE_OPTIONS,
   type AutomationChoice,
+  type ChoiceOption,
   type ConnectionChoice,
+  type FireChoice,
   type ListDraft,
   type Member,
   type Verb,
@@ -18,7 +23,12 @@ import {
   unreadableOutsiders,
 } from "./grantees";
 
-export function RadioGroup<T extends string>({
+/**
+ * One question as a dropdown: each answer carries its own description, shown
+ * in the open list, and the chosen one's stays under the closed dropdown. A
+ * question with a single possible answer is stated rather than asked.
+ */
+export function ChoiceSelect<T extends string>({
   label,
   options,
   value,
@@ -26,39 +36,58 @@ export function RadioGroup<T extends string>({
   testId,
 }: {
   label: string;
-  options: readonly { value: T; label: string }[];
+  options: readonly ChoiceOption<T>[];
   /** Null until the person chooses: no option is ever chosen for them. */
   value: T | null;
   onChange: (value: T) => void;
   testId?: string;
 }) {
+  const [only] = options.length === 1 ? options : [];
+  // With nothing else to pick there is nothing to decide, so the answer is
+  // taken here rather than left for a click on text that offers no click.
+  useEffect(() => {
+    if (only !== undefined && value !== only.value) onChange(only.value);
+  }, [only, value, onChange]);
+
+  if (only !== undefined) {
+    return (
+      <div data-testid={testId}>
+        <div className="text-[13px] font-medium text-gray-900">{only.label}</div>
+        <p className="mt-0.5 break-words text-[11.5px] leading-snug text-gray-400">{only.description}</p>
+      </div>
+    );
+  }
+  const chosen = options.find((option) => option.value === value);
   return (
-    <div role="radiogroup" aria-label={label} data-testid={testId} className="flex flex-wrap gap-1.5">
-      {options.map((option) => {
-        const checked = option.value === value;
-        return (
-          <button
-            key={option.value}
-            type="button"
-            role="radio"
-            aria-checked={checked}
-            data-value={option.value}
-            onClick={() => onChange(option.value)}
-            className={`cursor-pointer rounded-md border px-2.5 py-1 text-[12px] font-medium transition-colors ${
-              checked
-                ? "border-primary bg-primary-50 text-primary-700"
-                : "border-gray-200 text-gray-600 hover:bg-gray-50"
-            }`}
-          >
-            {option.label}
-          </button>
-        );
-      })}
+    <div>
+      <Select
+        value={chosen?.value ?? ""}
+        onChange={(picked) => {
+          const option = options.find((o) => o.value === picked);
+          if (option) onChange(option.value);
+        }}
+        options={options.map(({ value: v, label: l, description }) => ({ value: v, label: l, description }))}
+        placeholder="Choose…"
+        ariaLabel={label}
+        testId={testId}
+        searchable={false}
+      />
+      {chosen && <p className="mt-1 break-words text-[11.5px] leading-snug text-gray-400">{chosen.description}</p>}
     </div>
   );
 }
 
-/** Members to tick. The viewer, when `viewerAlways`, is shown on and cannot be taken off. */
+/** What a member row says under the name: their address, and that they may only read. */
+function memberDetail(member: Member, isViewer: boolean): string {
+  return [isViewer ? null : member.email, member.access === "read" ? "reads only" : null].filter((part) => part !== null).join(" \u00b7 ");
+}
+
+/**
+ * Members to tick. The viewer, when `viewerAlways`, is shown on and cannot be
+ * taken off. With `team`, "Everyone on the team" is the first row, and while
+ * it is ticked the members are covered by it: shown as they were ticked, but
+ * not changeable.
+ */
 export function PeoplePicker({
   members,
   chosen,
@@ -66,6 +95,7 @@ export function PeoplePicker({
   viewerUserId,
   viewerAlways,
   writersOnly,
+  team,
 }: {
   members: readonly Member[];
   chosen: readonly string[];
@@ -74,24 +104,45 @@ export function PeoplePicker({
   viewerAlways: boolean;
   /** Offer only members who may write on the team (a write list names no one else). */
   writersOnly?: boolean;
+  team?: { checked: boolean; onChange: (checked: boolean) => void };
 }) {
   const offered = members.filter((m) => !writersOnly || m.access === "write");
-  if (offered.length === 0) {
+  if (offered.length === 0 && team === undefined) {
     return <p className="text-[12px] text-gray-400">Nobody on the team yet.</p>;
   }
+  const covered = team?.checked === true;
   return (
-    <ul className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-gray-100 px-2.5 py-2" data-testid="people-picker">
+    <ul className="max-h-48 space-y-1.5 overflow-y-auto rounded-md border border-gray-100 px-2.5 py-2" data-testid="people-picker">
+      {team && (
+        <li>
+          <label className="flex cursor-pointer items-start gap-2 text-[12px] font-medium text-gray-700">
+            <input
+              type="checkbox"
+              className="mt-0.5 shrink-0"
+              checked={team.checked}
+              onChange={(e) => team.onChange(e.target.checked)}
+            />
+            <span className="min-w-0 flex-1">Everyone on the team</span>
+          </label>
+        </li>
+      )}
+      {offered.length === 0 && <li className="text-[12px] text-gray-400">Nobody on the team yet.</li>}
       {offered.map((member) => {
         const isViewer = member.userId === viewerUserId;
         const locked = isViewer && viewerAlways;
         const checked = locked || chosen.includes(member.userId);
+        const name = isViewer ? "You" : member.username;
+        const detail = memberDetail(member, isViewer);
+        const email = isViewer ? null : (member.email ?? null);
+        const readsOnly = member.access === "read";
         return (
           <li key={member.userId}>
-            <label className="flex cursor-pointer items-center gap-2 text-[12px] text-gray-700">
+            <label className={`flex items-start gap-2 text-[12px] text-gray-700 ${covered ? "cursor-default opacity-50" : "cursor-pointer"}`}>
               <input
                 type="checkbox"
+                className="mt-0.5 shrink-0"
                 checked={checked}
-                disabled={locked}
+                disabled={locked || covered}
                 onChange={(e) =>
                   onChange(
                     e.target.checked
@@ -100,9 +151,18 @@ export function PeoplePicker({
                   )
                 }
               />
-              <span>{isViewer ? "You" : member.username}</span>
-              {member.email && !isViewer && <span className="text-gray-400">{member.email}</span>}
-              {member.access === "read" && <span className="text-[11px] text-gray-400">(reads only)</span>}
+              <span className="min-w-0 flex-1">
+                <span className="block truncate" title={name}>
+                  {name}
+                </span>
+                {detail !== "" && (
+                  // The address gives way to "reads only", which must never be cut.
+                  <span className="flex min-w-0 text-[11px] text-gray-400" title={detail}>
+                    {email !== null && <span className="truncate">{email}</span>}
+                    {readsOnly && <span className="shrink-0 whitespace-pre">{email !== null ? " · reads only" : "reads only"}</span>}
+                  </span>
+                )}
+              </span>
             </label>
           </li>
         );
@@ -111,11 +171,10 @@ export function PeoplePicker({
   );
 }
 
-function Question({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+function Question({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
       <div className="text-[12px] font-medium text-gray-700">{title}</div>
-      {hint && <p className="text-[11.5px] leading-relaxed text-gray-400">{hint}</p>}
       {children}
     </div>
   );
@@ -127,22 +186,19 @@ export function AutomationAccessChoice({
   onChange,
   members,
   viewerUserId,
-  fireOptions = FIRE_OPTIONS,
+  fireOptions = fireOptionsFor("platform", { outsiders: false }),
 }: {
   choice: AutomationChoice;
   onChange: (choice: AutomationChoice) => void;
   members: readonly Member[];
   viewerUserId: string;
   /** What the team's engine can keep to for who may set it off. */
-  fireOptions?: typeof FIRE_OPTIONS;
+  fireOptions?: readonly ChoiceOption<FireChoice>[];
 }) {
   return (
     <div className="space-y-4" data-testid="automation-access-choice">
-      <Question
-        title="Who may see and change it"
-        hint="People who may only read on the team can see it but not change it."
-      >
-        <RadioGroup
+      <Question title="Who may see and change it">
+        <ChoiceSelect
           label="Who may see and change it"
           options={SEE_OPTIONS}
           value={choice.see}
@@ -159,8 +215,8 @@ export function AutomationAccessChoice({
           />
         )}
       </Question>
-      <Question title="Who may set it off" hint="Through its listens: a message, an email, an event from a connected system.">
-        <RadioGroup
+      <Question title="Who may set it off">
+        <ChoiceSelect
           label="Who may set it off"
           options={fireOptions}
           value={choice.fire}
@@ -195,11 +251,8 @@ export function ConnectionAccessChoice({
 }) {
   return (
     <div data-testid="connection-access-choice">
-      <Question
-        title="Who may use it"
-        hint="Whoever may use it can run automations on it, read through it, and change who else may."
-      >
-        <RadioGroup
+      <Question title="Who may use it">
+        <ChoiceSelect
           label="Who may use it"
           options={USE_OPTIONS}
           value={choice.use}
@@ -220,7 +273,7 @@ export function ConnectionAccessChoice({
   );
 }
 
-const DRAFT_OPTIONS: Record<Exclude<Verb, "fire">, readonly { value: ListDraft["mode"]; label: string }[]> = {
+const DRAFT_OPTIONS: Record<Exclude<Verb, "fire">, readonly ChoiceOption<ListDraft["mode"]>[]> = {
   read: SEE_OPTIONS,
   write: SEE_OPTIONS,
   use: USE_OPTIONS,
@@ -245,26 +298,19 @@ export function ListEditor({
 }) {
   const outsiders = takesOutsiders(verb);
   const unreadable = unreadableOutsiders(draft.outsiders);
+  // Outsiders are the rare case, so their field stays out of sight until asked for, unless the list already names some.
+  const [outsidersShown, setOutsidersShown] = useState(draft.outsiders !== "");
+  const outsidersId = useId();
   return (
     <div className="space-y-2" data-testid={`list-editor-${verb}`}>
-      <RadioGroup
+      <ChoiceSelect<ListDraft["mode"]>
         label={`Who may ${verb}`}
-        options={verb === "fire" ? fireOptionsFor(engine) : DRAFT_OPTIONS[verb]}
+        options={verb === "fire" ? fireOptionsFor(engine, { outsiders: true }) : DRAFT_OPTIONS[verb]}
         value={draft.mode}
         onChange={(mode) => onChange({ ...draft, mode })}
       />
       {draft.mode === "people" && (
         <>
-          {outsiders && (
-            <label className="flex cursor-pointer items-center gap-2 text-[12px] text-gray-700">
-              <input
-                type="checkbox"
-                checked={draft.withTeam}
-                onChange={(e) => onChange({ ...draft, withTeam: e.target.checked })}
-              />
-              Everyone on the team
-            </label>
-          )}
           <PeoplePicker
             members={members}
             chosen={draft.people}
@@ -272,26 +318,41 @@ export function ListEditor({
             viewerUserId={viewerUserId}
             viewerAlways={false}
             writersOnly={verb === "write"}
+            team={outsiders ? { checked: draft.withTeam, onChange: (withTeam) => onChange({ ...draft, withTeam }) } : undefined}
           />
-          {outsiders && (
-            <div>
-              <label className="mb-1 block text-[11.5px] text-gray-500">
-                People outside the team: addresses, domains (@acme.com) or phone numbers with the country code, separated by commas
-              </label>
-              <textarea
-                value={draft.outsiders}
-                onChange={(e) => onChange({ ...draft, outsiders: e.target.value })}
-                rows={2}
-                className="w-full rounded-md border border-gray-200 px-2.5 py-1.5 text-[12px] focus:border-gray-400 focus:outline-none"
-                placeholder="pat@acme.com, @acme.com, +44 7700 900123"
-              />
-              {unreadable.length > 0 && (
-                <p className="mt-1 text-[11.5px] text-red-600">
-                  Not an address, a domain or a phone number: {unreadable.join(", ")}
+          {outsiders &&
+            (outsidersShown ? (
+              <div>
+                <label htmlFor={outsidersId} className="block text-[12px] font-medium text-gray-700">
+                  People outside the team
+                </label>
+                <p id={`${outsidersId}-format`} className="mb-1 break-words text-[11.5px] leading-snug text-gray-400">
+                  Addresses, @domains or phone numbers with the country code, separated by commas
                 </p>
-              )}
-            </div>
-          )}
+                <textarea
+                  id={outsidersId}
+                  aria-describedby={`${outsidersId}-format`}
+                  value={draft.outsiders}
+                  onChange={(e) => onChange({ ...draft, outsiders: e.target.value })}
+                  rows={2}
+                  className="w-full rounded-md border border-gray-200 px-2.5 py-1.5 text-[12px] focus:border-gray-400 focus:outline-none"
+                  placeholder="pat@acme.com, @acme.com, +44 7700 900123"
+                />
+                {unreadable.length > 0 && (
+                  <p className="mt-1 break-words text-[11.5px] text-red-600">
+                    Not an address, a domain or a phone number: {unreadable.join(", ")}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setOutsidersShown(true)}
+                className="cursor-pointer text-[12px] font-medium text-gray-500 hover:text-gray-800"
+              >
+                + Add people outside the team
+              </button>
+            ))}
         </>
       )}
     </div>

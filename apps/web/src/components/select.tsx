@@ -14,6 +14,8 @@ export interface SelectOption {
   label: string;
   value: string;
   icon?: React.ReactNode;
+  /** A smaller grey line under the label, inside the open dropdown. */
+  description?: string;
 }
 
 // --- Shared dropdown (portaled to body) ---
@@ -52,12 +54,14 @@ export function SelectDropdown({
     direction: "down" | "up";
   } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Described options take two or three lines each, so four of them need room a plain list does not.
+  const tall = options.some((o) => o.description !== undefined);
 
   useLayoutEffect(() => {
     if (!anchorRef.current) return;
     const rect = anchorRef.current.getBoundingClientRect();
     const spaceBelow = window.innerHeight - rect.bottom;
-    const maxH = 192; // max-h-48
+    const maxH = tall ? 288 : 192; // max-h-72 : max-h-48
     const direction =
       spaceBelow < maxH && rect.top > spaceBelow ? "up" : "down";
     const width = Math.max(rect.width, size === "sm" ? 140 : 0);
@@ -67,7 +71,7 @@ export function SelectDropdown({
       width,
       direction,
     });
-  }, [anchorRef, size]);
+  }, [anchorRef, size, tall]);
 
   useEffect(() => {
     if (pos && inputRef.current) {
@@ -104,7 +108,7 @@ export function SelectDropdown({
           />
         </div>
       )}
-      <div className="max-h-48 overflow-auto py-1">
+      <div className={`${tall ? "max-h-72" : "max-h-48"} overflow-auto py-1`}>
         {options.length === 0 ? (
           <div
             className={`px-3 py-2 text-gray-400 ${size === "sm" ? "text-[12px]" : "text-[13px]"}`}
@@ -123,7 +127,16 @@ export function SelectDropdown({
               } ${i === focusedIndex ? "bg-gray-100" : ""} ${option.value === value ? "font-medium text-gray-900" : "text-gray-700"}`}
             >
               {option.icon && <span className="shrink-0">{option.icon}</span>}
-              <span className="truncate">{option.label}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate" title={option.label}>
+                  {option.label}
+                </span>
+                {option.description && (
+                  <span className="mt-0.5 block break-words text-[11.5px] font-normal leading-snug text-gray-400">
+                    {option.description}
+                  </span>
+                )}
+              </span>
               {option.value === value && (
                 <svg
                   className="ml-auto h-3.5 w-3.5 shrink-0 text-primary"
@@ -243,6 +256,10 @@ export function useSelectDropdown({
         break;
       case "Escape":
         e.preventDefault();
+        // Closing the list must not also close a dialog the select sits in; that dialog listens on the
+        // document, which is also where React listens, so only stopping later listeners too reaches it.
+        e.stopPropagation();
+        e.nativeEvent.stopImmediatePropagation();
         close();
         break;
     }
@@ -270,6 +287,11 @@ interface SelectProps {
   disabled?: boolean;
   className?: string;
   size?: "default" | "sm";
+  /** Names the trigger for assistive technology when no visible label sits beside it. */
+  ariaLabel?: string;
+  testId?: string;
+  /** Whether the open list has a filter box; a short list of described choices has no use for one. */
+  searchable?: boolean;
 }
 
 export function Select({
@@ -280,6 +302,9 @@ export function Select({
   disabled = false,
   className = "",
   size = "default",
+  ariaLabel,
+  testId,
+  searchable = true,
 }: SelectProps) {
   const [search, setSearch] = useState("");
 
@@ -326,13 +351,17 @@ export function Select({
         onClick={toggle}
         onKeyDown={handleKeyDown}
         disabled={disabled}
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        data-testid={testId}
         className={`flex w-full items-center justify-between rounded-md border border-gray-200 bg-white text-left transition-colors focus:border-gray-400 focus:outline-none disabled:opacity-50 ${
           size === "sm" ? "px-2 py-1.5 text-[12px]" : "px-3 py-2 text-[13px]"
         } ${open ? "border-gray-400" : ""} ${selectedOption ? "text-gray-900" : "text-gray-400"}`}
       >
-        <span className="flex items-center gap-2 truncate">
+        <span className="flex min-w-0 items-center gap-2">
           {selectedOption?.icon && <span className="shrink-0">{selectedOption.icon}</span>}
-          {selectedOption ? selectedOption.label : placeholder}
+          <span className="truncate">{selectedOption ? selectedOption.label : placeholder}</span>
         </span>
         <svg
           className={`ml-2 h-3.5 w-3.5 shrink-0 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`}
@@ -356,7 +385,7 @@ export function Select({
           anchorRef={containerRef}
           size={size}
           search={search}
-          onSearchChange={setSearch}
+          onSearchChange={searchable ? setSearch : undefined}
           onKeyDown={handleKeyDown}
           onSelect={(v) => {
             onChange(v);

@@ -90,30 +90,52 @@ export interface ConnectionChoice {
 export const NO_AUTOMATION_CHOICE: AutomationChoice = { see: null, seePeople: [], fire: null, firePeople: [] };
 export const NO_CONNECTION_CHOICE: ConnectionChoice = { use: null, usePeople: [] };
 
-export const SEE_OPTIONS: readonly { value: SeeChoice; label: string }[] = [
-  { value: "me", label: "Only me" },
-  { value: "team", label: "Whole team" },
-  { value: "people", label: "Specific people" },
+/** One answer to a question about who may reach a thing, and what choosing it means. */
+export interface ChoiceOption<T extends string> {
+  value: T;
+  label: string;
+  description: string;
+}
+
+const ONLY_ME = "Nobody else on the team.";
+const WHOLE_TEAM = "Everyone on the team now, and whoever joins.";
+
+export const SEE_OPTIONS: readonly ChoiceOption<SeeChoice>[] = [
+  { value: "me", label: "Only me", description: ONLY_ME },
+  { value: "team", label: "Whole team", description: `${WHOLE_TEAM} Members who only read can see it but not change it.` },
+  { value: "people", label: "Specific people", description: "Pick people on the team." },
 ];
 
-export const FIRE_OPTIONS: readonly { value: FireChoice; label: string }[] = [
-  { value: "me", label: "Only me" },
-  { value: "team", label: "Whole team" },
-  { value: "anyone", label: "Anyone who reaches it" },
-  { value: "people", label: "Specific people" },
+export const USE_OPTIONS: readonly ChoiceOption<UseChoice>[] = [
+  { value: "me", label: "Only me", description: ONLY_ME },
+  { value: "team", label: "Whole team", description: WHOLE_TEAM },
+  { value: "people", label: "Specific people", description: "Pick people on the team." },
 ];
 
-export const USE_OPTIONS: readonly { value: UseChoice; label: string }[] = SEE_OPTIONS;
+const FIRE_OPTIONS: readonly ChoiceOption<FireChoice>[] = [
+  { value: "me", label: "Only me", description: ONLY_ME },
+  { value: "team", label: "Whole team", description: WHOLE_TEAM },
+  {
+    value: "anyone",
+    label: "Anyone who reaches it",
+    description: "Anyone who can message, email or trigger its listens. Its own filters still apply.",
+  },
+  { value: "people", label: "Specific people", description: "Pick people on the team." },
+];
 
 /**
  * Who may set a new automation off that the team's engine can keep to. On lf
  * the platform does not judge the door, so the server refuses any fire list
- * but "anyone" there; offering the rest would only invite a refusal.
+ * but "anyone" there; offering the rest would only invite a refusal. Whether
+ * people outside the team can be named depends on where the choice is made:
+ * the list editor takes them, the creation dialog does not.
  */
-export function fireOptionsFor(engine: "platform" | "lf"): readonly { value: FireChoice; label: string }[] {
+export function fireOptionsFor(engine: "platform" | "lf", options: { outsiders: boolean }): readonly ChoiceOption<FireChoice>[] {
   switch (engine) {
     case "platform":
-      return FIRE_OPTIONS;
+      return options.outsiders
+        ? FIRE_OPTIONS.map((o) => (o.value === "people" ? { ...o, description: "Pick people on the team, or outside it." } : o))
+        : FIRE_OPTIONS;
     case "lf":
       return FIRE_OPTIONS.filter((option) => option.value === "anyone");
     default: {
