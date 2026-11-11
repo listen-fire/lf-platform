@@ -68,6 +68,8 @@ type AdapterFactory = (input: {
    *  ignore it. Threaded through `resolveAdapter` from both the checker's
    *  introspection and the runtime construction. */
   constructionArgs?: Record<string, string>;
+  /** What the connection carries for the settings its module declares. */
+  moduleSettings?: Record<string, string>;
 }) => Adapter;
 
 const ADAPTER_FACTORIES: Record<string, AdapterFactory> = {
@@ -327,6 +329,8 @@ export function getAdapter(input: {
   /** Non-credential construction args (e.g. Sheets' `spreadsheet:` entry
    *  position). Passed to the factory; position-free adapters ignore it. */
   constructionArgs?: Record<string, string>;
+  /** What the connection carries for the settings its module declares. */
+  moduleSettings?: Record<string, string>;
 }): Adapter {
   const slug = resolveAdapterSlug(input.adapterType);
   const factory = ADAPTER_FACTORIES[slug];
@@ -340,6 +344,7 @@ export function getAdapter(input: {
     teamId: input.teamId,
     credentialsId: input.credentialsId,
     ...(input.constructionArgs !== undefined ? { constructionArgs: input.constructionArgs } : {}),
+    ...(input.moduleSettings !== undefined ? { moduleSettings: input.moduleSettings } : {}),
   });
 }
 

@@ -37,6 +37,20 @@ const TITLES: Record<Verb, { title: string; hint: string }> = {
   use: { title: "Use", hint: "Who may run automations on it, read through it, and change this list." },
 };
 
+export const DROPS_OWN_MESSAGES = "Drops messages and reactions this app makes";
+export const HEARS_OWN_MESSAGES = "Hears messages and reactions this app makes";
+
+/**
+ * How a Slack connection an automation listens on treats its own app's
+ * messages and reactions. The connection is named only to someone who may use
+ * it, and only they may change it.
+ */
+export interface DropsOwnMessagesLine {
+  on: boolean;
+  mayChange: boolean;
+  connection: { id: string; name: string } | null;
+}
+
 /** What the server says about the thing's lists. */
 export interface AccessListing {
   thing: Thing;
@@ -46,6 +60,8 @@ export interface AccessListing {
   viewerUserId: string | null;
   /** An automation still on an older language version can be fired by anyone only. */
   carriedPin: boolean;
+  /** The Slack connections an automation listens on, which the fire list does not speak to. */
+  dropsOwnMessages: readonly DropsOwnMessagesLine[];
 }
 
 export interface AccessPanelViewProps {
@@ -62,6 +78,12 @@ export interface AccessPanelViewProps {
   onDraft: (draft: ListDraft) => void;
   onSave: () => void;
   onCancel: () => void;
+  /** Whether a change of a connection's setting is being made. */
+  settingBusy: boolean;
+  /** Turn a connection's dropping of its app's own messages on or off. */
+  onDropOwnMessages: (change: { connectionId: string; on: boolean }) => void;
+  /** Why the last such change was not made, if it was not. */
+  settingError: string | null;
 }
 
 /** What the panel shows when its lists could not be read, so a missing panel is never mistaken for an unrestricted thing. */
@@ -129,6 +151,15 @@ export function AccessPanelView(props: AccessPanelViewProps) {
                   )}
                 </div>
               )}
+              {verb === "fire" &&
+                listing.dropsOwnMessages.map((line, i) => (
+                  <DropsOwnMessages key={line.connection?.id ?? i} line={line} busy={props.settingBusy} onChange={props.onDropOwnMessages} />
+                ))}
+              {verb === "fire" && props.settingError && (
+                <p className="mt-1.5 text-[12px] text-red-600" data-testid="access-setting-error">
+                  {props.settingError}
+                </p>
+              )}
             </li>
           );
         })}
@@ -141,6 +172,40 @@ export function AccessPanelView(props: AccessPanelViewProps) {
         </p>
       )}
     </section>
+  );
+}
+
+/** One connection's line about the app's own messages: what it does now, and a way to change it. */
+function DropsOwnMessages({
+  line,
+  busy,
+  onChange,
+}: {
+  line: DropsOwnMessagesLine;
+  busy: boolean;
+  onChange: AccessPanelViewProps["onDropOwnMessages"];
+}) {
+  const { connection } = line;
+  return (
+    <div className="mt-2 flex items-start justify-between gap-2 border-t border-gray-100 pt-2" data-testid="access-drops-own-messages">
+      <div className="min-w-0 text-[12px] text-gray-700">
+        {line.on ? DROPS_OWN_MESSAGES : HEARS_OWN_MESSAGES}
+        <span className="text-gray-400">
+          {connection !== null ? ` on ${connection.name}` : ""}, for every automation on that connection
+        </span>
+      </div>
+      {line.mayChange && connection !== null && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onChange({ connectionId: connection.id, on: !line.on })}
+          className="shrink-0 cursor-pointer rounded-md px-1.5 py-0.5 text-[11.5px] font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-800 disabled:cursor-default disabled:opacity-50"
+          data-testid="access-drops-own-messages-toggle"
+        >
+          {line.on ? "Turn off" : "Turn on"}
+        </button>
+      )}
+    </div>
   );
 }
 

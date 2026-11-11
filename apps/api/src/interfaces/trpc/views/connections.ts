@@ -22,6 +22,7 @@
 
 import { TRPCError } from '@trpc/server';
 import { currentPrincipal } from 'principal';
+import { neverAsAny } from 'movement-engine/public/types';
 import { z } from 'zod';
 
 import type { UserId } from '../../../generated/kysely/core/User';
@@ -50,7 +51,8 @@ import {
   telegramStartUrl,
 } from '../../../services/translation_graph/adapters/telegram/handshake';
 import { USE_CONNECTION, connectionUnseen, decidesEach, readableAmong, seenAmong } from '../../access_route';
-import { seenOnlyBy } from '../../../services/access/decide';
+import { mayChangeConnection, seenOnlyBy } from '../../../services/access/decide';
+import { DROP_OWN_MESSAGES, setModuleSetting } from '../../../services/connections/module_settings';
 import { GranteesInput } from '../../../services/access/stated_input';
 import { useForNewConnection } from './connection_creation';
 
@@ -598,14 +600,44 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
         if (!ensured.created && (await connectionUnseen(ensured.id))) return { ok: false, reason: 'not_usable' };
         return { ok: true, ...ensured };
       }),
+
+    /**
+     * Turn on or off one of the settings a connection's module declares, for
+     * every automation on the connection. Whoever may use the connection, with
+     * write on its team, may.
+     */
+    setModuleSetting: userProcedure
+      .input(z.object({ id: z.string(), setting: z.literal(DROP_OWN_MESSAGES), on: z.boolean() }))
+      .mutation(async ({ input }): Promise<{ ok: true } | { ok: false; refusal: 'not_a_setting' }> => {
+        if (await connectionUnseen(input.id)) throw connectionNotFound();
+        if (!(await mayChangeConnection(currentPrincipal(), { thing: 'connection', id: input.id }))) {
+          throw new TRPCError({ code: 'FORBIDDEN', message: 'You may use this connection but not change it.' });
+        }
+        const outcome = await setModuleSetting({ connectionId: input.id, name: input.setting, on: input.on });
+        switch (outcome) {
+          case 'set':
+            return { ok: true };
+          case 'not_found':
+            throw connectionNotFound();
+          case 'not_a_setting':
+            return { ok: false, refusal: 'not_a_setting' };
+          default:
+            return neverAsAny(outcome);
+        }
+      }),
   });
 };
+
+function connectionNotFound(): TRPCError {
+  return new TRPCError({ code: 'NOT_FOUND', message: 'That connection was not found.' });
+}
 
 decidesEach('connections', {
   getAll: USE_CONNECTION,
   credentialDependents: USE_CONNECTION,
   connectTelegram: { exempt: "links the caller's own Telegram account, no connection" },
   connectTelegramTeam: USE_CONNECTION,
+  setModuleSetting: USE_CONNECTION,
 });
 
 export { connectionsRouter };

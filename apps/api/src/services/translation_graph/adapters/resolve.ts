@@ -24,6 +24,7 @@ import type { Adapter } from 'movement-engine/public/adapter';
 import type { TriggerType } from 'movement-engine/public/adapter';
 
 import { getAutomationsQb } from '../../../lib/kysely';
+import { moduleSettingsFor } from '../../connections/module_settings';
 import {
   getAdapter,
   hasAdapter,
@@ -66,12 +67,16 @@ export async function resolveAdapter(input: {
   // keep their adapterType strings and still resolve to a remote install.
   const slug = resolveAdapterSlug(input.adapterType);
 
-  // 1. Local first — unchanged behavior, no DB round-trip.
+  // 1. Local first. A module that declares settings has its connection's read
+  //    (one row); every other adapter resolves without a DB round-trip.
   if (hasAdapter(input.adapterType)) {
-    return getAdapter(input);
+    const moduleSettings = await moduleSettingsFor(input);
+    return getAdapter({ ...input, ...(moduleSettings !== undefined ? { moduleSettings } : {}) });
   }
   // (Remote installs below ignore constructionArgs — no entry position over
-  //  the wire yet — so they read `input` without it.)
+  //  the wire yet — so they read `input` without it. They get no connection
+  //  settings either: the engine's remote adapter sends none in the
+  //  envelope's `settings`.)
 
   const { manifestFile, install, installCredentialsId } = await remoteInstallOf({ adapterType: input.adapterType, slug, teamId: input.teamId });
 

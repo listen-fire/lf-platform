@@ -1,7 +1,15 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { AccessLoadFailed, AccessPanelView, ONLY_YOU, type AccessPanelViewProps } from "../access-panel-view";
+import {
+  AccessLoadFailed,
+  AccessPanelView,
+  DROPS_OWN_MESSAGES,
+  HEARS_OWN_MESSAGES,
+  ONLY_YOU,
+  type AccessPanelViewProps,
+  type DropsOwnMessagesLine,
+} from "../access-panel-view";
 import { AutomationAccessChoice, ConnectionAccessChoice } from "../choice";
 import { NO_AUTOMATION_CHOICE, NO_CONNECTION_CHOICE, type ListDraft, type Member } from "../grantees";
 
@@ -28,6 +36,7 @@ const panel = (overrides: Partial<AccessPanelViewProps>) =>
         onlyYou: false,
         viewerUserId: ME,
         carriedPin: false,
+        dropsOwnMessages: [],
       },
       editing: null,
       members,
@@ -38,6 +47,9 @@ const panel = (overrides: Partial<AccessPanelViewProps>) =>
       onDraft: noop,
       onSave: noop,
       onCancel: noop,
+      settingBusy: false,
+      settingError: null,
+      onDropOwnMessages: noop,
       ...overrides,
     }),
   );
@@ -73,7 +85,7 @@ describe("the access panel", () => {
 
   it("shows a connection's use list alone", () => {
     const html = panel({
-      listing: { thing: "connection", lists: { use: [{ kind: "team" }] }, mayChange: true, onlyYou: false, viewerUserId: ME, carriedPin: false },
+      listing: { thing: "connection", lists: { use: [{ kind: "team" }] }, mayChange: true, onlyYou: false, viewerUserId: ME, carriedPin: false, dropsOwnMessages: [] },
     });
     expect(html).toContain('data-testid="access-use"');
     expect(html).not.toContain('data-testid="access-read"');
@@ -125,6 +137,7 @@ describe("the access panel", () => {
         onlyYou: false,
         viewerUserId: ME,
         carriedPin: false,
+        dropsOwnMessages: [],
       },
       editing: { verb: "write", draft: { mode: "people", people: [], withTeam: false, outsiders: "" } },
     });
@@ -192,6 +205,51 @@ describe("the access panel", () => {
   });
 });
 
+describe("the app's own messages", () => {
+  const slack = { id: "c0000000-0000-4000-8000-000000000001", name: "Team Slack" };
+  const withLines = (...dropsOwnMessages: DropsOwnMessagesLine[]) => panel({ listing: { ...readerListing(), dropsOwnMessages } });
+  const inFireList = (html: string) => html.slice(html.indexOf('data-testid="access-fire"'));
+
+  it("says a Slack connection drops the app's own messages and reactions, in the fire list, and offers to turn it off", () => {
+    const html = withLines({ on: true, mayChange: true, connection: slack });
+    const fire = inFireList(html);
+    expect(fire).toContain('data-testid="access-drops-own-messages"');
+    expect(fire).toContain(DROPS_OWN_MESSAGES);
+    expect(fire).toContain("Team Slack");
+    expect(fire).toContain("Turn off");
+    expect(html.slice(0, html.indexOf('data-testid="access-fire"'))).not.toContain("access-drops-own-messages");
+  });
+
+  it("offers to turn it back on once it is off", () => {
+    const fire = inFireList(withLines({ on: false, mayChange: true, connection: slack }));
+    expect(fire).toContain(HEARS_OWN_MESSAGES);
+    expect(fire).not.toContain(DROPS_OWN_MESSAGES);
+    expect(fire).toContain("Turn on");
+  });
+
+  it("shows the line alone to someone who may not change the connection, naming it only if they may use it", () => {
+    const read = inFireList(withLines({ on: true, mayChange: false, connection: slack }));
+    expect(read).toContain(DROPS_OWN_MESSAGES);
+    expect(read).not.toContain("access-drops-own-messages-toggle");
+
+    const unseen = inFireList(withLines({ on: true, mayChange: false, connection: null }));
+    expect(unseen).toContain(DROPS_OWN_MESSAGES);
+    expect(unseen).not.toContain("Team Slack");
+    expect(unseen).not.toContain("access-drops-own-messages-toggle");
+  });
+
+  it("shows one line for each connection the automation listens on", () => {
+    const other = { id: "c0000000-0000-4000-8000-000000000002", name: "Ops Slack" };
+    const html = withLines({ on: true, mayChange: true, connection: slack }, { on: false, mayChange: true, connection: other });
+    expect(html.split('data-testid="access-drops-own-messages"')).toHaveLength(3);
+  });
+
+  it("shows nothing for an automation that listens on no such connection, and says why a change was not made", () => {
+    expect(panel({})).not.toContain("access-drops-own-messages");
+    expect(panel({ settingError: "Couldn't save the change." })).toContain('data-testid="access-setting-error"');
+  });
+});
+
 describe("the choice at creation", () => {
   it("asks who may see and change it and who may set it off, with nothing chosen", () => {
     const html = renderToStaticMarkup(
@@ -252,6 +310,7 @@ function readerListing(): AccessPanelViewProps["listing"] {
     onlyYou: false,
     viewerUserId: ME,
     carriedPin: false,
+    dropsOwnMessages: [],
   };
 }
 

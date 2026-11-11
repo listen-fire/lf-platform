@@ -14,7 +14,8 @@ import type { Grantee, StatedVerb, Target, Thing, Verb } from './statement';
 import { getCoreQb } from '../../lib/kysely';
 import { StatementStore } from './statement';
 import { onCarriedPin } from './carried_pin';
-import { mayChangeStatement, seenOnlyBy } from './decide';
+import { accessTo, mayChangeConnection, mayChangeStatement, seenOnlyBy } from './decide';
+import { dropsOwnMessagesOn } from '../connections/module_settings';
 
 /** One entry on a list: a named user with who they are, anything else as stored. */
 type ShownGrantee =
@@ -35,8 +36,22 @@ type Shown<T extends Thing> = {
   viewerUserId: string | null;
 } & Extras<T>;
 
-/** What only an automation's view says: it is pinned to a version whose arrivals the door cannot judge, so only anyone may fire it. */
-type Extras<T extends Thing> = T extends 'automation' ? { carriedPin: boolean } : Record<never, never>;
+/**
+ * A connection an automation listens on whose app can post to what it hears,
+ * and whether that connection drops the app's own messages and reactions. The
+ * connection is named only to someone who may use it; to anyone else the line
+ * says how the automation hears, and nothing of which connection that is.
+ */
+type DropsOwnMessagesLine = { on: boolean; mayChange: boolean; connection: { id: string; name: string } | null };
+
+/**
+ * What only an automation's view says: it is pinned to a version whose arrivals
+ * the door cannot judge, so only anyone may fire it; and how the connections it
+ * listens on treat the app's own messages, which its fire list does not speak to.
+ */
+type Extras<T extends Thing> = T extends 'automation'
+  ? { carriedPin: boolean; dropsOwnMessages: DropsOwnMessagesLine[] }
+  : Record<never, never>;
 
 type AccessView = Shown<'automation'> | Shown<'connection'>;
 
@@ -107,6 +122,18 @@ async function standingOn(target: Target, teamId: string): Promise<Pick<AccessVi
   return { mayChange, onlyYou: only.has(target.id), viewerUserId: principal.userId?.toLowerCase() ?? null };
 }
 
+async function dropsOwnMessagesLines(automationId: string): Promise<DropsOwnMessagesLine[]> {
+  const principal = currentPrincipal();
+  const listened = await dropsOwnMessagesOn(automationId);
+  return Promise.all(
+    listened.map(async ({ connectionId, name, on }): Promise<DropsOwnMessagesLine> => {
+      const target: Target<'connection'> = { thing: 'connection', id: connectionId };
+      if (!(await accessTo<'connection'>(principal, { target, verb: 'use' }))) return { on, mayChange: false, connection: null };
+      return { on, mayChange: await mayChangeConnection(principal, target), connection: { id: connectionId, name } };
+    }),
+  );
+}
+
 /** The automation's lists, or undefined when there is no such automation. */
 async function automationView(id: string): Promise<Shown<'automation'> | undefined> {
   const target: Target<'automation'> = { thing: 'automation', id };
@@ -118,6 +145,7 @@ async function automationView(id: string): Promise<Shown<'automation'> | undefin
     id,
     lists: { read: lists.get('read') ?? [], write: lists.get('write') ?? [], fire: lists.get('fire') ?? [] },
     carriedPin: await onCarriedPin(id),
+    dropsOwnMessages: await dropsOwnMessagesLines(id),
     ...(await standingOn(target, teamId)),
   };
 }
@@ -153,6 +181,7 @@ export {
   automationAccess,
   connectionAccess,
   type AccessView,
+  type DropsOwnMessagesLine,
   type AutomationAccess,
   type ConnectionAccess,
   type Shown,

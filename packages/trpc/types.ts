@@ -2015,9 +2015,28 @@ export type Shown<T extends Thing> = {
     /** The caller's own user id as the lists store it, so a page can say "you". */
     viewerUserId: string | null;
 } & Extras<T>;
-/** What only an automation's view says: it is pinned to a version whose arrivals the door cannot judge, so only anyone may fire it. */
+/**
+ * A connection an automation listens on whose app can post to what it hears,
+ * and whether that connection drops the app's own messages and reactions. The
+ * connection is named only to someone who may use it; to anyone else the line
+ * says how the automation hears, and nothing of which connection that is.
+ */
+export type DropsOwnMessagesLine = {
+    on: boolean;
+    mayChange: boolean;
+    connection: {
+        id: string;
+        name: string;
+    } | null;
+};
+/**
+ * What only an automation's view says: it is pinned to a version whose arrivals
+ * the door cannot judge, so only anyone may fire it; and how the connections it
+ * listens on treat the app's own messages, which its fire list does not speak to.
+ */
 export type Extras<T extends Thing> = T extends 'automation' ? {
     carriedPin: boolean;
+    dropsOwnMessages: DropsOwnMessagesLine[];
 } : Record<never, never>;
 export type AccessView = Shown<'automation'> | Shown<'connection'>;
 
@@ -3960,6 +3979,41 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
             } | {
                 ok: false;
                 reason: "needs_use" | "not_usable" | "given_for_existing";
+            }>;
+            setModuleSetting: _trpc_server.BuildProcedure<"mutation", {
+                _config: _trpc_server.RootConfig<{
+                    ctx: {
+                        authorise: () => Promise<void>;
+                    };
+                    meta: object;
+                    errorShape: {
+                        message: string;
+                        code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
+                        data: _trpc_server_dist_error_formatter.DefaultErrorData;
+                    };
+                    transformer: _trpc_server.DefaultDataTransformer;
+                }>;
+                _meta: object;
+                _ctx_out: {
+                    authorise: () => Promise<void>;
+                };
+                _input_in: {
+                    id: string;
+                    setting: "drop_own_messages";
+                    on: boolean;
+                };
+                _input_out: {
+                    id: string;
+                    setting: "drop_own_messages";
+                    on: boolean;
+                };
+                _output_in: typeof _trpc_server.unsetMarker;
+                _output_out: typeof _trpc_server.unsetMarker;
+            }, {
+                ok: true;
+            } | {
+                ok: false;
+                refusal: "not_a_setting";
             }>;
         }>;
         credentials: _trpc_server.CreateRouterInner<_trpc_server.RootConfig<{

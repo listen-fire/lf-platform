@@ -71,6 +71,19 @@ export function AccessPanel({ thing, id }: { thing: Thing; id: string }) {
     onError: () => setError(NOT_SAVED),
   });
 
+  const [settingError, setSettingError] = useState<string | null>(null);
+  const setting = trpc.views.connections.setModuleSetting.useMutation({
+    onSuccess: (result) => {
+      if (!result.ok) {
+        setSettingError(NOT_SAVED);
+        return;
+      }
+      setSettingError(null);
+      void utils.views.access.get.invalidate({ thing, id });
+    },
+    onError: () => setSettingError(NOT_SAVED),
+  });
+
   if (access.isError) return <AccessLoadFailed thing={thing} />;
   if (access.data === undefined) return null;
   const view = access.data;
@@ -81,6 +94,7 @@ export function AccessPanel({ thing, id }: { thing: Thing; id: string }) {
     onlyYou: view.onlyYou,
     viewerUserId: view.viewerUserId,
     carriedPin: view.thing === "automation" && view.carriedPin,
+    dropsOwnMessages: view.thing === "automation" ? view.dropsOwnMessages : [],
   };
 
   return (
@@ -91,6 +105,12 @@ export function AccessPanel({ thing, id }: { thing: Thing; id: string }) {
       engine={engine.data?.engine ?? null}
       busy={set.isLoading}
       error={error}
+      settingBusy={setting.isLoading}
+      settingError={settingError}
+      onDropOwnMessages={({ connectionId, on }) => {
+        setSettingError(null);
+        setting.mutate({ id: connectionId, setting: "drop_own_messages", on });
+      }}
       onEdit={(verb) => {
         setError(null);
         setEditing({ verb, draft: draftOf(listing.lists[verb] ?? [], listing.viewerUserId) });

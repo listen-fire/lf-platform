@@ -143,6 +143,19 @@ async function accessTo<T extends Thing>(
   return false;
 }
 
+/**
+ * Whether the principal may change a connection itself (how its module hears,
+ * not who may use it): whoever may use it, while they may write on its team.
+ * Never for a connection that does not exist.
+ */
+async function mayChangeConnection(principal: Principal, target: Target<'connection'>): Promise<boolean> {
+  const teamId = await StatementStore.teamOf(target);
+  if (teamId === undefined) return false;
+  const standing = (await standingsIn(principal, [teamId])).get(teamId);
+  if (standing === undefined || !meets(standing.access, 'write')) return false;
+  return accessTo<'connection'>(principal, { target, verb: 'use' });
+}
+
 /** The verb that lets a thing be seen in a list. */
 function seenBy(thing: Thing): AskedVerb<Thing> {
   switch (thing) {
@@ -653,6 +666,7 @@ async function passOnWhatTheyHeld(input: {
 
 export {
   accessTo,
+  mayChangeConnection,
   readableIds,
   setStatement,
   mayChangeStatement,

@@ -748,6 +748,7 @@ beforeEach(() => {
       // The module it may serve as an install's secret.
       app_id: 'acme_crm',
       declared_credential: null,
+      module_settings: {},
       created_at: new Date(1),
       updated_at: new Date(1),
     },
@@ -1055,6 +1056,9 @@ const TRPC_CONNECTION_CALLS: Record<string, ConnectionCall<unknown>> = {
   'views.connections.credentialDependents': { ask: (c) => ({ id: c.connectionId }) },
   // One shared Telegram connection per team: a hidden one is refused, and no second is made.
   'views.connections.connectTelegramTeam': { ask: () => undefined, refusal: /"reason":"not_usable"/ },
+  // The seeded connection is not a Slack one, so a caller who may use it is told it has no such setting: that answers
+  // otherwise than for a missing one, and writes nothing.
+  'views.connections.setModuleSetting': { ask: (c) => ({ id: c.connectionId, setting: 'drop_own_messages', on: false }) },
   'views.credentials.getCredentials': { ask: () => undefined, list: true },
   'views.credentials.updateCredential': {
     ask: (c) => ({ id: c.connectionId, name: c.connectionName, type: 'ATTIO', credentials: { accessToken: 'rotated' } }),

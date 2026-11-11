@@ -17,6 +17,10 @@ type Row = { target: Target; verb: Verb; grantee: Grantee };
 
 const mockState: { members: Map<string, Access>; rows: Row[]; pin: string | undefined } = { members: new Map(), rows: [], pin: undefined };
 
+/** The listens of the automation, and the connections they name, as the tables serve them. */
+const mockListens: unknown[] = [];
+const mockConnections: unknown[] = [];
+
 jest.mock('../../../../services/access/statement', () => {
   const actual = jest.requireActual('../../../../services/access/statement');
   const same = (a: Target, b: Target) => a.thing === b.thing && a.id === b.id;
@@ -73,6 +77,8 @@ jest.mock('../../../../services/user', () => ({ UserService: { getById: async (i
 // The people a list names: a name and a primary address each.
 jest.mock('../../../../lib/kysely', () => {
   const tables: Record<string, unknown[]> = {
+    trigger: mockListens,
+    external_service_credentials: mockConnections,
     user: [
       { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', username: 'Alice' },
       { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', username: 'Bob' },
@@ -128,6 +134,8 @@ beforeEach(() => {
   ]);
   mockState.rows = [];
   mockState.pin = undefined;
+  mockListens.length = 0;
+  mockConnections.length = 0;
 });
 
 describe('reading who may reach an automation', () => {
@@ -148,6 +156,7 @@ describe('reading who may reach an automation', () => {
       onlyYou: true,
       viewerUserId: ALICE,
       carriedPin: false,
+      dropsOwnMessages: [],
     });
   });
 
@@ -159,6 +168,39 @@ describe('reading who may reach an automation', () => {
     expect(await as(ALICE, () => caller().get({ thing: 'automation', id: DEALS }))).toMatchObject({ carriedPin: true });
     mockState.pin = '4';
     expect(await as(ALICE, () => caller().get({ thing: 'automation', id: DEALS }))).toMatchObject({ carriedPin: true });
+  });
+
+  describe('on a Slack connection', () => {
+    beforeEach(() => {
+      stated(automation, 'read', [{ kind: 'team' }]);
+      stated(automation, 'write', [{ kind: 'team' }]);
+      stated(automation, 'fire', [{ kind: 'team' }]);
+      mockListens.push({ kind: 'slack', credentials_id: FINANCE });
+      mockConnections.push({ id: FINANCE, name: 'Team Slack', module_settings: { drop_own_messages: 'on' } });
+    });
+
+    it('says whether the connection drops the app’s own messages, and names it to someone who may use it', async () => {
+      stated(connection, 'use', [{ kind: 'team' }]);
+      const line = { on: true, mayChange: true, connection: { id: FINANCE, name: 'Team Slack' } };
+      expect(await as(ALICE, () => caller().get({ thing: 'automation', id: DEALS }))).toMatchObject({ dropsOwnMessages: [line] });
+      mockConnections[0] = { id: FINANCE, name: 'Team Slack', module_settings: { drop_own_messages: 'off' } };
+      expect(await as(ALICE, () => caller().get({ thing: 'automation', id: DEALS }))).toMatchObject({ dropsOwnMessages: [{ ...line, on: false }] });
+    });
+
+    it('lets someone who may use the connection with write on the team change it, and a reader only see it', async () => {
+      stated(connection, 'use', [{ kind: 'team' }]);
+      mockState.members.set(BOB, 'read');
+      const view = await as(BOB, () => caller().get({ thing: 'automation', id: DEALS }));
+      expect(view).toMatchObject({ dropsOwnMessages: [{ on: true, mayChange: false, connection: { id: FINANCE } }] });
+    });
+
+    it('says how the automation hears, and nothing of the connection, to someone who may not use it', async () => {
+      stated(connection, 'use', [{ kind: 'user', userId: BOB }]);
+      const view = await as(ALICE, () => caller().get({ thing: 'automation', id: DEALS }));
+      expect(view).toMatchObject({ dropsOwnMessages: [{ on: true, mayChange: false, connection: null }] });
+      expect(JSON.stringify(view)).not.toContain(FINANCE);
+      expect(JSON.stringify(view)).not.toContain('Team Slack');
+    });
   });
 
   it('says a named person who has left the team is no longer on it', async () => {
