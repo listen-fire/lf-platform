@@ -2,6 +2,7 @@
 // table: who a statement admits, what team membership caps, and what happens
 // to a list when the last person it names leaves the team.
 
+import { currentVersion } from '@listen-fire/language-versions';
 import { logger } from 'movement-engine/public/log';
 
 import type { Access, Principal } from 'principal';
@@ -23,6 +24,7 @@ jest.mock('../statement', () => {
     ...actual,
     StatementStore: {
       teamOf: async (target: Target) => mockTable.things.get(`${target.thing}:${target.id}`),
+      languagePinOf: async (target: Target) => mockPins.get(target.id),
       grantsOf: async (target: Target, options: { teamId: string; verb: Verb }) =>
         mockTable.rows
           .filter((r) => r.teamId === options.teamId && same(r.target, target) && r.verb === options.verb)
@@ -89,6 +91,7 @@ jest.mock('../statement', () => {
   };
 });
 
+const mockPins = new Map<string, string>();
 const mockLfTeams = new Set<string>();
 jest.mock('../../lf_engine/team_engine', () => ({
   isLfEngineTeam: async (teamId: string) => mockLfTeams.has(teamId),
@@ -161,6 +164,7 @@ beforeEach(() => {
   mockTable.memberSince = [];
   mockTable.rows = [];
   mockLfTeams.clear();
+  mockPins.clear();
   thing(DEALS);
   thing(NOTES);
   thing(FINANCE);
@@ -774,6 +778,54 @@ describe('a team whose automations run on lf', () => {
     await setStatement(person(ALICE), { target: DEALS, verb: 'read', grantees: [team] });
     expect(listOf(DEALS, 'fire')).toEqual([{ kind: 'anyone' }]);
     expect(listOf(DEALS, 'read')).toEqual([team]);
+  });
+});
+
+describe('an automation pinned to a carried language version', () => {
+  const CARRIED_PIN = '0.12.13';
+  const LEGACY_PIN = '4';
+
+  beforeEach(() => {
+    member(TEAM, ALICE, 'write');
+    stated(DEALS, 'write', [user(ALICE)]);
+    mockPins.set(DEALS.id, CARRIED_PIN);
+  });
+
+  it('refuses a fire list other than anyone, naming the upgrade', async () => {
+    const refused = setStatement(person(ALICE), { target: DEALS, verb: 'fire', grantees: [team] });
+    await expect(refused).rejects.toMatchObject({ refusal: 'carried_pin' });
+    await expect(refused).rejects.toThrow(/upgrade the automation first/);
+    await expect(
+      setStatement(person(ALICE), { target: DEALS, verb: 'fire', grantees: [{ kind: 'domain', domain: 'acme.com' }] }),
+    ).rejects.toMatchObject({ refusal: 'carried_pin' });
+    mockPins.set(DEALS.id, LEGACY_PIN);
+    await expect(setStatement(person(ALICE), { target: DEALS, verb: 'fire', grantees: [team] })).rejects.toMatchObject({
+      refusal: 'carried_pin',
+    });
+    expect(listOf(DEALS, 'fire')).toEqual([]);
+  });
+
+  it('refuses it when the automation is stated as it is created, too', async () => {
+    mockTable.rows = mockTable.rows.filter((r) => r.target.id !== DEALS.id);
+    await expect(
+      stateAtCreation(DEALS, { teamId: TEAM, lists: [{ verb: 'fire', grantees: [team] }] }),
+    ).rejects.toMatchObject({ refusal: 'carried_pin' });
+  });
+
+  it('takes anyone, and every other list', async () => {
+    await setStatement(person(ALICE), { target: DEALS, verb: 'fire', grantees: [{ kind: 'anyone' }] });
+    await setStatement(person(ALICE), { target: DEALS, verb: 'read', grantees: [team] });
+    expect(listOf(DEALS, 'fire')).toEqual([{ kind: 'anyone' }]);
+    expect(listOf(DEALS, 'read')).toEqual([team]);
+  });
+
+  it('takes any fire list once it is upgraded to the current version, and on another automation', async () => {
+    mockPins.set(DEALS.id, currentVersion().release);
+    await setStatement(person(ALICE), { target: DEALS, verb: 'fire', grantees: [team] });
+    expect(listOf(DEALS, 'fire')).toEqual([team]);
+    stated(NOTES, 'write', [user(ALICE)]);
+    await setStatement(person(ALICE), { target: NOTES, verb: 'fire', grantees: [team] });
+    expect(listOf(NOTES, 'fire')).toEqual([team]);
   });
 });
 

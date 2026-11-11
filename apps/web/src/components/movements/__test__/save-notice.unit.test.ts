@@ -15,6 +15,7 @@ const REASONS: readonly StatementReason[] = [
   "not_a_writer",
   "malformed",
   "lf_engine",
+  "carried_pin",
   "already_stated",
   "on_overwrite",
 ];

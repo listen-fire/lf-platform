@@ -106,6 +106,17 @@ async function teamOf(target: Target): Promise<string | undefined> {
   }
 }
 
+/** The language version an automation is pinned to now, or undefined when there is no such automation. */
+async function languagePinOf(target: Target<'automation'>): Promise<string | undefined> {
+  if (!isUuid(target.id)) return undefined;
+  const row = await getAutomationsQb(['movement'])
+    .selectFrom('movement')
+    .select('language_version')
+    .where('id', '=', target.id as MovementId)
+    .executeTakeFirst();
+  return row?.language_version;
+}
+
 /** One verb's whole list on one thing, in no meaningful order. Empty when nothing has been stated. */
 async function grantsOf(target: Target, options: { teamId: string; verb: Verb }): Promise<Grantee[]> {
   const rows = await getAutomationsQb(['access_statement'])
@@ -329,6 +340,7 @@ async function adminsOf(teamId: string): Promise<string[]> {
 
 const StatementStore = {
   teamOf,
+  languagePinOf,
   grantsOf,
   grantsAmong,
   replaceGrants,

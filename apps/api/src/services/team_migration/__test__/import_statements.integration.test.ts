@@ -5,6 +5,7 @@
 
 import { randomUUID } from 'node:crypto';
 
+import { LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang';
 import { Client } from 'pg';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
@@ -31,9 +32,12 @@ afterEach(async () => {
   await cleanupTeam(teamId);
 });
 
-async function automation(name: string, source = ''): Promise<MovementId> {
+async function automation(name: string, source = '', languageVersion: LanguageVersion = LANGUAGE_VERSION): Promise<MovementId> {
   const id = randomUUID() as MovementId;
-  await getAutomationsQb(['movement']).insertInto('movement').values({ id, team_id: teamId, name, source }).execute();
+  await getAutomationsQb(['movement'])
+    .insertInto('movement')
+    .values({ id, team_id: teamId, name, source, language_version: languageVersion })
+    .execute();
   return id;
 }
 
@@ -68,6 +72,16 @@ describe('an imported team', () => {
     expect(await listOf({ thing: 'automation', id: onEmail }, 'fire')).toEqual([{ kind: 'anyone' }]);
     expect(await listOf({ thing: 'automation', id: mixed }, 'fire')).toEqual(team);
     expect(await listOf({ thing: 'connection', id: slack }, 'use')).toEqual(team);
+  });
+
+  it('says anyone may fire an automation pinned to a carried version, whatever its listens', async () => {
+    const slack = 'chat = slack(credentials: `Slack`)';
+    const carried = await automation('Carried', slack, '0.12.13');
+    const unstamped = await automation('Unstamped', slack, '1');
+
+    await stateWhatIsUnstated(client, teamId);
+    expect(await listOf({ thing: 'automation', id: carried }, 'fire')).toEqual([{ kind: 'anyone' }]);
+    expect(await listOf({ thing: 'automation', id: unstamped }, 'fire')).toEqual([{ kind: 'anyone' }]);
   });
 
   it('keeps what arrived with its statements as it was', async () => {

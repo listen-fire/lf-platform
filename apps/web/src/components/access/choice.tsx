@@ -187,7 +187,7 @@ export function AutomationAccessChoice({
   onChange,
   members,
   viewerUserId,
-  fireOptions = fireOptionsFor("platform", { outsiders: false }),
+  fireOptions = fireOptionsFor("platform", { outsiders: false, carriedPin: false }),
 }: {
   choice: AutomationChoice;
   onChange: (choice: AutomationChoice) => void;
@@ -288,6 +288,7 @@ export function ListEditor({
   members,
   viewerUserId,
   engine,
+  carriedPin,
 }: {
   verb: Verb;
   draft: ListDraft;
@@ -296,6 +297,8 @@ export function ListEditor({
   viewerUserId: string;
   /** The engine the team's automations run on, which decides who may be chosen to fire. */
   engine: "platform" | "lf";
+  /** Whether the automation is still on an older language version, whose arrivals the platform cannot judge by who acted. */
+  carriedPin: boolean;
 }) {
   const outsiders = takesOutsiders(verb);
   const unreadable = unreadableOutsiders(draft.outsiders);
@@ -306,7 +309,7 @@ export function ListEditor({
     <div className="space-y-2" data-testid={`list-editor-${verb}`}>
       <ChoiceSelect<ListDraft["mode"]>
         label={`Who may ${verb}`}
-        options={verb === "fire" ? fireOptionsFor(engine, { outsiders: true }) : DRAFT_OPTIONS[verb]}
+        options={verb === "fire" ? fireOptionsFor(engine, { outsiders: true, carriedPin }) : DRAFT_OPTIONS[verb]}
         value={draft.mode}
         onChange={(mode) => onChange({ ...draft, mode })}
       />

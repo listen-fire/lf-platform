@@ -137,6 +137,7 @@ jest.mock('../../services/access/statement', () => {
   return {
     ...actual,
     StatementStore: {
+      languagePinOf: async () => undefined,
       teamOf: async (target: Target) => {
         ask();
         return mockState.things.get(`${target.thing}:${target.id}`);

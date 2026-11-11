@@ -147,6 +147,7 @@ describe('stating what exists', () => {
       adapterType: 'email',
       edge: 'Emails',
       delivery: 'connection',
+      fire: null,
     });
 
     await stateTheTeam();
@@ -169,23 +170,24 @@ describe('stating what exists', () => {
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining(unreadable));
   });
 
-  // The join was spelled `parallel` until the language replaced it with `all`,
-  // so one text is a file under the current release and a parse error under an
-  // older pin.
-  it("reads each file under its own pin: the listens its pin reads are kept, and the ones it cannot read give the team", async () => {
-    const joined = [EMAIL_LISTEN, 'movement m() {', '  r = await all([f, g])', '}'].join('\n');
+  // Its arrivals are read and judged by its own version's rules, which never
+  // vouch for who acted, so a team rule on it would not be kept to.
+  it('gives anyone the fire list of an automation pinned to a carried version, whatever its listens', async () => {
     const written = [EMAIL_LISTEN, 'movement m() {', '  r = await parallel([f, g])', '}'].join('\n');
-    const current = await automation('Current', joined);
-    const olderUnreadable = await automation('Older unreadable', joined, '4');
-    const olderReadable = await automation('Older readable', written, '4');
+    const slack = await automation('Carried on Slack', SLACK_LISTEN, '0.12.13');
+    const legacySlack = await automation('Legacy on Slack', SLACK_LISTEN, '4');
+    const unreadable = await automation('Carried unreadable', [EMAIL_LISTEN, 'movement broken( {'].join('\n'), '4');
+    const readable = await automation('Carried readable', written, '4');
+    const current = await automation('Current on Slack', SLACK_LISTEN);
 
     await stateTheTeam();
 
-    expect(await listOf({ thing: 'automation', id: current }, 'fire')).toEqual(ANYONE);
-    expect(await listOf({ thing: 'automation', id: olderReadable }, 'fire')).toEqual(ANYONE);
-    expect(await listOf({ thing: 'automation', id: olderUnreadable }, 'fire')).toEqual(TEAM);
-    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining(olderUnreadable));
-    expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining(olderReadable));
+    for (const id of [slack, legacySlack, unreadable, readable]) {
+      expect(await listOf({ thing: 'automation', id }, 'fire')).toEqual(ANYONE);
+      expect(await listOf({ thing: 'automation', id }, 'read')).toEqual(TEAM);
+    }
+    expect(await listOf({ thing: 'automation', id: current }, 'fire')).toEqual(TEAM);
+    expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining(unreadable));
   });
 
   it('reads a Slack listen nested in a closure, so the file is fired only by the team', async () => {

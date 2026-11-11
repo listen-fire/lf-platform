@@ -16,6 +16,7 @@ import {
   connectionWithNoPerson,
   type ListenReach,
 } from './no_person';
+import { pinIsCarried } from './carried_pin';
 import { storedRowOf } from './statement';
 import { listenReachesOf } from '../translation_graph/movement/save_access';
 
@@ -106,6 +107,16 @@ async function listensOf(
   return byMovement;
 }
 
+/** Of these automations, the ones pinned to a carried language version: their fire list is anyone, as the door cannot judge them. */
+async function carriedPinsAmong(client: Client, teamId: string, movementIds: readonly string[]): Promise<Set<string>> {
+  const pins = await client.query<{ id: string; language_version: string }>(
+    `SELECT id::text AS id, language_version FROM automations.movement
+      WHERE team_id = $1::uuid AND id = ANY($2::uuid[])`,
+    [teamId, movementIds],
+  );
+  return new Set(pins.rows.filter((row) => pinIsCarried(row.language_version)).map((row) => row.id));
+}
+
 /** Whether anything of this team has been stated: on a later run, an unstated thing is a creation that forgot to say. */
 async function teamHasStatements(client: Client, teamId: string): Promise<boolean> {
   const found = await client.query(
@@ -154,12 +165,18 @@ async function stateIfStillUnstated<T extends Thing>(
 async function stateWhatIsUnstated(client: Client, teamId: string): Promise<StatedThings> {
   const unstated = await unstatedIn(client, teamId);
   const runsOnLf = await teamRunsOnLf(client, teamId);
-  const listensByAutomation = await listensOf(client, teamId, unstated.automations);
+  const carried = await carriedPinsAmong(client, teamId, unstated.automations);
+  // A carried automation is stated anyone whatever its listens say, so they are not read.
+  const listensByAutomation = await listensOf(
+    client,
+    teamId,
+    unstated.automations.filter((id) => !carried.has(id)),
+  );
 
   const stated: StatedThings = { automations: [], connections: [] };
   for (const id of unstated.automations) {
     const lists = automationLists(
-      automationWithNoPerson({ listens: listensByAutomation.get(id) ?? [], runsOnLf }),
+      automationWithNoPerson({ listens: listensByAutomation.get(id) ?? [], runsOnLf, carriedPin: carried.has(id) }),
     );
     if (await stateIfStillUnstated(client, { teamId, thing: 'automation', id, lists }))
       stated.automations.push(id);

@@ -9,7 +9,7 @@ describe('what a thing is created with when no person is in the request', () => 
   });
 
   it('lets the whole team read and write an automation, writing first', () => {
-    const statements = automationWithNoPerson({ listens: [{ module: 'email', viaConnection: false }], runsOnLf: false });
+    const statements = automationWithNoPerson({ listens: [{ module: 'email', viaConnection: false }], runsOnLf: false, carriedPin: false });
     expect(statements.read).toEqual([team]);
     expect(statements.write).toEqual([team]);
     expect(automationLists(statements).map((list) => list.verb)).toEqual(['write', 'read', 'fire']);
@@ -27,10 +27,18 @@ describe('what a thing is created with when no person is in the request', () => 
     ['a file mixing them, which gets the narrowest', [{ module: 'email', viaConnection: false }, { module: 'slack', viaConnection: true }], [team]],
     ['a file with no listens', [], [team]],
   ])('fires an automation listening to %s as that module admits today', (_, listens, fire) => {
-    expect(automationWithNoPerson({ listens, runsOnLf: false }).fire).toEqual(fire);
+    expect(automationWithNoPerson({ listens, runsOnLf: false, carriedPin: false }).fire).toEqual(fire);
   });
 
   it('says anyone may fire on a team whose automations run on lf, whose door the platform does not judge', () => {
-    expect(automationWithNoPerson({ listens: [{ module: 'slack', viaConnection: true }], runsOnLf: true }).fire).toEqual([anyone]);
+    expect(automationWithNoPerson({ listens: [{ module: 'slack', viaConnection: true }], runsOnLf: true, carriedPin: false }).fire).toEqual([anyone]);
+  });
+
+  it.each([
+    ['Slack', [{ module: 'slack', viaConnection: true }]],
+    ['a file mixing them', [{ module: 'email', viaConnection: false }, { module: 'slack', viaConnection: true }]],
+    ['no listens', []],
+  ])('says anyone may fire an automation pinned to a carried version, whatever its listens (%s) would give', (_, listens) => {
+    expect(automationWithNoPerson({ listens, runsOnLf: false, carriedPin: true }).fire).toEqual([anyone]);
   });
 });

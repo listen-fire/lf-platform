@@ -80,7 +80,7 @@ export function CreateAutomationDialog({
             onChange={setChoice}
             members={team.members}
             viewerUserId={team.viewerUserId}
-            fireOptions={fireOptionsFor(engine.data.engine, { outsiders: false })}
+            fireOptions={fireOptionsFor(engine.data.engine, { outsiders: false, carriedPin: false })}
           />
         )}
         <p className="mt-4 text-[11.5px] leading-relaxed text-gray-400">

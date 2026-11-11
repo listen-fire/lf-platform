@@ -273,11 +273,13 @@ export const MANIFEST: Record<Product, TableSpec[]> = {
       },
     },
     // listen-fire 0.13's store state. A listen's state (its resolution, its
-    // pause) and the arrivals a listen could not judge are the team's history;
+    // pause), the arrivals a listen could not judge and those a fire list
+    // refused are the team's history;
     // the arrival log, the identities kept for the re-send window, the write
     // ledger and the waits are this deployment's live state, as `work` is.
     { table: 'listen_state', tenancy: { kind: 'team_column' } },
     { table: 'arrival_unjudged', tenancy: { kind: 'team_column' }, history: true },
+    { table: 'arrival_refused', tenancy: { kind: 'team_column' }, history: true },
     {
       table: 'arrival',
       tenancy: { kind: 'team_column' },

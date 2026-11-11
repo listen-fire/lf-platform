@@ -44,6 +44,8 @@ export interface AccessListing {
   mayChange: boolean;
   onlyYou: boolean;
   viewerUserId: string | null;
+  /** An automation still on an older language version can be fired by anyone only. */
+  carriedPin: boolean;
 }
 
 export interface AccessPanelViewProps {
@@ -159,6 +161,7 @@ function EditingList(props: AccessPanelViewProps & { verb: Verb; draft: ListDraf
           members={props.members}
           viewerUserId={viewerUserId}
           engine={props.engine}
+          carriedPin={props.listing.carriedPin}
         />
       )}
       {departed > 0 && (

@@ -928,20 +928,24 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
       ),
 
     /**
-     * Put one kept delivery through one listen again (ruling 4: any team
-     * member may), the way out of an `Arrival Not Judged` fact once the
-     * provider answers again. `force` runs a listen that ran the arrival
-     * before again, under a receipt of its own.
+     * Put one kept delivery through one listen again, the way out of an
+     * `Arrival Not Judged` fact once the provider answers again, and of an
+     * arrival the automation's fire list refused. A write on the automation.
+     * The fire list judges it again, except an arrival it refused before,
+     * which the writer replaying it vouches for. `force`
+     * runs a listen that ran the arrival before again, under a receipt of its own.
      */
     replayDelivery: userProcedure
       .input(z.object({ triggerId: z.string().min(1), deliveryId: z.string().min(1), force: z.boolean().optional() }))
       .mutation(async ({ input }): Promise<ReplayOutcome> => {
         const ctx = currentContext();
         if (!(await changesListen(input.triggerId, ctx.user.teamId))) return noSuchListen(input.triggerId);
+        const { userId, credentialId } = currentPrincipal();
         return replayThroughListen({
           teamId: ctx.user.teamId as TeamId,
           triggerId: input.triggerId as TriggerId,
           deliveryId: input.deliveryId,
+          by: { ...(userId !== undefined ? { userId } : {}), ...(credentialId !== undefined ? { credentialId } : {}) },
           ...(input.force !== undefined ? { force: input.force } : {}),
         });
       }),

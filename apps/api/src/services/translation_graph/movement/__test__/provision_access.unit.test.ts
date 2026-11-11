@@ -160,6 +160,7 @@ jest.mock('../../../access/statement', () => {
   return {
     ...actual,
     StatementStore: {
+      languagePinOf: async () => undefined,
       teamOf: async (target: Target) =>
         target.thing === 'automation'
           ? (__tables.movement.find((row: { id: string }) => row.id === target.id)?.team_id as string | undefined)
@@ -795,7 +796,7 @@ describe('what a save warns about, never refusing', () => {
     expect(saved.ok).toBe(true);
     if (!saved.ok) return;
     expect(saved.warnings).toContain(
-      'Who may fire this automation names people, a team or a domain, but the ledger listen firing deals hears from a module that does not say who acted, so that rule cannot be applied to it.',
+      'Who may fire this automation names people, a team or a domain, but the ledger listen firing deals hears from a module that does not say who acted, so that rule cannot be applied to it: anyone who reaches that listen can fire it.',
     );
   });
 
@@ -806,11 +807,11 @@ describe('what a save warns about, never refusing', () => {
     stated(automation(id), 'write', [user(ALICE)]);
     stated(automation(id), 'fire', [{ kind: 'domain', domain: 'acme.com' }]);
     const listeners = [
-      { kind: 'email', movementName: 'intake' },
-      { kind: 'cron', movementName: 'nightly' },
-      { kind: 'system', movementName: 'watch' },
-      { kind: 'manual', movementName: 'go' },
-      { kind: 'ledger', movementName: 'deals' },
+      { kind: 'email', movementName: 'intake', config: {} },
+      { kind: 'cron', movementName: 'nightly', config: {} },
+      { kind: 'system', movementName: 'watch', config: {} },
+      { kind: 'manual', movementName: 'go', config: {} },
+      { kind: 'ledger', movementName: 'deals', config: {} },
     ];
     const warnings = await accessWarnings({ teamId: TEAM, automationId: id, named: [], listeners });
     expect(warnings).toEqual([
@@ -821,6 +822,28 @@ describe('what a save warns about, never refusing', () => {
     mockAccess.rows = mockAccess.rows.filter((r) => !(r.target.id === id && r.verb === 'fire'));
     stated(automation(id), 'fire', [{ kind: 'domain', domain: 'acme.com' }, anyone]);
     expect(await accessWarnings({ teamId: TEAM, automationId: id, named: [], listeners })).toEqual([]);
+  });
+
+  it('warns of a fire rule over a listen landing on a record whose module keeps its own Actor, as of one whose module says nobody acted', async () => {
+    const id = 'd0000000-0000-4000-8000-000000000002';
+    db.__tables.movement.push({ id, team_id: TEAM, name: 'crm' });
+    stated(automation(id), 'read', [team]);
+    stated(automation(id), 'write', [user(ALICE)]);
+    stated(automation(id), 'fire', [team]);
+    const listening = (fieldIds: Record<string, Record<string, string>>) => ({
+      listen: {
+        pipeline: 'listen:crm:onPerson:0',
+        plan: { movement: 'onPerson', connection: 'crm', adapter: 'slack', hops: [{ edge: 'People', from: '', to: 'Person', judged: 'arrival' }] },
+        awaits: { own: [], carried: {} },
+        fieldIds,
+      },
+    });
+    const own = { kind: 'slack', movementName: 'onPerson', config: listening({ Person: { Actor: 'attr_actor', Name: 'name' } }) };
+    const offered = { kind: 'slack', movementName: 'onPerson', config: listening({ Person: { Actor: 'Actor', Name: 'name' } }) };
+    expect(await accessWarnings({ teamId: TEAM, automationId: id, named: [], listeners: [own] })).toEqual([
+      'Who may fire this automation names people, a team or a domain, but the slack listen firing onPerson lands on a record whose module keeps a field of its own named Actor, where the platform does not look up who acted, so that rule cannot be applied to it: anyone who reaches that listen can fire it.',
+    ]);
+    expect(await accessWarnings({ teamId: TEAM, automationId: id, named: [], listeners: [offered] })).toEqual([]);
   });
 
   it('carries an email warning on the save itself', async () => {

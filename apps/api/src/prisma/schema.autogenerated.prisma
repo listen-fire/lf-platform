@@ -161,6 +161,24 @@ model ArrivalUnjudged {
   @@schema("automations")
 }
 
+model ArrivalRefused {
+  teamId     String   @map("team_id") @db.Uuid
+  deliveryId String   @map("delivery_id") @db.Uuid
+  pipeline   String
+  arrival    String
+  file       String
+  movement   String
+  edge       String
+  adapter    String
+  reason     String
+  notedAt    DateTime @map("noted_at") @db.Timestamptz(6)
+
+  @@id([teamId, deliveryId, pipeline, arrival])
+  @@index([teamId, notedAt], map: "arrival_refused_at_idx")
+  @@map("arrival_refused")
+  @@schema("automations")
+}
+
 model AutomationsAuditLog {
   id        String                             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   createdBy String?                            @map("created_by")
@@ -240,18 +258,20 @@ model ConnectToken {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model Delivery {
-  id             String    @id @db.Uuid
-  teamId         String    @map("team_id") @db.Uuid
-  subscriptionId String    @map("subscription_id")
-  externalId     String?   @map("external_id")
-  receivedAt     DateTime  @map("received_at") @db.Timestamptz(6)
-  source         String
-  inline         Boolean
-  replayOf       String?   @map("replay_of") @db.Uuid
-  events         Json
-  eventCount     Int       @map("event_count")
-  request        Json?
-  judgedAt       DateTime? @map("judged_at") @db.Timestamptz(6)
+  id                   String    @id @db.Uuid
+  teamId               String    @map("team_id") @db.Uuid
+  subscriptionId       String    @map("subscription_id")
+  externalId           String?   @map("external_id")
+  receivedAt           DateTime  @map("received_at") @db.Timestamptz(6)
+  source               String
+  inline               Boolean
+  replayOf             String?   @map("replay_of") @db.Uuid
+  events               Json
+  eventCount           Int       @map("event_count")
+  request              Json?
+  judgedAt             DateTime? @map("judged_at") @db.Timestamptz(6)
+  replayedBy           String?   @map("replayed_by") @db.Uuid
+  replayedByCredential String?   @map("replayed_by_credential")
 
   @@index([teamId, receivedAt], map: "delivery_received_idx")
   @@map("delivery")

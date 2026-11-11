@@ -51,7 +51,7 @@ async function resetTeam() {
   // `team`, so a full team delete needs an exhaustive, constantly-rotting
   // ordered teardown. Wiping the re-seedable data is what "reset" actually needs.
   const qb = getQb(['automations.external_service_credentials']);
-  const aqb = getAutomationsQb(['trigger_run', 'delivery', 'arrival_unjudged']);
+  const aqb = getAutomationsQb(['trigger_run', 'delivery', 'arrival_unjudged', 'arrival_refused']);
 
   // Run history first. Everything inside `automations` still cascades off the
   // run (parks, joins, awaits, callbacks); the residual `llm_usage` lines that
@@ -60,6 +60,7 @@ async function resetTeam() {
   await aqb.deleteFrom('trigger_run').where('team_id', '=', teamId).execute();
   await sql`delete from automations.delivery where team_id = ${teamId}::uuid`.execute(aqb);
   await sql`delete from automations.arrival_unjudged where team_id = ${teamId}::uuid`.execute(aqb);
+  await sql`delete from automations.arrival_refused where team_id = ${teamId}::uuid`.execute(aqb);
 
   // Triggers carry no foreign key to the team (D3), so the reset deletes them
   // itself; leaving them behind would leave the team dispatching.

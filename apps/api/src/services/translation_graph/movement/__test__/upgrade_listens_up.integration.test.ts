@@ -80,6 +80,7 @@ import { advanceLive, upgradeMovement, type Advance, type ValidateUnder } from '
 import { listensOfSubscription, MOVEMENT_LISTEN_PROVISIONER } from '../listen_subscriptions';
 import { bringUpListensLater, registerBringUpListensWork } from '../listens_up';
 import { mintMovementVersionIfChanged } from '../version_store';
+import { StatementStore } from '../../../access/statement';
 
 const SOURCE = 'function stamp(go: <manual-[:Invocations]->>) {\n}\n\nlisten to manual-[:Invocations]-> fire stamp\n';
 const clean: ValidateUnder = async () => ({ ok: true, diagnostics: [], listenerCount: 0, firedMovements: [], catalogNotes: [], gaps: [] });
@@ -108,6 +109,9 @@ async function seedShipped(name: string, source = SOURCE): Promise<string> {
     .values({ id: id as MovementId, team_id: teamId, name, source, description: '', language_version: '0.12.13' })
     .execute();
   await mintMovementVersionIfChanged({ teamId, movementId: id, source, languageVersion: '0.12.13' });
+  // Every automation says who may fire it, one saved before statements by the
+  // deploy's backfill; the vendor's door admits anyone.
+  await StatementStore.replaceGrants({ thing: 'automation', id }, { teamId, verb: 'fire', grantees: [{ kind: 'anyone' }] });
   return id;
 }
 

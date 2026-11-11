@@ -80,6 +80,7 @@ export function AccessPanel({ thing, id }: { thing: Thing; id: string }) {
     mayChange: view.mayChange,
     onlyYou: view.onlyYou,
     viewerUserId: view.viewerUserId,
+    carriedPin: view.thing === "automation" && view.carriedPin,
   };
 
   return (

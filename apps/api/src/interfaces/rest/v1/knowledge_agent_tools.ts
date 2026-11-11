@@ -118,7 +118,7 @@ import {
   inspectMovementRun,
 } from '../../../services/translation_graph/movement/run_now';
 import { abortRun, resumeRun } from '../../../services/interaction/operator';
-import { movementEventsImpl } from '../../../services/inbound/arrival_ledger';
+import { movementEventsImpl, type MovementEventItem } from '../../../services/inbound/arrival_ledger';
 import { replayThroughListen } from '../../../services/inbound/listen_replay';
 import { resumeListen } from '../../../services/inbound/listen_pause';
 import { RunBusy } from '../../../services/movement_engine/run_lease';
@@ -1518,7 +1518,7 @@ async function listNow(target: Target, verb: SetAccessInput['verb']): Promise<Gr
 }
 
 const SET_ACCESS_DESCRIPTION =
-  'Change who may reach one automation or one connection: replace one of its lists. An automation has three — read, write (change, run, delete, and change these lists; whoever may write may also read) and fire (set it off through its listens) — and a connection one, use. Body: { automation | connection (id or exact name), verb, grantees, team? }. Read, write and use take { kind: "team" } or { kind: "user", userId }; fire also takes { kind: "anyone" }, { kind: "domain", domain }, { kind: "email", address } and { kind: "phone", digits } (digits, country code first). A list is never empty, and names only people on the team. Ask the person you are working for who should be on it; never choose for them. This REPLACES the whole list: read the current list first (getAutomation\'s or describeConnection\'s `access`, or a locked entry\'s `access` in listAutomations and listConnections), then pass it back with your change made. Never pass just the one person to add, which would remove everyone else. Changing an automation\'s lists needs write on it; a connection\'s needs use; a team admin may change any on the team. Returns the list as stored. The current lists are in getAutomation\'s and describeConnection\'s `access`; leave out anyone marked `onTeam: false`, who has left the team. Also the top-level "setAccess" tool.';
+  'Change who may reach one automation or one connection: replace one of its lists. An automation has three — read, write (change, run, delete, and change these lists; whoever may write may also read) and fire (set it off through its listens) — and a connection one, use. Body: { automation | connection (id or exact name), verb, grantees, team? }. Read, write and use take { kind: "team" } or { kind: "user", userId }; fire also takes { kind: "anyone" }, { kind: "domain", domain }, { kind: "email", address } and { kind: "phone", digits } (digits, country code first), except that an automation still on an older language version can be fired by anyone only until you upgrade it (upgradeAutomation). A list is never empty, and names only people on the team. Ask the person you are working for who should be on it; never choose for them. This REPLACES the whole list: read the current list first (getAutomation\'s or describeConnection\'s `access`, or a locked entry\'s `access` in listAutomations and listConnections), then pass it back with your change made. Never pass just the one person to add, which would remove everyone else. Changing an automation\'s lists needs write on it; a connection\'s needs use; a team admin may change any on the team. Returns the list as stored. The current lists are in getAutomation\'s and describeConnection\'s `access`; leave out anyone marked `onTeam: false`, who has left the team. Also the top-level "setAccess" tool.';
 
 const READ_ONLY_CONNECTION_MESSAGE = 'You may use this connection but not change who may.';
 
@@ -1998,6 +1998,22 @@ const resumeRunHandler: RequestHandler = jsonHandler(resumeRunSchema, 'body', as
 // is shown only to a team admin who asks for it in the app (ruling 3).
 // ---------------------------------------------------------------------------
 
+/** What names an arrival's outcome: the run it started, or the attempt a
+ *  listen could not judge it at. A refusal started nothing and has neither. */
+function arrivalOutcomeOf(item: MovementEventItem): { runId: string } | { attempt: number | null } | Record<string, never> {
+  switch (item.status) {
+    case 'ran':
+    case 'run_failed':
+      return { runId: item.id };
+    case 'not_judged':
+      return { attempt: item.attempt };
+    case 'refused':
+      return {};
+    default:
+      return neverAsAny(item.status);
+  }
+}
+
 const listArrivalsHandler: RequestHandler = async (req, res) => {
   try {
     const idOrName = String(req.params.idOrName ?? '');
@@ -2010,7 +2026,7 @@ const listArrivalsHandler: RequestHandler = async (req, res) => {
       deliveryId: item.deliveryId,
       system: item.adapterType,
       status: item.status,
-      ...(item.status === 'not_judged' ? { attempt: item.attempt } : { runId: item.id }),
+      ...arrivalOutcomeOf(item),
       ...(item.failureReason !== null ? { reason: item.failureReason } : {}),
       at: item.occurredAt,
     }));
@@ -2040,10 +2056,12 @@ const replayDeliveryHandler: RequestHandler = jsonHandler(replayDeliverySchema, 
   if (movement && !isCurrent(movement.languageVersion)) {
     return { error: `'${movement.name}' is written in language ${movement.languageVersion}, and this platform replays a delivery only through a listen on ${LANGUAGE_VERSION}. Upgrade it (upgradeAutomation) to replay through it.` };
   }
+  const { userId, credentialId } = currentPrincipal();
   const outcome = await replayThroughListen({
     teamId: teamIdSchema.parse(owner.teamId),
     triggerId: input.listen as TriggerId,
     deliveryId: input.deliveryId,
+    by: { ...(userId !== undefined ? { userId } : {}), ...(credentialId !== undefined ? { credentialId } : {}) },
     ...(input.force !== undefined ? { force: input.force } : {}),
   });
   return outcome.outcome === 'refused' ? { error: outcome.reason } : outcome;
@@ -2257,8 +2275,8 @@ function registerAutomationToolRoutes(): void {
   reg('GET', '/automations/:idOrName/runs', 'List an automation\'s recent runs (every listener / "Run now" firing), newest first. Returns each run\'s { runId, lane, triggerType, status, committed, captured, recordCount, timestamps, costUsd, modelCalls } — `committed` = writes that landed, `captured` = writes rehearsed (a `dry_run` target, or a whole-run rehearsal), `costUsd`/`modelCalls` = the run\'s model-call spend and call count. Use a runId with inspectRun to see what the run actually captured and wrote. Query: ?limit= (default 20), ?team=. Also the top-level "listRuns" tool.', { readOnly: true, latency: 'fast' });
   reg('POST', '/automations/inspect-run', 'Read one run\'s full captured detail by id: the source event that fired it, the resolved write-plan (every target record + the FINAL field values it wrote, with every `?:` and enum coercion applied, each write flagged `committed` or captured), the decision trace (gate/branch outcomes, extraction emissions), errors, and the run\'s `committed`/`captured` counts plus its `costUsd`/`modelCalls` model-call spend. The "did it actually do what I meant" surface — including exactly which writes a rehearsal captured versus committed. Body: { runId, team? }. Get runIds from listRuns. Also the top-level "inspectRun" tool.', { inputSchema: inspectRunSchema, readOnly: true, latency: 'fast' });
   reg('POST', '/automations/resume-run', 'Resume a run that paused because it reached its cost limit (checkRun shows it as status "parked" with `paused` set). Every part of the run that stopped carries on from where it stopped, and its usage resets, so the limit applies afresh. Body: { runId, team? }. Also the top-level "resumeRun" tool.', { inputSchema: resumeRunSchema, latency: 'fast' });
-  reg('GET', '/automations/:idOrName/arrivals', 'List what reached an automation\'s listens, newest first: each run an arrival started and each arrival a listen could not judge (status `not_judged`, with the reason and its attempt). Each names its `listen` and `deliveryId`, which replayDelivery takes. Query: ?team=. Also the top-level "listArrivals" tool.', { readOnly: true, latency: 'fast' });
-  reg('POST', '/automations/replay-delivery', 'Put one kept delivery through one listen again: the way out of an arrival the listen could not judge once the system it needed answers again. Only the arrivals that delivery brought are judged, by that listen alone. A listen that ran the arrival before runs nothing unless `force` is true. Body: { listen, deliveryId, force?, team? }. Returns { outcome, runIds, attempt, stillUndecided, lines }; the runs are queued, so poll checkRun. Also the top-level "replayDelivery" tool.', { inputSchema: replayDeliverySchema, latency: 'fast' });
+  reg('GET', '/automations/:idOrName/arrivals', 'List what reached an automation\'s listens, newest first: each run an arrival started, each arrival a listen could not judge (status `not_judged`, with the reason and its attempt), and each arrival the automation\'s fire list did not let start a run (status `refused`, with the reason). Each names its `listen` and `deliveryId`, which replayDelivery takes. Query: ?team=. Also the top-level "listArrivals" tool.', { readOnly: true, latency: 'fast' });
+  reg('POST', '/automations/replay-delivery', 'Put one kept delivery through one listen again: the way out of an arrival the listen could not judge once the system it needed answers again, and of one the fire list refused. Only the arrivals that delivery brought are judged, by that listen alone. Who may fire the automation is judged again too, except for an arrival it refused before: replaying that one runs it, on your word as a writer. A listen that ran the arrival before runs nothing unless `force` is true. Body: { listen, deliveryId, force?, team? }. Returns { outcome, runIds, attempt, stillUndecided, lines }; the runs are queued, so poll checkRun. Also the top-level "replayDelivery" tool.', { inputSchema: replayDeliverySchema, latency: 'fast' });
   reg('POST', '/automations/resume-listen', 'Resume a listener the loop breaker or the loop guard paused: listAutomations and getAutomation show such a listener with `paused` ({ reason, held }). It runs what arrives from now on; the arrivals it held do not run (replayDelivery puts one through again). Body: { listen, team? } (`listen`: the listener\'s triggerId). Returns { resumed, held }. Also the top-level "resumeListen" tool.', { inputSchema: resumeListenSchema, latency: 'fast' });
   reg('POST', '/automations/cancel-run', 'Stop a run by id — one that\'s executing or one that\'s paused waiting on something. Everything the run already did stays done; it just won\'t do anything more. An executing run stops at its next safe point (usually within seconds). Body: { runId, team? }. Also the top-level "cancelRun" tool.', { inputSchema: cancelRunSchema, latency: 'fast' });
 }

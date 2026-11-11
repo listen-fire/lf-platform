@@ -750,8 +750,8 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
 
     /**
      * The arrival ledger: what reached the movement's listens, merged across
-     * lanes, newest first — the runs arrivals started and the arrivals a
-     * listen could not judge.
+     * lanes, newest first — the runs arrivals started, the arrivals a listen
+     * could not judge, and those the automation's fire list refused.
      */
     events: userProcedure
       .input(z.object({ movementId: z.string().uuid() }))

@@ -16,6 +16,7 @@ import { neverAsAny } from 'movement-engine/public/types';
 import { meets, narrower, type Access, type Principal } from 'principal';
 
 import { isLfEngineTeam } from '../lf_engine/team_engine';
+import { onCarriedPin } from './carried_pin';
 import { StatementStore, type AskedVerb, type Grantee, type StatedVerb, type Target, type Thing, type Verb } from './statement';
 
 type StatementRefusal =
@@ -27,6 +28,7 @@ type StatementRefusal =
   | 'not_a_writer'
   | 'malformed'
   | 'lf_engine'
+  | 'carried_pin'
   | 'already_stated';
 
 class StatementRefusedError extends Error {
@@ -395,7 +397,7 @@ async function setStatement<T extends Thing>(
       `Only someone who may ${changedBy(target.thing)} this ${target.thing}, or a team admin, can change who may ${verb} it.`,
     );
   }
-  const list = await checkedList(teamId, { verb, grantees });
+  const list = await checkedList(teamId, { verb, grantees, target });
   await StatementStore.replaceGrants(target, { teamId, verb, grantees: list });
   switch (right) {
     case 'listed':
@@ -417,19 +419,34 @@ async function setStatement<T extends Thing>(
 /**
  * One verb's list as it would be stored on a thing of this team: never empty,
  * every grantee well formed and of a kind the verb takes, and every user it
- * names on the team with the access the verb needs.
+ * names on the team with the access the verb needs. A fire list other than
+ * anyone is also refused where the door could not keep to it: on a team whose
+ * automations run on lf, and on an automation still pinned to a carried
+ * version, whose arrivals that version's own rules judge. Give `target` for the
+ * latter; a thing being created has none yet, and is created on the current one.
  */
-async function checkedList(teamId: string, stated: { verb: Verb; grantees: readonly Grantee[] }): Promise<Grantee[]> {
-  const { verb, grantees } = stated;
+async function checkedList(
+  teamId: string,
+  stated: { verb: Verb; grantees: readonly Grantee[]; target?: Target },
+): Promise<Grantee[]> {
+  const { verb, grantees, target } = stated;
   if (grantees.length === 0) {
     throw new StatementRefusedError('empty', `The ${verb} list can't be emptied: name the team, or someone on it.`);
   }
   const list = listFor(verb, grantees);
-  if (verb === 'fire' && !list.some((grantee) => grantee.kind === 'anyone') && (await isLfEngineTeam(teamId))) {
-    throw new StatementRefusedError(
-      'lf_engine',
-      "This team's automations run on lf, whose door the platform does not judge, so a fire list other than anyone would not be kept to. State anyone, or move the team back to the platform's engine first.",
-    );
+  if (verb === 'fire' && !list.some((grantee) => grantee.kind === 'anyone')) {
+    if (await isLfEngineTeam(teamId)) {
+      throw new StatementRefusedError(
+        'lf_engine',
+        "This team's automations run on lf, whose door the platform does not judge, so a fire list other than anyone would not be kept to. State anyone, or move the team back to the platform's engine first.",
+      );
+    }
+    if (target?.thing === 'automation' && (await onCarriedPin(target.id))) {
+      throw new StatementRefusedError(
+        'carried_pin',
+        "This automation is still on an older language version, whose arrivals the platform cannot judge by who acted, so a fire list other than anyone would not be kept to. State anyone, or upgrade the automation first (upgradeAutomation), then narrow it.",
+      );
+    }
   }
   const named = list.flatMap((grantee) => (grantee.kind === 'user' ? [grantee.userId] : []));
   const memberships = await StatementStore.membershipsAmong(teamId, named);
@@ -539,7 +556,7 @@ async function stateAtCreation<T extends Thing>(
     throw new StatementRefusedError('already_stated', `This ${target.thing} already says who may reach it.`);
   }
   const checked: { verb: StatedVerb<T>; grantees: Grantee[] }[] = [];
-  for (const list of lists) checked.push({ verb: list.verb, grantees: await checkedList(teamId, list) });
+  for (const list of lists) checked.push({ verb: list.verb, grantees: await checkedList(teamId, { ...list, target }) });
   for (const list of checked) await StatementStore.replaceGrants(target, { teamId, ...list });
 }
 

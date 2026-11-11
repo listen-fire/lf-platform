@@ -4,6 +4,8 @@
 
 import { randomUUID } from 'node:crypto';
 
+import { LANGUAGE_VERSION } from 'movement-lang';
+
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { UserId } from '../../../generated/kysely/core/User';
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
@@ -87,6 +89,25 @@ describe('access statements — one table, one decision', () => {
     const read = await StatementStore.grantsOf(deals, { teamId, verb: 'read' });
     expect(read).toHaveLength(2);
     expect(read).toEqual(expect.arrayContaining([user(alice), user(bob)]));
+  });
+
+  it('keeps an automation on a carried language version to firing by anyone, until it is upgraded', async () => {
+    await setStatement(as(alice), { target: deals, verb: 'write', grantees: [user(alice)] });
+    // The row was saved with no pin, which reads as legacy id '1': a carried version.
+    await expect(setStatement(as(alice), { target: deals, verb: 'fire', grantees: [team] })).rejects.toMatchObject({
+      refusal: 'carried_pin',
+    });
+    await setStatement(as(alice), { target: deals, verb: 'fire', grantees: [{ kind: 'anyone' }] });
+
+    await getAutomationsQb(['movement'])
+      .updateTable('movement')
+      .set({ language_version: LANGUAGE_VERSION })
+      .where('id', '=', deals.id as MovementId)
+      .execute();
+    // Upgrading changes the pin and nothing stated, so the person narrows it afterwards.
+    expect(await StatementStore.grantsOf(deals, { teamId, verb: 'fire' })).toEqual([{ kind: 'anyone' }]);
+    await setStatement(as(alice), { target: deals, verb: 'fire', grantees: [team] });
+    expect(await StatementStore.grantsOf(deals, { teamId, verb: 'fire' })).toEqual([team]);
   });
 
   it('decides a connection by its use list', async () => {

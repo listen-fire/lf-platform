@@ -192,7 +192,9 @@ export async function runMovementAsync(
   const delivery = { adapterType: MANUAL_ADAPTER_TYPE, credentialsId: null };
   const { arrivals } = await withActors([invocationArrival(invocation)], { team: listen.teamId, listens: [listen], adapter: delivery });
   const now = new Date();
-  const judged = judgeArrivals({ listens: [listen], delivery, arrivals, now });
+  // Running by hand is a write on the automation, decided by its route: the
+  // caller vouches for it, so its fire list does not judge it.
+  const judged = judgeArrivals({ listens: [listen], delivery, arrivals, now, firing: { kind: 'vouched' } });
   const run = judged.minted[0];
   if (run === undefined) {
     return {

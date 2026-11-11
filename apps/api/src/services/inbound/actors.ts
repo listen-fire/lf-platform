@@ -8,7 +8,7 @@
 
 import { isDeepStrictEqual } from 'node:util';
 
-import { normalisedActor, type ActorCandidate, type ActorIdentity, type Arrival, type AwaitLanding, type NormalisedActor } from 'engine-contracts';
+import { memberPlans, normalisedActor, type ActorCandidate, type ActorIdentity, type Arrival, type AwaitLanding, type NormalisedActor } from 'engine-contracts';
 import { arrivalTriggerOf } from 'movement-engine/public/inbound';
 import { logger } from 'movement-engine/public/log';
 
@@ -18,7 +18,6 @@ import type { TeamId } from '../../generated/kysely/core/Team';
 import type { DeliveredBy, SavedListen } from './listen_door';
 
 import { getAutomationsQb } from '../../lib/kysely';
-import { StatementStore } from '../access/statement';
 import { originatorTeamUser } from '../translation_graph/adapters/acting_user/resolve';
 import { getAdapterManifest } from '../translation_graph/adapters/registry';
 import { resolveAdapter } from '../translation_graph/adapters/resolve';
@@ -173,19 +172,10 @@ export interface AddressMatch {
   vouched: boolean;
 }
 
-/** Whether any listen's automation has a fire statement without anyone,
- *  which is judged from `Actor`. Nothing stated is not anyone. */
-async function fireStatementNeedsActor(team: TeamId, listens: readonly SavedListen[]): Promise<boolean> {
-  if (listens.length === 0) return false;
-  const rows = await getAutomationsQb(['trigger'])
-    .selectFrom('trigger')
-    .select('movement_id')
-    .where('id', 'in', listens.map((listen) => listen.triggerId))
-    .execute();
-  const automations = [...new Set(rows.flatMap((row) => (row.movement_id === null ? [] : [row.movement_id])))];
-  if (automations.length === 0) return false;
-  const lists = await StatementStore.grantsAmong({ thing: 'automation', teamId: team, ids: automations, verbs: ['fire'] });
-  return automations.some((id) => !(lists.get(id) ?? []).some((grant) => grant.grantee.kind === 'anyone'));
+/** Whether any listen's automation has a fire list without anyone, which is
+ *  judged from `Actor`. Nothing stated is not anyone. */
+function fireStatementNeedsActor(listens: readonly SavedListen[]): boolean {
+  return listens.some((listen) => !listen.fire.some((grantee) => grantee.kind === 'anyone'));
 }
 
 /**
@@ -233,8 +223,31 @@ function moduleOwnsActor(listens: readonly SavedListen[], landing: AwaitLanding)
     const ids = listen.fieldIds[recordType];
     return ids === undefined ? [] : [ids];
   });
-  if (described.some((ids) => ids[ACTOR] === ACTOR)) return false;
-  return described.some((ids) => ids[ACTOR] !== undefined || Object.values(ids).includes(ACTOR));
+  if (described.some(isOfferedActor)) return false;
+  return described.some(declaresActorOf);
+}
+
+/** Field ids planned over the platform's offer of `Actor`. */
+function isOfferedActor(ids: Record<string, string>): boolean {
+  return ids[ACTOR] === ACTOR;
+}
+
+/** Field ids that name an `Actor` of the module's own. */
+function declaresActorOf(ids: Record<string, string>): boolean {
+  return !isOfferedActor(ids) && (ids[ACTOR] !== undefined || Object.values(ids).includes(ACTOR));
+}
+
+/**
+ * Whether a saved listen lands on a record whose module keeps its own
+ * `Actor`, as its field ids say: the door then looks nobody up for it, so a
+ * fire list cannot be applied to it and the save says so.
+ */
+export function landsOnModuleActor(listen: Pick<SavedListen, 'plan' | 'fieldIds'>): boolean {
+  return memberPlans(listen.plan).some((member) => {
+    const landing = member.hops.at(-1)?.to;
+    const ids = landing === undefined ? undefined : listen.fieldIds[landing];
+    return ids !== undefined && declaresActorOf(ids);
+  });
 }
 
 /** What the module said of who acted, when asked: its candidates, or why it
@@ -350,7 +363,7 @@ export async function withActors(
   if (live.length === 0) return unchanged;
   // A connection's delivery is its own listens', as the judge hears it.
   const listens = input.listens.filter((listen) => adapter.credentialsId === null || listen.credentialsId === null || listen.credentialsId === adapter.credentialsId);
-  const everyArrival = listens.some((listen) => listen.readsActor === true) || (await fireStatementNeedsActor(team, listens));
+  const everyArrival = listens.some((listen) => listen.readsActor === true) || fireStatementNeedsActor(listens);
   const waited = everyArrival ? new Set<string>() : await edgesWaitedOnForActor({ team, adapterType: adapter.adapterType, edges: [...new Set(live.map((arrival) => arrival.edge))] });
   if (!everyArrival && waited.size === 0) return unchanged;
 

@@ -28,11 +28,16 @@ import {
 } from './run_host_queue';
 import { arrivalMark, dropUnstartedWaits, logArrivalsIn, openDeliveryWaits } from './run_host_waits';
 import { keepUnjudgedIn, type UnjudgedArrival } from '../lf_store/records_door';
+import { keepRefusedIn, type RefusedArrival } from '../inbound/fire_statement';
 
 /** `inbound.keepDelivery`'s input as the platform's door sends it: with the
- *  listens that could not judge the delivery's arrivals, kept in its write. */
+ *  listens that could not judge the delivery's arrivals, and the arrivals a
+ *  fire list refused, kept in its write. */
 export interface PlatformKeepDelivery extends KeepDelivery {
   unjudged?: readonly UnjudgedArrival[];
+  refused?: readonly RefusedArrival[];
+  /** A replay's: who put the delivery through its listen again. */
+  replayedBy?: { userId?: string; credentialId?: string };
   /** The door kept this delivery before reading it (`keepRawDelivery`): this
    *  write is its judging. `kept: false` when it was judged before. */
   rawKept?: { id: string };
@@ -254,11 +259,12 @@ export function deliveryRowStore(owner: { host: Host; teamId: string }): Platfor
                 where id = ${input.rawKept.id}::uuid and team_id = ${owner.teamId}::uuid and judged_at is null
                 returning id::text as id`.execute(trx)
             : await sql<{ id: string }>`
-                insert into automations.delivery (id, team_id, subscription_id, external_id, received_at, source, inline, replay_of, events, event_count, request, judged_at)
+                insert into automations.delivery (id, team_id, subscription_id, external_id, received_at, source, inline, replay_of, events, event_count, request, judged_at, replayed_by, replayed_by_credential)
                 values (${delivery.id}::uuid, ${owner.teamId}::uuid, ${subscriptionId}::text, ${delivery.externalId ?? null}::text,
                         ${delivery.receivedAt}::timestamptz, ${delivery.source}::text, ${delivery.inline}::bool, ${delivery.replayOf ?? null}::uuid,
                         ${JSON.stringify(delivery.events)}::text::jsonb, ${delivery.events.length}::int,
-                        ${delivery.request === undefined ? null : JSON.stringify(delivery.request)}::text::jsonb, now())
+                        ${delivery.request === undefined ? null : JSON.stringify(delivery.request)}::text::jsonb, now(),
+                        ${input.replayedBy?.userId ?? null}::uuid, ${input.replayedBy?.credentialId ?? null}::text)
                 on conflict do nothing returning id::text as id`.execute(trx);
         if (rows.length === 0) return null;
         if ('checkpoint' in input) await saveCheckpointIn(trx, { teamId: owner.teamId, subscriptionId, checkpoint: input.checkpoint });
@@ -274,6 +280,7 @@ export function deliveryRowStore(owner: { host: Host; teamId: string }): Platfor
         }
         for (const wake of wakes ?? []) queued.push(await queueWake(trx, arrivals?.teamId ?? owner.teamId, wake));
         for (const fact of input.unjudged ?? []) await keepUnjudgedIn(trx, { tenant: owner.teamId }, fact);
+        for (const fact of input.refused ?? []) await keepRefusedIn(trx, owner.teamId, fact);
         return { mark, wakes, queued };
       });
       if (written === null) return { kept: false };

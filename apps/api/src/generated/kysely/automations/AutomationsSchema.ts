@@ -29,6 +29,7 @@ import type { default as LfMovementsListingTable } from './LfMovementsListing';
 import type { default as ArrivalTable } from './Arrival';
 import type { default as TriggerRunTable } from './TriggerRun';
 import type { default as ArrivalUnjudgedTable } from './ArrivalUnjudged';
+import type { default as ArrivalRefusedTable } from './ArrivalRefused';
 import type { default as TriggerTable } from './Trigger';
 import type { default as DeliveryRequestReadTable } from './DeliveryRequestRead';
 import type { default as AccessStatementTable } from './AccessStatement';
@@ -109,6 +110,8 @@ export default interface AutomationsSchema {
   trigger_run: TriggerRunTable;
 
   arrival_unjudged: ArrivalUnjudgedTable;
+
+  arrival_refused: ArrivalRefusedTable;
 
   trigger: TriggerTable;
 

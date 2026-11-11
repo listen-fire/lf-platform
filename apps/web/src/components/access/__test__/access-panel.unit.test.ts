@@ -27,6 +27,7 @@ const panel = (overrides: Partial<AccessPanelViewProps>) =>
         mayChange: true,
         onlyYou: false,
         viewerUserId: ME,
+        carriedPin: false,
       },
       editing: null,
       members,
@@ -72,7 +73,7 @@ describe("the access panel", () => {
 
   it("shows a connection's use list alone", () => {
     const html = panel({
-      listing: { thing: "connection", lists: { use: [{ kind: "team" }] }, mayChange: true, onlyYou: false, viewerUserId: ME },
+      listing: { thing: "connection", lists: { use: [{ kind: "team" }] }, mayChange: true, onlyYou: false, viewerUserId: ME, carriedPin: false },
     });
     expect(html).toContain('data-testid="access-use"');
     expect(html).not.toContain('data-testid="access-read"');
@@ -104,6 +105,17 @@ describe("the access panel", () => {
     expect(html.slice(html.indexOf('data-testid="list-editor-fire"'))).not.toContain("Whole team");
   });
 
+  it("offers only \u201cAnyone who reaches it\u201d for firing an automation still on an older language version", () => {
+    const html = panel({
+      listing: { ...readerListing(), carriedPin: true },
+      editing: { verb: "fire", draft: { mode: "anyone", people: [], withTeam: false, outsiders: "" } },
+    });
+    expect(html).toContain("Anyone who reaches it");
+    expect(html).not.toContain('aria-haspopup="listbox"');
+    expect(html).not.toContain("Specific people");
+    expect(html.slice(html.indexOf('data-testid="list-editor-fire"'))).not.toContain("Whole team");
+  });
+
   it("says when someone on the list has left the team, and that saving leaves them off", () => {
     const html = panel({
       listing: {
@@ -112,6 +124,7 @@ describe("the access panel", () => {
         mayChange: true,
         onlyYou: false,
         viewerUserId: ME,
+        carriedPin: false,
       },
       editing: { verb: "write", draft: { mode: "people", people: [], withTeam: false, outsiders: "" } },
     });
@@ -238,6 +251,7 @@ function readerListing(): AccessPanelViewProps["listing"] {
     mayChange: true,
     onlyYou: false,
     viewerUserId: ME,
+    carriedPin: false,
   };
 }
 

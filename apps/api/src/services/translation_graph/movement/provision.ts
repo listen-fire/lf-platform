@@ -155,7 +155,7 @@ import { automationReadsActor } from '../../inbound/actors';
 import { carriedPauses, listenIdentityOf, type CarriedPause } from './carried_pauses';
 import { carriedRunTriggerId } from './carried_names';
 import { revokeCallbacksForRuns } from '../../movement_engine/callback_store';
-import { listenConfigSchema, type ListenConfig, type SavedListen } from '../../inbound/listen_door';
+import { listenConfigSchema, type ListenConfig, type ListenRow } from '../../inbound/listen_door';
 import { resolveAndArm, resolvesListen } from '../../inbound/listen_resolve';
 import { listenPauses, type ListenPause } from '../../inbound/listen_pause';
 
@@ -944,7 +944,7 @@ async function provisionListeners(input: {
       for (const listener of listeners) {
         const parsed = listenConfigSchema.safeParse(listener.config);
         if (!parsed.success || !resolvesListen(parsed.data.listen)) continue;
-        const listen: SavedListen = { ...parsed.data.listen, triggerId: listener.triggerId as TriggerId, teamId: input.teamId as TeamId, file: input.movementRow.name, credentialsId: listener.credentialsId };
+        const listen: ListenRow = { ...parsed.data.listen, triggerId: listener.triggerId as TriggerId, teamId: input.teamId as TeamId, file: input.movementRow.name, credentialsId: listener.credentialsId };
         await resolveAndArm(listen);
       }
     });

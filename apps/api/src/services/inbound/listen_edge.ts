@@ -17,7 +17,7 @@ import { createHash } from 'node:crypto';
 import { memberPlans, type ListenPlan } from 'engine-contracts';
 
 import type { TeamId } from '../../generated/kysely/core/Team';
-import type { SavedListen } from './listen_door';
+import type { ListenRow } from './listen_door';
 
 export interface ListenEdgeKey {
   teamId: TeamId;
@@ -39,7 +39,7 @@ export interface ListenEdgeKey {
 }
 
 /** How the module delivers a listen's last edge, as its saved listen keeps it. */
-export type ListenDelivery = NonNullable<SavedListen['delivery']>['kind'];
+export type ListenDelivery = NonNullable<ListenRow['delivery']>['kind'];
 
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
@@ -64,8 +64,8 @@ export function listenEdgeDigest(key: ListenEdgeKey): string {
  *  (`memberPlans`). Each is how the one listen is watched, never a listen of
  *  its own. */
 export function watchedTraversals(
-  listen: SavedListen,
-): Array<{ plan: ListenPlan; delivery: SavedListen['delivery']; scopes: readonly string[] | undefined }> {
+  listen: ListenRow,
+): Array<{ plan: ListenPlan; delivery: ListenRow['delivery']; scopes: readonly string[] | undefined }> {
   if (listen.plan.members === undefined) return [{ plan: listen.plan, delivery: listen.delivery, scopes: listen.watching?.heads }];
   return memberPlans(listen.plan).map((plan, member) => ({
     plan,
@@ -81,11 +81,11 @@ export function watchedTraversals(
  *  listen not yet resolved to any is watched under none. Two members of a
  *  union may share one key: the listen is one, so it is heard there once. */
 export function listenEdgeKeysOf(
-  listen: SavedListen,
+  listen: ListenRow,
   deliveries: readonly ListenDelivery[],
-): Array<{ key: ListenEdgeKey; digest: string; delivery: NonNullable<SavedListen['delivery']> }> {
-  const keys = new Map<string, { key: ListenEdgeKey; digest: string; delivery: NonNullable<SavedListen['delivery']> }>();
-  const add = (key: ListenEdgeKey, delivery: NonNullable<SavedListen['delivery']>): void => {
+): Array<{ key: ListenEdgeKey; digest: string; delivery: NonNullable<ListenRow['delivery']> }> {
+  const keys = new Map<string, { key: ListenEdgeKey; digest: string; delivery: NonNullable<ListenRow['delivery']> }>();
+  const add = (key: ListenEdgeKey, delivery: NonNullable<ListenRow['delivery']>): void => {
     const digest = listenEdgeDigest(key);
     const seen = keys.get(digest);
     // Polled under one key by two members, it is polled at the sooner of their intervals.

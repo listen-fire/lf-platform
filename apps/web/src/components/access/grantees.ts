@@ -157,13 +157,19 @@ const FIRE_OPTIONS: readonly ChoiceOption<FireChoice>[] = [
 ];
 
 /**
- * Who may set a new automation off that the team's engine can keep to. On lf
- * the platform does not judge the door, so the server refuses any fire list
- * but "anyone" there; offering the rest would only invite a refusal. Whether
- * people outside the team can be named depends on where the choice is made:
- * the list editor takes them, the creation dialog does not.
+ * Who may set an automation off that the platform can keep to. On lf the
+ * platform does not judge the door, and an automation still on an older
+ * language version is judged by that version's own rules, so the server
+ * refuses any fire list but "anyone" for both until the team moves back or the
+ * automation is upgraded; offering the rest would only invite a refusal.
+ * Whether people outside the team can be named depends on where the choice is
+ * made: the list editor takes them, the creation dialog does not.
  */
-export function fireOptionsFor(engine: "platform" | "lf", options: { outsiders: boolean }): readonly ChoiceOption<FireChoice>[] {
+export function fireOptionsFor(
+  engine: "platform" | "lf",
+  options: { outsiders: boolean; carriedPin: boolean },
+): readonly ChoiceOption<FireChoice>[] {
+  if (options.carriedPin) return FIRE_OPTIONS.filter((option) => option.value === "anyone");
   switch (engine) {
     case "platform":
       return options.outsiders
@@ -347,6 +353,7 @@ export type ListRefusal =
   | "not_a_writer"
   | "malformed"
   | "lf_engine"
+  | "carried_pin"
   | "already_stated";
 
 /** Why a changed list was refused, in the page's words: the server's text is written for agents and is never shown. */
@@ -370,6 +377,8 @@ export function listRefusalSentence(refusal: ListRefusal, thing: "automation" | 
       return "Something you chose could not be read. Check the addresses, domains and phone numbers.";
     case "lf_engine":
       return "Your team's automations run on lf, which does not check who sets one off, so only \u201cAnyone who reaches it\u201d can be chosen.";
+    case "carried_pin":
+      return "This automation is on an older language version, which does not check who sets one off, so only \u201cAnyone who reaches it\u201d can be chosen until you upgrade it.";
     case "already_stated":
       return `This ${thing} already says who may reach it. Reload the page to see it.`;
     default: {

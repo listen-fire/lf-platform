@@ -18,6 +18,7 @@ export type StatementReason =
   | "not_a_writer"
   | "malformed"
   | "lf_engine"
+  | "carried_pin"
   | "already_stated"
   | "on_overwrite";
 
@@ -70,6 +71,8 @@ export function statementReasonSentence(reason: StatementReason): string {
       return "Something you chose could not be read. Choose again.";
     case "lf_engine":
       return "Your team's automations run on lf, which does not check who sets one off. Choose \u201cAnyone who reaches it\u201d for who may set it off.";
+    case "carried_pin":
+      return "This automation is on an older language version, which does not check who sets one off. Choose \u201cAnyone who reaches it\u201d for who may set it off.";
     case "already_stated":
       return "This automation already says who may reach it. Change that under Access on its page.";
     case "on_overwrite":

@@ -23,7 +23,6 @@ jest.mock('../../../lib/kysely', () => ({ getAutomationsQb: jest.fn(), getCoreQb
 jest.mock('../../translation_graph/adapters/registry', () => ({ getAdapterManifest: jest.fn() }));
 jest.mock('../../translation_graph/adapters/resolve', () => ({ resolveAdapter: jest.fn() }));
 jest.mock('../../movement_engine/run_host_deliveries', () => ({ deliveryRowStore: jest.fn() }));
-jest.mock('../../access/statement', () => ({ StatementStore: { grantsAmong: jest.fn() } }));
 jest.mock('../../translation_graph/adapters/email/public_inbox', () => ({ publicInboxActor: jest.fn() }));
 jest.mock('../../translation_graph/adapters/acting_user_shared', () => ({
   applyCreatorOverride: jest.fn(async () => ({ overridden: false })),
@@ -36,7 +35,6 @@ jest.mock('../../translation_graph/adapters/acting_user_shared', () => ({
 import { getAutomationsQb as getAutomationsQbImport } from '../../../lib/kysely';
 import { getAdapterManifest as getAdapterManifestImport } from '../../translation_graph/adapters/registry';
 import { resolveAdapter as resolveAdapterImport } from '../../translation_graph/adapters/resolve';
-import { StatementStore } from '../../access/statement';
 import { lookupTeamUserByEmail as lookupTeamUserByEmailImport } from '../../translation_graph/adapters/acting_user_shared';
 import { plannedListensOfSource } from '../../translation_graph/movement/listen_plans';
 import { invocationArrival } from '../../translation_graph/adapters/manual';
@@ -46,7 +44,6 @@ import { judgeArrivals, type SavedListen } from '../listen_door';
 const getAutomationsQb = getAutomationsQbImport as jest.Mock;
 const resolveAdapter = resolveAdapterImport as jest.Mock;
 const lookupTeamUserByEmail = lookupTeamUserByEmailImport as jest.Mock;
-const grantsAmong = StatementStore.grantsAmong as jest.Mock;
 const getAdapterManifest = getAdapterManifestImport as jest.Mock;
 
 const TEAM = randomUUID() as TeamId;
@@ -76,8 +73,9 @@ function errorsOver(schema: InstanceSchema, where: string): string[] {
 }
 
 /** A listen saved as a save saves it: whether its automation reads `Actor`
- *  is decided by the save's own computation, over a text that imports nothing. */
-async function listenOver(schema: InstanceSchema, where: string): Promise<SavedListen> {
+ *  is decided by the save's own computation, over a text that imports nothing.
+ *  Its automation lets anyone fire it unless `fire` says otherwise. */
+async function listenOver(schema: InstanceSchema, where: string, fire: SavedListen['fire'] = [{ kind: 'anyone' }]): Promise<SavedListen> {
   expect(errorsOver(schema, where)).toEqual([]);
   const source = textOf(where);
   const snapshot = snapshotOf(schema);
@@ -86,7 +84,7 @@ async function listenOver(schema: InstanceSchema, where: string): Promise<SavedL
   expect(refused).toEqual([]);
   const [planned] = listens;
   if (planned === undefined) throw new Error('the text planned no listen');
-  return { ...planned, triggerId: randomUUID() as TriggerId, teamId: TEAM, file: 'chat.lf', credentialsId: null };
+  return { ...planned, triggerId: randomUUID() as TriggerId, teamId: TEAM, file: 'chat.lf', credentialsId: null, fire };
 }
 
 const offered = () => graftActorField({ adapterType: 'chat', methods: REPORTS, schema: chatSchema() });
@@ -107,13 +105,7 @@ const delivered = { adapterType: 'chat', credentialsId: null };
 
 let getActorCandidates: jest.Mock;
 
-let triggers: { movement_id: string | null }[] = [];
 let waitedOn: { edge: string }[] = [];
-
-/** The trigger rows `fireStatementNeedsActor` reads, as Kysely chains them. */
-function triggerRows(rows: { movement_id: string | null }[]): void {
-  triggers = rows;
-}
 
 /** The edges that runs of an automation reading `Actor` wait on (`wait_row`, by the version each run pins). */
 function waitsOn(edges: string[]): void {
@@ -122,7 +114,7 @@ function waitsOn(edges: string[]): void {
 
 /** One query, as Kysely chains it: its rows are the table it selects from. */
 function query(table: string) {
-  const rows = () => (table === 'wait_row' ? waitedOn : triggers);
+  const rows = () => (table === 'wait_row' ? waitedOn : []);
   const chain = { select: () => chain, where: () => chain, innerJoin: () => chain, distinct: () => chain, execute: async () => rows() };
   return chain;
 }
@@ -136,9 +128,7 @@ beforeEach(() => {
   lookupTeamUserByEmail.mockImplementation(async ({ email }: { email: string }) => (email.toLowerCase() === ADA.email ? ADA : null));
   getAutomationsQb.mockReturnValue({ selectFrom: query });
   getAdapterManifest.mockReturnValue(undefined);
-  triggerRows([]);
   waitsOn([]);
-  grantsAmong.mockResolvedValue(new Map());
 });
 
 describe('graftActorField', () => {
@@ -189,7 +179,7 @@ describe('withActors', () => {
     const actor = { Id: 'U1', Email: 'ada@x.com', Domain: 'x.com', Name: 'U1', Proven: true, Member: true, User: ADA.id };
     expect(fieldsOf(arrivals[0])?.[ACTOR]).toEqual(actor);
     expect(actors).toEqual([{ kind: 'written', actor, addressMatch: { user: ADA.id, vouched: true } }]);
-    expect(judgeArrivals({ listens: [listen], delivery: delivered, arrivals, now: new Date() }).minted).toHaveLength(1);
+    expect(judgeArrivals({ listens: [listen], delivery: delivered, arrivals, now: new Date(), firing: { kind: 'judged', actors, source: 'reported' } }).minted).toHaveLength(1);
   });
 
   it("an email from a member's address is no member and names no user, though the decision still names the matched user as unvouched", async () => {
@@ -202,7 +192,7 @@ describe('withActors', () => {
     const actor = { Id: 'ada@x.com', Email: 'ada@x.com', Domain: 'x.com', Name: 'ada@x.com', Proven: false, Member: false };
     expect(fieldsOf(arrivals[0])?.[ACTOR]).toEqual(actor);
     expect(actors).toEqual([{ kind: 'written', actor, addressMatch: { user: ADA.id, vouched: false } }]);
-    expect(judgeArrivals({ listens: [listen], delivery: delivered, arrivals, now: new Date() }).minted).toEqual([]);
+    expect(judgeArrivals({ listens: [listen], delivery: delivered, arrivals, now: new Date(), firing: { kind: 'judged', actors, source: 'reported' } }).minted).toEqual([]);
   });
 
   it('a stranger is no member, and has no user', async () => {
@@ -214,7 +204,7 @@ describe('withActors', () => {
     const actor = { Id: 'U9', Email: 'eve@evil.com', Domain: 'evil.com', Name: 'U9', Proven: true, Member: false };
     expect(fieldsOf(arrivals[0])?.[ACTOR]).toEqual(actor);
     expect(actors).toEqual([{ kind: 'written', actor }]);
-    expect(judgeArrivals({ listens: [listen], delivery: delivered, arrivals, now: new Date() }).minted).toEqual([]);
+    expect(judgeArrivals({ listens: [listen], delivery: delivered, arrivals, now: new Date(), firing: { kind: 'judged', actors, source: 'reported' } }).minted).toEqual([]);
   });
 
   it('takes an address only from an originator who is the same person the arrival named', async () => {
@@ -228,9 +218,6 @@ describe('withActors', () => {
 
   it('saves a listen whose text never says Actor as not reading it, and asks nothing, though the catalog offered it', async () => {
     const listen = await listenOver(offered(), 'm.Text == "hi"');
-    const automation = randomUUID();
-    triggerRows([{ movement_id: automation }]);
-    grantsAmong.mockResolvedValue(new Map([[automation, [{ verb: 'fire', grantee: { kind: 'anyone' } }]]]));
     const arrival = posted();
 
     expect(listen.readsActor).toBeUndefined();
@@ -275,10 +262,7 @@ describe('withActors', () => {
   });
 
   it('writes Actor for a fire statement that is not anyone, though no listen reads it', async () => {
-    const listen = await listenOver(chatSchema(), 'm.Text == "hi"');
-    const automation = randomUUID();
-    triggerRows([{ movement_id: automation }]);
-    grantsAmong.mockResolvedValue(new Map([[automation, [{ verb: 'fire', grantee: { kind: 'team' } }]]]));
+    const listen = await listenOver(chatSchema(), 'm.Text == "hi"', [{ kind: 'team' }]);
 
     const { arrivals } = await withActors([posted()], { team: TEAM, listens: [listen], adapter: delivered });
 
@@ -286,10 +270,7 @@ describe('withActors', () => {
   });
 
   it('asks nothing for a fire statement that names anyone among others', async () => {
-    const listen = await listenOver(chatSchema(), 'm.Text == "hi"');
-    const automation = randomUUID();
-    triggerRows([{ movement_id: automation }]);
-    grantsAmong.mockResolvedValue(new Map([[automation, [{ verb: 'fire', grantee: { kind: 'team' } }, { verb: 'fire', grantee: { kind: 'anyone' } }]]]));
+    const listen = await listenOver(chatSchema(), 'm.Text == "hi"', [{ kind: 'team' }, { kind: 'anyone' }]);
 
     expect((await withActors([posted()], { team: TEAM, listens: [listen], adapter: delivered })).actors).toEqual([{ kind: 'unneeded' }]);
     expect(resolveAdapter).not.toHaveBeenCalled();
@@ -318,7 +299,7 @@ describe('withActors', () => {
     const notReading = await listenOver(offered(), 'm.Text == "hi"');
 
     const { arrivals, actors } = await withActors([posted()], { team: TEAM, listens: [reading, notReading], adapter: delivered });
-    const judged = judgeArrivals({ listens: [reading, notReading], delivery: delivered, arrivals, now: new Date() });
+    const judged = judgeArrivals({ listens: [reading, notReading], delivery: delivered, arrivals, now: new Date(), firing: { kind: 'judged', actors, source: 'reported' } });
 
     const [arrival] = arrivals;
     expect(arrival !== undefined && !('gone' in arrival) ? arrival.landing.unknown : undefined).toEqual([ACTOR]);
@@ -340,10 +321,7 @@ describe('withActors', () => {
 
   it('removes a carried Actor where no listen says the module declared one, under a fire statement that is not anyone', async () => {
     getActorCandidates.mockResolvedValue([]);
-    const listen = await listenOver(chatSchema(), 'm.Text == "hi"');
-    const automation = randomUUID();
-    triggerRows([{ movement_id: automation }]);
-    grantsAmong.mockResolvedValue(new Map([[automation, [{ verb: 'fire', grantee: { kind: 'team' } }]]]));
+    const listen = await listenOver(chatSchema(), 'm.Text == "hi"', [{ kind: 'team' }]);
     const forged = { ...posted(), actor: undefined, landing: { recordType: 'Message', fields: { text: 'hi', [ACTOR]: { Email: 'ada@x.com', Proven: true, Member: true } } } };
 
     const { arrivals, actors } = await withActors([forged], { team: TEAM, listens: [listen], adapter: delivered });
@@ -359,9 +337,8 @@ describe('withActors', () => {
       methods: REPORTS,
       schema: chatSchema(message([TEXT, { fieldId: 'fldActor', displayName: 'Actor', kind: 'string', writable: false, required: false }])),
     });
-    const listen = { ...(await listenOver(own, 'm.Text == "hi"')), fieldIds: { Message: { Actor: 'fldActor' } } };
-    const automation = randomUUID();
-    triggerRows([{ movement_id: automation }]);
+    // Nothing stated, which is not anyone.
+    const listen = { ...(await listenOver(own, 'm.Text == "hi"', [])), fieldIds: { Message: { Actor: 'fldActor' } } };
     const arrival = { ...posted(), landing: { recordType: 'Message', fields: { text: 'hi', fldActor: 'Grace' } } };
 
     const answer = await withActors([arrival, arrival], { team: TEAM, listens: [listen], adapter: { adapterType: 'chatlog', credentialsId: null } });

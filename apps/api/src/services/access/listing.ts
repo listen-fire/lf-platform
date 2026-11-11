@@ -13,6 +13,7 @@ import type { Grantee, StatedVerb, Target, Thing, Verb } from './statement';
 
 import { getCoreQb } from '../../lib/kysely';
 import { StatementStore } from './statement';
+import { onCarriedPin } from './carried_pin';
 import { mayChangeStatement, seenOnlyBy } from './decide';
 
 /** One entry on a list: a named user with who they are, anything else as stored. */
@@ -32,7 +33,10 @@ type Shown<T extends Thing> = {
   onlyYou: boolean;
   /** The caller's own user id as the lists store it, so a page can say "you". */
   viewerUserId: string | null;
-};
+} & Extras<T>;
+
+/** What only an automation's view says: it is pinned to a version whose arrivals the door cannot judge, so only anyone may fire it. */
+type Extras<T extends Thing> = T extends 'automation' ? { carriedPin: boolean } : Record<never, never>;
 
 type AccessView = Shown<'automation'> | Shown<'connection'>;
 
@@ -113,6 +117,7 @@ async function automationView(id: string): Promise<Shown<'automation'> | undefin
     thing: 'automation',
     id,
     lists: { read: lists.get('read') ?? [], write: lists.get('write') ?? [], fire: lists.get('fire') ?? [] },
+    carriedPin: await onCarriedPin(id),
     ...(await standingOn(target, teamId)),
   };
 }

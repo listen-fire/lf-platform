@@ -185,6 +185,41 @@ export type MovementVersionId = string & {
     __brand: 'automations.movement_version';
 };
 
+/** Identifier type for automations.trigger_event */
+export type TriggerEventId = string & {
+    __brand: 'automations.trigger_event';
+};
+
+/** Identifier type for automations.trigger_run */
+export type TriggerRunId = string & {
+    __brand: 'automations.trigger_run';
+};
+
+export type Thing = 'automation' | 'connection';
+/** The verbs each thing's statement has: firing is an automation's, using is a connection's. */
+export type StatedVerb<T extends Thing> = T extends 'automation' ? 'read' | 'write' | 'fire' : 'use';
+/**
+ * One entry on a verb's list. Reading, writing and using go to the team or to
+ * named users; firing also admits outsiders, by domain, address or phone.
+ */
+export type Grantee = {
+    kind: 'team';
+} | {
+    kind: 'user';
+    userId: string;
+} | {
+    kind: 'anyone';
+} | {
+    kind: 'domain';
+    domain: string;
+} | {
+    kind: 'email';
+    address: string;
+} | {
+    kind: 'phone';
+    digits: string;
+};
+
 /** What a replay did, said in lines a person reads. */
 export type ReplayOutcome = 
 /** It could not be replayed at all: no such listen or delivery, or no
@@ -252,16 +287,6 @@ export type MovementTestRunResult = {
 export type AutomationStatus = 'live' | 'setting_up' | 'paused' | 'error';
 
 export type TriggerRunMode = 'off' | 'dry_run' | 'live';
-
-/** Identifier type for automations.trigger_event */
-export type TriggerEventId = string & {
-    __brand: 'automations.trigger_event';
-};
-
-/** Identifier type for automations.trigger_run */
-export type TriggerRunId = string & {
-    __brand: 'automations.trigger_run';
-};
 
 /** Which saved version a run executed, against the one that would run
  *  today. A run pins its version at start, so a firing from before the
@@ -747,9 +772,10 @@ export type OpsEventId = string & {
     __brand: 'public.ops_event';
 };
 
-/** How an arrival reached one of a movement's listens: a run it started, or
- *  an `Arrival Not Judged` fact (the listen could not tell). */
-export type MovementEventStatus = 'ran' | 'run_failed' | 'not_judged';
+/** How an arrival reached one of a movement's listens: a run it started, an
+ *  `Arrival Not Judged` fact (the listen could not tell), or a refusal (the
+ *  automation's fire list did not let who acted start a run). */
+export type MovementEventStatus = 'ran' | 'run_failed' | 'not_judged' | 'refused';
 export type MovementEventItem = {
     id: string;
     /** The lane (trigger name) of the listen it reached. */
@@ -761,7 +787,7 @@ export type MovementEventItem = {
     adapterType: string;
     status: MovementEventStatus;
     failureReason: string | null;
-    /** For a fact, which attempt (0 as delivered, one more per replay). */
+    /** For a not judged fact, which attempt (0 as delivered, one more per replay). */
     attempt: number | null;
     occurredAt: Date;
     createdAt: Date;
@@ -1190,32 +1216,7 @@ export interface DependentCheckResult {
     problemCount: number;
 }
 
-export type Thing = 'automation' | 'connection';
-/** The verbs each thing's statement has: firing is an automation's, using is a connection's. */
-export type StatedVerb<T extends Thing> = T extends 'automation' ? 'read' | 'write' | 'fire' : 'use';
-/**
- * One entry on a verb's list. Reading, writing and using go to the team or to
- * named users; firing also admits outsiders, by domain, address or phone.
- */
-export type Grantee = {
-    kind: 'team';
-} | {
-    kind: 'user';
-    userId: string;
-} | {
-    kind: 'anyone';
-} | {
-    kind: 'domain';
-    domain: string;
-} | {
-    kind: 'email';
-    address: string;
-} | {
-    kind: 'phone';
-    digits: string;
-};
-
-export type StatementRefusal = 'empty' | 'not_found' | 'not_allowed' | 'outsider' | 'not_a_member' | 'not_a_writer' | 'malformed' | 'lf_engine' | 'already_stated';
+export type StatementRefusal = 'empty' | 'not_found' | 'not_allowed' | 'outsider' | 'not_a_member' | 'not_a_writer' | 'malformed' | 'lf_engine' | 'carried_pin' | 'already_stated';
 
 /** Why a creation's statements were refused: the decision's own reasons, and statements given to a save that overwrites. */
 export type StatementReason = StatementRefusal | 'on_overwrite';
@@ -2013,7 +2014,11 @@ export type Shown<T extends Thing> = {
     onlyYou: boolean;
     /** The caller's own user id as the lists store it, so a page can say "you". */
     viewerUserId: string | null;
-};
+} & Extras<T>;
+/** What only an automation's view says: it is pinned to a version whose arrivals the door cannot judge, so only anyone may fire it. */
+export type Extras<T extends Thing> = T extends 'automation' ? {
+    carriedPin: boolean;
+} : Record<never, never>;
 export type AccessView = Shown<'automation'> | Shown<'connection'>;
 
 /**
@@ -4887,7 +4892,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     owned?: {
                         name: string;
                         allowPattern?: string | undefined;
-                        format?: "cron" | "timeZone" | undefined;
+                        format?: "timeZone" | "cron" | undefined;
                     } | undefined;
                     record?: {
                         typeId: string;
@@ -4978,7 +4983,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         owned?: {
                             name: string;
                             allowPattern?: string | undefined;
-                            format?: "cron" | "timeZone" | undefined;
+                            format?: "timeZone" | "cron" | undefined;
                         } | undefined;
                         record?: {
                             typeId: string;

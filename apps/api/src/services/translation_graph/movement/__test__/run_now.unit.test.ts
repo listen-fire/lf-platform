@@ -132,6 +132,7 @@ const LISTEN: SavedListen = {
   teamId: TEAM as TeamId,
   file: 'backfill',
   credentialsId: null,
+  fire: [{ kind: 'anyone' }],
 };
 
 /** What the delivery keeps, as `runMovementAsync` handed it over. */

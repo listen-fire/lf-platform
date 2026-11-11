@@ -15,7 +15,7 @@ const FINANCE = 'c0000000-0000-4000-8000-000000000001';
 
 type Row = { target: Target; verb: Verb; grantee: Grantee };
 
-const mockState: { members: Map<string, Access>; rows: Row[] } = { members: new Map(), rows: [] };
+const mockState: { members: Map<string, Access>; rows: Row[]; pin: string | undefined } = { members: new Map(), rows: [], pin: undefined };
 
 jest.mock('../../../../services/access/statement', () => {
   const actual = jest.requireActual('../../../../services/access/statement');
@@ -32,6 +32,7 @@ jest.mock('../../../../services/access/statement', () => {
   return {
     ...actual,
     StatementStore: {
+      languagePinOf: async () => mockState.pin,
       teamOf: async (target: Target) => things.get(`${target.thing}:${target.id}`),
       grantsOf: async (target: Target, options: { verb: Verb }) =>
         mockState.rows.filter((r) => same(r.target, target) && r.verb === options.verb).map((r) => r.grantee),
@@ -126,6 +127,7 @@ beforeEach(() => {
     [BOB, 'write'],
   ]);
   mockState.rows = [];
+  mockState.pin = undefined;
 });
 
 describe('reading who may reach an automation', () => {
@@ -145,7 +147,18 @@ describe('reading who may reach an automation', () => {
       mayChange: true,
       onlyYou: true,
       viewerUserId: ALICE,
+      carriedPin: false,
     });
+  });
+
+  it('says an automation still on an older language version can be fired by anyone only', async () => {
+    stated(automation, 'read', [{ kind: 'team' }]);
+    stated(automation, 'write', [{ kind: 'user', userId: ALICE }]);
+    stated(automation, 'fire', [{ kind: 'anyone' }]);
+    mockState.pin = '0.12.13';
+    expect(await as(ALICE, () => caller().get({ thing: 'automation', id: DEALS }))).toMatchObject({ carriedPin: true });
+    mockState.pin = '4';
+    expect(await as(ALICE, () => caller().get({ thing: 'automation', id: DEALS }))).toMatchObject({ carriedPin: true });
   });
 
   it('says a named person who has left the team is no longer on it', async () => {
@@ -192,6 +205,18 @@ describe('changing who may reach an automation', () => {
       caller().set({ thing: 'automation', id: DEALS, verb: 'fire', grantees: [{ kind: 'email', address: 'Pat@Acme.com' }] }),
     );
     expect(set).toMatchObject({ ok: true, view: { lists: { fire: [{ kind: 'email', address: 'pat@acme.com' }] } } });
+  });
+
+  it('refuses a fire list other than anyone on an automation still on an older language version, by its reason', async () => {
+    mockState.pin = '0.12.13';
+    expect(await as(ALICE, () => caller().set({ thing: 'automation', id: DEALS, verb: 'fire', grantees: [{ kind: 'team' }] }))).toEqual({
+      ok: false,
+      refusal: 'carried_pin',
+    });
+    expect(await as(ALICE, () => caller().set({ thing: 'automation', id: DEALS, verb: 'fire', grantees: [{ kind: 'anyone' }] }))).toMatchObject({
+      ok: true,
+      view: { carriedPin: true, lists: { fire: [{ kind: 'anyone' }] } },
+    });
   });
 
   it('refuses a reader as read-only, and a list the decision refuses by its reason', async () => {

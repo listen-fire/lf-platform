@@ -47,15 +47,21 @@ function connectionWithNoPerson(): { use: readonly Grantee[] } {
  * read and write it, and its fire list is the narrowest of its listens', so
  * nothing it was created with widens who could fire it. A file with no
  * listens fires nothing yet, and gets the narrower list. On a team whose
- * automations run on lf the platform judges no fire list, so it says anyone.
+ * automations run on lf the platform judges no fire list, so it says anyone;
+ * so it does for an automation pinned to a carried language version, whose
+ * arrivals that version's own rules judge, whatever its listens would give.
  */
-function automationWithNoPerson(created: { listens: readonly ListenReach[]; runsOnLf: boolean }): CreationStatements {
+function automationWithNoPerson(created: {
+  listens: readonly ListenReach[];
+  runsOnLf: boolean;
+  carriedPin: boolean;
+}): CreationStatements {
   const everyListenAdmitsAnyone =
     created.listens.length > 0 && created.listens.every((listen) => firedTodayBy(listen) === 'anyone');
   return {
     write: TEAM,
     read: TEAM,
-    fire: created.runsOnLf || everyListenAdmitsAnyone ? ANYONE : TEAM,
+    fire: created.runsOnLf || created.carriedPin || everyListenAdmitsAnyone ? ANYONE : TEAM,
   };
 }
 
