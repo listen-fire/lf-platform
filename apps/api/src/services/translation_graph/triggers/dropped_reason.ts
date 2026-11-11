@@ -19,7 +19,7 @@ export type DroppedReason =
   // drop), or flagged for replay when no receipt was provided.
   | 'loop_guard_paused'
   | 'loop_guard_throttled'
-  // Ownership gate (§6.4b): the source adapter requires a REGISTERED actor
+  // Ownership gate (§6.4b), on a carried pin only: the source adapter requires a REGISTERED actor
   // on inbound events, and this event's actor didn't resolve to one — the
   // bot's own echo and unregistered senders drop by the same rule. The
   // event is RECORDED as suppressed (replayable), never silent.

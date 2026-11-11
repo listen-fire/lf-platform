@@ -405,7 +405,7 @@ describe('describeMovementInstance', () => {
     // inboundRequiresRegisteredActor) — neither hand-written on the manifest.
     expect(result.identity).toContain('runs with the Slack account that connected it');
     expect(result.identity).toContain('set up on this team');
-    expect(result.identity).toContain('not set up on the team yet');
+    expect(result.identity).toContain('check its fire list');
   });
 
   it('credential-free adapters describe without a credential name', async () => {

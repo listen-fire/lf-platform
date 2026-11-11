@@ -1,4 +1,8 @@
-// Ownership gating for inbound events — the §6.4b rule: on a gated adapter,
+// Ownership gating for inbound events on an automation pinned to a carried
+// language version — the router consults it only then. An automation on the
+// current pin is judged by its fire list at the door and by Slack's own drop of
+// the app's messages, but a carried pin's receipts never say who acted, so this
+// gate is the only stranger check it has. The §6.4b rule: on a gated adapter,
 // an inbound event is processed only when its actor resolves to a
 // REGISTERED team user. One rule covers both hazards: the bot's own reply
 // re-ingested (never a registered user → drops → no self-loop) and an

@@ -25,7 +25,7 @@ describe('deriveIdentityNote', () => {
     );
     expect(note).toContain('runs with the Slack account that connected it');
     expect(note).toContain('set up on this team');
-    expect(note).toContain('not set up on the team yet');
+    expect(note).toContain('check its fire list');
   });
 
   it('a credentialed system with no registered-actor gate states runs-as only', () => {
