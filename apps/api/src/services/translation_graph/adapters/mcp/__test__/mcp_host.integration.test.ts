@@ -102,7 +102,7 @@ it('refuses at save a write whose argument has the wrong type, and a tool of the
   const wrongType = await saveMovement({ audience: { for: 'run' }, teamId, source: TRIAGE.replace('team: "ENG" }', 'team: "ENG", priority: "high" }') });
   expect(wrongType.ok).toBe(false);
   expect(wrongType.ok === false && wrongType.needsConfirmation).toBe(true);
-  expect(wrongType.ok === false ? wrongType.errors : []).toEqual([expect.stringMatching(/'priority' on tracker\.create_issue is number, but this expression produces text/)]);
+  expect(wrongType.ok === false ? wrongType.errors : []).toEqual([expect.stringMatching(/'priority' on create_issue is number, but this expression produces text/)]);
 
   const otherServer = await saveMovement({
     audience: { for: 'run' },

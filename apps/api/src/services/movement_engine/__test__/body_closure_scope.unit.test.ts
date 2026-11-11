@@ -1152,8 +1152,9 @@ describe('a library closure two levels deep is read in the library, as one level
         [oneCall, oneLevel('b')],
       ] as const) {
         const input = inputOn(source, makeParkSink(), makeKgFake(), { version, files });
+        // Pin 3 runs the legacy engine, which still spells a place with its system's name.
         await expect(runMovement({ ...input, catalog: { ...described, files: input.catalog?.files } })).rejects.toThrow(
-          /MOVENG_CHECK[\s\S]*MOV_WRITE_FIELD_TYPE[\s\S]*'payload\.r' is runs\.Invocation/,
+          /MOVENG_CHECK[\s\S]*MOV_WRITE_FIELD_TYPE[\s\S]*'payload\.r' is (runs\.)?Invocation/,
         );
       }
     }, 60_000);

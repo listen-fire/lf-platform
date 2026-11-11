@@ -48,6 +48,8 @@ jest.mock('../../../../lib/kysely', () => {
     movement: [],
     // What is stated about an automation goes with it on delete.
     access_statement: [],
+    // Moving off a carried pin restates the fire list, which reads whether the team runs on lf.
+    team_engine: [],
     trigger: [],
     translation_graph: [],
     team: [],
@@ -103,6 +105,7 @@ jest.mock('../../../../lib/kysely', () => {
       select: () => api,
       selectAll: () => api,
       forUpdate: () => api,
+      limit: () => api,
       innerJoin: () => api,
       distinct: () => api,
       orderBy: (col: string, dir?: string) => {

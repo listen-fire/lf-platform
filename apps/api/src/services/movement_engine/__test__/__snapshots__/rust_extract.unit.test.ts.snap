@@ -1501,7 +1501,7 @@ exports[`extraction calls and plugin calls in the Rust engine records held as va
   "asked": [],
   "invoked": [],
   "parked": [],
-  "outcome": "MovementEngineError: MOVENG_CHECK: the movement program failed checking:\\n  MOV_CALL_ARG_TYPE (line 6): 'echo' takes structured data for 'q', and 'q[0]' is inbox.message — a record, not a value. A record goes to a plugin only as the whole argument ('q: r', which hands it the record's fields); inside a value, write a field off it ('r.\`Name\`')."
+  "outcome": "MovementEngineError: MOVENG_CHECK: the movement program failed checking:\\n  MOV_CALL_ARG_TYPE (line 6): 'echo' takes structured data for 'q', and 'q[0]' is message — a record, not a value. A record goes to a plugin only as the whole argument ('q: r', which hands it the record's fields); inside a value, write a field off it ('r.\`Name\`')."
 }"
 `;
 
@@ -1510,7 +1510,7 @@ exports[`extraction calls and plugin calls in the Rust engine records held as va
   "asked": [],
   "invoked": [],
   "parked": [],
-  "outcome": "MovementEngineError: MOVENG_CHECK: the movement program failed checking:\\n  MOV_CALL_ARG_TYPE (line 6): 'echo' takes structured data for 'q', and 'q.k' is inbox.message — a record, not a value. A record goes to a plugin only as the whole argument ('q: r', which hands it the record's fields); inside a value, write a field off it ('k: r.\`Name\`')."
+  "outcome": "MovementEngineError: MOVENG_CHECK: the movement program failed checking:\\n  MOV_CALL_ARG_TYPE (line 6): 'echo' takes structured data for 'q', and 'q.k' is message — a record, not a value. A record goes to a plugin only as the whole argument ('q: r', which hands it the record's fields); inside a value, write a field off it ('k: r.\`Name\`')."
 }"
 `;
 

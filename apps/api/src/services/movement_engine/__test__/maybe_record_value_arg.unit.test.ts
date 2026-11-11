@@ -128,6 +128,6 @@ describe('a value that may be a record, handed to a <number> parameter', () => {
   });
 
   it('is refused at check under the release pin', async () => {
-    await expect(runUnder(LANGUAGE_VERSION)).rejects.toThrow(/MOV_CALL_ARG_TYPE \(line \d+\): 'f' expects number .* graph\.company handle/);
+    await expect(runUnder(LANGUAGE_VERSION)).rejects.toThrow(/MOV_CALL_ARG_TYPE \(line \d+\): 'f' expects number .* but this argument is company/);
   });
 });

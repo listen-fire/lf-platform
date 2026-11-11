@@ -171,7 +171,7 @@ exports[`calls of the movements a program declares, in the Rust engine binds a c
 exports[`calls of the movements a program declares, in the Rust engine ends a callee’s scope quietly on a match that finds nothing, and the caller goes on 1`] = `
 {
   "failed": "MovementEngineError: MOVENG_CHECK: the movement program failed checking:
-  MOV_ABSENT_REQUIRED (line 7): 'co' is a crm.company handle that may not be there, so a write off it can't be guaranteed to happen — and nothing in this statement says it might be skipped. Test it first ('if (co == null) { fail("…") }', or 'if (co != null)'). (see handbook: front#maybe-absent)",
+  MOV_ABSENT_REQUIRED (line 7): 'co' is a company handle that may not be there, so a write off it can't be guaranteed to happen — and nothing in this statement says it might be skipped. Test it first ('if (co == null) { fail("…") }', or 'if (co != null)'). (see handbook: front#maybe-absent)",
   "world": {
     "appends": [],
     "asked": [],
@@ -191,7 +191,7 @@ exports[`calls of the movements a program declares, in the Rust engine ends a ca
 exports[`calls of the movements a program declares, in the Rust engine ends a callee’s scope quietly on a match that finds nothing, and the caller goes on 2`] = `
 {
   "failed": "MovementEngineError: MOVENG_CHECK: the movement program failed checking:
-  MOV_ABSENT_REQUIRED (line 7): 'co' is a crm.company handle that may not be there, so a write off it can't be guaranteed to happen — and nothing in this statement says it might be skipped. Test it first ('if (co == null) { fail("…") }', or 'if (co != null)'). (see handbook: front#maybe-absent)",
+  MOV_ABSENT_REQUIRED (line 7): 'co' is a company handle that may not be there, so a write off it can't be guaranteed to happen — and nothing in this statement says it might be skipped. Test it first ('if (co == null) { fail("…") }', or 'if (co != null)'). (see handbook: front#maybe-absent)",
   "world": {
     "appends": [],
     "asked": [],
@@ -846,7 +846,7 @@ exports[`calls of the movements a program declares, in the Rust engine fails on 
 exports[`calls of the movements a program declares, in the Rust engine fails on recursion past the depth limit, and on a value passed to a position 2`] = `
 {
   "failed": "MovementEngineError: MOVENG_CHECK: the movement program failed checking:
-  MOV_CALL_ARG_TYPE (line 10): 'persist' expects crm.company for 'c' (argument 1), but this argument is text — a record parameter takes a record (a bound record, a node, or a write); declare the parameter as a value type ('<text>', '<{ … }>') to pass a value",
+  MOV_CALL_ARG_TYPE (line 10): 'persist' expects company for 'c' (argument 1), but this argument is text — a record parameter takes a record (a bound record, a node, or a write); declare the parameter as a value type ('<text>', '<{ … }>') to pass a value",
   "world": {
     "appends": [],
     "asked": [],
@@ -11630,8 +11630,8 @@ exports[`the graphs a run builds, in the Rust engine fails a target WHERE and an
 exports[`the graphs a run builds, in the Rust engine finds among the landings with match, and a miss ends the scope quietly 1`] = `
 {
   "failed": "MovementEngineError: MOVENG_CHECK: the movement program failed checking:
-  MOV_ABSENT_REQUIRED (line 16): 'name' on crm.company needs a value, but 'found?.\`name\`' may be absent (text (or absent)) — write 'name: coalesce(found?.\`name\`, "unknown")' to fall back to a value that is always there, or 'name ?: found?.\`name\`' to leave it unset when absent (see handbook: front#maybe-absent)
-  MOV_ABSENT_REQUIRED (line 16): 'stage' on crm.company needs a value, but 'found?.\`stage\`' may be absent (text (or absent)) — write 'stage: coalesce(found?.\`stage\`, "unknown")' to fall back to a value that is always there, or 'stage ?: found?.\`stage\`' to leave it unset when absent (see handbook: front#maybe-absent)",
+  MOV_ABSENT_REQUIRED (line 16): 'name' on company needs a value, but 'found?.\`name\`' may be absent (text | null) — write 'name: coalesce(found?.\`name\`, "unknown")' to fall back to a value that is always there, or 'name ?: found?.\`name\`' to leave it unset when absent (see handbook: front#maybe-absent)
+  MOV_ABSENT_REQUIRED (line 16): 'stage' on company needs a value, but 'found?.\`stage\`' may be absent (text | null) — write 'stage: coalesce(found?.\`stage\`, "unknown")' to fall back to a value that is always there, or 'stage ?: found?.\`stage\`' to leave it unset when absent (see handbook: front#maybe-absent)",
   "world": {
     "appends": [],
     "asked": [],
@@ -11875,8 +11875,8 @@ exports[`the graphs a run builds, in the Rust engine finds among the landings wi
 exports[`the graphs a run builds, in the Rust engine finds among the landings with match, and a miss ends the scope quietly 3`] = `
 {
   "failed": "MovementEngineError: MOVENG_CHECK: the movement program failed checking:
-  MOV_ABSENT_REQUIRED (line 16): 'name' on crm.company needs a value, but 'found?.\`name\`' may be absent (text (or absent)) — write 'name: coalesce(found?.\`name\`, "unknown")' to fall back to a value that is always there, or 'name ?: found?.\`name\`' to leave it unset when absent (see handbook: front#maybe-absent)
-  MOV_ABSENT_REQUIRED (line 16): 'stage' on crm.company needs a value, but 'found?.\`stage\`' may be absent (text (or absent)) — write 'stage: coalesce(found?.\`stage\`, "unknown")' to fall back to a value that is always there, or 'stage ?: found?.\`stage\`' to leave it unset when absent (see handbook: front#maybe-absent)",
+  MOV_ABSENT_REQUIRED (line 16): 'name' on company needs a value, but 'found?.\`name\`' may be absent (text | null) — write 'name: coalesce(found?.\`name\`, "unknown")' to fall back to a value that is always there, or 'name ?: found?.\`name\`' to leave it unset when absent (see handbook: front#maybe-absent)
+  MOV_ABSENT_REQUIRED (line 16): 'stage' on company needs a value, but 'found?.\`stage\`' may be absent (text | null) — write 'stage: coalesce(found?.\`stage\`, "unknown")' to fall back to a value that is always there, or 'stage ?: found?.\`stage\`' to leave it unset when absent (see handbook: front#maybe-absent)",
   "world": {
     "appends": [],
     "asked": [],
@@ -15464,7 +15464,7 @@ exports[`writes in the Rust engine expands a write spread by the fields the chec
 exports[`writes in the Rust engine fails a delete of the event or of a value: no record position 1`] = `
 {
   "failed": "MovementEngineError: MOVENG_CHECK: the movement program failed checking:
-  MOV_DELETE_NOT_DECLARED (line 6): 'msg' is inbox.message, and its system does not declare that it can delete one — 'delete' is checked against the system's own promise ('deletable' on the type it describes). Change the record instead ('write msg { … }'), or delete it in a system that can.",
+  MOV_DELETE_NOT_DECLARED (line 6): 'msg' is message, and its system does not declare that it can delete one — 'delete' is checked against the system's own promise ('deletable' on the type it describes). Change the record instead ('write msg { … }'), or delete it in a system that can.",
   "world": {
     "appends": [],
     "asked": [],

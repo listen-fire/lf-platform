@@ -132,6 +132,6 @@ describe('a value that may be a record, handed to a built-in that takes a value'
   });
 
   it.each(Object.keys(CASES))('%s is refused at check under the release pin', async name => {
-    await expect(runUnder(CASES[name]!, LANGUAGE_VERSION)).rejects.toThrow(/MOV_RECORD_NOT_A_VALUE \(line \d+\): a graph\.company handle is a record, not a value/);
+    await expect(runUnder(CASES[name]!, LANGUAGE_VERSION)).rejects.toThrow(/MOV_RECORD_NOT_A_VALUE \(line \d+\): company is a record, not a value/);
   });
 });
