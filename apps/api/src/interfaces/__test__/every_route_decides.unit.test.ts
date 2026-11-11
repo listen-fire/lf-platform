@@ -1502,12 +1502,17 @@ function lockedKeysFor(key: string): string[] {
   return key.startsWith('GET ') ? [...LOCKED_KEYS, 'access'] : LOCKED_KEYS;
 }
 
-/** The lists a locked entry carries over MCP, and nothing of its content. */
+/**
+ * The lists a locked entry carries over MCP, and nothing of its content. An
+ * automation's also says whether its fire list takes anyone only (its pin, its
+ * team's engine), which is no content of it.
+ */
 function expectListsOnly(entry: Record<string, unknown> | undefined, key: string, verbs: string[]): void {
   if (!key.startsWith('GET ')) return;
   const access = entry?.access;
   expect(access).toBeDefined();
-  expect(Object.keys(access ?? {}).sort()).toEqual([...verbs, 'mayChange', 'onlyYou'].sort());
+  const facts = verbs.includes('fire') ? ['carriedPin', 'teamRunsOnLf'] : [];
+  expect(Object.keys(access ?? {}).sort()).toEqual([...verbs, 'mayChange', 'onlyYou', ...facts].sort());
 }
 
 describe('as a team admin whom no list names', () => {

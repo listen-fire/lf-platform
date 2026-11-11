@@ -2031,11 +2031,13 @@ export type DropsOwnMessagesLine = {
 };
 /**
  * What only an automation's view says: it is pinned to a version whose arrivals
- * the door cannot judge, so only anyone may fire it; and how the connections it
+ * the door cannot judge, or its team runs on lf, whose door the platform does
+ * not judge, and either way only anyone may fire it; and how the connections it
  * listens on treat the app's own messages, which its fire list does not speak to.
  */
 export type Extras<T extends Thing> = T extends 'automation' ? {
     carriedPin: boolean;
+    teamRunsOnLf: boolean;
     dropsOwnMessages: DropsOwnMessagesLine[];
 } : Record<never, never>;
 export type AccessView = Shown<'automation'> | Shown<'connection'>;

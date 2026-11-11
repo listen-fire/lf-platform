@@ -94,6 +94,7 @@ export function AccessPanel({ thing, id }: { thing: Thing; id: string }) {
     onlyYou: view.onlyYou,
     viewerUserId: view.viewerUserId,
     carriedPin: view.thing === "automation" && view.carriedPin,
+    teamRunsOnLf: view.thing === "automation" && view.teamRunsOnLf,
     dropsOwnMessages: view.thing === "automation" ? view.dropsOwnMessages : [],
   };
 

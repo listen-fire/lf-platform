@@ -41,8 +41,9 @@ export function settingsAtCreation(type: ExternalServiceType): ModuleSettings {
 
 /**
  * A stored cell with the declared defaults under it: a stored "off" stays off,
- * a key the cell lacks gets the default. For every row filled in place, which
- * may have been written before the module declared the setting.
+ * a key the cell lacks gets the default. Every read goes through it, so a row
+ * written without the key (by an earlier release, or a raw insert) still gets
+ * the default, and so does every row filled in place.
  */
 export function underDeclaredDefaults(type: ExternalServiceType, cell: unknown): ModuleSettings {
   return { ...settingsAtCreation(type), ...settingsOfCell(cell) };
@@ -78,10 +79,10 @@ export async function moduleSettingsFor(asked: {
     .selectFrom('external_service_credentials')
     .where('id', '=', asked.credentialsId as ExternalServiceCredentialsId)
     .where('team_id', '=', asked.teamId)
-    .select('module_settings')
+    .select(['type', 'module_settings'])
     .executeTakeFirst();
   if (row === undefined) return {};
-  const stored = settingsOfCell(row.module_settings);
+  const stored = underDeclaredDefaults(row.type, row.module_settings);
   return Object.fromEntries(Object.entries(stored).filter(([name]) => declared.includes(name)));
 }
 
@@ -140,12 +141,12 @@ export async function dropsOwnMessagesOn(automationId: string): Promise<DropsOwn
   const connections = await getAutomationsQb(['external_service_credentials'])
     .selectFrom('external_service_credentials')
     .where('id', 'in', ids)
-    .select(['id', 'name', 'module_settings'])
+    .select(['id', 'name', 'type', 'module_settings'])
     .orderBy('name')
     .execute();
   return connections.map((connection) => ({
     connectionId: String(connection.id),
     name: connection.name,
-    on: isOn(settingsOfCell(connection.module_settings)[DROP_OWN_MESSAGES]),
+    on: isOn(underDeclaredDefaults(connection.type, connection.module_settings)[DROP_OWN_MESSAGES]),
   }));
 }

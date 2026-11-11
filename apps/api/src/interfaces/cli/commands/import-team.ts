@@ -27,7 +27,7 @@ export default class extends Command {
   async execute(options: ImportTeamOptions): Promise<void> {
     const client = await connect(options.databaseUrl ?? getEnvVar('DATABASE_URL'));
     try {
-      const { manifest, inserted, shellCredentials, stated } = await importTeam(client, {
+      const { manifest, inserted, shellCredentials, stated, fireMadeAnyone } = await importTeam(client, {
         bundleDir: options.in,
       });
       const total = inserted.reduce((sum, t) => sum + t.rows, 0);
@@ -45,6 +45,12 @@ export default class extends Command {
         console.warn(
           `${stated.automations} automation(s) and ${stated.connections} connection(s) arrived saying nothing of who may reach them, and were given the whole team's.`,
         );
+      }
+      if (fireMadeAnyone.length > 0) {
+        console.warn(
+          `${fireMadeAnyone.length} automation(s) arrived with a fire list this deployment would not check (the team runs on lf, or the automation is on an older language version), and now fire for anyone who reaches them:`,
+        );
+        for (const automation of fireMadeAnyone) console.warn(`  ${automation.name} (${automation.id})`);
       }
     } finally {
       await client.end();

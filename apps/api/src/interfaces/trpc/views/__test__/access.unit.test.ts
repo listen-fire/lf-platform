@@ -156,6 +156,7 @@ describe('reading who may reach an automation', () => {
       onlyYou: true,
       viewerUserId: ALICE,
       carriedPin: false,
+      teamRunsOnLf: false,
       dropsOwnMessages: [],
     });
   });

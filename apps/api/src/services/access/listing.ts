@@ -16,6 +16,7 @@ import { StatementStore } from './statement';
 import { onCarriedPin } from './carried_pin';
 import { accessTo, mayChangeConnection, mayChangeStatement, seenOnlyBy } from './decide';
 import { dropsOwnMessagesOn } from '../connections/module_settings';
+import { isLfEngineTeam } from '../lf_engine/team_engine';
 
 /** One entry on a list: a named user with who they are, anything else as stored. */
 type ShownGrantee =
@@ -46,11 +47,12 @@ type DropsOwnMessagesLine = { on: boolean; mayChange: boolean; connection: { id:
 
 /**
  * What only an automation's view says: it is pinned to a version whose arrivals
- * the door cannot judge, so only anyone may fire it; and how the connections it
+ * the door cannot judge, or its team runs on lf, whose door the platform does
+ * not judge, and either way only anyone may fire it; and how the connections it
  * listens on treat the app's own messages, which its fire list does not speak to.
  */
 type Extras<T extends Thing> = T extends 'automation'
-  ? { carriedPin: boolean; dropsOwnMessages: DropsOwnMessagesLine[] }
+  ? { carriedPin: boolean; teamRunsOnLf: boolean; dropsOwnMessages: DropsOwnMessagesLine[] }
   : Record<never, never>;
 
 type AccessView = Shown<'automation'> | Shown<'connection'>;
@@ -145,6 +147,7 @@ async function automationView(id: string): Promise<Shown<'automation'> | undefin
     id,
     lists: { read: lists.get('read') ?? [], write: lists.get('write') ?? [], fire: lists.get('fire') ?? [] },
     carriedPin: await onCarriedPin(id),
+    teamRunsOnLf: await isLfEngineTeam(teamId),
     dropsOwnMessages: await dropsOwnMessagesLines(id),
     ...(await standingOn(target, teamId)),
   };
@@ -159,15 +162,26 @@ async function connectionView(id: string): Promise<Shown<'connection'> | undefin
   return { thing: 'connection', id, lists: { use: lists.get('use') ?? [] }, ...(await standingOn(target, teamId)) };
 }
 
-/** An automation's lists as an agent reads them: each list in the shape `setAccess` takes back. */
-type AutomationAccess = Record<StatedVerb<'automation'>, ShownGrantee[]> & { mayChange: boolean; onlyYou: boolean };
+/**
+ * An automation's lists as an agent reads them: each list in the shape
+ * `setAccess` takes back, and the two facts that make its fire list take
+ * anyone only, as the web's panel is given them.
+ */
+type AutomationAccess = Record<StatedVerb<'automation'>, ShownGrantee[]> & {
+  mayChange: boolean;
+  onlyYou: boolean;
+  carriedPin: boolean;
+  teamRunsOnLf: boolean;
+};
 
 /** A connection's list as an agent reads it. */
 type ConnectionAccess = Record<StatedVerb<'connection'>, ShownGrantee[]> & { mayChange: boolean; onlyYou: boolean };
 
 async function automationAccess(id: string): Promise<AutomationAccess | undefined> {
   const view = await automationView(id);
-  return view === undefined ? undefined : { ...view.lists, mayChange: view.mayChange, onlyYou: view.onlyYou };
+  return view === undefined
+    ? undefined
+    : { ...view.lists, mayChange: view.mayChange, onlyYou: view.onlyYou, carriedPin: view.carriedPin, teamRunsOnLf: view.teamRunsOnLf };
 }
 
 async function connectionAccess(id: string): Promise<ConnectionAccess | undefined> {

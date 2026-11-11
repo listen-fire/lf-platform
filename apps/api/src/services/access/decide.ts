@@ -430,6 +430,26 @@ async function setStatement<T extends Thing>(
 }
 
 /**
+ * Why a fire list without anyone would not be kept to where it is stored, or
+ * undefined when it would: the platform's door does not judge a team whose
+ * automations run on lf, nor an automation pinned to a carried version, whose
+ * arrivals that version's own rules judge. A team import applies the same rule
+ * to the lists it brings.
+ */
+function fireNotKeptTo(where: { runsOnLf: boolean; carriedPin: boolean }): 'lf_engine' | 'carried_pin' | undefined {
+  if (where.runsOnLf) return 'lf_engine';
+  if (where.carriedPin) return 'carried_pin';
+  return undefined;
+}
+
+const FIRE_NOT_KEPT_TO: Record<'lf_engine' | 'carried_pin', string> = {
+  lf_engine:
+    "This team's automations run on lf, whose door the platform does not judge, so a fire list other than anyone would not be kept to. State anyone, or move the team back to the platform's engine first.",
+  carried_pin:
+    'This automation is still on an older language version, whose arrivals the platform cannot judge by who acted, so a fire list other than anyone would not be kept to. State anyone, or upgrade the automation first (upgradeAutomation), then narrow it.',
+};
+
+/**
  * One verb's list as it would be stored on a thing of this team: never empty,
  * every grantee well formed and of a kind the verb takes, and every user it
  * names on the team with the access the verb needs. A fire list other than
@@ -448,18 +468,11 @@ async function checkedList(
   }
   const list = listFor(verb, grantees);
   if (verb === 'fire' && !list.some((grantee) => grantee.kind === 'anyone')) {
-    if (await isLfEngineTeam(teamId)) {
-      throw new StatementRefusedError(
-        'lf_engine',
-        "This team's automations run on lf, whose door the platform does not judge, so a fire list other than anyone would not be kept to. State anyone, or move the team back to the platform's engine first.",
-      );
-    }
-    if (target?.thing === 'automation' && (await onCarriedPin(target.id))) {
-      throw new StatementRefusedError(
-        'carried_pin',
-        "This automation is still on an older language version, whose arrivals the platform cannot judge by who acted, so a fire list other than anyone would not be kept to. State anyone, or upgrade the automation first (upgradeAutomation), then narrow it.",
-      );
-    }
+    const refusal = fireNotKeptTo({
+      runsOnLf: await isLfEngineTeam(teamId),
+      carriedPin: target?.thing === 'automation' && (await onCarriedPin(target.id)),
+    });
+    if (refusal !== undefined) throw new StatementRefusedError(refusal, FIRE_NOT_KEPT_TO[refusal]);
   }
   const named = list.flatMap((grantee) => (grantee.kind === 'user' ? [grantee.userId] : []));
   const memberships = await StatementStore.membershipsAmong(teamId, named);
@@ -666,6 +679,7 @@ async function passOnWhatTheyHeld(input: {
 
 export {
   accessTo,
+  fireNotKeptTo,
   mayChangeConnection,
   readableIds,
   setStatement,

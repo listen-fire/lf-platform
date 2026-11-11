@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { globalQb } from '../../../lib/kysely';
 import { readTeamEngine, TEAM_ENGINES } from '../../../services/lf_engine/team_engine';
-import { switchTeamEngine } from '../../../services/lf_engine/switch';
+import { FIRE_LISTS_AFTER_SWITCH, switchTeamEngine } from '../../../services/lf_engine/switch';
 
 class TeamEngineOptions extends Options {
   @option({ description: 'Team id', required: true })
@@ -46,6 +46,7 @@ export default class extends Command {
     }
     const result = await switchTeamEngine(options.team, { engine: engine.data, changedBy: null });
     console.warn(`team ${options.team}: ${result.engine}${result.changed ? '' : ' (already)'}`);
+    if (result.changed) console.warn(`  ${FIRE_LISTS_AFTER_SWITCH[result.engine]}`);
     for (const note of result.notes) console.warn(`  ${note}`);
   }
 }

@@ -1,5 +1,5 @@
 // The team admin migration makes every member who could manage the team an
-// admin (the public identity excepted), keeps a read member reading, and from
+// admin (the public identity and service mailboxes excepted), keeps a read member reading, and from
 // then on the table holds only the three levels. Run against a throwaway database on the test server: a
 // minimal table as it stood before the migration, its rows, the migration
 // file itself, then the inserts it must refuse and allow.
@@ -37,7 +37,7 @@ describe('the team admin migration', () => {
     await admin?.end();
   });
 
-  it('turns every write membership into admin, keeps read and the public identity at write, and then holds only read, write and admin', async () => {
+  it('turns every write membership into admin, keeps read, and the public identity and service mailboxes at write, and then holds only read, write and admin', async () => {
     await db.query(`
       CREATE SCHEMA core;
       CREATE TABLE core.team_membership (
@@ -46,11 +46,20 @@ describe('the team admin migration', () => {
         team_id uuid NOT NULL,
         access text NOT NULL
       );
+      CREATE TABLE core.user_email (
+        user_id uuid NOT NULL,
+        email text NOT NULL,
+        is_service_email boolean DEFAULT false NOT NULL
+      );
+      INSERT INTO core.user_email (user_id, email, is_service_email) VALUES
+        ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'alice@team.example', false),
+        ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', 'inbox@team.example', true);
       INSERT INTO core.team_membership (user_id, team_id, access) VALUES
         ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '11111111-1111-4111-8111-111111111111', 'write'),
         ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', '11111111-1111-4111-8111-111111111111', 'read'),
         ('cccccccc-cccc-4ccc-8ccc-cccccccccccc', '22222222-2222-4222-8222-222222222222', 'write'),
-        ('dddddddd-dddd-4ddd-8ddd-dddddddddddd', '3c556453-82b3-4314-ab78-67d843aaa7da', 'write');
+        ('dddddddd-dddd-4ddd-8ddd-dddddddddddd', '3c556453-82b3-4314-ab78-67d843aaa7da', 'write'),
+        ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', '11111111-1111-4111-8111-111111111111', 'write');
     `);
 
     const file = readdirSync(MIGRATIONS).find((name) => name.endsWith('_team-admin.sql'));
@@ -66,6 +75,8 @@ describe('the team admin migration', () => {
       { user_id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', access: 'admin' },
       // The public identity stays write, as a new install creates it.
       { user_id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', access: 'write' },
+      // A service mailbox is no person, so it is not made an admin.
+      { user_id: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', access: 'write' },
     ]);
 
     const insert = (access: string) =>

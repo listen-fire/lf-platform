@@ -197,6 +197,17 @@ describe('the door', () => {
     expect(await handleSlackEventsInbound(message(workspace, FAKE_SLACK_APP_USER))).toMatchObject({ classification: 'no_events' });
   });
 
+  it('drops the app’s own message on a connection whose cell lacks the key, as its module declares, and a stored "off" stays off', async () => {
+    const workspace = `T-${randomUUID().slice(0, 8)}`;
+    const id = await slackConnection({ name: 'Team Slack', workspace });
+    await writeSettings(id, {});
+    expect(await moduleSettingsFor({ adapterType: 'slack', teamId, credentialsId: id })).toEqual({ [DROP_OWN_MESSAGES]: 'on' });
+    expect(await handleSlackEventsInbound(message(workspace, FAKE_SLACK_APP_USER))).toMatchObject({ classification: 'no_events' });
+
+    await writeSettings(id, { [DROP_OWN_MESSAGES]: 'off' });
+    expect(await moduleSettingsFor({ adapterType: 'slack', teamId, credentialsId: id })).toEqual({ [DROP_OWN_MESSAGES]: 'off' });
+  });
+
   it('reads the connection’s setting when the module is resolved, and none for a module that declares none', async () => {
     const id = await slackConnection({ name: 'Team Slack', workspace: `T-${randomUUID().slice(0, 8)}` });
     expect(await moduleSettingsFor({ adapterType: 'slack', teamId, credentialsId: id })).toEqual({ [DROP_OWN_MESSAGES]: 'on' });
@@ -251,6 +262,8 @@ describe('the automation that listens on it', () => {
     await getAutomationsQb(['movement']).insertInto('movement').values({ id: movementId, team_id: teamId, name: 'Deals', source: '' }).execute();
     await insertTestListen({ teamId, movementId, adapterType: 'slack', edge: 'Messages', delivery: 'connection', credentialsId: id });
 
+    expect(await dropsOwnMessagesOn(movementId)).toEqual([{ connectionId: id, name: 'Team Slack', on: true }]);
+    await writeSettings(id, {});
     expect(await dropsOwnMessagesOn(movementId)).toEqual([{ connectionId: id, name: 'Team Slack', on: true }]);
 
     const view = () => runWithPrincipal(userPrincipal({ userId: writer, teamId, access: 'write' }), () => automationView(movementId));

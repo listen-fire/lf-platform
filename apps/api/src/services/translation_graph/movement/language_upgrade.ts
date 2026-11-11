@@ -84,6 +84,7 @@ import { movementCatalogForTeam, type ImportedFile } from './catalog';
 import type { CatalogAudience } from './audience';
 import type { Principal } from 'principal';
 import { accessTo } from '../../access/decide';
+import { fireOnLeaving, fireSentence, restateFireOnLeaving } from '../../access/leaving_carried_pin';
 import { connectionsNamed, connectionsRefusal, unusableConnections } from './save_access';
 
 import { getAutomationsQb } from '../../../lib/kysely';
@@ -1108,6 +1109,9 @@ export interface UpgradeChanges {
   text: { line: number; was: string[]; becomes: string[] }[];
   /** What else is different once it has moved, in plain words. */
   behaviour: string[];
+  /** Who may set it off once it has moved, and that setAccess changes it:
+   *  present when it moves off a version that forced its fire list to anyone. */
+  fire?: string;
 }
 
 /** The changed lines between two texts: a longest common subsequence over
@@ -1155,7 +1159,12 @@ export function changedLines(before: string, after: string): UpgradeChanges['tex
 
 /** What a move from `movement`'s pin to `to` changes, from what its version
  *  provides and what the rewrite did. */
-export function upgradeChanges(input: { movement: Pick<MovementRow, 'languageVersion' | 'source' | 'currentVersionId'>; rewritten: string; to: LanguageVersion }): UpgradeChanges {
+export function upgradeChanges(input: {
+  movement: Pick<MovementRow, 'languageVersion' | 'source' | 'currentVersionId'>;
+  rewritten: string;
+  to: LanguageVersion;
+  fire?: string;
+}): UpgradeChanges {
   const { movement, to } = input;
   const from = movement.languageVersion;
   const behaviour = [
@@ -1166,7 +1175,7 @@ export function upgradeChanges(input: { movement: Pick<MovementRow, 'languageVer
   if (listeningOf(from).kind === 'held' && movement.currentVersionId !== null) {
     behaviour.unshift(`Its listens start firing under ${to}; they do not fire while it is on ${from}.`);
   }
-  return { text: changedLines(movement.source, input.rewritten), behaviour };
+  return { text: changedLines(movement.source, input.rewritten), behaviour, ...(input.fire !== undefined ? { fire: input.fire } : {}) };
 }
 
 /** One member of the group, checked for the move. */
@@ -1292,9 +1301,15 @@ export async function upgradeMovement(input: {
     .filter((member) => member.held || member.unverified)
     .map((member) => ({ ...asMember(member), diagnostics: member.diagnostics, unverified: member.unverified }));
   const diagnostics = own.diagnostics;
+  const fire = await fireOnLeaving({ teamId: input.teamId, id: movement.id, from: pin, source: own.rewrite.source, to });
   const shown = {
     ...base,
-    changes: upgradeChanges({ movement, rewritten: own.rewrite.source, to }),
+    changes: upgradeChanges({
+      movement,
+      rewritten: own.rewrite.source,
+      to,
+      ...(fire !== undefined ? { fire: fireSentence(fire, { from: pin, to }) } : {}),
+    }),
     ...(own.rewrite.changed ? { upgradedSource: own.rewrite.source } : {}),
     ...(others.length > 0 ? { movesWith: others.map(asMember) } : {}),
     ...(heldBy.length > 0 ? { heldBy } : {}),
@@ -1347,6 +1362,13 @@ export async function upgradeMovement(input: {
       for (const { member, move } of moves) {
         const advanced = await move({ movedAt });
         if (!advanced.ok) throw new GroupMoveStopped(member.movement.name, advanced.detail);
+        await restateFireOnLeaving({
+          teamId: movement.teamId,
+          id: member.movement.id,
+          from: member.movement.languageVersion,
+          source: member.rewrite.source,
+          to,
+        });
         warnings.push(...(advanced.warnings ?? []));
         const assessment = assessMovementValidity({ diagnostics: member.rewrite.validation.diagnostics, gaps: [] });
         await recordValidityOutcome({

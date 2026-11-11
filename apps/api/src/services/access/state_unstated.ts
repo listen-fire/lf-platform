@@ -10,6 +10,8 @@ import type { Client } from 'pg';
 import type { StatedList } from './decide';
 import type { Thing } from './statement';
 
+import { fireNotKeptTo } from './decide';
+
 import {
   automationLists,
   automationWithNoPerson,
@@ -191,8 +193,43 @@ async function stateWhatIsUnstated(client: Client, teamId: string): Promise<Stat
   return stated;
 }
 
+/**
+ * Make anyone the fire list of each of the team's automations whose list the
+ * door would not keep to, by the rule a set of the list applies (`fireNotKeptTo`):
+ * one without anyone, on a team whose automations run on lf or on an automation
+ * pinned to a carried version. A team import brings lists no set checked.
+ * Returns the automations it changed, by id and name.
+ */
+async function anyoneWhereFireIsNotKeptTo(client: Client, teamId: string): Promise<{ id: string; name: string }[]> {
+  const runsOnLf = await teamRunsOnLf(client, teamId);
+  const lists = await client.query<{ id: string; name: string; language_version: string; admits_anyone: boolean }>(
+    `SELECT m.id::text AS id, m.name, m.language_version, bool_or(s.grantee = 'anyone') AS admits_anyone
+       FROM automations.movement m
+       JOIN automations.access_statement s ON s.thing = 'automation' AND s.thing_id = m.id AND s.verb = 'fire'
+      WHERE m.team_id = $1::uuid
+      GROUP BY m.id, m.name, m.language_version`,
+    [teamId],
+  );
+  const changed = lists.rows.filter(
+    (row) => !row.admits_anyone && fireNotKeptTo({ runsOnLf, carriedPin: pinIsCarried(row.language_version) }) !== undefined,
+  );
+  for (const row of changed) {
+    await client.query(
+      `DELETE FROM automations.access_statement WHERE thing = 'automation' AND thing_id = $1::uuid AND verb = 'fire'`,
+      [row.id],
+    );
+    await client.query(
+      `INSERT INTO automations.access_statement (team_id, thing, thing_id, verb, grantee, value)
+       VALUES ($1::uuid, 'automation', $2::uuid, 'fire', 'anyone', NULL)`,
+      [teamId, row.id],
+    );
+  }
+  return changed.map(({ id, name }) => ({ id, name }));
+}
+
 export {
   stateWhatIsUnstated,
+  anyoneWhereFireIsNotKeptTo,
   unstatedIn,
   teamsWithUnstated,
   teamRunsOnLf,

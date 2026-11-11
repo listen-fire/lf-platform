@@ -20,7 +20,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, History, Inbox, Loader2 } from "lucide-react";
-import { neverAsAny } from "movement-lang";
 
 import { trpc, type RouterOutputs } from "@/lib/trpc";
 import { Badge, EmptyState } from "@/components/ui";
@@ -28,6 +27,8 @@ import { managesTeam } from "@/components/access/grantees";
 import { RecentActivityDetail } from "@/components/automations/recent-activity-detail";
 import { laneShortForm } from "@/lib/trigger-name";
 import { formatRunCostUsd } from "@/lib/run-cost";
+
+import { replayForces, replayQuestion } from "./arrival-replay";
 
 type MovementRun = RouterOutputs["views"]["movement"]["runs"][number];
 type MovementEvent = RouterOutputs["views"]["movement"]["events"][number];
@@ -351,21 +352,6 @@ const ARRIVAL_LABEL: Record<
   refused: { label: "Refused", tone: "gray" },
 };
 
-/** Whether a replay of this arrival runs it again on purpose: only one that
- *  started a run before took its listen's receipt. */
-function replayForces(status: MovementEvent["status"]): boolean {
-  switch (status) {
-    case "ran":
-    case "run_failed":
-      return true;
-    case "not_judged":
-    case "refused":
-      return false;
-    default:
-      return neverAsAny(status);
-  }
-}
-
 /**
  * The arrival ledger, scoped to the same lane filter as the runs above: the
  * runs arrivals started, the arrivals a listen could not judge (its
@@ -475,13 +461,15 @@ function EventsReceived({
                     <button
                       type="button"
                       disabled={replay.isLoading}
-                      onClick={() =>
+                      onClick={() => {
+                        const question = replayQuestion(evt.status);
+                        if (question !== null && !window.confirm(question)) return;
                         replay.mutate({
                           triggerId: evt.triggerId,
                           deliveryId,
                           force: replayForces(evt.status),
-                        })
-                      }
+                        });
+                      }}
                       className="shrink-0 rounded-lg border border-gray-200 px-2.5 py-1 text-[12px] font-medium text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
                       data-testid={`replay-event-${evt.id}`}
                       title="Put this delivery through this listen again."

@@ -18,6 +18,17 @@ import { syncListenSubscriptions } from '../translation_graph/movement/listen_su
 import { forgetPollProgress } from '../poll_source/worker';
 import { writeTeamEngine, type TeamEngine } from './team_engine';
 
+/**
+ * What a switch does to who may set the team's automations off. The platform's
+ * door judges each automation's fire list; a cloud lf's door does not, and its
+ * own filters decide. Nothing rewrites the lists either way: the switch is an
+ * admin's deliberate act, said where it is made.
+ */
+export const FIRE_LISTS_AFTER_SWITCH: Record<TeamEngine, string> = {
+  lf: "The platform stops checking fire lists: the cloud lf's own filters decide who sets each automation off.",
+  platform: 'Every automation\'s fire list is checked again, and those listing "Anyone" can be set off by anyone who reaches them.',
+};
+
 export interface TeamEngineSwitch {
   engine: TeamEngine;
   /** Whether this call changed the setting (false: it already was `engine`). */

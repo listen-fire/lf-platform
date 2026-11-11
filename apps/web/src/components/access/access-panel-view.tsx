@@ -39,6 +39,7 @@ const TITLES: Record<Verb, { title: string; hint: string }> = {
 
 export const DROPS_OWN_MESSAGES = "Drops messages and reactions this app makes";
 export const HEARS_OWN_MESSAGES = "Hears messages and reactions this app makes";
+export const FIRE_NOT_CHECKED_ON_LF = "Not checked while this team runs on lf.";
 
 /**
  * How a Slack connection an automation listens on treats its own app's
@@ -60,6 +61,8 @@ export interface AccessListing {
   viewerUserId: string | null;
   /** An automation still on an older language version can be fired by anyone only. */
   carriedPin: boolean;
+  /** The team runs on lf, whose own filters decide who sets an automation off: the fire list is not checked. */
+  teamRunsOnLf: boolean;
   /** The Slack connections an automation listens on, which the fire list does not speak to. */
   dropsOwnMessages: readonly DropsOwnMessagesLine[];
 }
@@ -150,6 +153,11 @@ export function AccessPanelView(props: AccessPanelViewProps) {
                     ))
                   )}
                 </div>
+              )}
+              {verb === "fire" && listing.teamRunsOnLf && !isEditing && (
+                <p className="mt-1.5 text-[11.5px] text-gray-500" data-testid="access-fire-not-checked">
+                  {FIRE_NOT_CHECKED_ON_LF}
+                </p>
               )}
               {verb === "fire" &&
                 listing.dropsOwnMessages.map((line, i) => (

@@ -36,6 +36,7 @@ const panel = (overrides: Partial<AccessPanelViewProps>) =>
         onlyYou: false,
         viewerUserId: ME,
         carriedPin: false,
+        teamRunsOnLf: false,
         dropsOwnMessages: [],
       },
       editing: null,
@@ -85,7 +86,7 @@ describe("the access panel", () => {
 
   it("shows a connection's use list alone", () => {
     const html = panel({
-      listing: { thing: "connection", lists: { use: [{ kind: "team" }] }, mayChange: true, onlyYou: false, viewerUserId: ME, carriedPin: false, dropsOwnMessages: [] },
+      listing: { thing: "connection", lists: { use: [{ kind: "team" }] }, mayChange: true, onlyYou: false, viewerUserId: ME, carriedPin: false, teamRunsOnLf: false, dropsOwnMessages: [] },
     });
     expect(html).toContain('data-testid="access-use"');
     expect(html).not.toContain('data-testid="access-read"');
@@ -117,6 +118,12 @@ describe("the access panel", () => {
     expect(html.slice(html.indexOf('data-testid="list-editor-fire"'))).not.toContain("Whole team");
   });
 
+  it("says the fire list is not checked while the team runs on lf", () => {
+    const html = panel({ listing: { ...readerListing(), teamRunsOnLf: true } });
+    expect(html.slice(html.indexOf('data-testid="access-fire"'))).toContain("Not checked while this team runs on lf.");
+    expect(panel({ listing: readerListing() })).not.toContain("Not checked while this team runs on lf.");
+  });
+
   it("offers only \u201cAnyone who reaches it\u201d for firing an automation still on an older language version", () => {
     const html = panel({
       listing: { ...readerListing(), carriedPin: true },
@@ -137,6 +144,7 @@ describe("the access panel", () => {
         onlyYou: false,
         viewerUserId: ME,
         carriedPin: false,
+        teamRunsOnLf: false,
         dropsOwnMessages: [],
       },
       editing: { verb: "write", draft: { mode: "people", people: [], withTeam: false, outsiders: "" } },
@@ -310,6 +318,7 @@ function readerListing(): AccessPanelViewProps["listing"] {
     onlyYou: false,
     viewerUserId: ME,
     carriedPin: false,
+    teamRunsOnLf: false,
     dropsOwnMessages: [],
   };
 }
