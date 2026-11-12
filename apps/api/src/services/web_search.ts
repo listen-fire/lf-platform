@@ -159,17 +159,29 @@ async function readCappedText(response: Response): Promise<string> {
 // So requests wait their turn here instead of being sent and refused.
 //
 // A zone under load fails in other ways too (a 5xx, a timeout, an empty or
-// malformed body), and about 30% of searches did in production. Each failure
-// closes the zone for every process, for longer the more failures follow in a
-// row, so the zone gets room to recover instead of more searches piling on.
+// malformed body), and about 30% of searches did in production. A lone failure
+// is as likely chance as trouble, so only that search waits before its retry.
+// Failures in a row mean the zone is struggling: it closes for every process,
+// for longer the more follow, so it gets room to recover instead of more
+// searches piling on. A 429 is Bright Data asking us to slow down, so it always
+// closes the zone.
 
 const BRIGHT_DATA_SERP_CALLER = 'bright-data/serp';
+
+// With about 30% of searches failing, closing the zone on every failure would
+// keep it closed most of the time; two in a row is rare enough by chance to
+// mean trouble.
+const FAILURES_IN_A_ROW_THAT_CLOSE_THE_ZONE = 2;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /** How the zone is paced, read from the environment at each search. */
 export interface BrightDataSerpPacing {
   perMinute: number;
   concurrent: number;
-  /** The pause after a first failure; each further failure in a row doubles it. */
+  /** The pause after a first failure, and after the second in a row; each further failure in a row doubles it. */
   backoffBaseMs: number;
   /** The longest pause; failures past it stay at it. */
   backoffMaxMs: number;
@@ -196,7 +208,7 @@ const CONCURRENT: WholeNumberSetting = {
 const BACKOFF_BASE_MS: WholeNumberSetting = {
   name: 'BRIGHT_DATA_SERP_BACKOFF_BASE_MS',
   fallback: 15 * SECOND,
-  meaning: 'how many milliseconds a first failed search closes the zone for',
+  meaning: 'how many milliseconds a first failed search waits, and the second in a row closes the zone for',
 };
 const BACKOFF_MAX_MS: WholeNumberSetting = {
   name: 'BRIGHT_DATA_SERP_BACKOFF_MAX_MS',
@@ -273,21 +285,27 @@ function brightDataSerpRequest(zone: string, pacing: BrightDataSerpPacing) {
   };
 }
 
-/** How long the zone closes after the `streak`th failure in a row: the base,
- *  doubled per failure up to the ceiling, then spread either side by up to the
- *  jitter so processes that failed together don't retry together. The spread
- *  applies at the ceiling too, for the same reason. A 429 waits at least what
- *  Bright Data asked for, or the rate limit default when it named nothing. */
-function brightDataSerpPauseMs(
+/** What one retryable failure costs, given `streak` failures in a row counting
+ *  this one. The first waits the base; each further one doubles it from the
+ *  threshold up to the ceiling, then the pause is spread either side by up to
+ *  the jitter so processes that failed together don't retry together (at the
+ *  ceiling too, for the same reason). Only a 429, or failures in a row, close
+ *  the zone for everyone; a lone failure is only this search's wait. A 429
+ *  waits at least what Bright Data asked for, or the rate limit default when it
+ *  named nothing. */
+function brightDataSerpPause(
   streak: number,
   failure: { rateLimited: boolean; retryAfterMs?: number },
   pacing: BrightDataSerpPacing,
-): number {
-  const curve = Math.min(pacing.backoffBaseMs * 2 ** (streak - 1), pacing.backoffMaxMs);
+): { ms: number; closesZone: boolean } {
+  const doublings = Math.max(streak - FAILURES_IN_A_ROW_THAT_CLOSE_THE_ZONE, 0);
+  const curve = Math.min(pacing.backoffBaseMs * 2 ** doublings, pacing.backoffMaxMs);
   const spread = curve * pacing.backoffJitter * (2 * Math.random() - 1);
-  const pause = Math.round(curve + spread);
-  if (!failure.rateLimited) return pause;
-  return Math.max(pause, failure.retryAfterMs ?? BRIGHT_DATA_SERP_RATE_LIMIT_RETRY_DELAY);
+  const ms = Math.round(curve + spread);
+  if (failure.rateLimited) {
+    return { ms: Math.max(ms, failure.retryAfterMs ?? BRIGHT_DATA_SERP_RATE_LIMIT_RETRY_DELAY), closesZone: true };
+  }
+  return { ms, closesZone: streak >= FAILURES_IN_A_ROW_THAT_CLOSE_THE_ZONE };
 }
 
 // The limiter keeps no count a caller can read back, so the run of failures
@@ -566,18 +584,18 @@ class WebSearch {
       // limiter too (and waits out a pause any search's failure set). The pause
       // is set before the permit is released, so a search waiting for a free
       // slot is never let in between a failure and the zone closing.
-      const { outcome, pauseMs } = await limited(limiter, request, async () => {
+      const { outcome, pause } = await limited(limiter, request, async () => {
         const outcome = await performBrightDataSerpAttempt(searchUrl);
         if (outcome.ok) {
           streaks.delete(zone);
-          return { outcome, pauseMs: undefined };
+          return { outcome, pause: undefined };
         }
-        if (!outcome.retryable) return { outcome, pauseMs: undefined };
+        if (!outcome.retryable) return { outcome, pause: undefined };
         const streak = (streaks.get(zone) ?? 0) + 1;
         streaks.set(zone, streak);
-        const pauseMs = brightDataSerpPauseMs(streak, outcome, pacing);
-        await throttleAfter(limiter, caller, pauseMs);
-        return { outcome, pauseMs };
+        const pause = brightDataSerpPause(streak, outcome, pacing);
+        if (pause.closesZone) await throttleAfter(limiter, caller, pause.ms);
+        return { outcome, pause };
       });
       const trace = {
         attempt,
@@ -600,7 +618,8 @@ class WebSearch {
         ...trace,
         outcome: willRetry ? 'retry' : 'failed',
         reason: outcome.reason,
-        pauseMs,
+        pauseMs: pause?.ms,
+        closedZone: pause?.closesZone,
       });
 
       if (!outcome.retryable) throw outcome.error;
@@ -611,6 +630,10 @@ class WebSearch {
           `Bright Data SERP request failed after ${attempt} attempts: ${failures.join('; ')}`,
         );
       }
+
+      // Outside the limiter call, so the wait holds no slot and other
+      // searches carry on.
+      if (pause !== undefined && !pause.closesZone) await sleep(pause.ms);
     }
   }
 

@@ -503,9 +503,9 @@ describe('WebSearchService.search — brightdata retries', () => {
     const expectation = expect(WebSearchService.search('acme')).rejects.toThrow(
       /^Bright Data SERP request failed after 3 attempts: #1 timed out \(\d+ms\); #2 Bright Data reported 502: waiting for selector "#main" failed \(\d+ms\); #3 response was not JSON \(200, 0 bytes\) \(\d+ms\)$/,
     );
-    // The second failure in a row doubles the pause.
+    // The first failure waits 15s, and so does the second in a row.
     await jest.advanceTimersByTimeAsync(FIRST_PAUSE_MS);
-    await jest.advanceTimersByTimeAsync(2 * FIRST_PAUSE_MS);
+    await jest.advanceTimersByTimeAsync(FIRST_PAUSE_MS);
     await expectation;
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
@@ -670,8 +670,8 @@ describe('Bright Data SERP pacing', () => {
 });
 
 // Measured in production: about 30% of searches failed under load, and only a
-// 429 slowed the others down. Every failure Bright Data might recover from
-// now closes the zone for every search, for longer the more follow in a row.
+// 429 slowed the others down. A lone failure only delays its own retry; failures
+// in a row close the zone for every search, for longer the more follow.
 describe('Bright Data SERP failures pause the zone', () => {
   beforeEach(() => {
     process.env.WEB_SEARCH_PROVIDER = 'brightdata';
@@ -701,6 +701,14 @@ describe('Bright Data SERP failures pause the zone', () => {
     return answers;
   }
 
+  function loggedClosures(info: jest.SpyInstance): unknown[] {
+    return info.mock.calls
+      .filter(([message]) => message === '[web_search] Bright Data SERP request')
+      .map(([, meta]: unknown[]) =>
+        typeof meta === 'object' && meta !== null && 'closedZone' in meta ? meta.closedZone : undefined,
+      );
+  }
+
   function loggedPauses(info: jest.SpyInstance): unknown[] {
     return info.mock.calls
       .filter(([message]) => message === '[web_search] Bright Data SERP request')
@@ -709,7 +717,7 @@ describe('Bright Data SERP failures pause the zone', () => {
       );
   }
 
-  it('a 502 holds the next search, a different query too, until the pause has passed', async () => {
+  it('one 502 delays only its own retry: a different query starts at once', async () => {
     fetchMock.mockResolvedValueOnce(badGateway());
     fetchMock.mockImplementation(async () => found());
 
@@ -718,35 +726,81 @@ describe('Bright Data SERP failures pause the zone', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     const second = WebSearchService.search('second');
-    await jest.advanceTimersByTimeAsync(FIRST_PAUSE_MS - 1);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await jest.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
 
+    // The failed search's own retry still waits its 15s.
+    await jest.advanceTimersByTimeAsync(FIRST_PAUSE_MS - 1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     await jest.advanceTimersByTimeAsync(1);
     await Promise.all([first, second]);
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
-  it('a search waiting for a free slot is not let in between a failure and the zone closing', async () => {
+  it('a search waiting out its own retry holds no slot: with the cap at 1, another search runs meanwhile', async () => {
     process.env.BRIGHT_DATA_SERP_CONCURRENT = '1';
     fetchMock.mockResolvedValueOnce(badGateway());
     fetchMock.mockImplementation(async () => found());
 
     const first = WebSearchService.search('first');
-    const second = WebSearchService.search('second');
-    await jest.advanceTimersByTimeAsync(FIRST_PAUSE_MS - 1);
+    await jest.advanceTimersByTimeAsync(0);
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    await jest.advanceTimersByTimeAsync(1);
-    await Promise.all([first, second]);
+    const second = WebSearchService.search('second');
+    await jest.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await second;
+
+    await jest.advanceTimersByTimeAsync(FIRST_PAUSE_MS);
+    await first;
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
-  it('failures in a row double the pause up to the ceiling, then stay there, and the log says each', async () => {
+  it('two 502s in a row close the zone: a different query waits 15s', async () => {
+    fetchMock.mockResolvedValueOnce(badGateway());
+    fetchMock.mockResolvedValueOnce(badGateway());
+    fetchMock.mockImplementation(async () => found());
+
+    const first = WebSearchService.search('first');
+    await jest.advanceTimersByTimeAsync(0);
+    const second = WebSearchService.search('second');
+    await jest.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const third = WebSearchService.search('third');
+    await jest.advanceTimersByTimeAsync(FIRST_PAUSE_MS - 1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    await jest.advanceTimersByTimeAsync(1);
+    await Promise.all([first, second, third]);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+  });
+
+  it('a search waiting for a free slot is not let in between the second failure and the zone closing', async () => {
+    process.env.BRIGHT_DATA_SERP_CONCURRENT = '1';
+    fetchMock.mockResolvedValueOnce(badGateway());
+    fetchMock.mockResolvedValueOnce(badGateway());
+    fetchMock.mockImplementation(async () => found());
+
+    const first = WebSearchService.search('first');
+    const second = WebSearchService.search('second');
+    const third = WebSearchService.search('third');
+    await jest.advanceTimersByTimeAsync(FIRST_PAUSE_MS - 1);
+    // The first failed, the second failed in a row and closed the zone, and
+    // the third, holding the next slot, still waits.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    await jest.advanceTimersByTimeAsync(1);
+    await Promise.all([first, second, third]);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+  });
+
+  it('failures in a row close the zone for 15s, 30s, then the 60s ceiling, and the log says each', async () => {
     const info = jest.spyOn(logger, 'info');
     const sentAt = recordSends(badGateway);
 
     const first = WebSearchService.search('first').catch((error: unknown) => error);
-    await jest.advanceTimersByTimeAsync(45_000);
+    await jest.advanceTimersByTimeAsync(30_000);
     expect(await first).toBeInstanceOf(Error);
 
     // A new search carries on the zone's run of failures, not a fresh one.
@@ -754,11 +808,14 @@ describe('Bright Data SERP failures pause the zone', () => {
     await jest.advanceTimersByTimeAsync(3 * 60_000);
     expect(await second).toBeInstanceOf(Error);
 
-    expect(sentAt).toEqual([0, 15_000, 45_000, 105_000, 165_000, 225_000]);
-    expect(loggedPauses(info)).toEqual([15_000, 30_000, 60_000, 60_000, 60_000, 60_000]);
+    // The first failure waits on its own, the second closes the zone for 15s,
+    // the third for 30s, the fourth and later for 60s.
+    expect(sentAt).toEqual([0, 15_000, 30_000, 60_000, 120_000, 180_000]);
+    expect(loggedPauses(info)).toEqual([15_000, 15_000, 30_000, 60_000, 60_000, 60_000]);
+    expect(loggedClosures(info)).toEqual([false, true, true, true, true, true]);
   });
 
-  it('a success resets the run of failures', async () => {
+  it('a success resets the run of failures, so the next single failure closes nothing', async () => {
     fetchMock.mockResolvedValueOnce(badGateway());
     fetchMock.mockResolvedValueOnce(badGateway());
     fetchMock.mockResolvedValueOnce(found());
@@ -766,19 +823,39 @@ describe('Bright Data SERP failures pause the zone', () => {
     fetchMock.mockImplementation(async () => found());
 
     const first = WebSearchService.search('first');
-    await jest.advanceTimersByTimeAsync(FIRST_PAUSE_MS + 2 * FIRST_PAUSE_MS);
+    await jest.advanceTimersByTimeAsync(2 * FIRST_PAUSE_MS);
     await first;
     expect(fetchMock).toHaveBeenCalledTimes(3);
 
-    // A third failure in a row would have closed the zone for 60s.
+    // Without the reset this would be a third failure in a row.
     const second = WebSearchService.search('second');
     await jest.advanceTimersByTimeAsync(0);
     expect(fetchMock).toHaveBeenCalledTimes(4);
-    await jest.advanceTimersByTimeAsync(FIRST_PAUSE_MS - 1);
-    expect(fetchMock).toHaveBeenCalledTimes(4);
-    await jest.advanceTimersByTimeAsync(1);
-    await second;
+    const other = WebSearchService.search('other');
+    await jest.advanceTimersByTimeAsync(0);
     expect(fetchMock).toHaveBeenCalledTimes(5);
+    await other;
+
+    await jest.advanceTimersByTimeAsync(FIRST_PAUSE_MS);
+    await second;
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+  });
+
+  it('a 429 closes the zone on its first occurrence, for its Retry-After when that is longer than the curve', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response('', { status: 200, headers: { 'x-brd-status-code': '429', 'retry-after': '45' } }),
+    );
+    fetchMock.mockImplementation(async () => found());
+
+    const first = WebSearchService.search('first');
+    await jest.advanceTimersByTimeAsync(0);
+    const second = WebSearchService.search('second');
+    await jest.advanceTimersByTimeAsync(44_999);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await jest.advanceTimersByTimeAsync(1);
+    await Promise.all([first, second]);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
   it("a 429's Retry-After longer than the curve is honoured further along the run too", async () => {
@@ -789,7 +866,7 @@ describe('Bright Data SERP failures pause the zone', () => {
     const sentAt = recordSends(found);
 
     const promise = WebSearchService.search('acme');
-    // The curve would say 30s for the second failure; Bright Data asked for 45s.
+    // The curve says 15s for the second failure; Bright Data asked for 45s.
     await jest.advanceTimersByTimeAsync(FIRST_PAUSE_MS + 45_000);
     await promise;
     expect(fetchMock).toHaveBeenCalledTimes(3);
@@ -849,11 +926,15 @@ describe('Bright Data SERP failures pause the zone', () => {
       process.env.BRIGHT_DATA_SERP_BACKOFF_MAX_MS = '20000';
       const sentAt = recordSends(badGateway);
 
-      const promise = WebSearchService.search('acme').catch((error: unknown) => error);
-      await jest.advanceTimersByTimeAsync(35_000);
-      expect(await promise).toBeInstanceOf(Error);
-      // 15s, then 30s held to the 20s ceiling.
-      expect(sentAt).toEqual([0, 15_000, 35_000]);
+      const first = WebSearchService.search('first').catch((error: unknown) => error);
+      await jest.advanceTimersByTimeAsync(30_000);
+      expect(await first).toBeInstanceOf(Error);
+      const second = WebSearchService.search('second').catch((error: unknown) => error);
+      await jest.advanceTimersByTimeAsync(60_000);
+      expect(await second).toBeInstanceOf(Error);
+      // The third failure in a row would close the zone for 30s; the 20s
+      // ceiling holds it to 20s.
+      expect(sentAt).toEqual([0, 15_000, 30_000, 50_000, 70_000, 90_000]);
     });
 
     it.each([
