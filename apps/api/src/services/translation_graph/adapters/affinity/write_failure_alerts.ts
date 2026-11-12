@@ -24,5 +24,16 @@ reportAffinityWriteFailuresTo(async ({ kind, detail }) => {
         opsTitle: 'Affinity error adding a field value',
       });
       return;
+    case 'domain':
+      await sendSlackNotification({
+        type: 'DEALFLOW',
+        text: `:warning: Affinity refused an organisation's domain, written without it (${detail})`,
+        opsTitle: 'Affinity refused an organisation domain',
+      });
+      return;
+    default: {
+      const unknownKind: never = kind;
+      throw new Error(`Affinity write failure of unknown kind ${String(unknownKind)}`);
+    }
   }
 });

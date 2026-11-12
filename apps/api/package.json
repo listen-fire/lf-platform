@@ -129,7 +129,7 @@
     "@anthropic-ai/sdk": "^0.126.0",
     "@anthropic-ai/vertex-sdk": "^0.19.9",
     "@google/genai": "^2.24.0",
-    "@listen-fire/affinity": "0.14.1",
+    "@listen-fire/affinity": "0.14.2",
     "@listen-fire/airtable": "0.14.0",
     "@listen-fire/anthropic": "0.12.7",
     "@listen-fire/attio": "0.13.1",
