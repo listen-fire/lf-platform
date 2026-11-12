@@ -43,7 +43,7 @@ import { assertExtractionTiersConfigured } from 'movement-engine/public/boot-che
 import { assertMaxCallDepthConfigured, assertSegmentLimitsConfigured } from 'movement-engine/public/boot-checks';
 import { assertWriteLockTimeoutConfigured } from 'movement-engine/public/write-locks';
 import { assertEngineConfigured } from 'movement-engine/public/movement-engine';
-import { assertBrightDataSerpRateConfigured } from './services/web_search';
+import { assertBrightDataSerpPacingConfigured } from './services/web_search';
 import { healthCheck, workersHealthCheck } from './lib/middleware/health_check';
 import { rootHandler } from './lib/middleware/root_handler';
 import { HEALTH_CHECK_ENDPOINT, WORKERS_HEALTH_ENDPOINT } from './constants';
@@ -149,9 +149,9 @@ assertLfOAuthRelayConfigured();
 // would hand them back to the platform while their cloud lf still runs them.
 assertLfEngineTeamsRetired();
 
-// A search rate set to something that is not a positive whole number is a
-// deployment that believes its Bright Data searches are paced when they are not.
-assertBrightDataSerpRateConfigured();
+// A malformed search rate, cap or pause is a deployment that believes its
+// Bright Data searches are paced when they are not.
+assertBrightDataSerpPacingConfigured();
 
 // A blocked event loop is the one failure this process cannot narrate: the
 // health check goes unanswered, the logs stop mid-sentence, and the platform

@@ -13,6 +13,7 @@ import {
   throttleAfter,
   vendorWaitMs,
   type Caller,
+  type Limiter,
 } from 'movement-engine/public/limiter';
 // Tavily is a legacy-only supplementary search (no DPA) — gated per-caller via
 // `allowSupplementaryWebSearch`, which only the legacy pipelines pass.
@@ -51,12 +52,9 @@ const MAX_BRIGHT_DATA_SERP_RESPONSE_BYTES = 1 * 1024 * 1024;
 // usually answers the same query moments later; three tries covers that
 // without turning one search into minutes of waiting.
 const BRIGHT_DATA_SERP_MAX_ATTEMPTS = 3;
-// Back-to-back retries kept failing the same way, so the zone gets a real
-// cooldown between attempts rather than a short blip.
-const BRIGHT_DATA_SERP_RETRY_DELAY = 15 * SECOND;
 // A 429 (from the gateway or from Bright Data) asks us to slow down; retrying
-// sooner only extends the limit. This is the throttle when Bright Data names
-// no wait of its own.
+// sooner only extends the limit. This is the least it closes the zone for when
+// Bright Data names no wait of its own.
 const BRIGHT_DATA_SERP_RATE_LIMIT_RETRY_DELAY = 30 * SECOND;
 
 // Verified against https://docs.brightdata.com/scraping-automation/serp-api/
@@ -151,10 +149,6 @@ async function readCappedText(response: Response): Promise<string> {
   );
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 // ── Pacing ─────────────────────────────────────────────────────────────────
 //
 // Bright Data throttles a SERP zone per target host once its success rate
@@ -163,44 +157,153 @@ function sleep(ms: number): Promise<void> {
 // faster than that does not get answers sooner: every refused request costs a
 // 30-second wait and one of three attempts, and keeps the success rate low.
 // So requests wait their turn here instead of being sent and refused.
-
-export const BRIGHT_DATA_SERP_RATE_ENV_VAR = 'BRIGHT_DATA_SERP_PER_MINUTE';
-
-export const DEFAULT_BRIGHT_DATA_SERP_PER_MINUTE = 14;
+//
+// A zone under load fails in other ways too (a 5xx, a timeout, an empty or
+// malformed body), and about 30% of searches did in production. Each failure
+// closes the zone for every process, for longer the more failures follow in a
+// row, so the zone gets room to recover instead of more searches piling on.
 
 const BRIGHT_DATA_SERP_CALLER = 'bright-data/serp';
 
-/** The rate, or the default when unset. Throws on a value that is set but is
+/** How the zone is paced, read from the environment at each search. */
+export interface BrightDataSerpPacing {
+  perMinute: number;
+  concurrent: number;
+  /** The pause after a first failure; each further failure in a row doubles it. */
+  backoffBaseMs: number;
+  /** The longest pause; failures past it stay at it. */
+  backoffMaxMs: number;
+  /** How far, as a fraction of the pause, it may land either side of the curve. */
+  backoffJitter: number;
+}
+
+interface WholeNumberSetting {
+  name: string;
+  fallback: number;
+  meaning: string;
+}
+
+const PER_MINUTE: WholeNumberSetting = {
+  name: 'BRIGHT_DATA_SERP_PER_MINUTE',
+  fallback: 14,
+  meaning: 'how many Bright Data SERP requests all processes sharing the limiter may send per minute',
+};
+const CONCURRENT: WholeNumberSetting = {
+  name: 'BRIGHT_DATA_SERP_CONCURRENT',
+  fallback: 4,
+  meaning: 'how many Bright Data SERP requests all processes sharing the limiter may have in flight at once',
+};
+const BACKOFF_BASE_MS: WholeNumberSetting = {
+  name: 'BRIGHT_DATA_SERP_BACKOFF_BASE_MS',
+  fallback: 15 * SECOND,
+  meaning: 'how many milliseconds a first failed search closes the zone for',
+};
+const BACKOFF_MAX_MS: WholeNumberSetting = {
+  name: 'BRIGHT_DATA_SERP_BACKOFF_MAX_MS',
+  fallback: 60 * SECOND,
+  meaning: 'the most milliseconds failures in a row close the zone for',
+};
+const BACKOFF_JITTER = { name: 'BRIGHT_DATA_SERP_BACKOFF_JITTER', fallback: 0.2 };
+
+/** The value, or the default when unset. Throws on a value that is set but is
  *  not a positive whole number — a typo here must not read as "no limit". */
-export function parseBrightDataSerpPerMinute(raw: string | undefined): number {
-  if (raw === undefined || raw.trim() === '') return DEFAULT_BRIGHT_DATA_SERP_PER_MINUTE;
-  const perMinute = Number(raw.trim());
-  if (!Number.isInteger(perMinute) || perMinute <= 0) {
+function readWholeNumber(setting: WholeNumberSetting, env: NodeJS.ProcessEnv): number {
+  const raw = env[setting.name];
+  if (raw === undefined || raw.trim() === '') return setting.fallback;
+  const value = Number(raw.trim());
+  if (!Number.isInteger(value) || value <= 0) {
     throw new Error(
-      `${BRIGHT_DATA_SERP_RATE_ENV_VAR}="${raw}" is not a positive whole number. ` +
-        `Set it to how many Bright Data SERP requests all processes sharing the limiter may send per minute ` +
-        `(e.g. ${BRIGHT_DATA_SERP_RATE_ENV_VAR}=${DEFAULT_BRIGHT_DATA_SERP_PER_MINUTE}), ` +
-        `or leave it unset for the default of ${DEFAULT_BRIGHT_DATA_SERP_PER_MINUTE}.`,
+      `${setting.name}="${raw}" is not a positive whole number. ` +
+        `Set it to ${setting.meaning} (e.g. ${setting.name}=${setting.fallback}), ` +
+        `or leave it unset for the default of ${setting.fallback}.`,
     );
   }
-  return perMinute;
+  return value;
 }
 
-/** Boot: refuse a malformed rate rather than letting the first search find out. */
-export function assertBrightDataSerpRateConfigured(env: NodeJS.ProcessEnv = process.env): void {
-  parseBrightDataSerpPerMinute(env[BRIGHT_DATA_SERP_RATE_ENV_VAR]);
+/** A spread of 1 or more could pause for nothing, so it stays below 1. */
+function readJitter(env: NodeJS.ProcessEnv): number {
+  const raw = env[BACKOFF_JITTER.name];
+  if (raw === undefined || raw.trim() === '') return BACKOFF_JITTER.fallback;
+  const value = Number(raw.trim());
+  if (!Number.isFinite(value) || value < 0 || value >= 1) {
+    throw new Error(
+      `${BACKOFF_JITTER.name}="${raw}" is not a fraction from 0 up to, but not including, 1. ` +
+        `Set it to how far each pause after a failed search may land either side of its doubling curve, ` +
+        `as a fraction of the pause (e.g. ${BACKOFF_JITTER.name}=${BACKOFF_JITTER.fallback}), ` +
+        `or leave it unset for the default of ${BACKOFF_JITTER.fallback}.`,
+    );
+  }
+  return value;
 }
 
-/** The zone's limit as the limiter slot holds it, so every process on the
- *  shared limiter shares one count. The rate is read at each search, so a
- *  test (or an operator, on restart) moves it by env alone. */
-function brightDataSerpRequest(zone: string) {
+export function brightDataSerpPacing(env: NodeJS.ProcessEnv = process.env): BrightDataSerpPacing {
+  const backoffBaseMs = readWholeNumber(BACKOFF_BASE_MS, env);
+  const backoffMaxMs = readWholeNumber(BACKOFF_MAX_MS, env);
+  if (backoffMaxMs < backoffBaseMs) {
+    throw new Error(
+      `${BACKOFF_MAX_MS.name} (${backoffMaxMs}) is below ${BACKOFF_BASE_MS.name} (${backoffBaseMs}). ` +
+        `The longest pause after failed searches must be at least the first one.`,
+    );
+  }
+  return {
+    perMinute: readWholeNumber(PER_MINUTE, env),
+    concurrent: readWholeNumber(CONCURRENT, env),
+    backoffBaseMs,
+    backoffMaxMs,
+    backoffJitter: readJitter(env),
+  };
+}
+
+/** Boot: refuse a malformed setting rather than letting the first search find out. */
+export function assertBrightDataSerpPacingConfigured(env: NodeJS.ProcessEnv = process.env): void {
+  brightDataSerpPacing(env);
+}
+
+/** The zone's limits as the limiter slot holds them, so every process on the
+ *  shared limiter shares one count of each. */
+function brightDataSerpRequest(zone: string, pacing: BrightDataSerpPacing) {
   const caller: Caller = { module: BRIGHT_DATA_SERP_CALLER, install: zone, team: '' };
-  const perMinute = parseBrightDataSerpPerMinute(process.env[BRIGHT_DATA_SERP_RATE_ENV_VAR]);
   return {
     caller,
-    request: limitRequest(caller, [{ scope: 'install', calls: perMinute, per: '1m' }]),
+    request: limitRequest(caller, [
+      { scope: 'install', calls: pacing.perMinute, per: '1m' },
+      { scope: 'install', concurrent: pacing.concurrent },
+    ]),
   };
+}
+
+/** How long the zone closes after the `streak`th failure in a row: the base,
+ *  doubled per failure up to the ceiling, then spread either side by up to the
+ *  jitter so processes that failed together don't retry together. The spread
+ *  applies at the ceiling too, for the same reason. A 429 waits at least what
+ *  Bright Data asked for, or the rate limit default when it named nothing. */
+function brightDataSerpPauseMs(
+  streak: number,
+  failure: { rateLimited: boolean; retryAfterMs?: number },
+  pacing: BrightDataSerpPacing,
+): number {
+  const curve = Math.min(pacing.backoffBaseMs * 2 ** (streak - 1), pacing.backoffMaxMs);
+  const spread = curve * pacing.backoffJitter * (2 * Math.random() - 1);
+  const pause = Math.round(curve + spread);
+  if (!failure.rateLimited) return pause;
+  return Math.max(pause, failure.retryAfterMs ?? BRIGHT_DATA_SERP_RATE_LIMIT_RETRY_DELAY);
+}
+
+// The limiter keeps no count a caller can read back, so the run of failures
+// lives in this process. The pause it sets still closes the zone for every
+// process, and the limiter keeps the later of two throttles, so one process's
+// shorter pause never cuts short another's longer one. Kept per limiter, so a
+// limiter installed afresh starts with no failures.
+const failureStreaks = new WeakMap<Limiter, Map<string, number>>();
+
+function failureStreaksOn(limiter: Limiter): Map<string, number> {
+  let streaks = failureStreaks.get(limiter);
+  if (streaks === undefined) {
+    streaks = new Map();
+    failureStreaks.set(limiter, streaks);
+  }
+  return streaks;
 }
 
 // What one attempt observed, for the per-attempt log line. Every field but
@@ -452,12 +555,30 @@ class WebSearch {
     searchUrl.searchParams.set('q', query);
     searchUrl.searchParams.set('brd_json', '1');
 
-    const { caller, request } = brightDataSerpRequest(getEnvVar('BRIGHT_DATA_SERP_ZONE'));
+    const zone = getEnvVar('BRIGHT_DATA_SERP_ZONE');
+    const pacing = brightDataSerpPacing();
+    const { caller, request } = brightDataSerpRequest(zone, pacing);
+    const limiter = limiterSlot();
+    const streaks = failureStreaksOn(limiter);
     const failures: string[] = [];
     for (let attempt = 1; ; attempt++) {
       // A retry is a request the zone counts like any other, so it asks the
-      // limiter too (and waits out a throttle the previous attempt set).
-      const outcome = await limited(limiterSlot(), request, () => performBrightDataSerpAttempt(searchUrl));
+      // limiter too (and waits out a pause any search's failure set). The pause
+      // is set before the permit is released, so a search waiting for a free
+      // slot is never let in between a failure and the zone closing.
+      const { outcome, pauseMs } = await limited(limiter, request, async () => {
+        const outcome = await performBrightDataSerpAttempt(searchUrl);
+        if (outcome.ok) {
+          streaks.delete(zone);
+          return { outcome, pauseMs: undefined };
+        }
+        if (!outcome.retryable) return { outcome, pauseMs: undefined };
+        const streak = (streaks.get(zone) ?? 0) + 1;
+        streaks.set(zone, streak);
+        const pauseMs = brightDataSerpPauseMs(streak, outcome, pacing);
+        await throttleAfter(limiter, caller, pauseMs);
+        return { outcome, pauseMs };
+      });
       const trace = {
         attempt,
         durationMs: outcome.durationMs,
@@ -479,15 +600,10 @@ class WebSearch {
         ...trace,
         outcome: willRetry ? 'retry' : 'failed',
         reason: outcome.reason,
+        pauseMs,
       });
 
       if (!outcome.retryable) throw outcome.error;
-
-      // A 429 closes the zone for every process sharing the limiter; the next
-      // attempt's acquire waits it out rather than sleeping here.
-      if (outcome.rateLimited) {
-        await throttleAfter(limiterSlot(), caller, outcome.retryAfterMs ?? BRIGHT_DATA_SERP_RATE_LIMIT_RETRY_DELAY);
-      }
 
       failures.push(`#${attempt} ${outcome.reason} (${outcome.durationMs}ms)`);
       if (isLastAttempt) {
@@ -495,8 +611,6 @@ class WebSearch {
           `Bright Data SERP request failed after ${attempt} attempts: ${failures.join('; ')}`,
         );
       }
-
-      if (!outcome.rateLimited) await sleep(BRIGHT_DATA_SERP_RETRY_DELAY);
     }
   }
 
