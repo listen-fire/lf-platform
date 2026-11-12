@@ -32,8 +32,16 @@ reportAffinityWriteFailuresTo(async ({ kind, detail }) => {
       });
       return;
     default: {
+      // The type check catches a new kind at the next bump; until then a newer
+      // module still alerts, because throwing here would fail the write the
+      // module chose to walk past.
       const unknownKind: never = kind;
-      throw new Error(`Affinity write failure of unknown kind ${String(unknownKind)}`);
+      await sendSlackNotification({
+        type: 'DEALFLOW',
+        text: `:warning: Affinity refused a ${String(unknownKind)} write (${detail})`,
+        opsTitle: 'Affinity refused a write',
+      });
+      return;
     }
   }
 });

@@ -22,4 +22,14 @@ describe('the Affinity write failure alert', () => {
     expect(sent.text).toContain(detail);
     expect(sent.opsTitle).toBe('Affinity refused an organisation domain');
   });
+
+  it('still alerts, without throwing, for a kind a newer module reports', async () => {
+    const fromNewerModule = JSON.parse('{"kind":"tag","detail":"organisation: 7"}');
+    await expect(reportAffinityWriteFailure(fromNewerModule)).resolves.toBeUndefined();
+
+    expect(mockSlack).toHaveBeenCalledTimes(1);
+    const sent = mockSlack.mock.calls[0][0];
+    expect(sent.text).toContain('tag');
+    expect(sent.text).toContain('organisation: 7');
+  });
 });
