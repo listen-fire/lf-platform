@@ -99,7 +99,7 @@ describe('the save rule (real Postgres)', () => {
     expect(await movements()).toEqual([expect.objectContaining({ id: first.id, source: 'first' })]);
 
     const principal = asAlice();
-    const statements = { read: [{ kind: 'team' }], write: [{ kind: 'user', userId: alice }], fire: [{ kind: 'anyone' }] } as const;
+    const statements = { read: [{ kind: 'team' }], write: [{ kind: 'user', userId: alice }] } as const;
     const raced = await Promise.all([1, 2].map(() => runWithPrincipal(principal, () => saveMovement({ teamId, source: RUN_NOW, name: 'Raced', audience: { for: principal }, userId: alice, statements }))));
     expect(raced.filter((r) => r.ok)).toHaveLength(1);
     expect(raced.filter((r) => !r.ok)).toEqual([expect.objectContaining({ refused: { kind: 'name_taken', name: 'Raced' } })]);
