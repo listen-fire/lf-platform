@@ -128,22 +128,17 @@ async function run(label: string, body: string): Promise<void> {
   const affinity = affinityOnFake();
   const manual = createManualAdapter({ teamId: TEAM_ID });
   requests.length = 0;
-  const catalog = {
-    snapshot: staticCatalogSnapshot({
-      credentials: { affinity_cred: { adapters: ['affinity'] } },
-      instanceSchemas: { affinity: affinitySchema },
-    }),
-    credentialIds: { affinity_cred: 'creds-verify' },
-  };
   await runMovement({
     source: movementSource(body),
     event: manualEvent(),
     teamId: tenantOfTeam(TEAM_ID),
-    catalog: catalog.snapshot,
-    credentialIds: catalog.credentialIds,
+    catalog: staticCatalogSnapshot({
+      credentials: { affinity_cred: { adapters: ['affinity'] } },
+      instanceSchemas: { affinity: affinitySchema },
+    }),
+    credentialIds: { affinity_cred: 'creds-verify' },
     host: probeEngineHost({
       teamId: TEAM_ID,
-      catalog,
       resolve: ({ adapterType }) => (adapterType === 'affinity' ? affinity : manual),
     }),
     dryRun: true,

@@ -11,25 +11,19 @@
 // may not use and read everything through it.
 
 import { credentialImportNames } from 'movement-engine/public/catalog';
-import { neverAsAny } from 'movement-engine/public/types';
 import { MovementParseError, type LanguageVersion } from 'movement-lang';
 
-import type { AdapterManifest } from 'movement-engine/public/adapter';
 import type { Principal } from 'principal';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { CatalogAudience } from './audience';
-import type { ProvisionedListener } from './provision';
 import type { ListenReach } from '../../access/no_person';
 
 import { accessTo, membersAdmitted, stateAtCreation, type CreationStatements, type StatementRefusal } from '../../access/decide';
 import { onCarriedPin } from '../../access/carried_pin';
 import { automationLists, automationWithNoPerson } from '../../access/no_person';
 import { isLfEngineTeam } from '../../lf_engine/team_engine';
-import { StatementStore, type Grantee, type StatedVerb, type Target } from '../../access/statement';
-import { actorSourceOf } from '../../inbound/fire_statement';
-import { landsOnModuleActor } from '../../inbound/actors';
-import { listenConfigSchema } from '../../inbound/listen_door';
-import { hasAdapter, indexManifestsByName, resolveAdapterSlug } from '../adapters/registry';
+import { StatementStore, type StatedVerb, type Target } from '../../access/statement';
+import { hasAdapter, resolveAdapterSlug } from '../adapters/registry';
 import { getRemoteAdapter } from '../adapters/remote/store';
 import { teamAdapterManifests } from '../adapters/team_manifests';
 import { constructionsOf, loadCredentialRows, parsedConstructionsOf } from './catalog';
@@ -252,46 +246,6 @@ export async function connectionsRefusal(
 
 export { inOneTransaction } from '../../context/one_transaction';
 
-function restricts(fire: readonly Grantee[]): boolean {
-  return fire.length > 0 && !fire.some((grantee) => grantee.kind === 'anyone');
-}
-
-type WarnedListener = Pick<ProvisionedListener, 'kind' | 'movementName' | 'config'>;
-
-function listenOf(listener: WarnedListener): string {
-  return `the ${listener.kind} listen firing ${listener.movementName}`;
-}
-
-/** Whether the listen lands on a record whose module keeps its own `Actor`,
- *  so the door looks nobody up for it. A carried version's row is no listen
- *  of this release's. */
-function landsOnOwnActor(listener: WarnedListener): boolean {
-  const parsed = listenConfigSchema.safeParse(listener.config);
-  return parsed.success && landsOnModuleActor(parsed.data.listen);
-}
-
-/** What a listen under a fire statement other than anyone tells the author,
- *  if anything: the door judges it by the same account of its module. */
-function fireWarning(listener: WarnedListener, manifests: ReadonlyMap<string, AdapterManifest>): string | undefined {
-  const source = actorSourceOf(listener.kind, manifests.get(resolveAdapterSlug(listener.kind))?.methods);
-  const cannot = (why: string) =>
-    `Who may fire this automation names people, a team or a domain, but ${listenOf(listener)} ${why}, so that rule cannot be applied to it: anyone who reaches that listen can fire it.`;
-  const ownActor = 'lands on a record whose module keeps a field of its own named Actor, where the platform does not look up who acted';
-  switch (source) {
-    case 'no_one_acts':
-      return undefined;
-    case 'reported':
-      return landsOnOwnActor(listener) ? cannot(ownActor) : undefined;
-    case 'claimed':
-      if (landsOnOwnActor(listener)) return cannot(ownActor);
-      return `Who may fire this automation names people, a team or a domain, and ${listenOf(listener)} hears email: a sender's address is claimed, not proven, until the email rework, so anyone writing as an allowed address can fire it.`;
-    case 'not_reported':
-      return cannot('hears from a module that does not say who acted');
-    default:
-      return neverAsAny(source);
-  }
-}
-
 /**
  * What a shipped save tells its author about who its statements reach. Never a
  * refusal: who may read the automation and who may use its connections are the
@@ -301,7 +255,6 @@ export async function accessWarnings(input: {
   teamId: string;
   automationId: string;
   named: readonly NamedConnection[];
-  listeners: readonly WarnedListener[];
 }): Promise<string[]> {
   const { teamId } = input;
   const automation: Target<'automation'> = { thing: 'automation', id: input.automationId };
@@ -324,13 +277,5 @@ export async function accessWarnings(input: {
     }
   }
 
-  const fire = await StatementStore.grantsOf(automation, { teamId, verb: 'fire' });
-  if (restricts(fire) && input.listeners.length > 0) {
-    const manifests = indexManifestsByName(await teamAdapterManifests(teamId as TeamId, []));
-    for (const listener of input.listeners) {
-      const warning = fireWarning(listener, manifests);
-      if (warning !== undefined) warnings.push(warning);
-    }
-  }
   return warnings;
 }

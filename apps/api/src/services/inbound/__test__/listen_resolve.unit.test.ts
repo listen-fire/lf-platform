@@ -17,7 +17,7 @@ import type { ListenPlan } from 'engine-contracts';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
 import type { Resolution } from '../../lf_store/listens';
-import type { ListenRow } from '../listen_door';
+import type { SavedListen } from '../listen_door';
 
 jest.mock('../../lf_store/listens', () => ({ claimResolve: jest.fn(), saveResolution: jest.fn(), states: jest.fn() }));
 jest.mock('../../translation_graph/adapters/resolve', () => ({ resolveAdapter: jest.fn() }));
@@ -44,7 +44,7 @@ const CARRIED = corpus.plans.carried!.plan;
 /** The `Bases` relist the Airtable module declares (`AIRTABLE_BASES_RELIST_SECONDS`). */
 const BASES_RELIST_SECONDS = 3600;
 
-function airtableListen(overrides: Partial<ListenRow> = {}): ListenRow {
+function airtableListen(overrides: Partial<SavedListen> = {}): SavedListen {
   return {
     pipeline: 'listen:crm.lf:changed:0a1b2c3d',
     plan: CARRIED,

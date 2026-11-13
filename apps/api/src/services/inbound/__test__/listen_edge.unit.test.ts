@@ -7,12 +7,12 @@ import type { ListenPlan, PlanHop } from 'engine-contracts';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
-import type { ListenRow } from '../listen_door';
+import type { SavedListen } from '../listen_door';
 import { listenEdgeKeysOf } from '../listen_edge';
 
 const hop = (edge: string, from: string, to: string, more: Partial<PlanHop> = {}): PlanHop => ({ edge, from, to, judged: 'none', ...more });
 
-function saved(listen: Pick<ListenRow, 'plan'> & Partial<ListenRow>): ListenRow {
+function saved(listen: Pick<SavedListen, 'plan'> & Partial<SavedListen>): SavedListen {
   return {
     pipeline: 'listen:f:advised:00',
     awaits: { own: [], carried: {} },
@@ -79,7 +79,7 @@ describe('a listen subscribed per scope (Airtable narrowed by base)', () => {
       hop('Changes', 'Table', 'Change', { judged: 'arrival' }),
     ],
   };
-  const airtable = (watching?: ListenRow['watching']) =>
+  const airtable = (watching?: SavedListen['watching']) =>
     saved({ plan: AIRTABLE, delivery: { kind: 'scope', scopedBy: 'Bases' }, ...(watching !== undefined ? { watching } : {}) });
 
   it('is watched once per base it was resolved to, each key scoped by that base', () => {

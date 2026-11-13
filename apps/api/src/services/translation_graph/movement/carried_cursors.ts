@@ -29,7 +29,7 @@ import { isCurrent, versionOf, versionOfLegacyId } from '@listen-fire/language-v
 import { isLegacyLanguageVersion } from 'legacy-lang';
 
 import { getAutomationsQb } from '../../../lib/kysely';
-import { listenConfigSchema, type ListenRow } from '../../inbound/listen_door';
+import { listenConfigSchema, type SavedListen } from '../../inbound/listen_door';
 import { listenEdgeKeysOf } from '../../inbound/listen_edge';
 import { resolveAdapterSlug } from '../adapters/registry';
 import { listenIdentityOf } from './carried_pauses';
@@ -163,7 +163,7 @@ export function carriedListen(input: {
   const parsed = listenConfigSchema.safeParse(input.config);
   if (!parsed.success) return { config: input.config, cursors: [], notCarried: heardAnything(heard) };
   const at = carrying.movedAt.toISOString();
-  const listenOf = (pollsAlone: boolean): ListenRow => ({
+  const listenOf = (pollsAlone: boolean): SavedListen => ({
     ...parsed.data.listen,
     ...input.listen,
     carriedFrom: { at, ...(pollsAlone ? { pollsAlone: true } : {}) },

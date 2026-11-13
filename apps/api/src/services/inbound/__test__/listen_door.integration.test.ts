@@ -125,7 +125,6 @@ describe('keepJudgedDelivery: a judged delivery in one write', () => {
       teamId,
       file: 'polls.lf',
       credentialsId: null,
-      fire: [{ kind: 'anyone' }],
     };
   }
 
@@ -162,7 +161,6 @@ describe('keepJudgedDelivery: a judged delivery in one write', () => {
             },
           },
         ],
-        refused: [],
         lines: [],
       },
       now,
@@ -209,7 +207,7 @@ describe('keepJudgedDelivery: a judged delivery in one write', () => {
       externalId: 'ext-3',
       source: 'webhook',
       arrivals: [ARRIVAL, elsewhere],
-      judged: { minted: [], unjudged: [undecided(ARRIVAL), undecided(elsewhere)], refused: [], lines: [] },
+      judged: { minted: [], unjudged: [undecided(ARRIVAL), undecided(elsewhere)], lines: [] },
       now,
     });
 
@@ -222,7 +220,7 @@ describe('keepJudgedDelivery: a judged delivery in one write', () => {
   });
 
   it('a redelivery under the same external id keeps nothing more', async () => {
-    const judged = { minted: [], unjudged: [], refused: [], lines: [] };
+    const judged = { minted: [], unjudged: [], lines: [] };
     const input = { teamId, subscriptionId: 'sub-1', adapterType: 'chat', externalId: 'ext-2', source: 'webhook' as const, arrivals: [ARRIVAL], judged };
 
     expect((await keepJudgedDelivery({ ...input, now: new Date() })).kept.kept).toBe(true);

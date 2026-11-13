@@ -2294,7 +2294,6 @@ async function main() {
       teamId: seed.teamId as TeamId,
       triggerId: flags.listen as TriggerId,
       deliveryId: flags.delivery,
-      by: { userId: seed.userId },
       force: 'force' in flags,
     });
     // `--settle` drains the team's work, so the run the replay queued has run.

@@ -10,8 +10,7 @@
 // gates every firing passes (run mode: off = paused, dry_run = rehearse).
 //
 // An invocation OPTIONALLY carries text and/or files, and the member who
-// pressed it (so `@user_*` / `@actor_*` resolve to them, and a filter and the
-// run read them as `Actor`, inbound/actors.ts). Files' bytes are
+// pressed it (so `@user_*` / `@actor_*` resolve to them). Files' bytes are
 // streamed into document storage (`services.document.upload`); the returned
 // `objectUri` rides on the invocation as the file's owner-resolvable byte
 // handle, which the manual adapter redeems via `resolveFileRef`.
@@ -58,7 +57,6 @@ import {
   savedListens,
   type SavedListen,
 } from '../../inbound/listen_door';
-import { withActors } from '../../inbound/actors';
 import { drainUntilIdle, notifyWork } from '../../work/drain';
 import { QUEUED_RUN_WORK_KINDS } from '../../work/kinds';
 import { carriedRunLaneOf } from './carried_run';
@@ -189,12 +187,14 @@ export async function runMovementAsync(
   if (!('pipeline' in listen)) return listen;
 
   const invocation = await buildInvocation(input);
-  const delivery = { adapterType: MANUAL_ADAPTER_TYPE, credentialsId: null };
-  const { arrivals } = await withActors([invocationArrival(invocation)], { team: listen.teamId, listens: [listen], adapter: delivery });
+  const arrival = invocationArrival(invocation);
   const now = new Date();
-  // Running by hand is a write on the automation, decided by its route: the
-  // caller vouches for it, so its fire list does not judge it.
-  const judged = judgeArrivals({ listens: [listen], delivery, arrivals, now, firing: { kind: 'vouched' } });
+  const judged = judgeArrivals({
+    listens: [listen],
+    delivery: { adapterType: MANUAL_ADAPTER_TYPE, credentialsId: null },
+    arrivals: [arrival],
+    now,
+  });
   const run = judged.minted[0];
   if (run === undefined) {
     return {
@@ -213,7 +213,7 @@ export async function runMovementAsync(
     externalId: input.requestId !== undefined ? `run-now:${listen.pipeline}:${input.requestId}` : null,
     // A person asked for this run, as `listen-fire run` asks for one.
     source: 'cli',
-    arrivals,
+    arrivals: [arrival],
     judged: { ...judged, minted },
     now,
   });

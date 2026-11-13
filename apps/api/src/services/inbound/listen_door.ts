@@ -7,9 +7,6 @@
 // `fire_event` row per run and the waits each run opens on its trigger, and
 // each listen that could not judge an arrival kept as an `Arrival Not Judged`
 // fact. The `fire_event` row then starts its run under the listen's receipt.
-// An arrival a listen takes starts a run only if its automation's fire list
-// lets who acted start one (fire_statement.ts); a refusal is kept as a fact
-// and starts nothing.
 //
 // The sequence is @listen-fire/embed's `dispatch` (its order, not its
 // package): the platform keeps its own run rows, catalogs and engine host.
@@ -41,7 +38,6 @@ import {
   type NewWorkRow,
 } from 'movement-engine/public/run-host';
 import { logger } from 'movement-engine/public/log';
-import { neverAsAny } from 'movement-engine/public/types';
 
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { TriggerId } from '../../generated/kysely/automations/Trigger';
@@ -49,8 +45,6 @@ import type { MovementId } from '../../generated/kysely/automations/Movement';
 import type { TriggerRunId } from '../../generated/kysely/automations/TriggerRun';
 import type { UnjudgedArrival } from '../lf_store/records_door';
 import type { Resolution } from '../lf_store/listens';
-import type { Grantee } from '../access/statement';
-import type { ActorDecision } from './actors';
 
 import { getAutomationsQb } from '../../lib/kysely';
 import { getAdapterManifest } from '../translation_graph/adapters/registry';
@@ -58,9 +52,6 @@ import { resolveAdapter } from '../translation_graph/adapters/resolve';
 import { deliveryRowStore } from '../movement_engine/run_host_deliveries';
 import { chainBefore, loopSettings } from './loop_breaker';
 import { armResolveForArrivals, withWatching, withWatchingOne } from './listen_resolve';
-import { withActors } from './actors';
-import { StatementStore } from '../access/statement';
-import { actorSourceFor, fireVerdict, type ActorSource, type FireVerdict, type RefusedArrival } from './fire_statement';
 
 // ── A saved listen, as its trigger row keeps it ─────────────────────────────
 
@@ -119,19 +110,13 @@ export const listenConfigSchema = z.object({
      *  kept before it was that version's), and whether it polls on the cursor it
      *  brought rather than sharing a poll (inbound/listen_edge.ts). */
     carriedFrom: z.object({ at: z.string(), pollsAlone: z.boolean().optional() }).optional(),
-    /** Its automation reads `Actor`, so the door writes who acted for it
-     *  (inbound/actors.ts). The same fact the save records on the automation,
-     *  which a wait reads. Absent reads as false: a listen saved before the
-     *  platform offered `Actor` could not read it. */
-    readsActor: z.boolean().optional(),
   }),
 });
 export type ListenConfig = z.infer<typeof listenConfigSchema>['listen'];
 export type ResolvedHop = z.infer<typeof resolvedHopSchema>;
 
-/** One saved listen of a team, as its trigger row keeps it: what reaches,
- *  watches and resolves it reads no more than this. */
-export interface ListenRow extends ListenConfig {
+/** One saved listen of a team: its trigger row and what it keeps. */
+export interface SavedListen extends ListenConfig {
   triggerId: TriggerId;
   teamId: TeamId;
   /** The file (the movement row's name) the listen is in. */
@@ -142,25 +127,6 @@ export interface ListenRow extends ListenConfig {
    *  the store keeps it (listen_resolve.ts). Absent for one never resolved,
    *  which is watched under no record, and for any other listen. */
   watching?: Resolution;
-}
-
-/** A saved listen as the door judges by it: with its automation's fire list. */
-export interface SavedListen extends ListenRow {
-  /** Who may start a run of its automation, as the list stood when the listen
-   *  was read. Empty when nothing is stated, which admits nobody. */
-  fire: readonly Grantee[];
-}
-
-/** Each listen with its automation's fire list beside it, read once per team. */
-export async function withFireLists(rows: readonly { listen: ListenRow; automationId: string }[]): Promise<SavedListen[]> {
-  const byTeam = new Map<TeamId, Set<string>>();
-  for (const { listen, automationId } of rows) byTeam.set(listen.teamId, (byTeam.get(listen.teamId) ?? new Set()).add(automationId));
-  const lists = new Map<string, Grantee[]>();
-  for (const [teamId, ids] of byTeam) {
-    const found = await StatementStore.grantsAmong({ thing: 'automation', teamId, ids: [...ids], verbs: ['fire'] });
-    for (const [id, grants] of found) lists.set(JSON.stringify([teamId, id]), grants.map(({ grantee }) => grantee));
-  }
-  return rows.map(({ listen, automationId }) => ({ ...listen, fire: lists.get(JSON.stringify([listen.teamId, automationId])) ?? [] }));
 }
 
 /** The listens `teamId` saved (on `adapterType`'s module, when it names one;
@@ -174,15 +140,14 @@ export async function savedListens(input: { teamId: TeamId; adapterType?: string
   if (input.adapterType !== undefined) query = query.where('trigger.kind', '=', input.adapterType);
   if (input.movementId !== undefined) query = query.where('trigger.movement_id', '=', input.movementId);
   const rows = await query
-    .select(['trigger.id as id', 'trigger.config as config', 'trigger.credentials_id as credentialsId', 'movement.name as file', 'movement.id as automationId'])
+    .select(['trigger.id as id', 'trigger.config as config', 'trigger.credentials_id as credentialsId', 'movement.name as file'])
     .execute();
   const listens = rows.flatMap((row) => {
     const parsed = listenConfigSchema.safeParse(row.config);
     if (!parsed.success) return [];
-    const listen: ListenRow = { ...parsed.data.listen, triggerId: row.id, teamId: input.teamId, file: row.file, credentialsId: row.credentialsId ?? null };
-    return [{ listen, automationId: row.automationId }];
+    return [{ ...parsed.data.listen, triggerId: row.id, teamId: input.teamId, file: row.file, credentialsId: row.credentialsId ?? null }];
   });
-  return withWatching(await withFireLists(listens));
+  return withWatching(listens);
 }
 
 /** The saved listen a trigger row is, or null when it is no listen. */
@@ -191,15 +156,13 @@ export async function savedListenOf(triggerId: TriggerId): Promise<SavedListen |
     .selectFrom('trigger')
     .innerJoin('movement', 'movement.id', 'trigger.movement_id')
     .where('trigger.id', '=', triggerId)
-    .select(['trigger.id as id', 'trigger.team_id as teamId', 'trigger.config as config', 'trigger.credentials_id as credentialsId', 'movement.name as file', 'movement.id as automationId'])
+    .select(['trigger.id as id', 'trigger.team_id as teamId', 'trigger.config as config', 'trigger.credentials_id as credentialsId', 'movement.name as file'])
     .executeTakeFirst();
   if (row === undefined) return null;
   const parsed = listenConfigSchema.safeParse(row.config);
   if (!parsed.success) return null;
   // The row's team as the branded id the rest of the door carries (its boundary).
-  const listen: ListenRow = { ...parsed.data.listen, triggerId: row.id, teamId: row.teamId as TeamId, file: row.file, credentialsId: row.credentialsId ?? null };
-  const [withFire] = await withFireLists([{ listen, automationId: row.automationId }]);
-  return withFire === undefined ? null : withWatchingOne(withFire);
+  return withWatchingOne({ ...parsed.data.listen, triggerId: row.id, teamId: row.teamId as TeamId, file: row.file, credentialsId: row.credentialsId ?? null });
 }
 
 // ── Judging a delivery's arrivals ───────────────────────────────────────────
@@ -230,53 +193,12 @@ export interface Undecided {
   fact: Omit<UnjudgedArrival, 'deliveryId' | 'cause'>;
 }
 
-/** An arrival a listen took that its automation's fire list did not let
- *  start a run: the fact kept with the delivery (its id is found as it is
- *  kept), and the listen and arrival it is about. */
-export interface Refused {
-  listen: SavedListen;
-  arrival: Exclude<Arrival, { gone: true }>;
-  fact: Omit<RefusedArrival, 'deliveryId'>;
-}
-
 export interface Judged {
   minted: MintedRun[];
   /** The listens that could not judge an arrival. */
   unjudged: Undecided[];
-  /** The arrivals a listen took that its automation's fire list refused. */
-  refused: Refused[];
   /** What ran nothing, said once per delivery. */
   lines: string[];
-}
-
-/** Who may start a run from what a delivery brings. */
-export type Firing =
-  /** At a door and at a replay: who acted on each arrival, as `withActors`
-   *  decided it, in the arrivals' order, against each listen's fire list.
-   *  `refusedBefore`: a replay's, the arrivals (by `refusedKey`) the list
-   *  refused when they first came, which the writer replaying them vouches for. */
-  | { kind: 'judged'; actors: readonly ActorDecision[]; source: ActorSource; refusedBefore?: ReadonlySet<string> }
-  /** A writer's own run (Run now), so no fire list judges it. */
-  | { kind: 'vouched' };
-
-/** What names an arrival a listen's fire list refused. */
-export function refusedKey(pipeline: string, arrival: string): string {
-  return JSON.stringify([pipeline, arrival]);
-}
-
-function verdictOf(firing: Firing, listen: SavedListen, arrival: Exclude<Arrival, { gone: true }>, index: number): FireVerdict {
-  switch (firing.kind) {
-    case 'vouched':
-      return { kind: 'fires' };
-    case 'judged': {
-      if (firing.refusedBefore?.has(refusedKey(listen.pipeline, arrivalReceiptKey(arrival))) === true) return { kind: 'fires' };
-      const decided = firing.actors[index];
-      if (decided === undefined) throw new Error(`the door judged arrival ${index} with no decision of who acted on it`);
-      return fireVerdict({ fire: listen.fire, decided, source: firing.source });
-    }
-    default:
-      return neverAsAny(firing);
-  }
 }
 
 /**
@@ -284,16 +206,13 @@ function verdictOf(firing: Firing, listen: SavedListen, arrival: Exclude<Arrival
  * order the arrivals came. A listen on another connection than the delivery
  * names hears nothing of it. An undecided verdict runs nothing and is kept
  * as a fact; an arrival that does not fit the node its listen states runs
- * nothing, said when no other listen took it. An arrival a listen takes
- * starts a run only as `firing` lets it: refused, it is kept as a fact; who
- * acted unknown, it is undecided.
+ * nothing, said when no other listen took it.
  */
 export function judgeArrivals(input: {
   listens: readonly SavedListen[];
   delivery: DeliveredBy;
   arrivals: readonly Arrival[];
   now: Date;
-  firing: Firing;
   /** A replay judges by one listen alone, and its facts are this attempt. */
   attempt?: number;
 }): Judged {
@@ -305,27 +224,6 @@ export function judgeArrivals(input: {
   };
   const minted: MintedRun[] = [];
   const unjudged: Judged['unjudged'] = [];
-  const refused: Judged['refused'] = [];
-  const undecided = (listen: SavedListen, arrival: Exclude<Arrival, { gone: true }>, reason: string): void => {
-    say(`${listen.file}:${listen.plan.movement}: an arrival on ${arrival.edge} cannot be judged (${reason}): it runs nothing`);
-    unjudged.push({
-      listen,
-      arrival,
-      fact: {
-        pipeline: listen.pipeline,
-        arrival: arrivalReceiptKey(arrival),
-        file: listen.file,
-        movement: listen.plan.movement,
-        edge: arrival.edge,
-        adapter: delivery.adapterType,
-        recordId: arrival.landing.recordId ?? null,
-        landing: arrival.landing,
-        reason,
-        at: now.toISOString(),
-        attempt: input.attempt ?? 0,
-      },
-    });
-  };
   for (const [index, arrival] of input.arrivals.entries()) {
     if ('gone' in arrival) continue;
     let taken = false;
@@ -345,7 +243,24 @@ export function judgeArrivals(input: {
       if ('skips' in verdict) continue;
       if ('undecided' in verdict) {
         taken = true;
-        undecided(listen, arrival, verdict.undecided);
+        say(`${named}: an arrival on ${arrival.edge} cannot be judged (${verdict.undecided}): it runs nothing`);
+        unjudged.push({
+          listen,
+          arrival,
+          fact: {
+            pipeline: listen.pipeline,
+            arrival: arrivalReceiptKey(arrival),
+            file: listen.file,
+            movement: listen.plan.movement,
+            edge: arrival.edge,
+            adapter: delivery.adapterType,
+            recordId: arrival.landing.recordId ?? null,
+            landing: arrival.landing,
+            reason: verdict.undecided,
+            at: now.toISOString(),
+            attempt: input.attempt ?? 0,
+          },
+        });
         continue;
       }
       if (listen.landing !== undefined) {
@@ -361,38 +276,11 @@ export function judgeArrivals(input: {
         }
       }
       taken = true;
-      const fire = verdictOf(input.firing, listen, arrival, index);
-      switch (fire.kind) {
-        case 'fires':
-          minted.push({ listen, arrival, index, runId: randomUUID() as TriggerRunId, receipt: arrivalReceiptKey(arrival) });
-          break;
-        case 'undecided':
-          undecided(listen, arrival, fire.reason);
-          break;
-        case 'refused':
-          say(`${named}: the arrival ${arrival.identity} on ${arrival.edge} may not start a run (${fire.reason}): it runs nothing, kept for a writer to replay`);
-          refused.push({
-            listen,
-            arrival,
-            fact: {
-              pipeline: listen.pipeline,
-              arrival: arrivalReceiptKey(arrival),
-              file: listen.file,
-              movement: listen.plan.movement,
-              edge: arrival.edge,
-              adapter: delivery.adapterType,
-              reason: fire.reason,
-              at: now.toISOString(),
-            },
-          });
-          break;
-        default:
-          neverAsAny(fire);
-      }
+      minted.push({ listen, arrival, index, runId: randomUUID() as TriggerRunId, receipt: arrivalReceiptKey(arrival) });
     }
     if (!taken) for (const line of misfitLines) say(line);
   }
-  return { minted, unjudged, refused, lines };
+  return { minted, unjudged, lines };
 }
 
 /**
@@ -520,24 +408,15 @@ export function fireKeyOf(runId: string): string {
   return `fire_event:${runId}`;
 }
 
-/** Who put a delivery through a listen again: the person, and the API key it
- *  came through when it was not a signed-in session. */
-export interface Replayer {
-  userId?: string;
-  credentialId?: string;
-}
-
 /**
  * Keep a delivery whose arrivals were judged, in one write: its receipt
  * (a redelivery under the same external id keeps nothing), its arrivals
  * logged under the module's re-send window, a `fire_event` row and the
  * trigger waits per minted run, and the facts of the listens that could not
- * judge it and of the arrivals a fire list refused. A refused arrival is
- * logged like any other, so it wakes the waits on its record. A run's row is
- * due at once: nothing on this host starts a run inline (as listen-fire's
- * door does, leaving its row as the fallback), so the drain is the starter,
- * and the row's lease is what takes it again from a process that died
- * holding it.
+ * judge it. A run's row is due at once: nothing on this host starts a run
+ * inline (as listen-fire's door does, leaving its row as the fallback), so
+ * the drain is the starter, and the row's lease is what takes it again from
+ * a process that died holding it.
  */
 export async function keepJudgedDelivery(input: {
   teamId: TeamId;
@@ -556,8 +435,6 @@ export async function keepJudgedDelivery(input: {
   replayOf?: string;
   /** A replay forced past its listen's receipt. */
   forced?: boolean;
-  /** Who replayed it, recorded on the replay's delivery. */
-  replayedBy?: Replayer;
   /** The row the door kept before reading it (carried_delivery.ts). */
   rawKeptId?: string;
   now: Date;
@@ -600,8 +477,6 @@ export async function keepJudgedDelivery(input: {
     },
     waits,
     unjudged: await unjudgedFacts({ teamId, undecided: judged.unjudged, deliveryId: input.replayOf ?? deliveryId, now }),
-    refused: judged.refused.map(({ fact }) => ({ ...fact, deliveryId: input.replayOf ?? deliveryId })),
-    ...(input.replayedBy !== undefined ? { replayedBy: input.replayedBy } : {}),
   });
   if (kept.kept) for (const line of judged.lines) logger.warn(`[ListenDoor] ${line}`);
   return { kept, deliveryId, fires };
@@ -710,17 +585,14 @@ export async function deliverArrivals(input: {
   const all = input.listens ?? (await savedListens({ teamId: input.teamId, adapterType: input.delivered.adapterType }));
   const { keptAt } = input;
   const listens = keptAt === undefined ? all : all.filter((listen) => listen.carriedFrom === undefined || Date.parse(listen.carriedFrom.at) <= keptAt.getTime());
-  // Logged as judged, so a wait its arrival wakes reads who acted too.
-  const { arrivals, actors } = await withActors(input.arrivals, { team: input.teamId, listens, adapter: input.delivered });
-  const source = await actorSourceFor(input.teamId, input.delivered.adapterType);
-  const judged = judgeArrivals({ listens, delivery: input.delivered, arrivals, now, firing: { kind: 'judged', actors, source } });
+  const judged = judgeArrivals({ listens, delivery: input.delivered, arrivals: input.arrivals, now });
   const result = await keepJudgedDelivery({
     teamId: input.teamId,
     subscriptionId: input.subscriptionId,
     adapterType: input.delivered.adapterType,
     externalId: input.externalId,
     source: input.source,
-    arrivals,
+    arrivals: input.arrivals,
     judged,
     ...('checkpoint' in input ? { checkpoint: input.checkpoint } : {}),
     ...(input.request !== undefined ? { request: input.request } : {}),
@@ -732,7 +604,7 @@ export async function deliverArrivals(input: {
   // is listed again, so a base or table made, renamed or removed moves what it
   // watches.
   if (result.kept.kept) {
-    const edges = [...new Set(arrivals.flatMap((arrival) => ('gone' in arrival ? [] : [arrival.edge])))];
+    const edges = [...new Set(input.arrivals.flatMap((arrival) => ('gone' in arrival ? [] : [arrival.edge])))];
     await armResolveForArrivals({ edges, listens });
   }
   return result;

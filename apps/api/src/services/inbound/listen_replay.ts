@@ -1,8 +1,6 @@
 // A replay: one kept delivery put through one listen again, the way out of
 // an `Arrival Not Judged` fact once the provider whose lookup failed answers
-// again, and of an arrival its automation's fire list refused (listen-fire's
-// `listens replay`). A replay is a write on the automation, decided by the
-// route that asks for it.
+// again (listen-fire's `listens replay`; ruling 4: any team member may).
 //
 // - The delivery's kept request is read again by the listen's module, as it
 //   was received, its lookups made afresh. Its signature is not checked: the
@@ -14,13 +12,6 @@
 //   the poll; any other, only by a listen on the module it came from.
 // - Only the arrivals the delivery brought are judged, by the named listen
 //   alone. Every other listen on the delivery is left as it is.
-// - Who acted (`Actor`, actors.ts) is written again at replay time, a kept
-//   page's arrivals included: the answer is not kept with the arrival.
-// - The automation's fire list judges it as it judges a fresh arrival, except
-//   an arrival the list refused when it first came: the writer who replays
-//   that vouches for it. A replay the list refuses is kept as refused, so the
-//   writer's next replay of it runs it. Whoever replays is recorded on the
-//   replay's delivery.
 // - A run it fires is kept as a delivery's is, in one write: a replay
 //   delivery of its own (`replay_of`), its `fire_event` row and its waits.
 //   Its arrivals were logged with the delivery replayed, and are not again.
@@ -44,9 +35,7 @@ import { notifyWork } from '../work/drain';
 import { pollSubscriptionId } from '../poll_source/worker';
 import { readKeptRequest, type CapturedRequest } from './captured_request';
 import { listenEdgeKeysOf } from './listen_edge';
-import { judgeArrivals, keepJudgedDelivery, refusedKey, savedListenOf, unjudgedFacts, type Firing, type Replayer, type SavedListen } from './listen_door';
-import { withActors } from './actors';
-import { actorSourceFor, keepRefusedIn, refusedBefore } from './fire_statement';
+import { judgeArrivals, keepJudgedDelivery, savedListenOf, unjudgedFacts, type SavedListen } from './listen_door';
 
 /** What a replay did, said in lines a person reads. */
 export type ReplayOutcome =
@@ -149,15 +138,7 @@ export function noSuchListen(triggerId: string): ReplayOutcome {
  * `teamId` again. Refused, judging nothing, when either is not the team's,
  * or the delivery kept no request.
  */
-export async function replayThroughListen(input: {
-  teamId: TeamId;
-  triggerId: TriggerId;
-  deliveryId: string;
-  /** The writer replaying it, whom the route decided may. */
-  by: Replayer;
-  force?: boolean;
-  now?: Date;
-}): Promise<ReplayOutcome> {
+export async function replayThroughListen(input: { teamId: TeamId; triggerId: TriggerId; deliveryId: string; force?: boolean; now?: Date }): Promise<ReplayOutcome> {
   const { teamId, deliveryId } = input;
   const now = input.now ?? new Date();
   const force = input.force === true;
@@ -199,31 +180,12 @@ export async function replayThroughListen(input: {
     arrivals = await reread(listen, adapterType, kept.request);
     credentialsId = listen.credentialsId;
   }
-  // Asked afresh, as listen-fire's replay asks: who acted and whether they are
-  // a member are as they stand now, not as they stood when it first came.
-  const decided = await withActors(arrivals, { team: teamId, listens: [listen], adapter: { adapterType, credentialsId } });
-  arrivals = decided.arrivals;
-  const refused = await refusedBefore(getAutomationsQb(['arrival_refused']), {
-    teamId,
-    deliveryId: row.id,
-    pipeline: listen.pipeline,
-    arrivals: arrivals.flatMap((arrival) => ('gone' in arrival ? [] : [arrivalReceiptKey(arrival)])),
-  });
-  const firing: Firing = {
-    kind: 'judged',
-    actors: decided.actors,
-    source: await actorSourceFor(teamId, adapterType),
-    refusedBefore: new Set([...refused].map((arrival) => refusedKey(listen.pipeline, arrival))),
-  };
 
   const lines: string[] = [];
   const attempt = await nextAttempt(teamId, listen.pipeline, arrivals);
-  const judged = judgeArrivals({ listens: [listen], delivery: { adapterType, credentialsId }, arrivals, now, attempt, firing });
+  const judged = judgeArrivals({ listens: [listen], delivery: { adapterType, credentialsId }, arrivals, now, attempt });
   for (const { fact } of judged.unjudged) {
     lines.push(`${named}: the arrival ${fact.arrival} on ${fact.edge} still cannot be judged (${fact.reason}): reported again, attempt ${attempt}`);
-  }
-  for (const { fact } of judged.refused) {
-    lines.push(`${named}: the arrival ${fact.arrival} on ${fact.edge} may not start a run (${fact.reason}): kept as refused, so replaying it again runs it`);
   }
   const stillUndecided = judged.unjudged.length > 0;
   if (!force) {
@@ -235,11 +197,10 @@ export async function replayThroughListen(input: {
     judged.minted = fresh;
   }
   if (judged.minted.length === 0) {
-    if (judged.unjudged.length > 0 || judged.refused.length > 0) {
+    if (judged.unjudged.length > 0) {
       const facts = await unjudgedFacts({ teamId, undecided: judged.unjudged, deliveryId: row.id, now });
       await inTransaction(async (trx) => {
         for (const fact of facts) await keepUnjudgedIn(trx, { tenant: teamId }, fact);
-        for (const { fact } of judged.refused) await keepRefusedIn(trx, teamId, { ...fact, deliveryId: row.id });
       });
     } else if (lines.length === 0) {
       lines.push(`${named}: its filter does not take what delivery ${row.id} brought: nothing to run`);
@@ -256,7 +217,6 @@ export async function replayThroughListen(input: {
     judged,
     replayOf: row.id,
     ...(force ? { forced: true } : {}),
-    replayedBy: input.by,
     now,
   });
   notifyWork();

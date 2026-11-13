@@ -772,10 +772,9 @@ export type OpsEventId = string & {
     __brand: 'public.ops_event';
 };
 
-/** How an arrival reached one of a movement's listens: a run it started, an
- *  `Arrival Not Judged` fact (the listen could not tell), or a refusal (the
- *  automation's fire list did not let who acted start a run). */
-export type MovementEventStatus = 'ran' | 'run_failed' | 'not_judged' | 'refused';
+/** How an arrival reached one of a movement's listens: a run it started, or
+ *  an `Arrival Not Judged` fact (the listen could not tell). */
+export type MovementEventStatus = 'ran' | 'run_failed' | 'not_judged';
 export type MovementEventItem = {
     id: string;
     /** The lane (trigger name) of the listen it reached. */
@@ -787,7 +786,7 @@ export type MovementEventItem = {
     adapterType: string;
     status: MovementEventStatus;
     failureReason: string | null;
-    /** For a not judged fact, which attempt (0 as delivered, one more per replay). */
+    /** For a fact, which attempt (0 as delivered, one more per replay). */
     attempt: number | null;
     occurredAt: Date;
     createdAt: Date;

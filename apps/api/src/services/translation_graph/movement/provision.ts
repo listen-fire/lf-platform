@@ -124,7 +124,6 @@ import {
   listenersFiringMovementNames,
   pendingUpgradeDiagnostics,
   recordDerivedTriggerLink,
-  recordReadsActor,
   recordValidityOutcome,
   writeMovementRow,
   MovementGoneError,
@@ -151,11 +150,10 @@ import { modulePlatform } from './carried_run';
 import { listeningOf, type ListeningLane } from '@listen-fire/language-versions';
 import { runningOf } from '@listen-fire/language-versions';
 import { plannedListensOfSource } from './listen_plans';
-import { automationReadsActor } from '../../inbound/actors';
 import { carriedPauses, listenIdentityOf, type CarriedPause } from './carried_pauses';
 import { carriedRunTriggerId } from './carried_names';
 import { revokeCallbacksForRuns } from '../../movement_engine/callback_store';
-import { listenConfigSchema, type ListenConfig, type ListenRow } from '../../inbound/listen_door';
+import { listenConfigSchema, type ListenConfig, type SavedListen } from '../../inbound/listen_door';
 import { resolveAndArm, resolvesListen } from '../../inbound/listen_resolve';
 import { listenPauses, type ListenPause } from '../../inbound/listen_pause';
 
@@ -894,13 +892,8 @@ async function provisionListeners(input: {
   ): Extract<TriggerRunMode, 'live' | 'dry_run'> =>
     movementWriteRunMode(program, movementName).mode === 'dry_run' ? 'dry_run' : 'live';
 
-  // Whether it reads `Actor` is the automation's, not one trigger's: a run any
-  // trigger started may wait on a press that must say who pressed it. Over
-  // the files the check of this very save saw, so the two agree.
-  const readsActor = await automationReadsActor({ source: input.source, resolveFile: teamCatalog.resolveFile });
-  await recordReadsActor(input.movementRow, readsActor);
   // Each listen as the check plans it: the trigger row is its projection.
-  const planned = plannedListensOfSource({ file: input.movementRow.name, source: input.source, program, snapshot, pin: route.pin, readsActor });
+  const planned = plannedListensOfSource({ file: input.movementRow.name, source: input.source, program, snapshot, pin: route.pin });
   if (planned.refused.length > 0 && input.provisionDespiteErrors !== true) {
     return { ok: false, errors: planned.refused, catalogNotes: teamCatalog.notes };
   }
@@ -944,7 +937,7 @@ async function provisionListeners(input: {
       for (const listener of listeners) {
         const parsed = listenConfigSchema.safeParse(listener.config);
         if (!parsed.success || !resolvesListen(parsed.data.listen)) continue;
-        const listen: ListenRow = { ...parsed.data.listen, triggerId: listener.triggerId as TriggerId, teamId: input.teamId as TeamId, file: input.movementRow.name, credentialsId: listener.credentialsId };
+        const listen: SavedListen = { ...parsed.data.listen, triggerId: listener.triggerId as TriggerId, teamId: input.teamId as TeamId, file: input.movementRow.name, credentialsId: listener.credentialsId };
         await resolveAndArm(listen);
       }
     });
@@ -1458,8 +1451,8 @@ async function runSave(
     }
     throw error;
   }
-  const warned = async (listeners: readonly ProvisionedListener[]): Promise<string[]> =>
-    saver === undefined ? [] : accessWarnings({ teamId: input.teamId, automationId: row.id, named, listeners });
+  const warned = async (): Promise<string[]> =>
+    saver === undefined ? [] : accessWarnings({ teamId: input.teamId, automationId: row.id, named });
 
   // The source row is now saved — emit the resource-change hint here (the
   // shared service layer), so UI saves and agent saves both propagate
@@ -1598,12 +1591,12 @@ async function runSave(
         listeners: [],
         infos: [],
         catalogNotes: notes,
-        warnings: [...(provisioned.diagnostics ?? []).map((diagnostic) => diagnostic.message), ...(await warned([]))],
+        warnings: [...(provisioned.diagnostics ?? []).map((diagnostic) => diagnostic.message), ...(await warned())],
         validity,
       };
     }
     if (!provisioned.ok) return { ...provisioned, movementId: row.id, validity };
-    return { ...provisioned, warnings: [...provisioned.warnings, ...(await warned(provisioned.listeners))], movementId: row.id, validity };
+    return { ...provisioned, warnings: [...provisioned.warnings, ...(await warned())], movementId: row.id, validity };
   }
 
   if (!provisioned.ok && validity.status === 'valid') {
@@ -1632,7 +1625,7 @@ async function runSave(
         declaredNames: declaredNames ?? [],
       }),
     )),
-    ...(await timer.step('accessWarnings', () => warned(provisioned.ok ? provisioned.listeners : []))),
+    ...(await timer.step('accessWarnings', () => warned())),
   ];
 
   if (!provisioned.ok) {

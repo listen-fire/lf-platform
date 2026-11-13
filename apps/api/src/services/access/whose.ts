@@ -268,7 +268,7 @@ async function automationsOfAsks(asked: { askIds: readonly string[]; teamIds: re
 /**
  * The automations a delivery reached, for a delivery in these teams: each
  * run its arrivals started (a replay's runs included), each listen that
- * could not judge one of them, and each whose fire list refused one. `untraced`: one of those whose automation
+ * could not judge one of them. `untraced`: one of those whose automation
  * cannot be traced, which no caller may read a delivery through. A listen
  * whose movement is gone belongs to no automation and adds none.
  */
@@ -278,7 +278,7 @@ async function automationsReachedBy(asked: {
 }): Promise<{ automationIds: Set<string>; untraced: boolean }> {
   const reached = { automationIds: new Set<string>(), untraced: false };
   if (!uuid.safeParse(asked.deliveryId).success || asked.teamIds.length === 0) return reached;
-  const exec = getAutomationsQb(['trigger_run', 'delivery', 'arrival_unjudged', 'arrival_refused', 'trigger', 'movement']);
+  const exec = getAutomationsQb(['trigger_run', 'delivery', 'arrival_unjudged', 'trigger', 'movement']);
   const teams = sql.join(asked.teamIds);
   const { rows: runs } = await sql<{ id: string }>`
     select r.id::text as id
@@ -294,9 +294,7 @@ async function automationsReachedBy(asked: {
   // A listen edited since keeps its facts under the pipeline it had: its file names its automation.
   const { rows: facts } = await sql<{ listened: boolean; movement_id: string | null; named: string | null }>`
     select t.id is not null as listened, t.movement_id::text as movement_id, m.id::text as named
-    from (select team_id, pipeline, file from automations.arrival_unjudged where team_id::text in (${teams}) and delivery_id = ${asked.deliveryId}::text
-          union all
-          select team_id, pipeline, file from automations.arrival_refused where team_id::text in (${teams}) and delivery_id = ${asked.deliveryId}::uuid) u
+    from (select team_id, pipeline, file from automations.arrival_unjudged where team_id::text in (${teams}) and delivery_id = ${asked.deliveryId}::text) u
     left join automations.trigger t on t.team_id = u.team_id and t.config->'listen'->>'pipeline' = u.pipeline
     left join automations.movement m on m.team_id = u.team_id and m.name = u.file`.execute(exec);
   for (const fact of facts) {

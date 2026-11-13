@@ -83,7 +83,7 @@ describe('a page a door read itself', () => {
   it('is kept with the delivery and replayed through a listen on its module, the module asked nothing', async () => {
     deliveryId = await deliver({ identity: 'mail-1', request: keptPage({ adapterType: ADAPTER, credentialsId: null, arrivals: [arrival('mail-1')] }) });
 
-    const replayed = await replayThroughListen({ teamId, triggerId: listen, deliveryId, by: { userId: ADMIN.userId } });
+    const replayed = await replayThroughListen({ teamId, triggerId: listen, deliveryId });
 
     if (replayed.outcome !== 'replayed') throw new Error(replayed.reason);
     expect(replayed.runIds).toHaveLength(1);
@@ -93,7 +93,7 @@ describe('a page a door read itself', () => {
   });
 
   it('is refused, naming both, through a listen on another module', async () => {
-    expect(await replayThroughListen({ teamId, triggerId: elsewhere, deliveryId, by: { userId: ADMIN.userId } })).toEqual({
+    expect(await replayThroughListen({ teamId, triggerId: elsewhere, deliveryId })).toEqual({
       outcome: 'refused',
       reason: expect.stringMatching(new RegExp(`^delivery ${deliveryId} came from ${ADAPTER}: \\S+ listens on other_test$`)),
     });

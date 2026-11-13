@@ -3058,10 +3058,6 @@ CREATE TABLE automations.movement (
     -- NULL = nothing recorded (never checked, or the pin is already current).
     upgrade_diagnostics jsonb,
     upgrade_checked_against text,
-    -- Whether its text, or a file it imports, says `Actor`, as its last save
-    -- found. An arrival a run of it waits on is then written with who acted,
-    -- whichever trigger started the run. False until a save says otherwise.
-    reads_actor boolean DEFAULT false NOT NULL,
     created_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamptz DEFAULT CURRENT_TIMESTAMP NOT NULL,
     CONSTRAINT movement_validity_status_check CHECK (validity_status IN ('valid', 'invalid', 'unverified'))
@@ -3632,12 +3628,7 @@ CREATE TABLE automations.delivery (
     -- brought. Sensitive (a message's text, a person's address): read only by
     -- one explicit read of the delivery, and forgotten with the delivery or by
     -- the delivery sweep past retention, whichever is first.
-    request jsonb,
-    -- A replay's: who put the delivery through its listen again, a writer
-    -- vouching for it, so its automation's fire list did not judge it; and the
-    -- API key it came through when it was not a signed-in session.
-    replayed_by uuid,
-    replayed_by_credential text
+    request jsonb
 );
 CREATE UNIQUE INDEX delivery_external_idx ON automations.delivery (team_id, subscription_id, external_id) WHERE external_id IS NOT NULL;
 CREATE INDEX delivery_received_idx ON automations.delivery (team_id, received_at);
@@ -3827,25 +3818,6 @@ CREATE TABLE automations.arrival_unjudged (
     PRIMARY KEY (team_id, pipeline, arrival, attempt)
 );
 CREATE INDEX arrival_unjudged_at_idx ON automations.arrival_unjudged (team_id, noted_at, pipeline, arrival, attempt);
-
--- arrival_refused — each arrival a listen's filter took that its automation's
--- fire list did not let start a run, once per delivery, listen and arrival. No
--- run was minted and the listen's receipt was not taken, so a writer's replay
--- of the delivery through the listen runs it.
-CREATE TABLE automations.arrival_refused (
-    team_id uuid NOT NULL,
-    delivery_id uuid NOT NULL,
-    pipeline text NOT NULL,
-    arrival text NOT NULL,                 -- the arrival's receipt key
-    file text NOT NULL,
-    movement text NOT NULL,
-    edge text NOT NULL,
-    adapter text NOT NULL,
-    reason text NOT NULL,
-    noted_at timestamptz NOT NULL,
-    PRIMARY KEY (team_id, delivery_id, pipeline, arrival)
-);
-CREATE INDEX arrival_refused_at_idx ON automations.arrival_refused (team_id, noted_at);
 
 -- join_pending — the per-frame PENDING-COUNT (§5.4): for each parallel / fan-out
 -- JOIN frame with ≥1 parked descendant, the number of its child branches still

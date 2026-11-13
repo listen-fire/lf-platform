@@ -145,7 +145,6 @@ async function interpretMovementFiring(input: {
     runId: input.triggerRunId,
     host: productionEngineHost({
       teamId: input.teamId,
-      catalog: teamCatalog,
       triggerRunId: input.triggerRunId,
       ...(input.parksInto !== undefined ? { parksInto: input.parksInto } : {}),
       ...(input.lease !== undefined ? { lease: input.lease } : {}),
@@ -740,7 +739,6 @@ async function resumeOnThisRelease(
     // A resumed run can re-park at a deeper ask — it gets live parks too.
     host: productionEngineHost({
       teamId: input.teamId,
-      catalog: teamCatalog,
       triggerRunId: input.runId,
       parksInto: recorder,
       ...(input.lease !== undefined ? { lease: input.lease } : {}),

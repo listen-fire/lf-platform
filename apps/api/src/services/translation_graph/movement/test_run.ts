@@ -200,7 +200,6 @@ export async function runMovementTestRun(
       // lock a live firing could wait on.
       host: productionEngineHost({
         teamId: input.teamId,
-        catalog: teamCatalog,
         rawText: inMemoryRawTextStore(),
         locks: new InMemoryWriteLocks(),
         writeSink: (w) => writes.push(w),

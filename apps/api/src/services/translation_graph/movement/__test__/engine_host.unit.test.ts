@@ -38,7 +38,7 @@ jest.mock('../../../credentials/credential_ownership', () => ({
   },
 }));
 
-import { EMPTY_CATALOG_SNAPSHOT, LANGUAGE_VERSION } from 'movement-lang';
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { HOST_FAMILIES_VERSION, tenantIdOf } from 'engine-contracts';
 
 import type { Adapter } from 'movement-engine/public/adapter';
@@ -59,9 +59,6 @@ const MUTATION_CONTEXT = userEditContext('user-1');
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-0000000000e1');
 
-/** A run checked against nothing: the host answers no field itself. */
-const NO_CATALOG = { snapshot: EMPTY_CATALOG_SNAPSHOT, credentialIds: {} };
-
 beforeEach(() => {
   ownedCredentials.clear();
   ownershipAsked.length = 0;
@@ -73,14 +70,14 @@ beforeEach(() => {
 
 describe('productionEngineHost — file text storage', () => {
   it("a firing's host stores file text in the team's raw_text table", () => {
-    productionEngineHost({ teamId: teamOfTenant(TEAM_ID), catalog: NO_CATALOG });
+    productionEngineHost({ teamId: teamOfTenant(TEAM_ID) });
     expect(postgresRawTextStore).toHaveBeenCalledWith(TEAM_ID);
     expect(resolverStores).toEqual([postgresStore]);
   });
 
   it('a host given an in-memory store never builds the Postgres one', () => {
     const rawText = inMemoryRawTextStore();
-    productionEngineHost({ teamId: teamOfTenant(TEAM_ID), catalog: NO_CATALOG, rawText });
+    productionEngineHost({ teamId: teamOfTenant(TEAM_ID), rawText });
     expect(postgresRawTextStore).not.toHaveBeenCalled();
     expect(resolverStores).toEqual([rawText]);
   });
@@ -119,7 +116,7 @@ describe('productionEngineHost — adapter instances', () => {
 
   it('resolves an instance to data, and answers each call by method', async () => {
     const live = liveAdapter([]);
-    const host = productionEngineHost({ teamId: teamOfTenant(TEAM_ID), catalog: NO_CATALOG, resolveLive: () => live });
+    const host = productionEngineHost({ teamId: teamOfTenant(TEAM_ID), resolveLive: () => live });
     const { segmentId } = await host.segment.open({ teamId: TEAM_ID, languageVersion: '2', hostFamiliesVersion: HOST_FAMILIES_VERSION });
     const resolved = await host.adapters.resolve({ adapterType: 'attio', role: 'target', segmentId });
     expect(resolved).toMatchObject({
@@ -156,7 +153,7 @@ describe('productionEngineHost — adapter instances', () => {
   });
 
   it('refuses a segment open whose host families version it does not serve, and opens nothing', async () => {
-    const host = productionEngineHost({ teamId: teamOfTenant(TEAM_ID), catalog: NO_CATALOG, resolveLive: () => liveAdapter([]) });
+    const host = productionEngineHost({ teamId: teamOfTenant(TEAM_ID), resolveLive: () => liveAdapter([]) });
     await expect(host.segment.open({ teamId: TEAM_ID, languageVersion: '2', hostFamiliesVersion: HOST_FAMILIES_VERSION + 1 })).rejects.toThrow(
       `segment.open carries host families version ${HOST_FAMILIES_VERSION + 1}, which this host does not serve (supported: ${HOST_FAMILIES_VERSION})`,
     );
@@ -167,7 +164,6 @@ describe('productionEngineHost — adapter instances', () => {
     const captured: CapturedWrite[] = [];
     const host = productionEngineHost({
       teamId: teamOfTenant(TEAM_ID),
-      catalog: NO_CATALOG,
       resolveLive: () => liveAdapter(writes),
       writeSink: (write) => captured.push(write),
     });
@@ -197,7 +193,6 @@ describe('productionEngineHost — adapter instances', () => {
     const built: Array<string | undefined> = [];
     const host = productionEngineHost({
       teamId: teamOfTenant(TEAM_ID),
-      catalog: NO_CATALOG,
       resolveLive: ({ credentialsId }) => {
         built.push(credentialsId);
         return liveAdapter([]);
@@ -221,7 +216,6 @@ describe('productionEngineHost — adapter instances', () => {
     // A fresh live object every time it is asked, as a registry without a cache would hand out.
     const host = productionEngineHost({
       teamId: teamOfTenant(TEAM_ID),
-      catalog: NO_CATALOG,
       resolveLive: ({ teamId, credentialsId }) => {
         asked.push({ teamId, ...(credentialsId !== undefined ? { credentialsId } : {}) });
         return liveAdapter([]);
@@ -266,7 +260,7 @@ describe('productionEngineHost — adapter instances', () => {
 describe('productionEngineHost — priced calls past the budget', () => {
   it('answers a budget refusal carrying what the call spent first', async () => {
     fileTextSpends = true;
-    const host = productionEngineHost({ teamId: teamOfTenant(TEAM_ID), catalog: NO_CATALOG });
+    const host = productionEngineHost({ teamId: teamOfTenant(TEAM_ID) });
     const answer = await host.files.resolveFileText({
       segmentId: 'seg-1',
       file: { __brand: 'FileRef', name: 'call.mp3' },
@@ -318,7 +312,7 @@ describe('productionEngineHost — what a module spends', () => {
           methods: ['createRecord'],
         },
       });
-      const host = productionEngineHost({ teamId: teamOfTenant(TEAM_ID), catalog: NO_CATALOG, resolveLive: () => remote });
+      const host = productionEngineHost({ teamId: teamOfTenant(TEAM_ID), resolveLive: () => remote });
       const { segmentId } = await host.segment.open({ teamId: TEAM_ID, languageVersion: LANGUAGE_VERSION, hostFamiliesVersion: HOST_FAMILIES_VERSION });
       const { instance } = await host.adapters.resolve({ adapterType: 'enrich', role: 'target', segmentId });
       const create = (name: string) =>

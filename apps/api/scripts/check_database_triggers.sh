@@ -133,13 +133,11 @@ audit_triggers=`psql -v ON_ERROR_STOP=ON "$DATABASE_URL" <<-EOSQL
       -- releases a team has seen, and the arrivals no listen could judge are
       -- all written by the engine host and swept by it. Resuming a paused
       -- listen is an action through the API, not an edit to undo.
-      -- arrival_refused is the same shape as arrival_unjudged: append-only
-      -- facts of what the door decided, forgotten with their delivery.
       -- delivery_request_read is itself a trail: who read a kept request.
       'automations.arrival', 'automations.arrival_identity',
       'automations.wait_row', 'automations.wait_seen',
       'automations.listen_state', 'automations.write_ledger',
-      'automations.release_seen', 'automations.arrival_unjudged', 'automations.arrival_refused',
+      'automations.release_seen', 'automations.arrival_unjudged',
       'automations.delivery_request_read',
       -- cache_entry: the expiring key-value store standing in for Redis (icons, MCP
       -- OAuth state, loop guard counters). Every row dies within days and the loop

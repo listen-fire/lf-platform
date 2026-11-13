@@ -26,7 +26,7 @@ import { SECOND } from '../../constants';
 import { getAutomationsQb } from '../../lib/kysely';
 import { teamIdSchema } from '../../lib/team_id';
 import { logger } from 'movement-engine/public/log';
-import { deliverArrivals, listenConfigSchema, withFireLists, type ListenRow, type SavedListen } from '../inbound/listen_door';
+import { deliverArrivals, listenConfigSchema, type SavedListen } from '../inbound/listen_door';
 import { keptPage } from '../inbound/captured_request';
 import { lfEngineTeams } from '../lf_engine/team_engine';
 import { notifyWork, registerWorkHandler } from '../work/drain';
@@ -85,21 +85,16 @@ export async function sharedPolls(input: { teamId?: TeamId } = {}): Promise<Shar
   if (input.teamId !== undefined) query = query.where('trigger.team_id', '=', input.teamId);
   const [rows, lfTeams] = await Promise.all([
     query
-      .select(['trigger.id as id', 'trigger.team_id as teamId', 'trigger.config as config', 'trigger.credentials_id as credentialsId', 'movement.name as file', 'movement.id as automationId'])
+      .select(['trigger.id as id', 'trigger.team_id as teamId', 'trigger.config as config', 'trigger.credentials_id as credentialsId', 'movement.name as file'])
       .execute(),
     lfEngineTeams(),
   ]);
-  const read = rows.flatMap((row) => {
-    if (lfTeams.has(row.teamId)) return [];
-    const parsed = listenConfigSchema.safeParse(row.config);
-    if (!parsed.success) return [];
-    const listen: ListenRow = { ...parsed.data.listen, triggerId: row.id, teamId: teamIdSchema.parse(row.teamId), file: row.file, credentialsId: row.credentialsId ?? null };
-    return [{ listen, automationId: row.automationId }];
-  });
-  // A poll's delivery is judged by these listens, so each carries its fire list.
-  const listens: SavedListen[] = await withFireLists(read);
   const polls = new Map<string, SharedPoll>();
-  for (const listen of listens) {
+  for (const row of rows) {
+    if (lfTeams.has(row.teamId)) continue;
+    const parsed = listenConfigSchema.safeParse(row.config);
+    if (!parsed.success) continue;
+    const listen: SavedListen = { ...parsed.data.listen, triggerId: row.id, teamId: teamIdSchema.parse(row.teamId), file: row.file, credentialsId: row.credentialsId ?? null };
     for (const { key, digest, delivery } of listenEdgeKeysOf(listen, ['polled'])) {
       const everyMs = (delivery.pollEverySeconds ?? DEFAULT_POLL_EVERY_SECONDS) * SECOND;
       const shared = polls.get(digest);

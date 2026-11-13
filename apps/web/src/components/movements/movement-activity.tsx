@@ -28,7 +28,7 @@ import { RecentActivityDetail } from "@/components/automations/recent-activity-d
 import { laneShortForm } from "@/lib/trigger-name";
 import { formatRunCostUsd } from "@/lib/run-cost";
 
-import { replayForces, replayQuestion } from "./arrival-replay";
+import { replayForces } from "./arrival-replay";
 
 type MovementRun = RouterOutputs["views"]["movement"]["runs"][number];
 type MovementEvent = RouterOutputs["views"]["movement"]["events"][number];
@@ -349,17 +349,14 @@ const ARRIVAL_LABEL: Record<
   ran: { label: "Ran", tone: "emerald" },
   run_failed: { label: "Failed", tone: "red" },
   not_judged: { label: "Not judged", tone: "amber" },
-  refused: { label: "Refused", tone: "gray" },
 };
 
 /**
  * The arrival ledger, scoped to the same lane filter as the runs above: the
- * runs arrivals started, the arrivals a listen could not judge (its
- * connected system could not give a field its filter reads), and those the
- * automation's fire list refused (who acted may not start it). Replay puts
+ * runs arrivals started, and the arrivals a listen could not judge (its
+ * connected system could not give a field its filter reads). Replay puts
  * the kept delivery through that one listen again; a run it starts shows up
- * in the list above. A refused arrival's replay runs it, on the word of the
- * writer replaying it.
+ * in the list above.
  */
 function EventsReceived({
   movementId,
@@ -461,15 +458,14 @@ function EventsReceived({
                     <button
                       type="button"
                       disabled={replay.isLoading}
-                      onClick={() => {
-                        const question = replayQuestion(evt.status);
-                        if (question !== null && !window.confirm(question)) return;
+                      onClick={() =>
                         replay.mutate({
                           triggerId: evt.triggerId,
                           deliveryId,
+                          // A run already started: run it again on purpose.
                           force: replayForces(evt.status),
-                        });
-                      }}
+                        })
+                      }
                       className="shrink-0 rounded-lg border border-gray-200 px-2.5 py-1 text-[12px] font-medium text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
                       data-testid={`replay-event-${evt.id}`}
                       title="Put this delivery through this listen again."

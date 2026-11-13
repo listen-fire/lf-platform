@@ -41,7 +41,7 @@ import { enqueueWork } from '../work/store';
 import { registerWorkKinds, type WorkKindRegistration } from '../work/drain';
 import { resolveAdapter } from '../translation_graph/adapters/resolve';
 import { claimResolve, saveResolution, states, type Resolution, type MemberResolution } from '../lf_store/listens';
-import { savedListenOf, type ListenConfig, type ListenRow, type ResolvedHop } from './listen_door';
+import { savedListenOf, type ListenConfig, type ResolvedHop, type SavedListen } from './listen_door';
 
 /** The records a listen's earlier hops may match before it is suspended: no
  *  lf.yaml here, so listen-fire's default (`DEFAULT_LISTEN_SCOPE_LIMIT`),
@@ -66,7 +66,7 @@ export function resolvesListen(listen: Pick<ListenConfig, 'resolvedHops' | 'memb
   return (listen.resolvedHops?.length ?? 0) > 0 || (listen.members ?? []).some((member) => (member.resolvedHops?.length ?? 0) > 0);
 }
 
-/** A resolution as the door reads it (`ListenRow.watching`): what the store
+/** A resolution as the door reads it (`SavedListen.watching`): what the store
  *  keeps, without the pause and held-count a resolve never writes. */
 function resolutionOf(state: { heads: string[]; resolvedAt: string | null; failure: string | null; parents?: Record<string, string[]>; members?: MemberResolution[] }): Resolution {
   return {
@@ -81,7 +81,7 @@ function resolutionOf(state: { heads: string[]; resolvedAt: string | null; failu
 /** `listens` with what each resolved listen's last resolve came to attached
  *  (`watching`): a listen never resolved keeps none, and is watched nowhere.
  *  One store read per team. */
-export async function withWatching<L extends ListenRow>(listens: L[]): Promise<L[]> {
+export async function withWatching(listens: SavedListen[]): Promise<SavedListen[]> {
   const resolving = listens.filter((listen) => resolvesListen(listen));
   if (resolving.length === 0) return listens;
   const byTeam = new Map<TeamId, string[]>();
@@ -102,7 +102,7 @@ export async function withWatching<L extends ListenRow>(listens: L[]): Promise<L
 }
 
 /** `listen` with its resolution attached, for one saved listen. */
-export async function withWatchingOne<L extends ListenRow>(listen: L): Promise<L> {
+export async function withWatchingOne(listen: SavedListen): Promise<SavedListen> {
   const [one] = await withWatching([listen]);
   return one ?? listen;
 }
@@ -113,7 +113,7 @@ class OverLimit extends Error {
   constructor(readonly position: string) {
     super('LISTEN_SCOPE_LIMIT');
   }
-  line(listen: ListenRow): string {
+  line(listen: SavedListen): string {
     return `LISTEN_SCOPE_LIMIT: ${listen.file}:${listen.plan.movement} matched more ${this.position}s than its limit of ${LISTEN_SCOPE_LIMIT}; it is suspended until its filter matches fewer`;
   }
 }
@@ -126,7 +126,7 @@ interface Traversal {
   scopedBy: string | undefined;
 }
 
-function traversalsOf(listen: ListenRow): Traversal[] {
+function traversalsOf(listen: SavedListen): Traversal[] {
   if (listen.plan.members === undefined) {
     return [{ plan: listen.plan, resolvedHops: listen.resolvedHops ?? [], scopedBy: listen.delivery?.scopedBy }];
   }
@@ -150,7 +150,7 @@ function fieldsOf(position: Position): Record<string, unknown> {
  *  one-hop arrival plan of the hop, the record its landing. A record the judge
  *  cannot decide (a field its module could not read) is not kept, as a
  *  listen-fire resolve keeps only records it confirms. */
-function hopFires(listen: ListenRow, hop: PlanHop, record: Position): boolean {
+function hopFires(listen: SavedListen, hop: PlanHop, record: Position): boolean {
   if (hop.taken === undefined && hop.checked === undefined) return true;
   const plan: ListenPlan = {
     movement: listen.plan.movement,
@@ -167,7 +167,7 @@ function hopFires(listen: ListenRow, hop: PlanHop, record: Position): boolean {
  *  root through the module's `getRelated`, each hop's members kept where its
  *  WHERE fires. Empty for a traversal whose last edge is not scoped (delivered
  *  to the whole connection), which needs no listing. */
-async function scopeRecordsOf(listen: ListenRow, traversal: Traversal): Promise<string[]> {
+async function scopeRecordsOf(listen: SavedListen, traversal: Traversal): Promise<string[]> {
   const { scopedBy } = traversal;
   if (scopedBy === undefined) return [];
   const scopeHop = traversal.plan.hops.findIndex((hop) => hop.edge === scopedBy);
@@ -203,7 +203,7 @@ async function scopeRecordsOf(listen: ListenRow, traversal: Traversal): Promise<
 }
 
 /** What listing the listen's members now comes to. */
-async function listMembers(listen: ListenRow): Promise<Resolution> {
+async function listMembers(listen: SavedListen): Promise<Resolution> {
   const resolvedAt = new Date().toISOString();
   if (listen.plan.members === undefined) {
     return { heads: await scopeRecordsOf(listen, traversalsOf(listen)[0]!), resolvedAt, failure: null };
@@ -232,7 +232,7 @@ export const HELD_ELSEWHERE = Symbol('another process is listing this listen');
  *  leaves it to that process. Answers the failure listing again may mend, if
  *  any: a suspension is kept in the store and lifts on the listen's own relist
  *  once its filter matches fewer, so it is not one to retry. */
-export async function resolveListen(listen: ListenRow): Promise<string | null | typeof HELD_ELSEWHERE> {
+export async function resolveListen(listen: SavedListen): Promise<string | null | typeof HELD_ELSEWHERE> {
   const scope = { tenant: listen.teamId };
   const held = await claimResolve(scope, { pipeline: listen.pipeline, ttlMs: RESOLVE_HOLD_MS });
   if (held === null) return HELD_ELSEWHERE;
@@ -266,7 +266,7 @@ export async function resolveListen(listen: ListenRow): Promise<string | null | 
  *  milliseconds: when it is listed again on a clock. Undefined when none
  *  declares one (its members' changes are pushed, or it has no resolved hop):
  *  it is listed at save, and again only when a change is pushed. */
-export function relistIntervalMs(listen: ListenRow): number | undefined {
+export function relistIntervalMs(listen: SavedListen): number | undefined {
   const seconds = traversalsOf(listen)
     .flatMap((traversal) => traversal.resolvedHops)
     .flatMap((hop) => (typeof hop.membersChange === 'object' ? [hop.membersChange.relistEverySeconds] : []));
@@ -276,7 +276,7 @@ export function relistIntervalMs(listen: ListenRow): number | undefined {
 /** The edges of the listen's resolved hops whose module pushes their members'
  *  changes (`membersChange: 'pushed'`): an arrival on one lists the listen
  *  again. */
-export function pushedParentEdgesOf(listen: ListenRow): string[] {
+export function pushedParentEdgesOf(listen: SavedListen): string[] {
   const edges: string[] = [];
   for (const traversal of traversalsOf(listen)) {
     for (const hop of traversal.resolvedHops) {
@@ -296,7 +296,7 @@ const resolvePayloadSchema = z.object({ teamId: z.string(), triggerId: z.string(
 
 /** Arm the listen's next list `inMs` from now (now by default): its one work
  *  row, so a clock relist and a pushed one share it, the sooner winning. */
-export async function armResolve(listen: ListenRow, inMs = 0): Promise<void> {
+export async function armResolve(listen: SavedListen, inMs = 0): Promise<void> {
   await enqueueWork({
     kind: RESOLVE_WORK_KIND,
     key: resolveWorkKey(listen.pipeline),
@@ -308,7 +308,7 @@ export async function armResolve(listen: ListenRow, inMs = 0): Promise<void> {
 
 /** List now, synchronously, and arm the next clock relist: run at save so the
  *  first subscription sync sees the records the listen is subscribed under. */
-export async function resolveAndArm(listen: ListenRow): Promise<string | null | typeof HELD_ELSEWHERE> {
+export async function resolveAndArm(listen: SavedListen): Promise<string | null | typeof HELD_ELSEWHERE> {
   const failure = await resolveListen(listen);
   const everyMs = relistIntervalMs(listen);
   if (everyMs !== undefined) await armResolve(listen, everyMs);
@@ -319,7 +319,7 @@ export async function resolveAndArm(listen: ListenRow): Promise<string | null | 
  *  edges listed again: the delivery that carried the change arms it
  *  (listen_door.ts), off the listens it was already judged against, so no
  *  listen is re-read on the delivery path. */
-export async function armResolveForArrivals(input: { edges: readonly string[]; listens: readonly ListenRow[] }): Promise<void> {
+export async function armResolveForArrivals(input: { edges: readonly string[]; listens: readonly SavedListen[] }): Promise<void> {
   if (input.edges.length === 0) return;
   for (const listen of input.listens) {
     if (!resolvesListen(listen)) continue;

@@ -8,10 +8,9 @@ import type { TeamId } from '../../generated/kysely/core/Team';
 
 import { getAutomationsQb } from '../../lib/kysely';
 
-/** How an arrival reached one of a movement's listens: a run it started, an
- *  `Arrival Not Judged` fact (the listen could not tell), or a refusal (the
- *  automation's fire list did not let who acted start a run). */
-export type MovementEventStatus = 'ran' | 'run_failed' | 'not_judged' | 'refused';
+/** How an arrival reached one of a movement's listens: a run it started, or
+ *  an `Arrival Not Judged` fact (the listen could not tell). */
+export type MovementEventStatus = 'ran' | 'run_failed' | 'not_judged';
 
 export type MovementEventItem = {
   id: string;
@@ -24,7 +23,7 @@ export type MovementEventItem = {
   adapterType: string;
   status: MovementEventStatus;
   failureReason: string | null;
-  /** For a not judged fact, which attempt (0 as delivered, one more per replay). */
+  /** For a fact, which attempt (0 as delivered, one more per replay). */
   attempt: number | null;
   occurredAt: Date;
   createdAt: Date;
@@ -32,14 +31,13 @@ export type MovementEventItem = {
 
 /**
  * The arrival ledger for a movement's listens, newest first: each run an
- * arrival started (with the delivery it came in), each arrival a listen
- * could not judge, and each its fire list refused (ruling 4: each with its
- * replay). A listen edited since keeps its facts under the pipeline it had,
- * so they are not shown here.
+ * arrival started (with the delivery it came in), and each arrival a listen
+ * could not judge (ruling 4: each with its replay). A listen edited since
+ * keeps its facts under the pipeline it had, so they are not shown here.
  */
 export async function movementEventsImpl(params: { teamId: TeamId; movementId: string }): Promise<MovementEventItem[]> {
   const { teamId, movementId } = params;
-  const exec = getAutomationsQb(['trigger', 'trigger_run', 'arrival_unjudged', 'arrival_refused', 'delivery']);
+  const exec = getAutomationsQb(['trigger', 'trigger_run', 'arrival_unjudged', 'delivery']);
   const { rows: runs } = await sql<{
     id: string;
     trigger_id: string;
@@ -74,21 +72,6 @@ export async function movementEventsImpl(params: { teamId: TeamId; movementId: s
     join automations.arrival_unjudged u on u.team_id = t.team_id and u.pipeline = t.config->'listen'->>'pipeline'
     where t.team_id = ${teamId}::uuid and t.movement_id = ${movementId}::uuid
     order by u.noted_at desc limit 50`.execute(exec);
-  const { rows: refused } = await sql<{
-    trigger_id: string;
-    lane: string;
-    kind: string;
-    pipeline: string;
-    arrival: string;
-    delivery_id: string;
-    reason: string;
-    noted_at: Date;
-  }>`
-    select t.id::text as trigger_id, t.name as lane, t.kind, f.pipeline, f.arrival, f.delivery_id::text as delivery_id, f.reason, f.noted_at
-    from automations.trigger t
-    join automations.arrival_refused f on f.team_id = t.team_id and f.pipeline = t.config->'listen'->>'pipeline'
-    where t.team_id = ${teamId}::uuid and t.movement_id = ${movementId}::uuid
-    order by f.noted_at desc limit 50`.execute(exec);
   const items: MovementEventItem[] = [
     ...runs.map((run): MovementEventItem => ({
       id: run.id,
@@ -111,18 +94,6 @@ export async function movementEventsImpl(params: { teamId: TeamId; movementId: s
       status: 'not_judged',
       failureReason: fact.reason,
       attempt: fact.attempt,
-      occurredAt: fact.noted_at,
-      createdAt: fact.noted_at,
-    })),
-    ...refused.map((fact): MovementEventItem => ({
-      id: `refused|${fact.pipeline}|${fact.arrival}|${fact.delivery_id}`,
-      lane: fact.lane,
-      triggerId: fact.trigger_id,
-      deliveryId: fact.delivery_id,
-      adapterType: fact.kind,
-      status: 'refused',
-      failureReason: fact.reason,
-      attempt: null,
       occurredAt: fact.noted_at,
       createdAt: fact.noted_at,
     })),

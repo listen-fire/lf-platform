@@ -660,7 +660,7 @@ function automationConnectorOptions(): McpRouterOptions {
       },
       listArrivals: {
         description:
-          "List what reached an automation's listeners, newest first: each run an arrival started (with its runId), each arrival a listener could not judge (status \"not_judged\", with the reason — usually a system that did not answer a lookup — and which attempt), and each arrival the automation's fire list did not let start a run (status \"refused\", with the reason). Each entry names its `listen` and `deliveryId`: pass both to replayDelivery. Pass the automation id or its exact name.",
+          "List what reached an automation's listeners, newest first: each run an arrival started (with its runId) and each arrival a listener could not judge (status \"not_judged\", with the reason — usually a system that did not answer a lookup — and which attempt). Each entry names its `listen` and `deliveryId`: pass both to replayDelivery. Pass the automation id or its exact name.",
         annotations: { readOnlyHint: true },
         inputSchema: {
           idOrName: z.string().describe('The automation id (from listAutomations) or its exact name.'),
@@ -671,7 +671,7 @@ function automationConnectorOptions(): McpRouterOptions {
       },
       replayDelivery: {
         description:
-          'Put one delivery through one listener again — the way out of an arrival the listener could not judge (listArrivals shows it as "not_judged"), once the system it needed answers again, and of one its fire list refused (shown as "refused"). Only what that delivery brought is judged, by that listener alone. Who may fire the automation is judged again too, except for an arrival it refused before: replaying that one runs it, on the word of the writer replaying it, so confirm with the user first. A listener that already ran the arrival runs nothing and says so; `force: true` runs it again, so confirm with the user first. Returns { outcome, runIds, attempt, stillUndecided, lines }: the runs are queued, so poll checkRun with each runId.',
+          'Put one delivery through one listener again — the way out of an arrival the listener could not judge (listArrivals shows it as "not_judged"), once the system it needed answers again. Only what that delivery brought is judged, by that listener alone. A listener that already ran the arrival runs nothing and says so; `force: true` runs it again, so confirm with the user first. Returns { outcome, runIds, attempt, stillUndecided, lines }: the runs are queued, so poll checkRun with each runId.',
         annotations: { destructiveHint: true },
         inputSchema: {
           listen: z.string().describe('The listener, as listArrivals names it (`listen`).'),

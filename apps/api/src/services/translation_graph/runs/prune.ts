@@ -61,11 +61,10 @@ export async function pruneTriggerRuns(
  * (ruling 3), and the delivery with it once nothing still running needs it:
  * a run that is not settled, or a `fire_event` row yet to start one. A
  * `read_delivery` row a version gave up on keeps its delivery and its request:
- * the issue it left names the delivery, and an operator may need it. A
- * refused arrival goes with its delivery, which a replay of it needs.
+ * the issue it left names the delivery, and an operator may need it.
  */
 async function pruneDeliveries(input: { cutoff: Date; teamId: TeamId | null }): Promise<number> {
-  const exec = getAutomationsQb(['delivery', 'trigger_run', 'work', 'arrival_refused']);
+  const exec = getAutomationsQb(['delivery', 'trigger_run', 'work']);
   const { cutoff, teamId } = input;
   await sql`
     update automations.delivery d set request = null
@@ -81,9 +80,5 @@ async function pruneDeliveries(input: { cutoff: Date; teamId: TeamId | null }): 
       and not exists (select 1 from automations.work w
                       where w.team_id = d.team_id and w.kind in ('fire_event', 'read_delivery') and w.payload->>'deliveryId' = d.id::text)
     returning 1`.execute(exec);
-  await sql`
-    delete from automations.arrival_refused f
-    where f.noted_at < ${cutoff} and (${teamId}::uuid is null or f.team_id = ${teamId}::uuid)
-      and not exists (select 1 from automations.delivery d where d.team_id = f.team_id and d.id = f.delivery_id)`.execute(exec);
   return rows.length;
 }
