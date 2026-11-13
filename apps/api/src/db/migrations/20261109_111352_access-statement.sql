@@ -1,4 +1,4 @@
--- Access statements: who may read, write or fire one automation, and who may
+-- Access statements: who may read or write one automation, and who may
 -- use one connection, beside the team's own read or write. Nothing is backfilled
 -- here: until a thing has a statement, nobody passes a decision about it.
 
@@ -21,19 +21,16 @@ ALTER TABLE access_statement
 	ADD CONSTRAINT access_statement_pkey PRIMARY KEY (id);
 
 ALTER TABLE access_statement
-	ADD CONSTRAINT access_statement_grantee_check CHECK ((grantee = ANY (ARRAY['team'::text, 'user'::text, 'anyone'::text, 'domain'::text, 'email'::text, 'phone'::text])));
-
-ALTER TABLE access_statement
-	ADD CONSTRAINT access_statement_members_only_check CHECK (((verb = 'fire'::text) OR (grantee = ANY (ARRAY['team'::text, 'user'::text]))));
+	ADD CONSTRAINT access_statement_grantee_check CHECK ((grantee = ANY (ARRAY['team'::text, 'user'::text])));
 
 ALTER TABLE access_statement
 	ADD CONSTRAINT access_statement_thing_check CHECK ((thing = ANY (ARRAY['automation'::text, 'connection'::text])));
 
 ALTER TABLE access_statement
-	ADD CONSTRAINT access_statement_value_check CHECK (((value IS NULL) = (grantee = ANY (ARRAY['team'::text, 'anyone'::text]))));
+	ADD CONSTRAINT access_statement_value_check CHECK (((value IS NULL) = (grantee = 'team'::text)));
 
 ALTER TABLE access_statement
-	ADD CONSTRAINT access_statement_verb_check CHECK ((verb = ANY (ARRAY['read'::text, 'write'::text, 'fire'::text, 'use'::text])));
+	ADD CONSTRAINT access_statement_verb_check CHECK ((verb = ANY (ARRAY['read'::text, 'write'::text, 'use'::text])));
 
 ALTER TABLE access_statement
 	ADD CONSTRAINT access_statement_verb_thing_check CHECK (((verb = 'use'::text) = (thing = 'connection'::text)));

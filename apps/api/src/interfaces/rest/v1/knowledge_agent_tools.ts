@@ -9,7 +9,7 @@
 // implementation. The route metadata is also registered on the registry
 // (`registerKnowledgeAgentToolRoutes`) for non-MCP discovery.
 
-import { CreationStatementsInput, GranteesInput, LIST_DESCRIPTIONS, MemberGranteesInput } from '../../../services/access/stated_input';
+import { CreationStatementsInput, GranteesInput, LIST_DESCRIPTIONS } from '../../../services/access/stated_input';
 import { randomUUID } from "node:crypto";
 
 import { Router, type RequestHandler } from 'express';
@@ -1360,7 +1360,7 @@ const saveMovementSchema = z.object({
    *  conflict instead of silently overwriting. Omit for today's behaviour
    *  (no precondition). Ignored when creating a new automation. */
   expectedRevision: z.string().optional(),
-  /** Who may read, write and fire the automation, when this save creates it:
+  /** Who may read and write the automation, when this save creates it:
    *  each list is required then, and refused on a save over an existing one. */
   statements: CreationStatementsInput.optional(),
 });
@@ -1451,7 +1451,7 @@ const setAccessSchema = z
     automation: z.string().optional(),
     connection: z.string().optional(),
     verb: z.enum(['read', 'write', 'use']),
-    grantees: MemberGranteesInput,
+    grantees: GranteesInput,
     team: z.string().optional(),
   })
   .refine((input) => (input.automation === undefined) !== (input.connection === undefined), {

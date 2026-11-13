@@ -80,7 +80,7 @@ import { advanceLive, upgradeMovement, type Advance, type ValidateUnder } from '
 import { listensOfSubscription, MOVEMENT_LISTEN_PROVISIONER } from '../listen_subscriptions';
 import { bringUpListensLater, registerBringUpListensWork } from '../listens_up';
 import { mintMovementVersionIfChanged } from '../version_store';
-import { StatementStore, type Target } from '../../../access/statement';
+import { StatementStore } from '../../../access/statement';
 
 const SOURCE = 'function stamp(go: <manual-[:Invocations]->>) {\n}\n\nlisten to manual-[:Invocations]-> fire stamp\n';
 const clean: ValidateUnder = async () => ({ ok: true, diagnostics: [], listenerCount: 0, firedMovements: [], catalogNotes: [], gaps: [] });
@@ -109,9 +109,10 @@ async function seedShipped(name: string, source = SOURCE): Promise<string> {
     .values({ id: id as MovementId, team_id: teamId, name, source, description: '', language_version: '0.12.13' })
     .execute();
   await mintMovementVersionIfChanged({ teamId, movementId: id, source, languageVersion: '0.12.13' });
-  // Every automation says who may fire it, one saved before statements by the
-  // deploy's backfill; the vendor's door admits anyone.
-  await StatementStore.replaceGrants({ thing: 'automation', id }, { teamId, verb: 'fire', grantees: [{ kind: 'anyone' }] });
+  // Every automation says who may reach it, as one saved before statements does by the deploy's backfill.
+  for (const verb of ['write', 'read'] as const) {
+    await StatementStore.replaceGrants({ thing: 'automation', id }, { teamId, verb, grantees: [{ kind: 'team' }] });
+  }
   return id;
 }
 
@@ -175,13 +176,6 @@ describe('an upgraded automation whose listens could not be brought up', () => {
 
     expect(result.status).toBe('upgraded');
     expect(await workRows(id)).toHaveLength(1);
-    // Off 0.12.13 its forced anyone is restated from its text, which constructs
-    // no module, so the team. The vendor here says nothing of who acted, so the
-    // person widens it again, as setAccess would.
-    const automation = { thing: 'automation', id } satisfies Target<'automation'>;
-    expect(await StatementStore.grantsOf(automation, { teamId, verb: 'fire' })).toEqual([{ kind: 'team' }]);
-    await StatementStore.replaceGrants(automation, { teamId, verb: 'fire', grantees: [{ kind: 'anyone' }] });
-
     // Failing, the row stays and counts; a first failure may be a blip.
     expect(await pass(PASSES_TO_AN_ISSUE[0])).toEqual(expect.objectContaining({ failed: 0, deferred: 1 }));
     expect(await pass(PASSES_TO_AN_ISSUE[1])).toEqual(expect.objectContaining({ failed: 0, deferred: 1 }));

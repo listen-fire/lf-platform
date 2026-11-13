@@ -4,29 +4,25 @@
 // A person's save is decided here; a run's (an upgrade, the deploy sweep, a
 // script) is not, since nobody is authoring, and what a run creates gets the
 // statements a creation with no person gets. Saving over an automation is a
-// write on it, by id or by name. Creating one needs its read, write and fire
+// write on it, by id or by name. Creating one needs its read and write
 // statements. Every connection the file and the files it imports name needs
 // `use`: an imported function runs against its own file's connections, and
 // without this anyone could save their own automation on a connection they
 // may not use and read everything through it.
 
 import { credentialImportNames } from 'movement-engine/public/catalog';
-import { MovementParseError, type LanguageVersion } from 'movement-lang';
 
 import type { Principal } from 'principal';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { CatalogAudience } from './audience';
-import type { ListenReach } from '../../access/no_person';
 
 import { accessTo, membersAdmitted, stateAtCreation, type CreationStatements, type StatementRefusal } from '../../access/decide';
-import { onCarriedPin } from '../../access/carried_pin';
 import { automationLists, automationWithNoPerson } from '../../access/no_person';
-import { isLfEngineTeam } from '../../lf_engine/team_engine';
 import { StatementStore, type StatedVerb, type Target } from '../../access/statement';
 import { hasAdapter, resolveAdapterSlug } from '../adapters/registry';
 import { getRemoteAdapter } from '../adapters/remote/store';
 import { teamAdapterManifests } from '../adapters/team_manifests';
-import { constructionsOf, loadCredentialRows, parsedConstructionsOf } from './catalog';
+import { constructionsOf, loadCredentialRows } from './catalog';
 import { assembleMovementFileSources } from './files';
 import { getMovementRowByName, type MovementRow } from './store';
 
@@ -69,21 +65,21 @@ export function nameTakenRefusal(name: string): string {
 
 /** Statements given to a save that overwrites: they say who may reach a new automation, so they apply only when creating. */
 export const STATEMENTS_ON_OVERWRITE_REFUSAL =
-  'Statements apply only when creating an automation. Change who may read, write or fire this one with setAccess.';
+  'Statements apply only when creating an automation. Change who may read or write this one with setAccess.';
 
 /** A save by name over an automation that was deleted while it was being saved: nothing is created in its place. */
 export function nameGoneRefusal(name: string): string {
   return `The automation named "${name}" was deleted while you were saving it, so nothing was saved. Save again to create it.`;
 }
 
-const STATED_VERBS = ['read', 'write', 'fire'] as const satisfies readonly StatedVerb<'automation'>[];
+const STATED_VERBS = ['read', 'write'] as const satisfies readonly StatedVerb<'automation'>[];
 
-/** All three statements a new automation is created with, or the ones it still lacks. */
+/** Both statements a new automation is created with, or the ones it still lacks. */
 export function creationStatements(
   given: Partial<CreationStatements> | undefined,
 ): { statements: CreationStatements } | { missing: StatedVerb<'automation'>[] } {
-  const { read, write, fire } = given ?? {};
-  if (read !== undefined && write !== undefined && fire !== undefined) return { statements: { read, write, fire } };
+  const { read, write } = given ?? {};
+  if (read !== undefined && write !== undefined) return { statements: { read, write } };
   return { missing: STATED_VERBS.filter((verb) => given?.[verb] === undefined) };
 }
 
@@ -148,55 +144,22 @@ export async function connectionsNamed(input: { teamId: string; file: string; so
 }
 
 /**
- * The listens a file may have, as far as its text says before it is checked:
- * each module it constructs stands for a listen on it. That can only make the
- * fire list a run creates it with narrower than its listens alone would.
- *
- * The source is parsed strictly. A lexical guess at a file that does not parse
- * can miss a Slack construction split over lines, and a file whose only Slack
- * listen is missed would read as one every listen of which admits anyone. A
- * file saved under an older pin is read under it when the caller gives it.
- * Throws `MovementParseError`; the caller states the narrowest fire list.
- */
-export function listenReachesOf(source: string, options?: { languageVersion?: LanguageVersion }): ListenReach[] {
-  return parsedConstructionsOf(source, options).map((ref) => ({ module: ref.adapter, viaConnection: ref.credential !== undefined }));
-}
-
-/** The listens of a source, or none when it does not parse: a file whose listens cannot be read is fired only by the team. */
-function listenReachesOrNoneOf(source: string): ListenReach[] {
-  try {
-    return listenReachesOf(source);
-  } catch (e) {
-    if (e instanceof MovementParseError) return [];
-    throw e;
-  }
-}
-
-/**
  * State what a run's save creates: the statements it was given, when it was
- * given all three, else what a creation with no person gets. One or two of
- * the three is refused as a programming error.
+ * given both, else what a creation with no person gets. One of the two is
+ * refused as a programming error.
  */
 export async function stateRunCreation(created: {
   teamId: string;
   target: Target<'automation'>;
-  source: string;
   given: Partial<CreationStatements> | undefined;
 }): Promise<void> {
   const given = creationStatements(created.given);
-  // Some of the three is a caller's mistake, not a request for the defaults:
+  // One of the two is a caller's mistake, not a request for the defaults:
   // carrying on would drop what they stated without a word.
   if ('missing' in given && given.missing.length < STATED_VERBS.length) {
-    throw new Error(`A run's save was given only some of the statements: ${given.missing.join(', ')} missing. Give all three, or none.`);
+    throw new Error(`A run's save was given only some of the statements: ${given.missing.join(', ')} missing. Give both, or none.`);
   }
-  const statements =
-    'statements' in given
-      ? given.statements
-      : automationWithNoPerson({
-          listens: listenReachesOrNoneOf(created.source),
-          runsOnLf: await isLfEngineTeam(created.teamId),
-          carriedPin: await onCarriedPin(created.target.id),
-        });
+  const statements = 'statements' in given ? given.statements : automationWithNoPerson();
   await stateAtCreation(created.target, { teamId: created.teamId, lists: automationLists(statements) });
 }
 

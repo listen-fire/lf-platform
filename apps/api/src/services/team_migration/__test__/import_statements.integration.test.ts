@@ -16,7 +16,7 @@ import { cleanupTeam } from '../../../test/harness/cleanup';
 import { StatementStore, type Target } from '../../access/statement';
 import ExternalServiceType from '../../../generated/kysely/automations/ExternalServiceType';
 import type { ExternalServiceCredentialsId } from '../../../generated/kysely/automations/ExternalServiceCredentials';
-import { anyoneWhereFireIsNotKeptTo, stateWhatIsUnstated } from '../../access/state_unstated';
+import { stateWhatIsUnstated } from '../../access/state_unstated';
 
 let teamId: TeamId;
 let client: Client;
@@ -50,38 +50,26 @@ async function connection(name: string): Promise<ExternalServiceCredentialsId> {
   return id;
 }
 
-const listOf = (target: Target, verb: 'read' | 'write' | 'fire' | 'use') => StatementStore.grantsOf(target, { teamId, verb });
+const listOf = (target: Target, verb: 'read' | 'write' | 'use') => StatementStore.grantsOf(target, { teamId, verb });
 
 describe('an imported team', () => {
-  it('gives an automation with no statement the team, and fire by its listens; a connection or shell, use for the team', async () => {
+  it('the backfill states read, write and use and parses no source', async () => {
     const slack = await connection('Slack');
+    // Sources that no parser could read: the backfill states the same lists whatever the file says.
     const onSlack = await automation('On Slack', 'chat = slack(credentials: `Slack`)');
-    const onEmail = await automation('On email', 'inbox = email()');
-    const mixed = await automation('Mixed', 'inbox = email()\nchat = slack(credentials: `Slack`)');
+    const unreadable = await automation('Unreadable', 'movement broken( {', '4');
+    const carried = await automation('Carried', 'inbox = email()', '0.12.13');
 
     const stated = await stateWhatIsUnstated(client, teamId);
     expect(stated.automations).toHaveLength(3);
     expect(stated.connections).toEqual([slack]);
 
     const team = [{ kind: 'team' }];
-    for (const id of [onSlack, onEmail, mixed]) {
+    for (const id of [onSlack, unreadable, carried]) {
       expect(await listOf({ thing: 'automation', id }, 'read')).toEqual(team);
       expect(await listOf({ thing: 'automation', id }, 'write')).toEqual(team);
     }
-    expect(await listOf({ thing: 'automation', id: onSlack }, 'fire')).toEqual(team);
-    expect(await listOf({ thing: 'automation', id: onEmail }, 'fire')).toEqual([{ kind: 'anyone' }]);
-    expect(await listOf({ thing: 'automation', id: mixed }, 'fire')).toEqual(team);
     expect(await listOf({ thing: 'connection', id: slack }, 'use')).toEqual(team);
-  });
-
-  it('says anyone may fire an automation pinned to a carried version, whatever its listens', async () => {
-    const slack = 'chat = slack(credentials: `Slack`)';
-    const carried = await automation('Carried', slack, '0.12.13');
-    const unstamped = await automation('Unstamped', slack, '1');
-
-    await stateWhatIsUnstated(client, teamId);
-    expect(await listOf({ thing: 'automation', id: carried }, 'fire')).toEqual([{ kind: 'anyone' }]);
-    expect(await listOf({ thing: 'automation', id: unstamped }, 'fire')).toEqual([{ kind: 'anyone' }]);
   });
 
   it('keeps what arrived with its statements as it was', async () => {
@@ -92,33 +80,5 @@ describe('an imported team', () => {
     expect(await stateWhatIsUnstated(client, teamId)).toEqual({ automations: [], connections: [] });
     expect(await listOf({ thing: 'automation', id: stated }, 'write')).toEqual([{ kind: 'user', userId: alice }]);
     expect(await listOf({ thing: 'automation', id: stated }, 'read')).toEqual([]);
-  });
-
-  it('makes anyone a fire list a set would refuse there, and says which automations it changed', async () => {
-    const team = [{ kind: 'team' as const }];
-    const carried = await automation('Carried', 'chat = slack(credentials: `Slack`)', '0.12.13');
-    const current = await automation('Current', 'chat = slack(credentials: `Slack`)');
-    const open = await automation('Open', 'inbox = email()', '0.12.13');
-    for (const id of [carried, current]) {
-      await StatementStore.replaceGrants({ thing: 'automation', id }, { teamId, verb: 'fire', grantees: team });
-    }
-    await StatementStore.replaceGrants({ thing: 'automation', id: open }, { teamId, verb: 'fire', grantees: [{ kind: 'anyone' }] });
-
-    expect(await anyoneWhereFireIsNotKeptTo(client, teamId)).toEqual([{ id: carried, name: 'Carried' }]);
-    expect(await listOf({ thing: 'automation', id: carried }, 'fire')).toEqual([{ kind: 'anyone' }]);
-    expect(await listOf({ thing: 'automation', id: current }, 'fire')).toEqual(team);
-    expect(await listOf({ thing: 'automation', id: open }, 'fire')).toEqual([{ kind: 'anyone' }]);
-
-    await getAutomationsQb(['team_engine']).insertInto('team_engine').values({ team_id: teamId, engine: 'lf' }).execute();
-    expect(await anyoneWhereFireIsNotKeptTo(client, teamId)).toEqual([{ id: current, name: 'Current' }]);
-    expect(await listOf({ thing: 'automation', id: current }, 'fire')).toEqual([{ kind: 'anyone' }]);
-  });
-
-  it('says anyone may fire on a team whose automations run on lf', async () => {
-    const onSlack = await automation('On Slack', 'chat = slack(credentials: `Slack`)');
-    await getAutomationsQb(['team_engine']).insertInto('team_engine').values({ team_id: teamId, engine: 'lf' }).execute();
-
-    await stateWhatIsUnstated(client, teamId);
-    expect(await listOf({ thing: 'automation', id: onSlack }, 'fire')).toEqual([{ kind: 'anyone' }]);
   });
 });

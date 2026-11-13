@@ -1,6 +1,5 @@
 // The one decision about an automation or a connection: may this principal
-// read it, write it, or use it. Firing is judged at the door instead, from the
-// arrival's actor, so it is never asked here.
+// read it, write it, or use it.
 //
 // A statement sits beside team membership, never in place of it. The database
 // pool already holds a read member to reads, so membership caps every answer
@@ -15,20 +14,15 @@ import { neverAsAny } from 'movement-engine/public/types';
 
 import { meets, narrower, type Access, type Principal } from 'principal';
 
-import { isLfEngineTeam } from '../lf_engine/team_engine';
-import { onCarriedPin } from './carried_pin';
-import { StatementStore, type AskedVerb, type Grantee, type StatedVerb, type Target, type Thing, type Verb } from './statement';
+import { StatementStore, type Grantee, type StatedVerb, type Target, type Thing, type Verb } from './statement';
 
 type StatementRefusal =
   | 'empty'
   | 'not_found'
   | 'not_allowed'
-  | 'outsider'
   | 'not_a_member'
   | 'not_a_writer'
   | 'malformed'
-  | 'lf_engine'
-  | 'carried_pin'
   | 'already_stated';
 
 class StatementRefusedError extends Error {
@@ -81,17 +75,13 @@ function holderNeeds(verb: Verb): Access {
       return 'write';
     case 'read':
     case 'use':
-    case 'fire':
       return 'read';
     default:
       return neverAsAny(verb);
   }
 }
 
-/**
- * The lists whose holders may do `verb`: whoever may write an automation may
- * also read it. Empty for firing, which this decision never answers.
- */
+/** The lists whose holders may do `verb`: whoever may write an automation may also read it. */
 function grantedBy(verb: Verb): Verb[] {
   switch (verb) {
     case 'read':
@@ -100,8 +90,6 @@ function grantedBy(verb: Verb): Verb[] {
       return ['write'];
     case 'use':
       return ['use'];
-    case 'fire':
-      return [];
     default:
       return neverAsAny(verb);
   }
@@ -113,12 +101,6 @@ function admits(grantee: Grantee, standing: Standing): boolean {
       return true;
     case 'user':
       return standing.userId !== undefined && grantee.userId === standing.userId;
-    // Outsiders are firing's, judged at the door from the arrival's actor.
-    case 'anyone':
-    case 'domain':
-    case 'email':
-    case 'phone':
-      return false;
     default:
       return neverAsAny(grantee);
   }
@@ -126,11 +108,10 @@ function admits(grantee: Grantee, standing: Standing): boolean {
 
 async function accessTo<T extends Thing>(
   principal: Principal,
-  asked: { target: Target<T>; verb: AskedVerb<T> },
+  asked: { target: Target<T>; verb: StatedVerb<T> },
 ): Promise<boolean> {
   const { target, verb } = asked;
   const lists = grantedBy(verb);
-  if (lists.length === 0) return false;
   const teamId = await StatementStore.teamOf(target);
   if (teamId === undefined) return false;
   const standing = (await standingsIn(principal, [teamId])).get(teamId);
@@ -157,7 +138,7 @@ async function mayChangeConnection(principal: Principal, target: Target<'connect
 }
 
 /** The verb that lets a thing be seen in a list. */
-function seenBy(thing: Thing): AskedVerb<Thing> {
+function seenBy(thing: Thing): StatedVerb<Thing> {
   switch (thing) {
     case 'automation':
       return 'read';
@@ -189,7 +170,7 @@ async function readableIds(
 }
 
 /** The verb whose holders may change a thing's statement. */
-function changedBy(thing: Thing): AskedVerb<Thing> {
+function changedBy(thing: Thing): StatedVerb<Thing> {
   switch (thing) {
     case 'automation':
       return 'write';
@@ -267,10 +248,6 @@ async function seenOnlyBy(
       case 'user':
         return grantee.userId;
       case 'team':
-      case 'anyone':
-      case 'domain':
-      case 'email':
-      case 'phone':
         return undefined;
       default:
         return neverAsAny(grantee);
@@ -293,61 +270,17 @@ async function seenOnlyBy(
   return only;
 }
 
-/** Whether a verb's list may name people who are not on the team. */
-function admitsOutsiders(verb: Verb): boolean {
-  switch (verb) {
-    case 'fire':
-      return true;
-    case 'read':
-    case 'write':
-    case 'use':
-      return false;
-    default:
-      return neverAsAny(verb);
-  }
-}
-
-// The shapes a fire list's outsiders are judged against at the door: a sender's
-// domain, a sender's address, and a phone as WhatsApp's `From` gives it.
-const DOMAIN = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
-const ADDRESS_LOCAL = /^[^\s@"(),:;<>[\\\]]{1,64}$/;
-const PHONE_DIGITS = /^[1-9]\d{7,14}$/;
-const PHONE_SPACING = /[\s().-]/g;
-
-/**
- * A grantee as it is stored: user ids, domains and addresses lowercased, a
- * phone as its digits, so a stored value compares exactly. A value of the
- * wrong shape is refused, naming it.
- */
+/** A grantee as it is stored: user ids lowercased, so a stored value compares exactly. A user naming nobody is refused. */
 function normalised(grantee: Grantee, verb: Verb): Grantee {
-  const malformed = (value: string, shape: string): never => {
-    throw new StatementRefusedError('malformed', `${JSON.stringify(value)} on the ${verb} list is not ${shape}.`);
-  };
   switch (grantee.kind) {
     case 'team':
-    case 'anyone':
       return grantee;
     case 'user': {
       const userId = grantee.userId.trim().toLowerCase();
-      return userId === '' ? malformed(grantee.userId, 'a user: name which one') : { kind: 'user', userId };
-    }
-    case 'domain': {
-      const domain = grantee.domain.trim().toLowerCase();
-      return DOMAIN.test(domain) ? { kind: 'domain', domain } : malformed(grantee.domain, 'a domain, such as example.com');
-    }
-    case 'email': {
-      const address = grantee.address.trim().toLowerCase();
-      const at = address.lastIndexOf('@');
-      const shaped = at > 0 && ADDRESS_LOCAL.test(address.slice(0, at)) && DOMAIN.test(address.slice(at + 1));
-      return shaped ? { kind: 'email', address } : malformed(grantee.address, 'an email address, such as pat@example.com');
-    }
-    case 'phone': {
-      // Spacing and the international plus are how people write a number; the
-      // digits are what WhatsApp sends, and they must start with the country code.
-      const digits = grantee.digits.trim().replace(PHONE_SPACING, '').replace(/^\+/, '');
-      return PHONE_DIGITS.test(digits)
-        ? { kind: 'phone', digits }
-        : malformed(grantee.digits, 'a phone number: its digits with the country code first, such as 447700900123');
+      if (userId === '') {
+        throw new StatementRefusedError('malformed', `${JSON.stringify(grantee.userId)} on the ${verb} list is not a user: name which one.`);
+      }
+      return { kind: 'user', userId };
     }
     default:
       return neverAsAny(grantee);
@@ -357,16 +290,9 @@ function normalised(grantee: Grantee, verb: Verb): Grantee {
 function keyOf(grantee: Grantee): string {
   switch (grantee.kind) {
     case 'team':
-    case 'anyone':
       return grantee.kind;
     case 'user':
       return `user:${grantee.userId}`;
-    case 'domain':
-      return `domain:${grantee.domain}`;
-    case 'email':
-      return `email:${grantee.address}`;
-    case 'phone':
-      return `phone:${grantee.digits}`;
     default:
       return neverAsAny(grantee);
   }
@@ -376,12 +302,6 @@ function listFor(verb: Verb, grantees: readonly Grantee[]): Grantee[] {
   const list = new Map<string, Grantee>();
   for (const given of grantees) {
     const grantee = normalised(given, verb);
-    if (!admitsOutsiders(verb) && grantee.kind !== 'team' && grantee.kind !== 'user') {
-      throw new StatementRefusedError(
-        'outsider',
-        `Only the team or people on it can ${verb}; a ${grantee.kind} can be given firing only.`,
-      );
-    }
     list.set(keyOf(grantee), grantee);
   }
   return [...list.values()];
@@ -410,7 +330,7 @@ async function setStatement<T extends Thing>(
       `Only someone who may ${changedBy(target.thing)} this ${target.thing}, or a team admin, can change who may ${verb} it.`,
     );
   }
-  const list = await checkedList(teamId, { verb, grantees, target });
+  const list = await checkedList(teamId, { verb, grantees });
   await StatementStore.replaceGrants(target, { teamId, verb, grantees: list });
   switch (right) {
     case 'listed':
@@ -430,50 +350,16 @@ async function setStatement<T extends Thing>(
 }
 
 /**
- * Why a fire list without anyone would not be kept to where it is stored, or
- * undefined when it would: the platform's door does not judge a team whose
- * automations run on lf, nor an automation pinned to a carried version, whose
- * arrivals that version's own rules judge. A team import applies the same rule
- * to the lists it brings.
- */
-function fireNotKeptTo(where: { runsOnLf: boolean; carriedPin: boolean }): 'lf_engine' | 'carried_pin' | undefined {
-  if (where.runsOnLf) return 'lf_engine';
-  if (where.carriedPin) return 'carried_pin';
-  return undefined;
-}
-
-const FIRE_NOT_KEPT_TO: Record<'lf_engine' | 'carried_pin', string> = {
-  lf_engine:
-    "This team's automations run on lf, whose door the platform does not judge, so a fire list other than anyone would not be kept to. State anyone, or move the team back to the platform's engine first.",
-  carried_pin:
-    'This automation is still on an older language version, whose arrivals the platform cannot judge by who acted, so a fire list other than anyone would not be kept to. State anyone, or upgrade the automation first (upgradeAutomation), then narrow it.',
-};
-
-/**
  * One verb's list as it would be stored on a thing of this team: never empty,
- * every grantee well formed and of a kind the verb takes, and every user it
- * names on the team with the access the verb needs. A fire list other than
- * anyone is also refused where the door could not keep to it: on a team whose
- * automations run on lf, and on an automation still pinned to a carried
- * version, whose arrivals that version's own rules judge. Give `target` for the
- * latter; a thing being created has none yet, and is created on the current one.
+ * every grantee well formed, and every user it names on the team with the
+ * access the verb needs.
  */
-async function checkedList(
-  teamId: string,
-  stated: { verb: Verb; grantees: readonly Grantee[]; target?: Target },
-): Promise<Grantee[]> {
-  const { verb, grantees, target } = stated;
+async function checkedList(teamId: string, stated: { verb: Verb; grantees: readonly Grantee[] }): Promise<Grantee[]> {
+  const { verb, grantees } = stated;
   if (grantees.length === 0) {
     throw new StatementRefusedError('empty', `The ${verb} list can't be emptied: name the team, or someone on it.`);
   }
   const list = listFor(verb, grantees);
-  if (verb === 'fire' && !list.some((grantee) => grantee.kind === 'anyone')) {
-    const refusal = fireNotKeptTo({
-      runsOnLf: await isLfEngineTeam(teamId),
-      carriedPin: target?.thing === 'automation' && (await onCarriedPin(target.id)),
-    });
-    if (refusal !== undefined) throw new StatementRefusedError(refusal, FIRE_NOT_KEPT_TO[refusal]);
-  }
   const named = list.flatMap((grantee) => (grantee.kind === 'user' ? [grantee.userId] : []));
   const memberships = await StatementStore.membershipsAmong(teamId, named);
   const strangers = named.filter((userId) => !memberships.has(userId));
@@ -494,15 +380,15 @@ async function checkedList(
   return list;
 }
 
-/** The read, write and fire lists a new automation is created with. */
+/** The read and write lists a new automation is created with. */
 type CreationStatements = Readonly<Record<StatedVerb<'automation'>, readonly Grantee[]>>;
 
 /**
  * Whether the principal may create an automation on this team with these
  * statements, checked before anything is stored so a refusal leaves nothing
  * behind. Creating is a write on the team, and the creator must be on the
- * write list they state: the read and fire lists are stated after it, by
- * someone who may write, and nobody creates what they could not change.
+ * write list they state: the read list is stated after it, by someone who
+ * may write, and nobody creates what they could not change.
  */
 async function checkCreation(
   principal: Principal,
@@ -515,7 +401,6 @@ async function checkCreation(
   }
   const write = await checkedList(teamId, { verb: 'write', grantees: statements.write });
   await checkedList(teamId, { verb: 'read', grantees: statements.read });
-  await checkedList(teamId, { verb: 'fire', grantees: statements.fire });
   if (!write.some((grantee) => admits(grantee, standing))) {
     throw new StatementRefusedError(
       'not_allowed',
@@ -526,7 +411,7 @@ async function checkCreation(
 
 /**
  * State a just-created automation's lists: write first, while nothing is
- * stated about it, then read and fire, as someone the write list now admits.
+ * stated about it, then read, as someone the write list now admits.
  * `checkCreation` has passed for the same lists.
  */
 async function stateCreation(
@@ -534,7 +419,7 @@ async function stateCreation(
   created: { target: Target<'automation'>; statements: CreationStatements },
 ): Promise<void> {
   const { target, statements } = created;
-  for (const verb of ['write', 'read', 'fire'] as const) {
+  for (const verb of ['write', 'read'] as const) {
     await setStatement(principal, { target, verb, grantees: statements[verb] });
   }
 }
@@ -582,7 +467,7 @@ async function stateAtCreation<T extends Thing>(
     throw new StatementRefusedError('already_stated', `This ${target.thing} already says who may reach it.`);
   }
   const checked: { verb: StatedVerb<T>; grantees: Grantee[] }[] = [];
-  for (const list of lists) checked.push({ verb: list.verb, grantees: await checkedList(teamId, { ...list, target }) });
+  for (const list of lists) checked.push({ verb: list.verb, grantees: await checkedList(teamId, list) });
   for (const list of checked) await StatementStore.replaceGrants(target, { teamId, ...list });
 }
 
@@ -605,17 +490,13 @@ async function membersAdmitted(
 /**
  * Whether a verb's list still admits someone as the team stands now. A user
  * grant holds only while its user is on the team with the access the verb
- * needs; anything else holds regardless of who is.
+ * needs; a team grant holds regardless of who is.
  */
 async function stillHeld(teamId: string, list: { verb: Verb; grantees: readonly Grantee[] }): Promise<boolean> {
   const named: string[] = [];
   for (const grantee of list.grantees) {
     switch (grantee.kind) {
       case 'team':
-      case 'anyone':
-      case 'domain':
-      case 'email':
-      case 'phone':
         return true;
       case 'user':
         named.push(grantee.userId);
@@ -679,7 +560,6 @@ async function passOnWhatTheyHeld(input: {
 
 export {
   accessTo,
-  fireNotKeptTo,
   mayChangeConnection,
   readableIds,
   setStatement,

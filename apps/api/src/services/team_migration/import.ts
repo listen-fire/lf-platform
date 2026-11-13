@@ -1,7 +1,7 @@
 import type { Client } from 'pg';
 
 import ExternalServiceType from '../../generated/kysely/automations/ExternalServiceType';
-import { anyoneWhereFireIsNotKeptTo, stateWhatIsUnstated } from '../access/state_unstated';
+import { stateWhatIsUnstated } from '../access/state_unstated';
 import { settingsAtCreation } from '../connections/module_settings';
 import { readBundle, readTableFile, type BundleManifest } from './bundle';
 import { quoteIdent, readColumns, readMigrationHead, splitQualified } from './catalog';
@@ -15,9 +15,6 @@ export type ImportResult = {
   shellCredentials: number;
   /** Automations and connections that arrived saying nothing of who may reach them, and were given the team's reach. */
   stated: { automations: number; connections: number };
-  /** Automations whose fire list this deployment's door would not keep to (the
-   *  team runs on lf, or the automation is on a carried version), made anyone. */
-  fireMadeAnyone: { id: string; name: string }[];
 };
 
 const DEFAULT_BATCH = 500;
@@ -104,7 +101,6 @@ export async function importTeam(client: Client, options: ImportOptions): Promis
   const inserted: Array<{ table: string; rows: number }> = [];
   let shellCredentials = 0;
   let stated = { automations: 0, connections: 0 };
-  let fireMadeAnyone: { id: string; name: string }[] = [];
 
   await client.query('BEGIN');
   try {
@@ -182,7 +178,6 @@ export async function importTeam(client: Client, options: ImportOptions): Promis
       }
       const statedNow = await stateWhatIsUnstated(client, manifest.teamId);
       stated = { automations: statedNow.automations.length, connections: statedNow.connections.length };
-      fireMadeAnyone = await anyoneWhereFireIsNotKeptTo(client, manifest.teamId);
     }
 
     await client.query('COMMIT');
@@ -191,5 +186,5 @@ export async function importTeam(client: Client, options: ImportOptions): Promis
     throw err;
   }
 
-  return { manifest, inserted, shellCredentials, stated, fireMadeAnyone };
+  return { manifest, inserted, shellCredentials, stated };
 }

@@ -21,7 +21,6 @@
     "refresh:valuations-cache": "TZ=utc ts-node --project tsconfig.dev.json --transpile-only -r dotenv/config -r tsconfig-paths/register src/scripts/refresh_valuations_cache.ts",
     "adapter:conformance": "TZ=utc ts-node --project tsconfig.dev.json --transpile-only -r tsconfig-paths/register src/scripts/adapter_conformance.ts",
     "access:state-unstated": "TZ=utc ts-node --project tsconfig.dev.json --transpile-only -r dotenv/config -r tsconfig-paths/register src/scripts/state_unstated.ts",
-    "access:mixed-fire-reach": "TZ=utc ts-node --project tsconfig.dev.json --transpile-only -r dotenv/config -r tsconfig-paths/register src/scripts/list_mixed_fire_reach.ts",
     "listeners:paused": "TZ=utc ts-node --project tsconfig.dev.json --transpile-only -r dotenv/config -r tsconfig-paths/register src/scripts/list_paused_listeners.ts",
     "deploy:check": "TZ=utc ts-node --project tsconfig.dev.json --transpile-only -r dotenv/config -r tsconfig-paths/register src/scripts/dev/deploy_check.ts",
     "export:kg-sqlite": "TZ=utc ts-node --project tsconfig.dev.json --transpile-only -r dotenv/config -r tsconfig-paths/register src/scripts/export_kg_sqlite.ts",

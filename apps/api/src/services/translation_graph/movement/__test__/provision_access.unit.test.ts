@@ -6,7 +6,7 @@
 //
 //   - saving over an automation, by id or by name, needs write on it; one the
 //     saver may not see answers as nothing there (by id) or as a taken name;
-//   - creating one needs its read, write and fire statements, stated with it;
+//   - creating one needs its read and write statements, stated with it;
 //   - every connection the file and its imports name needs use, and a refused
 //     save stores nothing, so it cannot re-provision a hidden connection's
 //     listens;
@@ -212,7 +212,7 @@ jest.mock('../catalog', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { mockCatalog, mockCatalogSnapshot } = require('movement-lang');
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { parsedConstructions, referencedConstructions } = require('legacy-lang');
+  const { referencedConstructions } = require('legacy-lang');
   const { unitInstanceSchema } = jest.requireActual('../../adapters/unit_surface');
   const { MANUAL_ADAPTER_TYPE, MANUAL_SURFACE } = jest.requireActual('../../adapters/manual');
   const spec = {
@@ -249,7 +249,6 @@ jest.mock('../catalog', () => {
       gaps: [],
     })),
     constructionsOf: (source: string) => referencedConstructions(source),
-    parsedConstructionsOf: (source: string) => parsedConstructions(source),
     loadCredentialRows: jest.fn(async () => [
       { id: ids.Finance, name: 'Finance', type: 'LEDGER' },
       { id: ids.Sales, name: 'Sales', type: 'LEDGER' },
@@ -276,8 +275,6 @@ jest.mock('../../adapters/registry', () => {
   };
 });
 
-const mockLfTeams = new Set<string>();
-jest.mock('../../../lf_engine/team_engine', () => ({ isLfEngineTeam: async (teamId: string) => mockLfTeams.has(teamId) }));
 
 jest.mock('../save_access', () => {
   const actual = jest.requireActual('../save_access');
@@ -325,10 +322,9 @@ const carol: Principal = { teamId: TEAM, userId: CAROL, access: 'read', scopes: 
 
 const user = (userId: string): Grantee => ({ kind: 'user', userId });
 const team: Grantee = { kind: 'team' };
-const anyone: Grantee = { kind: 'anyone' };
 
-/** The team may read and fire it, and Alice may write it. */
-const STATEMENTS = { read: [team], write: [user(ALICE)], fire: [anyone] };
+/** The team may read it, and Alice may write it. */
+const STATEMENTS = { read: [team], write: [user(ALICE)] };
 
 const onLedger = (connection: string, name = 'deals') =>
   [
@@ -386,7 +382,7 @@ const asAlice = (input: Omit<SaveMovementInput, 'teamId' | 'audience'>) => saveM
 /** An automation saved as a run would save it, with these statements, as it stands before Alice's save. */
 async function existing(
   source: string,
-  statements: Partial<Record<'read' | 'write' | 'fire', Grantee[]>>,
+  statements: Partial<Record<'read' | 'write', Grantee[]>>,
   name?: string,
 ): Promise<string> {
   const saved = await saveMovement({ teamId: TEAM, audience: { for: 'run' }, source, acknowledgeErrors: true, ...(name !== undefined ? { name } : {}) });
@@ -395,7 +391,7 @@ async function existing(
   const { movementId } = saved;
   mockAccess.rows = mockAccess.rows.filter((r) => r.target.id !== movementId);
   mockAccess.stated = [];
-  for (const verb of ['read', 'write', 'fire'] as const) {
+  for (const verb of ['read', 'write'] as const) {
     const grantees = statements[verb];
     if (grantees !== undefined) stated(automation(saved.movementId), verb, grantees);
   }
@@ -516,33 +512,31 @@ describe('a save that means to create', () => {
   });
 });
 
-describe('creating an automation needs who may read, write and fire it', () => {
-  it('is refused without all three, naming what is missing, and stores nothing', async () => {
+describe('creating an automation needs who may read and write it', () => {
+  it('is refused without both, naming what is missing, and stores nothing', async () => {
     const before = stored();
     expect(await asAlice({ source: manualOnly('fresh') })).toMatchObject({
       ok: false,
-      refused: { kind: 'missing_statement', missing: ['read', 'write', 'fire'] },
+      refused: { kind: 'missing_statement', missing: ['read', 'write'] },
     });
     expect(await asAlice({ source: manualOnly('fresh'), statements: { write: [user(ALICE)] } })).toMatchObject({
       ok: false,
-      refused: { kind: 'missing_statement', missing: ['read', 'fire'] },
-      errors: [expect.stringContaining('who may read, fire it')],
+      refused: { kind: 'missing_statement', missing: ['read'] },
+      errors: [expect.stringContaining('who may read it')],
     });
     expect(stored()).toEqual(before);
   });
 
-  it('states write first, then read and fire, with the insert in one transaction', async () => {
+  it('states write first, then read, with the insert in one transaction', async () => {
     const created = await asAlice({ source: manualOnly('fresh'), statements: STATEMENTS });
     expect(created.ok).toBe(true);
     if (!created.ok) return;
     expect(mockAccess.stated).toEqual([
       { verb: 'write', inTransaction: true },
       { verb: 'read', inTransaction: true },
-      { verb: 'fire', inTransaction: true },
     ]);
     expect(listOf(created.movementId, 'write')).toEqual([user(ALICE)]);
     expect(listOf(created.movementId, 'read')).toEqual([team]);
-    expect(listOf(created.movementId, 'fire')).toEqual([anyone]);
     expect(db.__tables.movement[0]).toMatchObject({ created_by_user_id: null });
   });
 
@@ -557,62 +551,49 @@ describe('creating an automation needs who may read, write and fire it', () => {
     // Nobody creates what they could not change.
     const notHers = await asAlice({ source: manualOnly('fresh'), statements: { ...STATEMENTS, write: [user(BOB)] } });
     expect(notHers).toMatchObject({ ok: false, refused: { kind: 'statement', reason: 'not_allowed' }, errors: [expect.stringContaining('write list')] });
-    // Reading goes only to the team or people on it.
-    const outsider = await asAlice({ source: manualOnly('fresh'), statements: { ...STATEMENTS, read: [anyone] } });
-    expect(outsider).toMatchObject({ ok: false, refused: { kind: 'statement', reason: 'outsider' } });
+    // Only people on the team can be named.
+    const stranger = await asAlice({ source: manualOnly('fresh'), statements: { ...STATEMENTS, read: [user(MISSING)] } });
+    expect(stranger).toMatchObject({ ok: false, refused: { kind: 'statement', reason: 'not_a_member' } });
     // A read member creates nothing.
     const reader = await saveMovement({ teamId: TEAM, audience: { for: carol }, source: manualOnly('fresh'), statements: STATEMENTS });
     expect(reader).toMatchObject({ ok: false, refused: { kind: 'statement', reason: 'not_allowed' } });
     expect(stored()).toEqual(before);
   });
 
-  it('is not decided for a run, and gives what a run creates the team, and fire by its modules, with the insert', async () => {
+  it('is not decided for a run, and gives what a run creates the team to read and write, with the insert', async () => {
     const saved = await saveMovement({ teamId: TEAM, audience: { for: 'run' }, source: manualOnly('fresh') });
     expect(saved.ok).toBe(true);
     if (!saved.ok) return;
     expect(mockAccess.stated).toEqual([
       { verb: 'write', inTransaction: true },
       { verb: 'read', inTransaction: true },
-      { verb: 'fire', inTransaction: true },
     ]);
     expect(listOf(saved.movementId, 'write')).toEqual([team]);
     expect(listOf(saved.movementId, 'read')).toEqual([team]);
-    expect(listOf(saved.movementId, 'fire')).toEqual([{ kind: 'anyone' }]);
   });
 
-  it('states the three a run gives it, over the defaults', async () => {
+  it('states the two a run gives it, over the defaults', async () => {
     const carol = user(CAROL);
     const saved = await saveMovement({
       teamId: TEAM,
       audience: { for: 'run' },
       source: manualOnly('given'),
-      statements: { read: [carol], write: [team], fire: [team] },
+      statements: { read: [carol], write: [team] },
     });
     if (!saved.ok) throw new Error('not saved');
     expect(listOf(saved.movementId, 'read')).toEqual([carol]);
-    expect(listOf(saved.movementId, 'fire')).toEqual([team]);
+    expect(listOf(saved.movementId, 'write')).toEqual([team]);
   });
 
   it.each([
-    ['one', { read: [team] }, 'write, fire'],
-    ['two', { read: [team], write: [team] }, 'fire'],
-  ])('refuses a run given only %s of the three, as a mistake, stating nothing for the defaults', async (_, given, missing) => {
+    ['read', { read: [team] }, 'write'],
+    ['write', { write: [team] }, 'read'],
+  ])('refuses a run given only %s of the two, as a mistake, stating nothing for the defaults', async (_, given, missing) => {
     await expect(
       saveMovement({ teamId: TEAM, audience: { for: 'run' }, source: manualOnly('partial'), statements: given }),
     ).rejects.toThrow(`only some of the statements: ${missing} missing`);
     // The two the fixture's connections began with: none for the automation.
     expect(stored().statements).toBe(2);
-  });
-
-  it('gives what a run creates on a team whose automations run on lf anyone to fire, and states nothing over what exists', async () => {
-    mockLfTeams.add(TEAM);
-    const saved = await saveMovement({ teamId: TEAM, audience: { for: 'run' }, source: manualOnly('onlf') });
-    mockLfTeams.clear();
-    if (!saved.ok) throw new Error('not saved');
-    expect(listOf(saved.movementId, 'fire')).toEqual([{ kind: 'anyone' }]);
-    mockAccess.stated = [];
-    expect((await saveMovement({ teamId: TEAM, audience: { for: 'run' }, source: manualOnly('onlf') })).ok).toBe(true);
-    expect(mockAccess.stated).toEqual([]);
   });
 });
 
@@ -785,7 +766,7 @@ describe('what a save warns about, never refusing', () => {
   });
 
   it('does not warn when everyone who may read it may use its connections', async () => {
-    const saved = await asAlice({ source: onLedger('Sales'), statements: { ...STATEMENTS, fire: [team] } });
+    const saved = await asAlice({ source: onLedger('Sales'), statements: { ...STATEMENTS, read: [team] } });
     expect(saved.ok).toBe(true);
     if (!saved.ok) return;
     expect(saved.warnings.filter((w) => w.includes('connection "Sales"'))).toEqual([]);

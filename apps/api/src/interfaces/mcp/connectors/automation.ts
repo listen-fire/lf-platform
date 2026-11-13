@@ -19,7 +19,7 @@ import {
   languageVersionInput,
 } from '../../../services/translation_graph/movement/language_pin_input';
 import { LANGUAGE_SEARCH_KINDS } from '../../../lib/knowledge/movement_handbook';
-import { GranteesInput, LIST_DESCRIPTIONS, MemberGranteesInput } from '../../../services/access/stated_input';
+import { GranteesInput, LIST_DESCRIPTIONS } from '../../../services/access/stated_input';
 
 /** Which version's help a tool answers with. */
 const HELP_INPUTS = {
@@ -308,7 +308,7 @@ function automationConnectorOptions(): McpRouterOptions {
           automation: z.string().optional().describe('The automation (id or exact name). Name this or connection, not both.'),
           connection: z.string().optional().describe('The connection (id or exact name, from listConnections). Name this or automation, not both.'),
           verb: z.enum(['read', 'write', 'use']).describe('Which list: read or write for an automation; use for a connection.'),
-          grantees: MemberGranteesInput.describe(
+          grantees: GranteesInput.describe(
             'The whole new list, replacing the old one: { kind: "team" } or { kind: "user", userId }. From the person you are working for.',
           ),
           team: z.string().optional().describe('Team id (see instructions).'),
@@ -417,7 +417,7 @@ function automationConnectorOptions(): McpRouterOptions {
       },
       saveAutomation: {
         description:
-          'Save an automation program and provision its listeners (authoring → live). It validates first, exactly as validateAutomation does, so there is no need to call that before: with any error, or a system it could not check, NOTHING is saved and you get { ok: false, saved: false, diagnostics } — fix them and save again. A clean save goes live. Pass acknowledgeErrors: true to ship it despite errors: it then replaces whatever was running (even broken) and will run and fail visibly. There is no "draft" that quietly keeps the last good version running — what goes live is what you save and confirm. When updating an EXISTING automation, pass expectedRevision so a concurrent edit is caught rather than silently overwritten. Returns the provisioned listeners (each channel and the inbound address for email), whether an on-demand run is possible (runnable), storyUrl, `diagnostics` when a clean save still has warnings, and `warnings` — things that saved fine but would surprise the user (a movement name another automation already fires; listeners retired because the saved source could not be read). Always relay a warning to the user in your own words. storyUrl is a link to a picture of what the automation does — its triggers, steps, and the records it touches — for a person to look at, not something you can open yourself; hand it out as a labelled link once the save goes live. Anyone holding it can view with no login, until the automation is deleted. Pass id to re-save/rename. For a small, targeted change to an existing automation — one line, one field — editAutomation is cheaper: it anchors the change on a snippet instead of resending the whole program. A NEW automation needs `statements`: who may read, write and fire it. Ask the person you are working for before you save one; never choose for them. A save over an existing automation takes none: change those with setAccess.',
+          'Save an automation program and provision its listeners (authoring → live). It validates first, exactly as validateAutomation does, so there is no need to call that before: with any error, or a system it could not check, NOTHING is saved and you get { ok: false, saved: false, diagnostics } — fix them and save again. A clean save goes live. Pass acknowledgeErrors: true to ship it despite errors: it then replaces whatever was running (even broken) and will run and fail visibly. There is no "draft" that quietly keeps the last good version running — what goes live is what you save and confirm. When updating an EXISTING automation, pass expectedRevision so a concurrent edit is caught rather than silently overwritten. Returns the provisioned listeners (each channel and the inbound address for email), whether an on-demand run is possible (runnable), storyUrl, `diagnostics` when a clean save still has warnings, and `warnings` — things that saved fine but would surprise the user (a movement name another automation already fires; listeners retired because the saved source could not be read). Always relay a warning to the user in your own words. storyUrl is a link to a picture of what the automation does — its triggers, steps, and the records it touches — for a person to look at, not something you can open yourself; hand it out as a labelled link once the save goes live. Anyone holding it can view with no login, until the automation is deleted. Pass id to re-save/rename. For a small, targeted change to an existing automation — one line, one field — editAutomation is cheaper: it anchors the change on a snippet instead of resending the whole program. A NEW automation needs `statements`: who may read and write it. Ask the person you are working for before you save one; never choose for them. A save over an existing automation takes none: change those with setAccess.',
         inputSchema: {
           source: z.string().describe('The automation program text (.mvt).'),
           name: z
@@ -445,11 +445,10 @@ function automationConnectorOptions(): McpRouterOptions {
             .object({
               read: GranteesInput.optional().describe(LIST_DESCRIPTIONS.read),
               write: GranteesInput.optional().describe(LIST_DESCRIPTIONS.write),
-              fire: GranteesInput.optional().describe(LIST_DESCRIPTIONS.fire),
             })
             .optional()
             .describe(
-              'Who may reach a NEW automation: all three lists, each from the person you are working for. Refused on a save over an existing automation (use setAccess).',
+              'Who may reach a NEW automation: both lists, each from the person you are working for. Refused on a save over an existing automation (use setAccess).',
             ),
           team: z.string().optional().describe('Team id (see instructions).'),
         },

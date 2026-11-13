@@ -4,7 +4,6 @@
 
 import { randomUUID } from 'node:crypto';
 
-import { LANGUAGE_VERSION } from 'movement-lang';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { UserId } from '../../../generated/kysely/core/User';
@@ -91,25 +90,6 @@ describe('access statements — one table, one decision', () => {
     expect(read).toEqual(expect.arrayContaining([user(alice), user(bob)]));
   });
 
-  it('keeps an automation on a carried language version to firing by anyone, until it is upgraded', async () => {
-    await setStatement(as(alice), { target: deals, verb: 'write', grantees: [user(alice)] });
-    // The row was saved with no pin, which reads as legacy id '1': a carried version.
-    await expect(setStatement(as(alice), { target: deals, verb: 'fire', grantees: [team] })).rejects.toMatchObject({
-      refusal: 'carried_pin',
-    });
-    await setStatement(as(alice), { target: deals, verb: 'fire', grantees: [{ kind: 'anyone' }] });
-
-    await getAutomationsQb(['movement'])
-      .updateTable('movement')
-      .set({ language_version: LANGUAGE_VERSION })
-      .where('id', '=', deals.id as MovementId)
-      .execute();
-    // Upgrading changes the pin and nothing stated, so the person narrows it afterwards.
-    expect(await StatementStore.grantsOf(deals, { teamId, verb: 'fire' })).toEqual([{ kind: 'anyone' }]);
-    await setStatement(as(alice), { target: deals, verb: 'fire', grantees: [team] });
-    expect(await StatementStore.grantsOf(deals, { teamId, verb: 'fire' })).toEqual([team]);
-  });
-
   it('decides a connection by its use list', async () => {
     await setStatement(as(alice), { target: finance, verb: 'use', grantees: [user(carol)] });
     expect(await accessTo(as(carol), { target: finance, verb: 'use' })).toBe(true);
@@ -120,8 +100,8 @@ describe('access statements — one table, one decision', () => {
   it('keeps a list whole when its replacement fails partway', async () => {
     await setStatement(as(alice), { target: deals, verb: 'write', grantees: [user(alice)] });
     await expect(
-      StatementStore.replaceGrants(deals, { teamId, verb: 'write', grantees: [team, { kind: 'domain', domain: 'acme.com' }] }),
-    ).rejects.toThrow(/access_statement_members_only_check/);
+      StatementStore.replaceGrants(deals, { teamId, verb: 'write', grantees: [team, user(carol), user(carol)] }),
+    ).rejects.toThrow(/access_statement_grant_key/);
     expect(await StatementStore.grantsOf(deals, { teamId, verb: 'write' })).toEqual([user(alice)]);
   });
 
@@ -150,7 +130,6 @@ describe('access statements — one table, one decision', () => {
       .execute();
     await setStatement(as(alice), { target: deals, verb: 'write', grantees: [user(alice)] });
     await setStatement(as(alice), { target: deals, verb: 'read', grantees: [user(alice)] });
-    await setStatement(as(alice), { target: deals, verb: 'fire', grantees: [{ kind: 'anyone' }] });
     await setStatement(as(alice), { target: notes, verb: 'write', grantees: [user(alice)] });
     await setStatement(as(alice), { target: notes, verb: 'read', grantees: [team] });
 

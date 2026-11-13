@@ -46,7 +46,6 @@ async function save(body: Record<string, unknown>): Promise<void> {
 const statements = {
   read: [{ kind: 'team' }],
   write: [{ kind: 'user', userId: ALICE }],
-  fire: [{ kind: 'anyone' }],
 };
 
 beforeEach(() => mockSave.mockClear());
@@ -63,8 +62,12 @@ describe('saving over REST', () => {
     expect(mockSave.mock.calls[0]?.[0]).not.toHaveProperty('statements');
   });
 
-  it('refuses a list of the wrong shape before the save', async () => {
-    await save({ source: 'x', acknowledgeErrors: true, statements: { ...statements, fire: [{ kind: 'everyone' }] } });
+  it.each([
+    ['an unknown kind', { kind: 'everyone' }],
+    ['anyone', { kind: 'anyone' }],
+    ['a domain', { kind: 'domain', domain: 'example.com' }],
+  ])('refuses a list naming %s before the save', async (_, grantee) => {
+    await save({ source: 'x', acknowledgeErrors: true, statements: { ...statements, read: [grantee] } });
     expect(mockSave).not.toHaveBeenCalled();
   });
 });

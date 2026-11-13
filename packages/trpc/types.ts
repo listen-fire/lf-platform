@@ -1191,31 +1191,17 @@ export interface DependentCheckResult {
 }
 
 export type Thing = 'automation' | 'connection';
-/** The verbs each thing's statement has: firing is an automation's, using is a connection's. */
-export type StatedVerb<T extends Thing> = T extends 'automation' ? 'read' | 'write' | 'fire' : 'use';
-/**
- * One entry on a verb's list. Reading, writing and using go to the team or to
- * named users; firing also admits outsiders, by domain, address or phone.
- */
+/** The verbs each thing's statement has: reading and writing are an automation's, using is a connection's. */
+export type StatedVerb<T extends Thing> = T extends 'automation' ? 'read' | 'write' : 'use';
+/** One entry on a verb's list: the team, or one person on it. */
 export type Grantee = {
     kind: 'team';
 } | {
     kind: 'user';
     userId: string;
-} | {
-    kind: 'anyone';
-} | {
-    kind: 'domain';
-    domain: string;
-} | {
-    kind: 'email';
-    address: string;
-} | {
-    kind: 'phone';
-    digits: string;
 };
 
-export type StatementRefusal = 'empty' | 'not_found' | 'not_allowed' | 'outsider' | 'not_a_member' | 'not_a_writer' | 'malformed' | 'lf_engine' | 'carried_pin' | 'already_stated';
+export type StatementRefusal = 'empty' | 'not_found' | 'not_allowed' | 'not_a_member' | 'not_a_writer' | 'malformed' | 'already_stated';
 
 /** Why a creation's statements were refused: the decision's own reasons, and statements given to a save that overwrites. */
 export type StatementReason = StatementRefusal | 'on_overwrite';
@@ -2003,12 +1989,10 @@ export type ShownGrantee = Exclude<Grantee, {
     email: string | null;
     onTeam: boolean;
 };
-/** The verbs a view lists: a fire list is no longer read or shown. */
-export type ListedVerb<T extends Thing> = Exclude<StatedVerb<T>, 'fire'>;
 export type Shown<T extends Thing> = {
     thing: T;
     id: string;
-    lists: Record<ListedVerb<T>, ShownGrantee[]>;
+    lists: Record<StatedVerb<T>, ShownGrantee[]>;
     /** Whether the caller may change these lists; otherwise they are read-only. */
     mayChange: boolean;
     /** Whether the lists that let someone see it admit the caller alone. */
@@ -2236,43 +2220,23 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     thing: "automation";
                     id: string;
                     verb: "read" | "write";
-                    grantees: ({
-                        kind: "team";
-                    } | {
-                        kind: "user";
-                        userId: string;
-                    })[];
+                    grantees: unknown[];
                 } | {
                     thing: "connection";
                     id: string;
                     verb: "use";
-                    grantees: ({
-                        kind: "team";
-                    } | {
-                        kind: "user";
-                        userId: string;
-                    })[];
+                    grantees: unknown[];
                 };
                 _input_out: {
                     thing: "automation";
                     id: string;
                     verb: "read" | "write";
-                    grantees: ({
-                        kind: "team";
-                    } | {
-                        kind: "user";
-                        userId: string;
-                    })[];
+                    grantees: Grantee[];
                 } | {
                     thing: "connection";
                     id: string;
                     verb: "use";
-                    grantees: ({
-                        kind: "team";
-                    } | {
-                        kind: "user";
-                        userId: string;
-                    })[];
+                    grantees: Grantee[];
                 };
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
@@ -9210,7 +9174,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     name?: string | undefined;
                     baseUpdatedAt?: string | undefined;
                     acknowledgeErrors?: boolean | undefined;
-                    statements?: Partial<Readonly<Record<"read" | "write" | "fire", readonly Grantee[]>>> | undefined;
+                    statements?: Partial<Readonly<Record<"read" | "write", readonly Grantee[]>>> | undefined;
                     intent?: "create" | undefined;
                 };
                 _output_in: typeof _trpc_server.unsetMarker;

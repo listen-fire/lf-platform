@@ -4618,12 +4618,10 @@ CREATE TRIGGER public_inbox_audit AFTER INSERT OR DELETE OR UPDATE ON automation
 -- statement). One row per grantee of one verb; a verb's rows are its whole
 -- list, replaced together and never emptied (services/access/decide.ts).
 --
--- Reading, writing and using a connection go to the team or to named users;
--- only firing admits outsiders, by address, domain, phone or anyone. A user
--- grant counts only while the user is on the thing's team. `thing_id` names a
--- movement or an external_service_credentials row, so it carries no foreign
--- key; `value` is the user id, domain, address or phone digits, and is null for
--- team and anyone. Rows are only ever inserted and deleted, never updated, so
+-- Reading, writing and using a connection go to the team or to named users. A
+-- user grant counts only while the user is on the thing's team. `thing_id`
+-- names a movement or an external_service_credentials row, so it carries no
+-- foreign key; `value` is the user id, and is null for team. Rows are only ever inserted and deleted, never updated, so
 -- `created_at` is when the list holding the row was stated.
 CREATE TABLE automations.access_statement (
     id uuid DEFAULT pg_catalog.gen_random_uuid() NOT NULL,
@@ -4635,11 +4633,10 @@ CREATE TABLE automations.access_statement (
     value text,
     created_at timestamptz DEFAULT now() NOT NULL,
     CONSTRAINT access_statement_thing_check CHECK (thing IN ('automation', 'connection')),
-    CONSTRAINT access_statement_verb_check CHECK (verb IN ('read', 'write', 'fire', 'use')),
+    CONSTRAINT access_statement_verb_check CHECK (verb IN ('read', 'write', 'use')),
     CONSTRAINT access_statement_verb_thing_check CHECK ((verb = 'use') = (thing = 'connection')),
-    CONSTRAINT access_statement_grantee_check CHECK (grantee IN ('team', 'user', 'anyone', 'domain', 'email', 'phone')),
-    CONSTRAINT access_statement_members_only_check CHECK (verb = 'fire' OR grantee IN ('team', 'user')),
-    CONSTRAINT access_statement_value_check CHECK ((value IS NULL) = (grantee IN ('team', 'anyone')))
+    CONSTRAINT access_statement_grantee_check CHECK (grantee IN ('team', 'user')),
+    CONSTRAINT access_statement_value_check CHECK ((value IS NULL) = (grantee = 'team'))
 );
 
 ALTER TABLE ONLY automations.access_statement

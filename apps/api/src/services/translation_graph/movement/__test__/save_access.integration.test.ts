@@ -59,7 +59,7 @@ describe('the save rule (real Postgres)', () => {
         source: RUN_NOW,
         audience: { for: principal },
         userId: alice,
-        statements: { read: [{ kind: 'team' }], write: [{ kind: 'user', userId: alice }], fire: [{ kind: 'anyone' }] },
+        statements: { read: [{ kind: 'team' }], write: [{ kind: 'user', userId: alice }] },
       }),
     );
     expect(saved).toMatchObject({ ok: true });
@@ -67,7 +67,6 @@ describe('the save rule (real Postgres)', () => {
     const target = { thing: 'automation', id: saved.movementId } as const;
     expect(await StatementStore.grantsOf(target, { teamId, verb: 'write' })).toEqual([{ kind: 'user', userId: alice }]);
     expect(await StatementStore.grantsOf(target, { teamId, verb: 'read' })).toEqual([{ kind: 'team' }]);
-    expect(await StatementStore.grantsOf(target, { teamId, verb: 'fire' })).toEqual([{ kind: 'anyone' }]);
     expect(await accessTo(principal, { target, verb: 'write' })).toBe(true);
     expect((await movements())[0]).toMatchObject({ created_by_user_id: alice });
   });
@@ -115,22 +114,18 @@ describe('the save rule (real Postgres)', () => {
     );
     expect(await movements()).toEqual([]);
   });
-  // A run's creation is fired by its listens as the source says them, read
-  // strictly: a lexical guess at a file that does not parse finds the email
-  // listen and misses the Slack one written over two lines.
-  it.each([
-    ['does not parse', ['inbox = email()', 'chat =', '  slack(credentials: `Slack`)', 'movement broken( {']],
-    ['listens to Slack inside a closure', ['inbox = email()', 'movement m() {', '  later = () => {', '    chat = slack(credentials: `Slack`)', '  }', '}']],
-  ])("gives a run's file that %s a fire list of the team", async (_, lines) => {
-    const row = await writeMovementRow({ teamId, intent: { kind: 'create' }, name: 'Run made', source: lines.join('\n') });
+  it("gives a run's file the team's read and write, whatever its source says, and states nothing else", async () => {
+    const source = ['inbox = email()', 'chat =', '  slack(credentials: `Slack`)', 'movement broken( {'].join('\n');
+    const row = await writeMovementRow({ teamId, intent: { kind: 'create' }, name: 'Run made', source });
     const target = { thing: 'automation', id: row.id } as const;
-    await stateRunCreation({ teamId, target, source: lines.join('\n'), given: undefined });
-    expect(await StatementStore.grantsOf(target, { teamId, verb: 'fire' })).toEqual([{ kind: 'team' }]);
+    await stateRunCreation({ teamId, target, given: undefined });
+    expect(await StatementStore.grantsOf(target, { teamId, verb: 'read' })).toEqual([{ kind: 'team' }]);
+    expect(await StatementStore.grantsOf(target, { teamId, verb: 'write' })).toEqual([{ kind: 'team' }]);
   });
   it('deletes what is stated about an automation with it', async () => {
     const row = await writeMovementRow({ teamId, intent: { kind: 'create' }, name: 'Going', source: RUN_NOW });
     const target = { thing: 'automation', id: row.id } as const;
-    await stateRunCreation({ teamId, target, source: RUN_NOW, given: undefined });
+    await stateRunCreation({ teamId, target, given: undefined });
     await deleteMovement({ teamId, id: row.id });
     expect(await StatementStore.hasAnyStatement(target)).toBe(false);
   });

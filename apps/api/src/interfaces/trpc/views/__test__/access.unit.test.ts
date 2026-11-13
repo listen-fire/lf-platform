@@ -130,8 +130,6 @@ describe('reading who may reach an automation', () => {
   it('names each person on a list, says whether the caller may change it, and whether they alone see it', async () => {
     stated(automation, 'read', [{ kind: 'user', userId: ALICE }]);
     stated(automation, 'write', [{ kind: 'user', userId: ALICE }]);
-    // A fire list stored by an earlier build is neither read nor shown.
-    stated(automation, 'fire', [{ kind: 'domain', domain: 'acme.com' }]);
     const view = await as(ALICE, () => caller().get({ thing: 'automation', id: DEALS }));
     expect(view).toEqual({
       thing: 'automation',

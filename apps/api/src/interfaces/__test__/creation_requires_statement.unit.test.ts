@@ -2,8 +2,8 @@
 // a connection asks for its use list before anything is stored, refusing one
 // that is missing by naming it, and deciding the list as the creator's to give
 // (a write member, on it themselves or through the team, naming only people on
-// the team). Every route that creates an automation hands its read, write and
-// fire lists to the save, which decides them (provision_access covers that).
+// the team). Every route that creates an automation hands its read and write
+// lists to the save, which decides them (provision_access covers that).
 //
 // The decision is the real one, over statements and memberships held in memory;
 // what would store a connection is stood in for, so a refusal is seen to store
@@ -175,9 +175,8 @@ describe.each(CONNECTION_CREATIONS)('%s', (_, create, effect) => {
     expect(mockCreated[effect]).not.toHaveBeenCalled();
   });
 
-  it('refuses a use list its creator is not on, one naming an outsider, and a read member creating', async () => {
+  it('refuses a use list its creator is not on, one naming a stranger to the team, and a read member creating', async () => {
     await expect(asAlice(() => create([user(BOB)]))).rejects.toThrow(/could not use: put yourself, or the team/);
-    await expect(asAlice(() => create([{ kind: 'domain', domain: 'acme.com' }]))).rejects.toThrow(/can be given firing only/);
     await expect(asAlice(() => create([user('cccccccc-cccc-4ccc-8ccc-cccccccccccc')]))).rejects.toThrow(/Only people on the team/);
     mockCtx.principal.access = 'read';
     await expect(asAlice(() => create([team]))).rejects.toThrow(/Only someone with write access/);
@@ -191,8 +190,8 @@ describe.each(CONNECTION_CREATIONS)('%s', (_, create, effect) => {
 });
 
 describe('views.movement.save', () => {
-  it('hands the save the read, write and fire lists it was given, for the save to decide', async () => {
-    const statements = { read: [team], write: [user(ALICE)], fire: [{ kind: 'anyone' as const }] };
+  it('hands the save the read and write lists it was given, for the save to decide', async () => {
+    const statements = { read: [team], write: [user(ALICE)] };
     await asAlice(() => caller(movementRouter(trpc.procedure)).save({ source: 'x', statements }));
     expect(mockCreated.save).toHaveBeenCalledWith(expect.objectContaining({ statements }));
   });

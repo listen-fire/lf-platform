@@ -20,7 +20,7 @@ import {
   setStatement,
   type StatementRefusal,
 } from '../../../services/access/decide';
-import { MemberGranteesInput } from '../../../services/access/stated_input';
+import { GranteesInput } from '../../../services/access/stated_input';
 import { CHANGE_STATEMENT, decidesEach, type Decision } from '../../access_route';
 import { cannotChange } from '../access';
 import { userProcedure as sharedUserProcedure } from '../procedures';
@@ -69,8 +69,8 @@ function refusedList(error: unknown): SetResult {
 const ThingInput = z.object({ thing: z.enum(['automation', 'connection']), id: z.string() });
 
 const SetInput = z.discriminatedUnion('thing', [
-  z.object({ thing: z.literal('automation'), id: z.string(), verb: z.enum(AUTOMATION_VERBS), grantees: MemberGranteesInput }),
-  z.object({ thing: z.literal('connection'), id: z.string(), verb: z.literal('use'), grantees: MemberGranteesInput }),
+  z.object({ thing: z.literal('automation'), id: z.string(), verb: z.enum(AUTOMATION_VERBS), grantees: GranteesInput }),
+  z.object({ thing: z.literal('connection'), id: z.string(), verb: z.literal('use'), grantees: GranteesInput }),
 ]);
 
 const accessRouter = (procedure: typeof trpc.procedure) => {

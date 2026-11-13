@@ -1,7 +1,6 @@
 // What already exists keeps the reach it has today: the deploy step that states
 // every automation and connection with no statement, run over a seeded team on
-// a real database. Driven through the script a deployment runs, then the listing
-// a person widens a mixed file by.
+// a real database. Driven through the script a deployment runs.
 
 import { randomUUID } from 'node:crypto';
 
@@ -14,15 +13,11 @@ import type { ExternalServiceCredentialsId } from '../../../generated/kysely/aut
 
 import { getAutomationsQb } from '../../../lib/kysely';
 import { cleanupTeam } from '../../../test/harness/cleanup';
-import { insertTestListen } from '../../../test/harness/listens';
-import { mixedFilesOf } from '../../../scripts/list_mixed_fire_reach';
-import * as saveAccess from '../../translation_graph/movement/save_access';
 import { stateUnstatedMain } from '../../../scripts/state_unstated';
 import ExternalServiceType from '../../../generated/kysely/automations/ExternalServiceType';
 import { StatementStore, type Grantee, type Target } from '../statement';
 
 const TEAM: Grantee[] = [{ kind: 'team' }];
-const ANYONE: Grantee[] = [{ kind: 'anyone' }];
 
 let teamId: TeamId;
 let client: Client;
@@ -79,7 +74,7 @@ async function connection(name: string): Promise<ExternalServiceCredentialsId> {
   return id;
 }
 
-const listOf = (target: Target, verb: 'read' | 'write' | 'fire' | 'use') =>
+const listOf = (target: Target, verb: 'read' | 'write' | 'use') =>
   StatementStore.grantsOf(target, { teamId, verb });
 
 const stateTheTeam = () => stateUnstatedMain(['--team', teamId]);
@@ -123,91 +118,22 @@ async function everythingStated(ids: {
 }
 
 describe('stating what exists', () => {
-  it('gives the team the connection, and each file the team plus the narrowest of its listens', async () => {
+  it('the backfill states read, write and use and parses no source', async () => {
     const { slack, onSlack, onEmail, mixed } = await seed();
+    // A source no parser can read, under a pin only a legacy parser knows: it is stated the same, and never read.
+    const unreadable = await automation('Unreadable', 'movement broken( {', '4');
+    const carried = await automation('Carried', SLACK_LISTEN, '0.12.13');
 
     await stateTheTeam();
 
     expect(await listOf({ thing: 'connection', id: slack }, 'use')).toEqual(TEAM);
-    for (const id of [onSlack, onEmail, mixed]) {
+    for (const id of [onSlack, onEmail, mixed, unreadable, carried]) {
       expect(await listOf({ thing: 'automation', id }, 'read')).toEqual(TEAM);
       expect(await listOf({ thing: 'automation', id }, 'write')).toEqual(TEAM);
     }
-    expect(await listOf({ thing: 'automation', id: onSlack }, 'fire')).toEqual(TEAM);
-    expect(await listOf({ thing: 'automation', id: onEmail }, 'fire')).toEqual(ANYONE);
-    expect(await listOf({ thing: 'automation', id: mixed }, 'fire')).toEqual(TEAM);
-  });
-
-  it("reads a file's listens from its source, not from its trigger rows", async () => {
-    const mixed = await automation('Stopped half', `${EMAIL_LISTEN}\n${SLACK_LISTEN}`);
-    // The deploy check deletes a stopped automation's unpaused trigger rows and keeps the paused ones.
-    await insertTestListen({
-      teamId,
-      movementId: mixed,
-      adapterType: 'email',
-      edge: 'Emails',
-      delivery: 'connection',
-      fire: null,
-    });
-
-    await stateTheTeam();
-
-    expect(await listOf({ thing: 'automation', id: mixed }, 'fire')).toEqual(TEAM);
-  });
-
-  // A lexical guess at this file finds the email listen and misses the Slack
-  // one written over two lines, so it would read as a file every listen of
-  // which admits anyone.
-  it('gives the team the fire list of a file whose source does not parse, and says which', async () => {
-    const unreadable = await automation(
-      'Unreadable',
-      [EMAIL_LISTEN, 'chat =', '  slack(credentials: `Slack`)', 'movement broken( {'].join('\n'),
-    );
-
-    await stateTheTeam();
-
-    expect(await listOf({ thing: 'automation', id: unreadable }, 'fire')).toEqual(TEAM);
-    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining(unreadable));
-  });
-
-  // Its arrivals are read and judged by its own version's rules, which never
-  // vouch for who acted, so a team rule on it would not be kept to.
-  it('gives anyone the fire list of an automation pinned to a carried version, whatever its listens', async () => {
-    const written = [EMAIL_LISTEN, 'movement m() {', '  r = await parallel([f, g])', '}'].join('\n');
-    const slack = await automation('Carried on Slack', SLACK_LISTEN, '0.12.13');
-    const legacySlack = await automation('Legacy on Slack', SLACK_LISTEN, '4');
-    const unreadable = await automation('Carried unreadable', [EMAIL_LISTEN, 'movement broken( {'].join('\n'), '4');
-    const readable = await automation('Carried readable', written, '4');
-    const current = await automation('Current on Slack', SLACK_LISTEN);
-
-    await stateTheTeam();
-
-    for (const id of [slack, legacySlack, unreadable, readable]) {
-      expect(await listOf({ thing: 'automation', id }, 'fire')).toEqual(ANYONE);
-      expect(await listOf({ thing: 'automation', id }, 'read')).toEqual(TEAM);
-    }
-    expect(await listOf({ thing: 'automation', id: current }, 'fire')).toEqual(TEAM);
-    expect(console.warn).not.toHaveBeenCalledWith(expect.stringContaining(unreadable));
-  });
-
-  it('reads a Slack listen nested in a closure, so the file is fired only by the team', async () => {
-    const source = [EMAIL_LISTEN, 'movement m() {', '  later = () => {', `    ${SLACK_LISTEN}`, '  }', '}'].join('\n');
-    expect(saveAccess.listenReachesOf(source)).toContainEqual({ module: 'slack', viaConnection: true });
-    const nested = await automation('Nested Slack', source);
-
-    await stateTheTeam();
-
-    expect(await listOf({ thing: 'automation', id: nested }, 'fire')).toEqual(TEAM);
-  });
-
-  it("fires a file on the shared WhatsApp number for the team, and on the team's own number for anyone", async () => {
-    const shared = await automation('Shared number', 'wa = whatsapp()');
-    const own = await automation('Own number', 'wa = whatsapp(credentials: `WhatsApp`)');
-
-    await stateTheTeam();
-
-    expect(await listOf({ thing: 'automation', id: shared }, 'fire')).toEqual(TEAM);
-    expect(await listOf({ thing: 'automation', id: own }, 'fire')).toEqual(ANYONE);
+    expect(console.warn).not.toHaveBeenCalled();
+    const verbs = await client.query(`SELECT DISTINCT verb FROM automations.access_statement WHERE team_id = $1 ORDER BY verb`, [teamId]);
+    expect(verbs.rows.map((r) => r.verb)).toEqual(['read', 'use', 'write']);
   });
 
   it('logs each thing it states, and warns only once the team already has statements', async () => {
@@ -256,11 +182,9 @@ describe('stating what exists', () => {
       { kind: 'user', userId: alice },
     ]);
     expect(await listOf({ thing: 'automation', id: onEmail }, 'read')).toEqual([]);
-    expect(await listOf({ thing: 'automation', id: onEmail }, 'fire')).toEqual([]);
     expect(await listOf({ thing: 'connection', id: slack }, 'use')).toEqual([
       { kind: 'user', userId: alice },
     ]);
-    expect(await listOf({ thing: 'automation', id: mixed }, 'fire')).toEqual(TEAM);
   });
 
   it('only reports, and writes nothing, with --check', async () => {
@@ -270,28 +194,5 @@ describe('stating what exists', () => {
 
     expect(await listOf({ thing: 'connection', id: slack }, 'use')).toEqual([]);
     expect(await listOf({ thing: 'automation', id: onSlack }, 'read')).toEqual([]);
-  });
-});
-
-describe('listing the files that mix who may fire', () => {
-  it('names the mixed file with each listen, and no other', async () => {
-    const { mixed } = await seed();
-    await stateTheTeam();
-
-    const files = await mixedFilesOf(client, teamId);
-
-    expect(files).toEqual([
-      {
-        teamId,
-        automationId: mixed,
-        name: 'Mixed',
-        listens: expect.arrayContaining([
-          { module: 'email', viaConnection: false, firedBy: 'anyone' },
-          { module: 'slack', viaConnection: true, firedBy: 'team' },
-        ]),
-        fireList: ['team'],
-      },
-    ]);
-    expect(files[0].listens).toHaveLength(2);
   });
 });

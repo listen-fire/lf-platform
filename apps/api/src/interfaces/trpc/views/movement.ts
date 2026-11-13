@@ -597,7 +597,7 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
           /** Explicit consent to ship a non-valid save (the editor's
            *  "save anyway" confirmation). */
           acknowledgeErrors: z.boolean().optional(),
-          /** Who may read, write and fire it, when this save creates it. */
+          /** Who may read and write it, when this save creates it. */
           statements: CreationStatementsInput.optional(),
           /** Set by a page that creates a new automation: a name already held is then refused as taken, never overwritten. */
           intent: z.literal('create').optional(),

@@ -74,11 +74,6 @@ jest.mock('../../../../services/access/statement', () => {
   };
 });
 
-jest.mock('../../../../services/lf_engine/team_engine', () => ({
-  ...jest.requireActual('../../../../services/lf_engine/team_engine'),
-  isLfEngineTeam: async () => false,
-}));
-
 jest.mock('../team_scope', () => ({
   ...jest.requireActual('../team_scope'),
   teamSetForReads: async () => [TEAM_A],
@@ -242,8 +237,6 @@ beforeEach(() => {
     {
       read: [team],
       write: [user(ALICE), user(BOB)],
-      // A fire list stored by an earlier build is neither read nor shown.
-      fire: [{ kind: 'domain', domain: 'example.com' }],
     },
   );
   state({ thing: 'connection', id: FINANCE }, { use: [user(ALICE), user(BOB), user(LEFT)] });

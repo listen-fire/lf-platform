@@ -989,7 +989,7 @@ export interface SaveMovementInput {
   /** Whose save this is: the connections its check, and its listens, may
    *  resolve. A person's save is also decided for them (./save_access.ts). */
   audience: CatalogAudience;
-  /** Who may read, write and fire the automation, when this save creates it.
+  /** Who may read and write the automation, when this save creates it.
    *  A person's save that creates one without all three is refused. */
   statements?: Partial<CreationStatements>;
   /** Existing movement row id (the editor's re-save path). */
@@ -1433,7 +1433,7 @@ async function runSave(
   // person choosing who may reach it.
   const stated = async (created: MovementRow): Promise<MovementRow> => {
     const target = { thing: 'automation', id: created.id } as const;
-    if (saver === undefined) await stateRunCreation({ teamId: input.teamId, target, source: input.source, given: input.statements });
+    if (saver === undefined) await stateRunCreation({ teamId: input.teamId, target, given: input.statements });
     else if (statements !== undefined) await stateCreation(saver, { target, statements });
     else throw new Error('a person creating an automation reached the write with no statements decided');
     return created;

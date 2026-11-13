@@ -15,17 +15,17 @@ import { currentPrincipal } from 'principal';
 import { neverAsAny } from 'movement-engine/public/types';
 
 import type { RequestHandler, Router } from 'express';
-import type { AskedVerb, Target, Thing } from '../services/access/statement';
+import type { StatedVerb, Target, Thing } from '../services/access/statement';
 
 import { accessTo, administered, readableIds } from '../services/access/decide';
 
 /** One decision about one kind of thing. */
-type ThingDecision = { thing: 'automation'; verb: AskedVerb<'automation'> } | { thing: 'connection'; verb: AskedVerb<'connection'> };
+type ThingDecision = { thing: 'automation'; verb: StatedVerb<'automation'> } | { thing: 'connection'; verb: StatedVerb<'connection'> };
 
 type Decision =
   | ThingDecision
   /** A route that acts on whichever thing its request names, asking that thing's verb. */
-  | { byTarget: { automation: AskedVerb<'automation'>; connection: AskedVerb<'connection'> } }
+  | { byTarget: { automation: StatedVerb<'automation'>; connection: StatedVerb<'connection'> } }
   | { exempt: string };
 
 /** The decisions a route asks, one per thing it may act on; none for an exemption. */
@@ -119,7 +119,7 @@ const READ_ONLY_MESSAGE = 'You may read this automation but not change it.';
  */
 async function refusalOn(asked: {
   automationId: string | null;
-  verb: AskedVerb<'automation'>;
+  verb: StatedVerb<'automation'>;
 }): Promise<Refusal | undefined> {
   if (asked.automationId === null) return undefined;
   const principal = currentPrincipal();

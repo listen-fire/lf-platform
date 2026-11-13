@@ -20,15 +20,12 @@ type ShownGrantee =
   | Exclude<Grantee, { kind: 'user' }>
   | { kind: 'user'; userId: string; name: string | null; email: string | null; onTeam: boolean };
 
-/** The verbs a view lists: a fire list is no longer read or shown. */
-type ListedVerb<T extends Thing> = Exclude<StatedVerb<T>, 'fire'>;
-
 type Person = { name: string | null; email: string | null; onTeam: boolean };
 
 type Shown<T extends Thing> = {
   thing: T;
   id: string;
-  lists: Record<ListedVerb<T>, ShownGrantee[]>;
+  lists: Record<StatedVerb<T>, ShownGrantee[]>;
   /** Whether the caller may change these lists; otherwise they are read-only. */
   mayChange: boolean;
   /** Whether the lists that let someone see it admit the caller alone. */
@@ -39,7 +36,7 @@ type Shown<T extends Thing> = {
 
 type AccessView = Shown<'automation'> | Shown<'connection'>;
 
-const AUTOMATION_VERBS = ['read', 'write'] as const satisfies readonly ListedVerb<'automation'>[];
+const AUTOMATION_VERBS = ['read', 'write'] as const satisfies readonly StatedVerb<'automation'>[];
 
 const uuid = z.string().uuid();
 
@@ -78,10 +75,6 @@ function shown(grantee: Grantee, people: ReadonlyMap<string, Person>): ShownGran
     case 'user':
       return { ...grantee, ...(people.get(grantee.userId) ?? { name: null, email: null, onTeam: false }) };
     case 'team':
-    case 'anyone':
-    case 'domain':
-    case 'email':
-    case 'phone':
       return grantee;
     default:
       return neverAsAny(grantee);
@@ -130,10 +123,10 @@ async function connectionView(id: string): Promise<Shown<'connection'> | undefin
 }
 
 /** An automation's lists as an agent reads them: each list in the shape `setAccess` takes back. */
-type AutomationAccess = Record<ListedVerb<'automation'>, ShownGrantee[]> & { mayChange: boolean; onlyYou: boolean };
+type AutomationAccess = Record<StatedVerb<'automation'>, ShownGrantee[]> & { mayChange: boolean; onlyYou: boolean };
 
 /** A connection's list as an agent reads it. */
-type ConnectionAccess = Record<ListedVerb<'connection'>, ShownGrantee[]> & { mayChange: boolean; onlyYou: boolean };
+type ConnectionAccess = Record<StatedVerb<'connection'>, ShownGrantee[]> & { mayChange: boolean; onlyYou: boolean };
 
 async function automationAccess(id: string): Promise<AutomationAccess | undefined> {
   const view = await automationView(id);

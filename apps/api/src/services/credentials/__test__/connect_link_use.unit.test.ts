@@ -65,8 +65,8 @@ describe.each([
   });
 
   it('is refused with a malformed use list, naming the bad value, and stores no link', async () => {
-    const answer = await mint(adapterSlug, [{ kind: 'domain', domain: 'not a domain' }]);
-    expect(answer).toEqual({ error: expect.stringContaining('"not a domain"') });
+    const answer = await mint(adapterSlug, [{ kind: 'user', userId: '  ' }]);
+    expect(answer).toEqual({ error: expect.stringContaining('"  "') });
     expect(mockState.inserted).toEqual([]);
   });
 

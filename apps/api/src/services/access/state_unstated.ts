@@ -10,17 +10,8 @@ import type { Client } from 'pg';
 import type { StatedList } from './decide';
 import type { Thing } from './statement';
 
-import { fireNotKeptTo } from './decide';
-
-import {
-  automationLists,
-  automationWithNoPerson,
-  connectionWithNoPerson,
-  type ListenReach,
-} from './no_person';
-import { pinIsCarried } from './carried_pin';
+import { automationLists, automationWithNoPerson, connectionWithNoPerson } from './no_person';
 import { storedRowOf } from './statement';
-import { listenReachesOf } from '../translation_graph/movement/save_access';
 
 type Unstated = { automations: string[]; connections: string[] };
 
@@ -61,62 +52,6 @@ async function teamsWithUnstated(client: Client): Promise<string[]> {
      ORDER BY 1`,
   );
   return rows.rows.map((r) => r.team_id);
-}
-
-/** Whether the team's automations run on lf, whose door the platform does not judge. */
-async function teamRunsOnLf(client: Client, teamId: string): Promise<boolean> {
-  const engine = await client.query<{ engine: string }>(
-    `SELECT engine FROM automations.team_engine WHERE team_id = $1::uuid`,
-    [teamId],
-  );
-  return engine.rows.some((r) => r.engine === 'lf');
-}
-
-/**
- * The listens of these automations, read from each file's source by the
- * function a save uses, so a file's listens have one derivation. The trigger
- * rows are not the file: the deploy check deletes an automation's unpaused ones
- * when it stops it, so a mixed file can look narrower there than its source is.
- * Each file is parsed under its own pin, since a file written for an older
- * release can use spellings the current one refuses. A source that does not
- * parse under its pin, or whose listens cannot otherwise be read, gets no
- * listens, which states the narrowest fire list (the team): migration never
- * widens who may fire. The source is parsed strictly, never guessed at.
- */
-async function listensOf(
-  client: Client,
-  teamId: string,
-  movementIds: readonly string[],
-): Promise<Map<string, ListenReach[]>> {
-  const files = await client.query<{ id: string; source: string; language_version: string }>(
-    `SELECT id::text AS id, source, language_version FROM automations.movement
-      WHERE team_id = $1::uuid AND id = ANY($2::uuid[])`,
-    [teamId, movementIds],
-  );
-  const byMovement = new Map<string, ListenReach[]>();
-  for (const file of files.rows) {
-    try {
-      byMovement.set(file.id, listenReachesOf(file.source, { languageVersion: file.language_version }));
-    } catch (err) {
-      console.warn(
-        `[state-unstated] could not read the listens of automation ${file.id} in team ${teamId}; treating it as having none, so only the team may fire it: ${
-          err instanceof Error ? err.message : String(err)
-        }`,
-      );
-      byMovement.set(file.id, []);
-    }
-  }
-  return byMovement;
-}
-
-/** Of these automations, the ones pinned to a carried language version: their fire list is anyone, as the door cannot judge them. */
-async function carriedPinsAmong(client: Client, teamId: string, movementIds: readonly string[]): Promise<Set<string>> {
-  const pins = await client.query<{ id: string; language_version: string }>(
-    `SELECT id::text AS id, language_version FROM automations.movement
-      WHERE team_id = $1::uuid AND id = ANY($2::uuid[])`,
-    [teamId, movementIds],
-  );
-  return new Set(pins.rows.filter((row) => pinIsCarried(row.language_version)).map((row) => row.id));
 }
 
 /** Whether anything of this team has been stated: on a later run, an unstated thing is a creation that forgot to say. */
@@ -166,20 +101,10 @@ async function stateIfStillUnstated<T extends Thing>(
  */
 async function stateWhatIsUnstated(client: Client, teamId: string): Promise<StatedThings> {
   const unstated = await unstatedIn(client, teamId);
-  const runsOnLf = await teamRunsOnLf(client, teamId);
-  const carried = await carriedPinsAmong(client, teamId, unstated.automations);
-  // A carried automation is stated anyone whatever its listens say, so they are not read.
-  const listensByAutomation = await listensOf(
-    client,
-    teamId,
-    unstated.automations.filter((id) => !carried.has(id)),
-  );
 
   const stated: StatedThings = { automations: [], connections: [] };
   for (const id of unstated.automations) {
-    const lists = automationLists(
-      automationWithNoPerson({ listens: listensByAutomation.get(id) ?? [], runsOnLf, carriedPin: carried.has(id) }),
-    );
+    const lists = automationLists(automationWithNoPerson());
     if (await stateIfStillUnstated(client, { teamId, thing: 'automation', id, lists }))
       stated.automations.push(id);
   }
@@ -193,47 +118,10 @@ async function stateWhatIsUnstated(client: Client, teamId: string): Promise<Stat
   return stated;
 }
 
-/**
- * Make anyone the fire list of each of the team's automations whose list the
- * door would not keep to, by the rule a set of the list applies (`fireNotKeptTo`):
- * one without anyone, on a team whose automations run on lf or on an automation
- * pinned to a carried version. A team import brings lists no set checked.
- * Returns the automations it changed, by id and name.
- */
-async function anyoneWhereFireIsNotKeptTo(client: Client, teamId: string): Promise<{ id: string; name: string }[]> {
-  const runsOnLf = await teamRunsOnLf(client, teamId);
-  const lists = await client.query<{ id: string; name: string; language_version: string; admits_anyone: boolean }>(
-    `SELECT m.id::text AS id, m.name, m.language_version, bool_or(s.grantee = 'anyone') AS admits_anyone
-       FROM automations.movement m
-       JOIN automations.access_statement s ON s.thing = 'automation' AND s.thing_id = m.id AND s.verb = 'fire'
-      WHERE m.team_id = $1::uuid
-      GROUP BY m.id, m.name, m.language_version`,
-    [teamId],
-  );
-  const changed = lists.rows.filter(
-    (row) => !row.admits_anyone && fireNotKeptTo({ runsOnLf, carriedPin: pinIsCarried(row.language_version) }) !== undefined,
-  );
-  for (const row of changed) {
-    await client.query(
-      `DELETE FROM automations.access_statement WHERE thing = 'automation' AND thing_id = $1::uuid AND verb = 'fire'`,
-      [row.id],
-    );
-    await client.query(
-      `INSERT INTO automations.access_statement (team_id, thing, thing_id, verb, grantee, value)
-       VALUES ($1::uuid, 'automation', $2::uuid, 'fire', 'anyone', NULL)`,
-      [teamId, row.id],
-    );
-  }
-  return changed.map(({ id, name }) => ({ id, name }));
-}
-
 export {
   stateWhatIsUnstated,
-  anyoneWhereFireIsNotKeptTo,
   unstatedIn,
   teamsWithUnstated,
-  teamRunsOnLf,
-  listensOf,
   teamHasStatements,
   type StatedThings,
 };

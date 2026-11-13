@@ -576,7 +576,7 @@ async function main() {
           .insertInto('movement')
           .values({ id: created as MovementId, team_id: seed.teamId as TeamId, name: movementName, source, description: '', language_version: pin })
           .execute();
-        await stateRunCreation({ teamId: seed.teamId, target: { thing: 'automation', id: created }, source, given: undefined });
+        await stateRunCreation({ teamId: seed.teamId, target: { thing: 'automation', id: created }, given: undefined });
       });
     }
   }

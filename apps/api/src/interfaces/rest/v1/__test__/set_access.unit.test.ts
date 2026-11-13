@@ -67,11 +67,6 @@ jest.mock('../../../../services/access/statement', () => {
   };
 });
 
-jest.mock('../../../../services/lf_engine/team_engine', () => ({
-  ...jest.requireActual('../../../../services/lf_engine/team_engine'),
-  isLfEngineTeam: async () => false,
-}));
-
 jest.mock('../team_scope', () => ({
   ...jest.requireActual('../team_scope'),
   teamSetForReads: async () => mockState.teams,

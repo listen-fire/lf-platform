@@ -1,4 +1,4 @@
-// Access statements: who may read, write or fire one automation, and who may use
+// Access statements: who may read or write one automation, and who may use
 // one connection (`automations.access_statement`). This file is the table and
 // the memberships a decision reads beside it; what they mean is `decide.ts`'s.
 //
@@ -19,27 +19,15 @@ import { getAutomationsQb, getCoreQb } from '../../lib/kysely';
 
 type Thing = 'automation' | 'connection';
 
-type Verb = 'read' | 'write' | 'fire' | 'use';
+type Verb = 'read' | 'write' | 'use';
 
-/** The verbs each thing's statement has: firing is an automation's, using is a connection's. */
-type StatedVerb<T extends Thing> = T extends 'automation' ? 'read' | 'write' | 'fire' : 'use';
-
-/** What a decision may be asked about. Firing is judged at the door, never here. */
-type AskedVerb<T extends Thing> = Exclude<StatedVerb<T>, 'fire'>;
+/** The verbs each thing's statement has: reading and writing are an automation's, using is a connection's. */
+type StatedVerb<T extends Thing> = T extends 'automation' ? 'read' | 'write' : 'use';
 
 type Target<T extends Thing = Thing> = { thing: T; id: string };
 
-/**
- * One entry on a verb's list. Reading, writing and using go to the team or to
- * named users; firing also admits outsiders, by domain, address or phone.
- */
-type Grantee =
-  | { kind: 'team' }
-  | { kind: 'user'; userId: string }
-  | { kind: 'anyone' }
-  | { kind: 'domain'; domain: string }
-  | { kind: 'email'; address: string }
-  | { kind: 'phone'; digits: string };
+/** One entry on a verb's list: the team, or one person on it. */
+type Grantee = { kind: 'team' } | { kind: 'user'; userId: string };
 
 type GranteeKind = Grantee['kind'];
 
@@ -55,16 +43,9 @@ function isUuid(id: string): boolean {
 function rowOf(grantee: Grantee): StatementRow {
   switch (grantee.kind) {
     case 'team':
-    case 'anyone':
-      return { grantee: grantee.kind, value: null };
+      return { grantee: 'team', value: null };
     case 'user':
       return { grantee: 'user', value: grantee.userId };
-    case 'domain':
-      return { grantee: 'domain', value: grantee.domain };
-    case 'email':
-      return { grantee: 'email', value: grantee.address };
-    case 'phone':
-      return { grantee: 'phone', value: grantee.digits };
     default:
       return neverAsAny(grantee);
   }
@@ -72,12 +53,11 @@ function rowOf(grantee: Grantee): StatementRow {
 
 function granteeOf(row: { grantee: string; value: string | null }): Grantee {
   const { grantee, value } = row;
-  if (grantee === 'team' || grantee === 'anyone') return { kind: grantee };
-  if (value === null) throw new Error(`An access statement's ${grantee} grant names nobody.`);
-  if (grantee === 'user') return { kind: 'user', userId: value };
-  if (grantee === 'domain') return { kind: 'domain', domain: value };
-  if (grantee === 'email') return { kind: 'email', address: value };
-  if (grantee === 'phone') return { kind: 'phone', digits: value };
+  if (grantee === 'team') return { kind: 'team' };
+  if (grantee === 'user') {
+    if (value === null) throw new Error("An access statement's user grant names nobody.");
+    return { kind: 'user', userId: value };
+  }
   throw new Error(`An access statement names an unknown kind of grantee: ${grantee}.`);
 }
 
@@ -239,7 +219,7 @@ function thingOf(value: string): Thing {
 }
 
 function verbOf(value: string): Verb {
-  if (value === 'read' || value === 'write' || value === 'fire' || value === 'use') return value;
+  if (value === 'read' || value === 'write' || value === 'use') return value;
   throw new Error(`An access statement names an unknown verb: ${value}.`);
 }
 
@@ -360,7 +340,6 @@ export {
   type Thing,
   type Verb,
   type StatedVerb,
-  type AskedVerb,
   type Target,
   type Grantee,
   type GranteeKind,

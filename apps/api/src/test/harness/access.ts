@@ -1,6 +1,5 @@
 // The statements Task 9 writes for everything that exists: read and write for
-// the team and fire for anyone on an automation, use for the team on a
-// connection. A thing with no statement admits nobody, so a helper that puts
+// the team on an automation, use for the team on a connection. A thing with no statement admits nobody, so a helper that puts
 // an automation or a connection in place directly states these beside it.
 
 import { neverAsAny } from 'movement-engine/public/types';
@@ -15,7 +14,6 @@ async function stateTeamDefaults(target: Target, teamId: string): Promise<void> 
     case 'automation':
       await StatementStore.replaceGrants(target, { teamId, verb: 'write', grantees: team });
       await StatementStore.replaceGrants(target, { teamId, verb: 'read', grantees: team });
-      await StatementStore.replaceGrants(target, { teamId, verb: 'fire', grantees: [{ kind: 'anyone' }] });
       return;
     case 'connection':
       await StatementStore.replaceGrants(target, { teamId, verb: 'use', grantees: team });

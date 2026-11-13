@@ -24,14 +24,12 @@ is documented here, so this is the one place to look.
 
 ## 2026-11-10_access_statements_for_what_exists (script, also a deploy step)
 
-Access statements say who may read, write or fire an automation and use a
+Access statements say who may read or write an automation and use a
 connection, and a thing with none admits nobody. This states every automation
 and connection that has none with the reach it has today, through the same rule
 a creation with no person uses (`services/access/no_person.ts`), so turning on
-the access checks changes nobody's reach: the team may read, write and use it;
-firing is the narrowest of its listens' modules (Slack and the shared WhatsApp
-number the team, everything else anyone; a team whose automations run on lf,
-anyone). It writes only to things with no statement at all, so it is safe to
+the access checks changes nobody's reach: the team may read, write and use it.
+It reads no source and no pin. It writes only to things with no statement at all, so it is safe to
 re-run, and it never changes a thing a person or a creation stated.
 
 It is not a `.sql` migration because the rule is code. `deploy:render-pre` and
@@ -44,28 +42,12 @@ pnpm access:state-unstated --check [--team <teamId>]
 
 # apply — state it, one transaction per team
 pnpm access:state-unstated [--team <teamId>]
-
-# the files whose listens mix who may fire (narrowed by the backfill), to widen by hand
-pnpm access:mixed-fire-reach [--team <teamId>] [--json]
 ```
-
-Right after the first deployment that carries this, run the listing and look at
-the mixed files. Both the report and the listing read `access_statement`, which
-that deployment creates, so neither can run before it. Each file it names was
-given the narrower fire list, so widen it by hand to what it admitted before,
-and restore any machine caller. Until someone widens a mixed file, a machine
-caller that fires it through email or a webhook (a sender with no person behind
-it) is cut off: only the team may fire it now.
 
 On that first deployment the previous api keeps serving while the backfill runs,
 and what it creates in that window has no statement. `up.sh` runs the backfill
 once more after the new api is healthy; on Render, run
 `node build/scripts/state_unstated.js` once by hand after the first deployment.
-
-A file's listens are read from its source, as a save reads them, not from its
-trigger rows (the deploy check deletes a stopped automation's unpaused trigger
-rows, so a mixed file can look narrower there). A source that cannot be read
-gets no listens, so only the team may fire it, and the run logs its id.
 
 Each thing a run states is logged with its id and kind. A run in a team that
 already has statements also warns for each: after the first run an unstated
