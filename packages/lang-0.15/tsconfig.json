@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "lib": ["es2022"],
+    "target": "es2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    // Compiling is `tsconfig.build.json`'s job, in the image. A bare tsc here
+    // would write .js beside every .ts, and jest then resolves those instead.
+    "noEmit": true,
+    "types": ["node", "jest"]
+  },
+  "exclude": ["node_modules", "jest.config.cjs"]
+}

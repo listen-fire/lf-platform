@@ -16,6 +16,7 @@
   "type": "commonjs",
   "dependencies": {
     "@listen-fire/kg": "workspace:*",
+    "@listen-fire/lang-0.15": "workspace:*",
     "@listen-fire/slack": "0.13.5",
     "legacy-lang": "workspace:@listen-fire/legacy-lang@*",
     "module-kit": "npm:@listen-fire/module-kit@0.14.1",
