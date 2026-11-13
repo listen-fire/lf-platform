@@ -44,13 +44,13 @@ describe("the team engine toggle", () => {
     expect(SWITCH_CONSEQUENCES.lf).toContain("The platform stops running this team's automations");
     expect(SWITCH_CONSEQUENCES.lf).toContain("A cloud lf must take over");
     expect(SWITCH_CONSEQUENCES.lf).toContain("webhooks and polls it registered for them are removed");
-    expect(SWITCH_CONSEQUENCES.lf).toContain("The platform stops checking fire lists: the cloud lf's own filters decide who sets each automation off.");
+    expect(SWITCH_CONSEQUENCES.lf).not.toContain("fire list");
     expect(toLf).toContain('data-testid="team-engine-confirm-yes"');
 
     const toPlatform = card({ engine: "lf", confirming: true });
     expect(toPlatform).toContain(escaped(SWITCH_CONSEQUENCES.platform));
     expect(SWITCH_CONSEQUENCES.platform).toContain("Stop the cloud lf first");
-    expect(SWITCH_CONSEQUENCES.platform).toContain('Every automation\'s fire list is checked again, and those listing "Anyone" can be set off by anyone who reaches them.');
+    expect(SWITCH_CONSEQUENCES.platform).not.toContain("fire list");
   });
 
   it("offers no switch to a read-only member", () => {

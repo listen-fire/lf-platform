@@ -8,10 +8,10 @@ import { z } from 'zod';
 import type { CreationStatements } from './decide';
 import type { Grantee } from './statement';
 
-const GranteeInput: z.ZodType<Grantee> = z.discriminatedUnion('kind', [
+const GranteeInput = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('team') }),
   z.object({ kind: z.literal('user'), userId: z.string() }),
-]);
+]) satisfies z.ZodType<Grantee>;
 
 const GranteesInput = z.array(GranteeInput);
 

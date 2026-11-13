@@ -56,7 +56,6 @@ import { EXEMPT, USE_CONNECTION, connectionUnseen, decidesEach, unseen, usableAm
 import { Whose } from '../../../services/access/whose';
 import { GranteesInput } from '../../../services/access/stated_input';
 import { useForNewConnection } from './connection_creation';
-import { underDeclaredDefaults } from '../../../services/connections/module_settings';
 
 /** A connection the caller may not use is answered as one that does not exist. */
 function connectionNotFound(id: string): TRPCError {
@@ -327,7 +326,7 @@ const credentialsRouter = (procedure: typeof trpc.procedure) => {
           .selectFrom('external_service_credentials')
           .where('id', '=', input.id as ExternalServiceCredentialsId)
           .where('team_id', '=', ctx.user.teamId as TeamId)
-          .select(['type', 'credentials', 'module_settings'])
+          .select(['type', 'credentials'])
           .executeTakeFirst();
         if (existing === undefined) throw connectionNotFound(input.id);
 
@@ -371,8 +370,6 @@ const credentialsRouter = (procedure: typeof trpc.procedure) => {
             name: input.name,
             credentials: encrypted,
             identifier,
-            // A row written before its module declared a setting gets the default now it is filled.
-            module_settings: underDeclaredDefaults(existing.type, existing.module_settings),
           })
           .where('id', '=', input.id as ExternalServiceCredentialsId)
           .executeTakeFirst();

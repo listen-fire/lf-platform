@@ -28,9 +28,9 @@ export default interface DeliveryTable {
 
   event_count: ColumnType<number, number, number>;
 
-  judged_at: ColumnType<Date | null, Date | string | null, Date | string | null>;
-
   request: ColumnType<unknown | null, unknown | null, unknown | null>;
+
+  judged_at: ColumnType<Date | null, Date | string | null, Date | string | null>;
 }
 
 export type Delivery = Selectable<DeliveryTable>;

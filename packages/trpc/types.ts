@@ -2220,23 +2220,43 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     thing: "automation";
                     id: string;
                     verb: "read" | "write";
-                    grantees: unknown[];
+                    grantees: ({
+                        kind: "team";
+                    } | {
+                        kind: "user";
+                        userId: string;
+                    })[];
                 } | {
                     thing: "connection";
                     id: string;
                     verb: "use";
-                    grantees: unknown[];
+                    grantees: ({
+                        kind: "team";
+                    } | {
+                        kind: "user";
+                        userId: string;
+                    })[];
                 };
                 _input_out: {
                     thing: "automation";
                     id: string;
                     verb: "read" | "write";
-                    grantees: Grantee[];
+                    grantees: ({
+                        kind: "team";
+                    } | {
+                        kind: "user";
+                        userId: string;
+                    })[];
                 } | {
                     thing: "connection";
                     id: string;
                     verb: "use";
-                    grantees: Grantee[];
+                    grantees: ({
+                        kind: "team";
+                    } | {
+                        kind: "user";
+                        userId: string;
+                    })[];
                 };
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
@@ -3926,10 +3946,20 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     authorise: () => Promise<void>;
                 };
                 _input_in: {
-                    use?: unknown[] | undefined;
+                    use?: ({
+                        kind: "team";
+                    } | {
+                        kind: "user";
+                        userId: string;
+                    })[] | undefined;
                 } | undefined;
                 _input_out: {
-                    use?: Grantee[] | undefined;
+                    use?: ({
+                        kind: "team";
+                    } | {
+                        kind: "user";
+                        userId: string;
+                    })[] | undefined;
                 } | undefined;
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
@@ -3941,41 +3971,6 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
             } | {
                 ok: false;
                 reason: "needs_use" | "not_usable" | "given_for_existing";
-            }>;
-            setModuleSetting: _trpc_server.BuildProcedure<"mutation", {
-                _config: _trpc_server.RootConfig<{
-                    ctx: {
-                        authorise: () => Promise<void>;
-                    };
-                    meta: object;
-                    errorShape: {
-                        message: string;
-                        code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
-                        data: _trpc_server_dist_error_formatter.DefaultErrorData;
-                    };
-                    transformer: _trpc_server.DefaultDataTransformer;
-                }>;
-                _meta: object;
-                _ctx_out: {
-                    authorise: () => Promise<void>;
-                };
-                _input_in: {
-                    id: string;
-                    setting: "drop_own_messages";
-                    on: boolean;
-                };
-                _input_out: {
-                    id: string;
-                    setting: "drop_own_messages";
-                    on: boolean;
-                };
-                _output_in: typeof _trpc_server.unsetMarker;
-                _output_out: typeof _trpc_server.unsetMarker;
-            }, {
-                ok: true;
-            } | {
-                ok: false;
-                refusal: "not_a_setting";
             }>;
         }>;
         credentials: _trpc_server.CreateRouterInner<_trpc_server.RootConfig<{
@@ -4035,7 +4030,12 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 };
                 _input_in: {
                     name: string;
-                    use?: unknown[] | undefined;
+                    use?: ({
+                        kind: "team";
+                    } | {
+                        kind: "user";
+                        userId: string;
+                    })[] | undefined;
                 } & ({
                     type: ExternalServiceType.AFFINITY;
                     credentials: {
@@ -4123,7 +4123,12 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 });
                 _input_out: {
                     name: string;
-                    use?: Grantee[] | undefined;
+                    use?: ({
+                        kind: "team";
+                    } | {
+                        kind: "user";
+                        userId: string;
+                    })[] | undefined;
                 } & ({
                     type: ExternalServiceType.AFFINITY;
                     credentials: {
@@ -4875,7 +4880,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     } | {
                         kind: "edge";
                         edgeTypeId: string;
-                        side: "source" | "target";
+                        side: "target" | "source";
                     } | undefined;
                     cardinality?: "one" | "many" | undefined;
                     uiHint?: "string" | "number" | "boolean" | "date" | "select" | "prompt" | "json" | "textarea" | undefined;
@@ -4908,7 +4913,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     owned?: {
                         name: string;
                         allowPattern?: string | undefined;
-                        format?: "timeZone" | "cron" | undefined;
+                        format?: "cron" | "timeZone" | undefined;
                     } | undefined;
                     record?: {
                         typeId: string;
@@ -4966,7 +4971,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         } | {
                             kind: "edge";
                             edgeTypeId: string;
-                            side: "source" | "target";
+                            side: "target" | "source";
                         } | undefined;
                         cardinality?: "one" | "many" | undefined;
                         uiHint?: "string" | "number" | "boolean" | "date" | "select" | "prompt" | "json" | "textarea" | undefined;
@@ -4999,7 +5004,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         owned?: {
                             name: string;
                             allowPattern?: string | undefined;
-                            format?: "timeZone" | "cron" | undefined;
+                            format?: "cron" | "timeZone" | undefined;
                         } | undefined;
                         record?: {
                             typeId: string;
@@ -5094,13 +5099,13 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 inputTokens: number;
                 outputTokens: number;
                 id: TriggerRunId;
+                errors: unknown;
                 created_at: Date;
                 team_id: string;
                 status: string;
                 engine: string | null;
                 steps: unknown;
                 diagnostics: unknown;
-                errors: unknown;
                 host: string;
                 returned: unknown;
                 trigger_id: string;
@@ -6801,7 +6806,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         required?: boolean | undefined;
                         scopes?: boolean | undefined;
                         filters?: {
-                            side: "source" | "target";
+                            side: "target" | "source";
                             property: string;
                             value: string;
                         }[] | undefined;
@@ -6816,7 +6821,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         required: boolean;
                         scopes: boolean;
                         filters: {
-                            side: "source" | "target";
+                            side: "target" | "source";
                             property: string;
                             value: string;
                         }[];
@@ -6856,7 +6861,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         required?: boolean | undefined;
                         scopes?: boolean | undefined;
                         filters?: {
-                            side: "source" | "target";
+                            side: "target" | "source";
                             property: string;
                             value: string;
                         }[] | undefined;
@@ -6872,7 +6877,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         required?: boolean | undefined;
                         scopes?: boolean | undefined;
                         filters?: {
-                            side: "source" | "target";
+                            side: "target" | "source";
                             property: string;
                             value: string;
                         }[] | undefined;
@@ -8480,12 +8485,12 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     };
                     _input_in: {
                         edgeId: string;
-                        direction: "source" | "target";
+                        direction: "target" | "source";
                         newNodeId: string;
                     };
                     _input_out: {
                         edgeId: string;
-                        direction: "source" | "target";
+                        direction: "target" | "source";
                         newNodeId: string;
                     };
                     _output_in: typeof _trpc_server.unsetMarker;
@@ -9597,10 +9602,10 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     team_name: string | null;
                     id: OpsEventId;
                     type: OpsEventType;
+                    title: string;
                     created_at: Date;
                     updated_at: Date | null;
                     team_id: string | null;
-                    title: string;
                     status: OpsRunStatus | null;
                     severity: OpsSeverity;
                     request_id: string | null;
@@ -9636,8 +9641,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
             }, {
                 id: OpsEventId;
                 type: OpsEventType;
-                created_at: Date;
                 title: string;
+                created_at: Date;
                 detail: unknown;
                 severity: OpsSeverity;
             }[]>;
@@ -9669,10 +9674,10 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
             }, {
                 id: OpsEventId;
                 type: OpsEventType;
+                title: string;
                 created_at: Date;
                 updated_at: Date | null;
                 team_id: string | null;
-                title: string;
                 detail: unknown;
                 status: OpsRunStatus | null;
                 severity: OpsSeverity;
@@ -9825,8 +9830,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 }, {
                     description: string | null;
                     id: string;
-                    teamId: string | null;
                     type: _prisma_client.$Enums.LegalEntityType | null;
+                    teamId: string | null;
                     name: string;
                     personalWebsite: string | null;
                     createdAt: Date;
@@ -10350,8 +10355,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     data: _prisma_client_runtime_library.JsonValue | null;
                     id: string;
                     date: Date;
-                    teamId: string | null;
                     type: _prisma_client.$Enums.EventType;
+                    teamId: string | null;
                     name: string;
                     createdAt: Date;
                     updatedAt: Date;
@@ -10988,8 +10993,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 }, {
                     description: string | null;
                     id: string;
-                    teamId: string | null;
                     type: _prisma_client.$Enums.LegalEntityType | null;
+                    teamId: string | null;
                     name: string;
                     personalWebsite: string | null;
                     createdAt: Date;
@@ -11255,8 +11260,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         pricePerShare: {
                             id: string;
                             date: Date;
-                            teamId: string;
                             type: _prisma_client.$Enums.PriceType;
+                            teamId: string;
                             price: number;
                             createdAt: Date;
                             updatedAt: Date;
@@ -12307,7 +12312,12 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     credentialsId?: string | undefined;
                     protocolVersion?: 2 | undefined;
                     secret?: string | undefined;
-                    use?: unknown[] | undefined;
+                    use?: ({
+                        kind: "team";
+                    } | {
+                        kind: "user";
+                        userId: string;
+                    })[] | undefined;
                 };
                 _input_out: {
                     runtimeCapabilities: {
@@ -12491,7 +12501,12 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     credentialsId?: string | undefined;
                     protocolVersion?: 2 | undefined;
                     secret?: string | undefined;
-                    use?: Grantee[] | undefined;
+                    use?: ({
+                        kind: "team";
+                    } | {
+                        kind: "user";
+                        userId: string;
+                    })[] | undefined;
                 };
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
@@ -12578,14 +12593,24 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     declaredCredential: string;
                     name: string;
                     fields: Record<string, string>;
-                    use?: unknown[] | undefined;
+                    use?: ({
+                        kind: "team";
+                    } | {
+                        kind: "user";
+                        userId: string;
+                    })[] | undefined;
                 };
                 _input_out: {
                     adapterType: string;
                     declaredCredential: string;
                     name: string;
                     fields: Record<string, string>;
-                    use?: Grantee[] | undefined;
+                    use?: ({
+                        kind: "team";
+                    } | {
+                        kind: "user";
+                        userId: string;
+                    })[] | undefined;
                 };
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
@@ -12614,14 +12639,24 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     declaredCredential: string;
                     name: string;
                     fields?: Record<string, string> | undefined;
-                    use?: unknown[] | undefined;
+                    use?: ({
+                        kind: "team";
+                    } | {
+                        kind: "user";
+                        userId: string;
+                    })[] | undefined;
                 };
                 _input_out: {
                     adapterType: string;
                     declaredCredential: string;
                     name: string;
                     fields?: Record<string, string> | undefined;
-                    use?: Grantee[] | undefined;
+                    use?: ({
+                        kind: "team";
+                    } | {
+                        kind: "user";
+                        userId: string;
+                    })[] | undefined;
                 };
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;

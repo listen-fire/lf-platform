@@ -14,9 +14,9 @@ export type Engine = "platform" | "lf";
 /** What each switch does, said before the second click. */
 export const SWITCH_CONSEQUENCES: Record<Engine, string> = {
   lf:
-    "The platform stops running this team's automations: every firing is dropped (the events are kept and can be replayed), and the webhooks and polls it registered for them are removed. A cloud lf must take over. Start it once this switch is a few seconds old. The platform stops checking fire lists: the cloud lf's own filters decide who sets each automation off.",
+    "The platform stops running this team's automations: every firing is dropped (the events are kept and can be replayed), and the webhooks and polls it registered for them are removed. A cloud lf must take over. Start it once this switch is a few seconds old.",
   platform:
-    "Stop the cloud lf first. The platform registers this team's webhooks and polls again and starts running its automations within a few seconds. Every automation's fire list is checked again, and those listing \"Anyone\" can be set off by anyone who reaches them.",
+    "Stop the cloud lf first. The platform registers this team's webhooks and polls again and starts running its automations within a few seconds.",
 };
 
 const WHERE: Record<Engine, string> = {

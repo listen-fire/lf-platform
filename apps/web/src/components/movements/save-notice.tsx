@@ -13,12 +13,9 @@ export type StatementReason =
   | "empty"
   | "not_found"
   | "not_allowed"
-  | "outsider"
   | "not_a_member"
   | "not_a_writer"
   | "malformed"
-  | "lf_engine"
-  | "carried_pin"
   | "already_stated"
   | "on_overwrite";
 
@@ -27,7 +24,7 @@ export type SaveRefusal =
   | { kind: "read_only" }
   | { kind: "name_taken"; name: string }
   | { kind: "name_gone"; name: string }
-  | { kind: "missing_statement"; missing: ("read" | "write" | "fire")[] }
+  | { kind: "missing_statement"; missing: ("read" | "write")[] }
   | { kind: "statement"; reason: StatementReason }
   | { kind: "connections"; connections: { connection: string; file: string }[]; unreadableFiles: string[] };
 
@@ -61,18 +58,12 @@ export function statementReasonSentence(reason: StatementReason): string {
       return "That automation could not be found.";
     case "not_allowed":
       return "You can't create this automation. It takes write access on your team, and you must be among those who may change it.";
-    case "outsider":
-      return "Only the team, or people on it, can be chosen to see or change an automation. People outside the team can only be allowed to set it off.";
     case "not_a_member":
       return "Someone you chose is no longer on the team. Choose again.";
     case "not_a_writer":
       return "Someone you chose can only read on your team, so they can't be allowed to change an automation. Choose again.";
     case "malformed":
       return "Something you chose could not be read. Choose again.";
-    case "lf_engine":
-      return "Your team's automations run on lf, which does not check who sets one off. Choose \u201cAnyone who reaches it\u201d for who may set it off.";
-    case "carried_pin":
-      return "This automation is on an older language version, which does not check who sets one off. Choose \u201cAnyone who reaches it\u201d for who may set it off.";
     case "already_stated":
       return "This automation already says who may reach it. Change that under Access on its page.";
     case "on_overwrite":
@@ -112,7 +103,7 @@ function RefusalBody({ refused, onChooseAccess }: { refused: SaveRefusal; onChoo
     case "missing_statement":
       return (
         <>
-          <p>A new automation needs to say who may see, change and set it off.</p>
+          <p>A new automation needs to say who may see and change it.</p>
           {onChooseAccess !== undefined && <ChooseAccessButton onChooseAccess={onChooseAccess} />}
         </>
       );

@@ -15,20 +15,13 @@ const NOT_SAVED = "Couldn't save the change. Reload the page and try again.";
 
 type SetInput = RouterInputs["views"]["access"]["set"];
 
-type MemberGrantee = Extract<SetInput, { thing: "connection" }>["grantees"][number];
-
-/** The team and named members: the only entries a list the server takes can hold. */
-function membersOf(grantees: Grantee[]): MemberGrantee[] {
-  return grantees.flatMap((grantee): MemberGrantee[] => (grantee.kind === "team" || grantee.kind === "user" ? [grantee] : []));
-}
-
 /** The change to send, when the verb is one the thing has. */
 function setInputOf(target: { thing: Thing; id: string }, verb: Verb, grantees: Grantee[]): SetInput | null {
   switch (target.thing) {
     case "automation":
-      return verb === "use" || verb === "fire" ? null : { thing: "automation", id: target.id, verb, grantees: membersOf(grantees) };
+      return verb === "use" ? null : { thing: "automation", id: target.id, verb, grantees };
     case "connection":
-      return verb === "use" ? { thing: "connection", id: target.id, verb, grantees: membersOf(grantees) } : null;
+      return verb === "use" ? { thing: "connection", id: target.id, verb, grantees } : null;
     default: {
       const unreachable: never = target.thing;
       return unreachable;
@@ -61,7 +54,6 @@ export function AccessPanel({ thing, id }: { thing: Thing; id: string }) {
   const [editing, setEditing] = useState<{ verb: Verb; draft: ListDraft } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const team = useTeamMembers({ enabled: editing !== null });
-  const engine = trpc.views.teamEngine.get.useQuery(undefined, { enabled: editing !== null, refetchOnWindowFocus: false });
   const set = trpc.views.access.set.useMutation({
     onSuccess: (result) => {
       if (!result.ok) {
@@ -78,19 +70,6 @@ export function AccessPanel({ thing, id }: { thing: Thing; id: string }) {
     onError: () => setError(NOT_SAVED),
   });
 
-  const [settingError, setSettingError] = useState<string | null>(null);
-  const setting = trpc.views.connections.setModuleSetting.useMutation({
-    onSuccess: (result) => {
-      if (!result.ok) {
-        setSettingError(NOT_SAVED);
-        return;
-      }
-      setSettingError(null);
-      void utils.views.access.get.invalidate({ thing, id });
-    },
-    onError: () => setSettingError(NOT_SAVED),
-  });
-
   if (access.isError) return <AccessLoadFailed thing={thing} />;
   if (access.data === undefined) return null;
   const view = access.data;
@@ -100,9 +79,6 @@ export function AccessPanel({ thing, id }: { thing: Thing; id: string }) {
     mayChange: view.mayChange,
     onlyYou: view.onlyYou,
     viewerUserId: view.viewerUserId,
-    carriedPin: false,
-    teamRunsOnLf: false,
-    dropsOwnMessages: [],
   };
 
   return (
@@ -110,15 +86,8 @@ export function AccessPanel({ thing, id }: { thing: Thing; id: string }) {
       listing={listing}
       editing={editing}
       members={team.members}
-      engine={engine.data?.engine ?? null}
       busy={set.isLoading}
       error={error}
-      settingBusy={setting.isLoading}
-      settingError={settingError}
-      onDropOwnMessages={({ connectionId, on }) => {
-        setSettingError(null);
-        setting.mutate({ id: connectionId, setting: "drop_own_messages", on });
-      }}
       onEdit={(verb) => {
         setError(null);
         setEditing({ verb, draft: draftOf(listing.lists[verb] ?? [], listing.viewerUserId) });
@@ -130,7 +99,7 @@ export function AccessPanel({ thing, id }: { thing: Thing; id: string }) {
       }}
       onSave={() => {
         if (editing === null || listing.viewerUserId === null) return;
-        const input = setInputOf({ thing, id }, editing.verb, listOfDraft(editing.draft, { verb: editing.verb, viewerUserId: listing.viewerUserId }));
+        const input = setInputOf({ thing, id }, editing.verb, listOfDraft(editing.draft, { viewerUserId: listing.viewerUserId }));
         if (input !== null) set.mutate(input);
       }}
     />

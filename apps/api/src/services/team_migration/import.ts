@@ -1,8 +1,6 @@
 import type { Client } from 'pg';
 
-import ExternalServiceType from '../../generated/kysely/automations/ExternalServiceType';
 import { stateWhatIsUnstated } from '../access/state_unstated';
-import { settingsAtCreation } from '../connections/module_settings';
 import { readBundle, readTableFile, type BundleManifest } from './bundle';
 import { quoteIdent, readColumns, readMigrationHead, splitQualified } from './catalog';
 import { isProduct } from './manifest';
@@ -164,18 +162,6 @@ export async function importTeam(client: Client, options: ImportOptions): Promis
         [manifest.teamId],
       );
       shellCredentials = stamped.rowCount ?? 0;
-      // A bundle from before a module declared a setting carries none for it;
-      // the stored value, when there is one, stays (jsonb || lets the right win).
-      for (const type of Object.values(ExternalServiceType)) {
-        const declared = settingsAtCreation(type);
-        if (Object.keys(declared).length === 0) continue;
-        await client.query(
-          `UPDATE automations.external_service_credentials
-              SET module_settings = $3::jsonb || module_settings
-            WHERE team_id = $1::uuid AND type = $2::automations."ExternalServiceType"`,
-          [manifest.teamId, type, JSON.stringify(declared)],
-        );
-      }
       const statedNow = await stateWhatIsUnstated(client, manifest.teamId);
       stated = { automations: statedNow.automations.length, connections: statedNow.connections.length };
     }

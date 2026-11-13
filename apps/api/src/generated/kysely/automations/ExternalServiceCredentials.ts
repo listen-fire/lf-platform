@@ -34,8 +34,6 @@ export default interface ExternalServiceCredentialsTable {
   declared_credential: ColumnType<string | null, string | null, string | null>;
 
   wire_binding: ColumnType<string | null, string | null, string | null>;
-
-  module_settings: ColumnType<unknown, unknown | undefined, unknown>;
 }
 
 export type ExternalServiceCredentials = Selectable<ExternalServiceCredentialsTable>;

@@ -324,7 +324,6 @@ model ExternalServiceCredentials {
   appId                String?                          @map("app_id")
   declaredCredential   String?                          @map("declared_credential")
   wireBinding          String?                          @map("wire_binding")
-  moduleSettings       Json                             @default("{}") @map("module_settings")
   connectTokens        ConnectToken[]
   googleGrantedItems   GoogleGrantedItem[]
   remoteAdapters       RemoteAdapter[]

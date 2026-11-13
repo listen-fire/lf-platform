@@ -160,7 +160,6 @@ jest.mock('../../../access/statement', () => {
   return {
     ...actual,
     StatementStore: {
-      languagePinOf: async () => undefined,
       teamOf: async (target: Target) =>
         target.thing === 'automation'
           ? (__tables.movement.find((row: { id: string }) => row.id === target.id)?.team_id as string | undefined)

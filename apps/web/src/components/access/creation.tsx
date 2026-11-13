@@ -8,7 +8,6 @@
 import { useCallback, useState, type ReactNode } from "react";
 
 import { Modal } from "@/components/ontology/modal";
-import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui";
 
 import { useTeamMembers } from "./access-panel";
@@ -18,7 +17,6 @@ import {
   NO_CONNECTION_CHOICE,
   automationStatements,
   connectionUse,
-  fireOptionsFor,
   type AutomationChoice,
   type AutomationVerb,
   type ConnectionChoice,
@@ -48,7 +46,7 @@ export function useConnectionUseChoice(options: { enabled: boolean }): {
   };
 }
 
-/** Before a new automation's first save: who may see and change it, and who may set it off. */
+/** Before a new automation's first save: who may see and change it. */
 export function CreateAutomationDialog({
   isOpen,
   onCancel,
@@ -59,7 +57,6 @@ export function CreateAutomationDialog({
   onConfirm: (statements: Record<AutomationVerb, Grantee[]>) => void;
 }) {
   const team = useTeamMembers({ enabled: isOpen });
-  const engine = trpc.views.teamEngine.get.useQuery(undefined, { enabled: isOpen, refetchOnWindowFocus: false });
   const [choice, setChoice] = useState<AutomationChoice>(NO_AUTOMATION_CHOICE);
   const statements =
     team.viewerUserId === null || team.members === null
@@ -72,7 +69,7 @@ export function CreateAutomationDialog({
   return (
     <Modal isOpen={isOpen} onClose={close} title="Who may reach this automation">
       <div className="p-5" data-testid="create-automation-dialog">
-        {team.viewerUserId === null || team.members === null || engine.data === undefined ? (
+        {team.viewerUserId === null || team.members === null ? (
           LOADING
         ) : (
           <AutomationAccessChoice
@@ -80,7 +77,6 @@ export function CreateAutomationDialog({
             onChange={setChoice}
             members={team.members}
             viewerUserId={team.viewerUserId}
-            fireOptions={fireOptionsFor(engine.data.engine, { outsiders: false, carriedPin: false })}
           />
         )}
         <p className="mt-4 text-[11.5px] leading-relaxed text-gray-400">

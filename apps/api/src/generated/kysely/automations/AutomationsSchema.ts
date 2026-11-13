@@ -110,7 +110,6 @@ export default interface AutomationsSchema {
 
   arrival_unjudged: ArrivalUnjudgedTable;
 
-
   trigger: TriggerTable;
 
   delivery_request_read: DeliveryRequestReadTable;

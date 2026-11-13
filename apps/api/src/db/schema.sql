@@ -4106,11 +4106,7 @@ CREATE TABLE automations.external_service_credentials (
     -- Set only by the secrets module (`/api/public/lf-secrets`) when lf names
     -- an entry's binding `install` or `legacy`; NULL derives the binding from
     -- the row (its declared credential, its type's module).
-    wire_binding text CHECK (wire_binding IN ('install', 'legacy')),
-    -- The settings the connection's module declares, by name, as the module
-    -- reads them (strings: Slack's `drop_own_messages` is "on" or "off"). The
-    -- platform hands them to the module on every call of the connection.
-    module_settings jsonb DEFAULT '{}'::jsonb NOT NULL
+    wire_binding text CHECK (wire_binding IN ('install', 'legacy'))
 );
 
 

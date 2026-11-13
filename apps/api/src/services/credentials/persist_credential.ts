@@ -20,7 +20,6 @@ import { encryptToken } from '../../lib/credentials';
 import { getAutomationsQb } from '../../lib/kysely';
 import { stateAtCreation } from '../access/decide';
 import { inOneTransaction } from '../context/one_transaction';
-import { settingsAtCreation, settingsOfCell, type ModuleSettings } from '../connections/module_settings';
 import { defaultAppIdForType } from './app_id';
 import ExternalServiceType from '../../generated/kysely/automations/ExternalServiceType';
 import { ExternalServiceCredentialsId } from '../../generated/kysely/automations/ExternalServiceCredentials';
@@ -114,7 +113,7 @@ export async function persistCredential(input: PersistCredentialInput): Promise<
   // The row and who may use it commit together: a connection stored with no
   // statement would admit nobody.
   await inOneTransaction(async () => {
-    let replaced: { id: string; module_settings: unknown }[] = [];
+    let replaced: { id: string }[] = [];
     if (input.replaceExisting) {
       // Triggers bound to the replaced credential are released by the vault's
       // in-schema ON DELETE SET NULL (restored with the vault's move, D7).
@@ -123,15 +122,9 @@ export async function persistCredential(input: PersistCredentialInput): Promise<
         .where('team_id', '=', input.teamId)
         .where('type', '=', input.type)
         .where('name', '=', input.name)
-        .returning(['id', 'module_settings'])
+        .returning('id')
         .execute();
     }
-    // A reconnected connection keeps how its module was set: someone who
-    // turned a setting off did not mean it to come back on with a new key.
-    const moduleSettings = replaced.reduce<ModuleSettings>(
-      (kept, row) => ({ ...kept, ...settingsOfCell(row.module_settings) }),
-      settingsAtCreation(input.type),
-    );
     try {
       await getAutomationsQb(['external_service_credentials'])
         .insertInto('external_service_credentials')
@@ -146,7 +139,6 @@ export async function persistCredential(input: PersistCredentialInput): Promise<
           app_id: input.appId ?? defaultAppIdForType(input.type) ?? null,
           declared_credential: input.declaredCredential ?? null,
           wire_binding: input.wireBinding ?? null,
-          module_settings: moduleSettings,
           team_id: input.teamId,
           user_id: input.userId,
         })

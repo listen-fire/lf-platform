@@ -10,12 +10,9 @@ const REASONS: readonly StatementReason[] = [
   "empty",
   "not_found",
   "not_allowed",
-  "outsider",
   "not_a_member",
   "not_a_writer",
   "malformed",
-  "lf_engine",
-  "carried_pin",
   "already_stated",
   "on_overwrite",
 ];
@@ -38,7 +35,7 @@ describe("a save that was not the saver's to make", () => {
   });
 
   it("offers the choice of who may reach a new automation when its save lacked one", () => {
-    const html = notice({ kind: "missing_statement", missing: ["read", "write", "fire"] });
+    const html = notice({ kind: "missing_statement", missing: ["read", "write"] });
     expect(html).toContain("Choose who may reach it");
   });
 
@@ -62,12 +59,12 @@ describe("a save that was not the saver's to make", () => {
       expect(html).not.toContain("the server");
       expect(html).toContain("Choose who may reach it");
     }
-    expect(statementReasonSentence("lf_engine")).toContain("Anyone who reaches it");
+    expect(statementReasonSentence("not_a_writer")).toContain("can only read");
   });
 
   it("offers the choice again only while the automation is new", () => {
     expect(notice({ kind: "statement", reason: "empty" }, { choosable: false })).not.toContain("Choose who may reach it");
-    expect(notice({ kind: "missing_statement", missing: ["fire"] }, { choosable: false })).not.toContain("Choose who may reach it");
+    expect(notice({ kind: "missing_statement", missing: ["write"] }, { choosable: false })).not.toContain("Choose who may reach it");
   });
 });
 

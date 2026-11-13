@@ -1,6 +1,6 @@
 "use client";
 
-// Who may reach one automation (read, write, fire) or one connection (use),
+// Who may reach one automation (read, write) or one connection (use),
 // drawn from props alone. Whoever may change the lists gets an edit control
 // on each; anyone else sees them read-only. "Only you can see this" says when
 // the lists that let someone see the thing admit the viewer alone.
@@ -14,7 +14,6 @@ import {
   departedOn,
   listOfDraft,
   listPhrases,
-  unreadableOutsiders,
   type ListDraft,
   type ListedGrantee,
   type Member,
@@ -26,31 +25,15 @@ export type Thing = "automation" | "connection";
 export const ONLY_YOU = "Only you can see this";
 
 const VERBS: Record<Thing, readonly Verb[]> = {
-  automation: ["read", "write", "fire"],
+  automation: ["read", "write"],
   connection: ["use"],
 };
 
 const TITLES: Record<Verb, { title: string; hint: string }> = {
   read: { title: "Read", hint: "Who may see it. Whoever may change it may also see it." },
   write: { title: "Write", hint: "Who may change, run and delete it, and change these lists." },
-  fire: { title: "Fire", hint: "Who may set it off through its listens." },
   use: { title: "Use", hint: "Who may run automations on it, read through it, and change this list." },
 };
-
-export const DROPS_OWN_MESSAGES = "Drops messages and reactions this app makes";
-export const HEARS_OWN_MESSAGES = "Hears messages and reactions this app makes";
-export const FIRE_NOT_CHECKED_ON_LF = "Not checked while this team runs on lf.";
-
-/**
- * How a Slack connection an automation listens on treats its own app's
- * messages and reactions. The connection is named only to someone who may use
- * it, and only they may change it.
- */
-export interface DropsOwnMessagesLine {
-  on: boolean;
-  mayChange: boolean;
-  connection: { id: string; name: string } | null;
-}
 
 /** What the server says about the thing's lists. */
 export interface AccessListing {
@@ -59,12 +42,6 @@ export interface AccessListing {
   mayChange: boolean;
   onlyYou: boolean;
   viewerUserId: string | null;
-  /** An automation still on an older language version can be fired by anyone only. */
-  carriedPin: boolean;
-  /** The team runs on lf, whose own filters decide who sets an automation off: the fire list is not checked. */
-  teamRunsOnLf: boolean;
-  /** The Slack connections an automation listens on, which the fire list does not speak to. */
-  dropsOwnMessages: readonly DropsOwnMessagesLine[];
 }
 
 export interface AccessPanelViewProps {
@@ -73,20 +50,12 @@ export interface AccessPanelViewProps {
   editing: { verb: Verb; draft: ListDraft } | null;
   /** The team, to choose people from; null until it has loaded. */
   members: readonly Member[] | null;
-  /** The engine the team's automations run on, which decides who may be chosen to fire; null until it has loaded. */
-  engine: "platform" | "lf" | null;
   busy: boolean;
   error: string | null;
   onEdit: (verb: Verb) => void;
   onDraft: (draft: ListDraft) => void;
   onSave: () => void;
   onCancel: () => void;
-  /** Whether a change of a connection's setting is being made. */
-  settingBusy: boolean;
-  /** Turn a connection's dropping of its app's own messages on or off. */
-  onDropOwnMessages: (change: { connectionId: string; on: boolean }) => void;
-  /** Why the last such change was not made, if it was not. */
-  settingError: string | null;
 }
 
 /** What the panel shows when its lists could not be read, so a missing panel is never mistaken for an unrestricted thing. */
@@ -154,20 +123,6 @@ export function AccessPanelView(props: AccessPanelViewProps) {
                   )}
                 </div>
               )}
-              {verb === "fire" && listing.teamRunsOnLf && !isEditing && (
-                <p className="mt-1.5 text-[11.5px] text-gray-500" data-testid="access-fire-not-checked">
-                  {FIRE_NOT_CHECKED_ON_LF}
-                </p>
-              )}
-              {verb === "fire" &&
-                listing.dropsOwnMessages.map((line, i) => (
-                  <DropsOwnMessages key={line.connection?.id ?? i} line={line} busy={props.settingBusy} onChange={props.onDropOwnMessages} />
-                ))}
-              {verb === "fire" && props.settingError && (
-                <p className="mt-1.5 text-[12px] text-red-600" data-testid="access-setting-error">
-                  {props.settingError}
-                </p>
-              )}
             </li>
           );
         })}
@@ -183,48 +138,14 @@ export function AccessPanelView(props: AccessPanelViewProps) {
   );
 }
 
-/** One connection's line about the app's own messages: what it does now, and a way to change it. */
-function DropsOwnMessages({
-  line,
-  busy,
-  onChange,
-}: {
-  line: DropsOwnMessagesLine;
-  busy: boolean;
-  onChange: AccessPanelViewProps["onDropOwnMessages"];
-}) {
-  const { connection } = line;
-  return (
-    <div className="mt-2 flex items-start justify-between gap-2 border-t border-gray-100 pt-2" data-testid="access-drops-own-messages">
-      <div className="min-w-0 text-[12px] text-gray-700">
-        {line.on ? DROPS_OWN_MESSAGES : HEARS_OWN_MESSAGES}
-        <span className="text-gray-400">
-          {connection !== null ? ` on ${connection.name}` : ""}, for every automation on that connection
-        </span>
-      </div>
-      {line.mayChange && connection !== null && (
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => onChange({ connectionId: connection.id, on: !line.on })}
-          className="shrink-0 cursor-pointer rounded-md px-1.5 py-0.5 text-[11.5px] font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-800 disabled:cursor-default disabled:opacity-50"
-          data-testid="access-drops-own-messages-toggle"
-        >
-          {line.on ? "Turn off" : "Turn on"}
-        </button>
-      )}
-    </div>
-  );
-}
-
 function EditingList(props: AccessPanelViewProps & { verb: Verb; draft: ListDraft; viewerUserId: string }) {
   const { verb, draft, viewerUserId } = props;
-  const stated = listOfDraft(draft, { verb, viewerUserId });
-  const savable = stated.length > 0 && unreadableOutsiders(draft.outsiders).length === 0;
+  const stated = listOfDraft(draft, { viewerUserId });
+  const savable = stated.length > 0;
   const departed = departedOn(props.listing.lists[verb] ?? []);
   return (
     <div className="mt-2 space-y-2">
-      {props.members === null || props.engine === null ? (
+      {props.members === null ? (
         <p className="text-[12px] text-gray-400">Loading the team…</p>
       ) : (
         <ListEditor
@@ -233,8 +154,6 @@ function EditingList(props: AccessPanelViewProps & { verb: Verb; draft: ListDraf
           onChange={props.onDraft}
           members={props.members}
           viewerUserId={viewerUserId}
-          engine={props.engine}
-          carriedPin={props.listing.carriedPin}
         />
       )}
       {departed > 0 && (

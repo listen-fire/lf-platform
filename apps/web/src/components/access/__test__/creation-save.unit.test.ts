@@ -5,7 +5,6 @@ import type { SaveRefusal } from "@/components/movements/save-notice";
 const STATEMENTS: CreationStatements = {
   read: [{ kind: "team" }],
   write: [{ kind: "team" }],
-  fire: [{ kind: "anyone" }],
 };
 
 describe("what a save from the editor says about creating", () => {
@@ -33,8 +32,8 @@ describe("the first save of a new automation", () => {
 
 describe("a refusal of the choice itself", () => {
   const refusals: [SaveRefusal, boolean][] = [
-    [{ kind: "statement", reason: "lf_engine" }, true],
-    [{ kind: "missing_statement", missing: ["fire"] }, true],
+    [{ kind: "statement", reason: "not_a_member" }, true],
+    [{ kind: "missing_statement", missing: ["write"] }, true],
     [{ kind: "read_only" }, false],
     [{ kind: "name_taken", name: "deals" }, false],
     [{ kind: "name_gone", name: "deals" }, false],

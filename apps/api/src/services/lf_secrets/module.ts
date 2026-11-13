@@ -26,7 +26,6 @@ import { lockLease, unlockLease } from './lease';
 import { servedCredentials, wireReading, wireTarget, type WireTarget } from './rows';
 import { accessTo, readableIds } from '../access/decide';
 import { connectionWithNoPerson } from '../access/no_person';
-import { underDeclaredDefaults } from '../connections/module_settings';
 
 export type SecretsMethod = (typeof SECRETS_METHODS)[number];
 
@@ -141,14 +140,14 @@ export function platformSecretsModule({
     target: WireTarget,
     fields: Record<string, string>,
   ): Promise<null> => {
-    const stored = await credentials()
-      .selectFrom('external_service_credentials')
-      .where('id', '=', row.id)
-      .where('team_id', '=', teamId)
-      .select(['credentials', 'module_settings'])
-      .executeTakeFirstOrThrow();
     let prior: StoredPayload = {};
     if (!row.shell) {
+      const stored = await credentials()
+        .selectFrom('external_service_credentials')
+        .where('id', '=', row.id)
+        .where('team_id', '=', teamId)
+        .select(['credentials'])
+        .executeTakeFirstOrThrow();
       const parsed: unknown = JSON.parse(await decryptToken(stored.credentials, row.id));
       if (isPayload(parsed)) prior = parsed;
     }
@@ -162,8 +161,6 @@ export function platformSecretsModule({
         declared_credential: target.declaredCredential,
         wire_binding: target.wireBinding,
         identifier: slackIdentifier(row.type, isPayload(next) ? next : {}),
-        // A shell imported or made before its module declared a setting gets the default now it is filled.
-        module_settings: underDeclaredDefaults(row.type, stored.module_settings),
         reconnect_required_at: null,
         updated_at: new Date(),
       })

@@ -16,7 +16,6 @@
 
 import type { Adapter, AdapterManifest } from 'movement-engine/public/adapter';
 import type { TeamId } from '../../../generated/kysely/core/Team';
-import type ExternalServiceType from '../../../generated/kysely/automations/ExternalServiceType';
 import type { WorkKindRegistration } from '../../work/drain';
 
 import {
@@ -551,11 +550,6 @@ export interface BuiltinInstall {
   teamId: TeamId;
   credentialsId?: string;
   constructionArgs?: Record<string, string>;
-  /** What the connection itself carries for the settings its module declares
-   *  (`external_service_credentials.module_settings`). It speaks over a
-   *  program's `connect` args, since a setting is the connection's, whichever
-   *  automation connects it. */
-  moduleSettings?: Record<string, string>;
 }
 
 /** How long before its expiry the platform refreshes a token it hands a
@@ -718,8 +712,6 @@ function hostedModuleOf(definition: ModuleDefinition): HostedModule {
  * same for every release; what the module declares is the module's, checked
  * here against this release's protocol shape rather than trusted.
  */
-// Carries no module settings: its host pieces have no settings slot. A carried
-// (0.12) pin is covered all the same, because the shared Slack door resolves the current module and drops the app's own event first.
 export function moduleHostFor(input: { adapterType: string; install: BuiltinInstall; declaration: ModuleDeclaration }): ModuleHostPieces {
   const entry = moduleLineOf(input.adapterType);
   if (entry === undefined) {
@@ -750,17 +742,13 @@ export function moduleHostFor(input: { adapterType: string; install: BuiltinInst
 export function loadBuiltinModule(entry: AdapterModuleLine, install: BuiltinInstall): InProcessAdapterModule {
   const definition = entry.load();
   const baseUrlOverride = harnessBaseUrl(entry, install.teamId);
-  const constructionArgs =
-    install.constructionArgs === undefined && install.moduleSettings === undefined
-      ? undefined
-      : { ...install.constructionArgs, ...install.moduleSettings };
   const loaded = adapterInProcess(definition, {
     tenant: install.teamId,
     ...platformHost(entry, hostedModuleOf(definition), install),
     log: logger,
     models: hostedModels,
     ...(baseUrlOverride !== undefined ? { baseUrlOverride } : {}),
-    ...(constructionArgs !== undefined ? { constructionArgs } : {}),
+    ...(install.constructionArgs !== undefined ? { constructionArgs: install.constructionArgs } : {}),
     ...(install.credentialsId !== undefined ? { credentialRef: install.credentialsId } : {}),
     validateResults: inProcessValidationDefault(process.env),
   });
@@ -771,22 +759,6 @@ export function loadBuiltinModule(entry: AdapterModuleLine, install: BuiltinInst
     ...(install.constructionArgs !== undefined ? { constructionArgs: install.constructionArgs } : {}),
   };
   return { ...loaded, adapter: ownedFilesAdapter(loaded.adapter, owner) };
-}
-
-/** The names of the settings a built-in module declares (Slack's
- *  `drop_own_messages`), which a connection of it may carry; empty for a
- *  built-in on no module line, or one that declares none. */
-export function builtinModuleSettings(adapterType: string): readonly string[] {
-  return moduleLineOf(adapterType)?.load().settings?.map((setting) => setting.name) ?? [];
-}
-
-/** The built-in module line a stored connection of this credential type is
- *  for, by the type its manifest names: the adapter types whose connections
- *  carry settings are looked up this way. */
-export function builtinModulesOfCredentialType(type: ExternalServiceType): string[] {
-  return Object.entries(BUILTIN_MODULES).flatMap(([adapterType, entry]) =>
-    entry.kind === 'adapter' && entry.line === 'module' && credentialTypeOf(entry.manifest.requiredCredentialType) === type ? [adapterType] : [],
-  );
 }
 
 /** The package a built-in is installed from, as its catalog entry names it;
