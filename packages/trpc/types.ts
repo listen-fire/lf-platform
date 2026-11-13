@@ -185,41 +185,6 @@ export type MovementVersionId = string & {
     __brand: 'automations.movement_version';
 };
 
-/** Identifier type for automations.trigger_event */
-export type TriggerEventId = string & {
-    __brand: 'automations.trigger_event';
-};
-
-/** Identifier type for automations.trigger_run */
-export type TriggerRunId = string & {
-    __brand: 'automations.trigger_run';
-};
-
-export type Thing = 'automation' | 'connection';
-/** The verbs each thing's statement has: firing is an automation's, using is a connection's. */
-export type StatedVerb<T extends Thing> = T extends 'automation' ? 'read' | 'write' | 'fire' : 'use';
-/**
- * One entry on a verb's list. Reading, writing and using go to the team or to
- * named users; firing also admits outsiders, by domain, address or phone.
- */
-export type Grantee = {
-    kind: 'team';
-} | {
-    kind: 'user';
-    userId: string;
-} | {
-    kind: 'anyone';
-} | {
-    kind: 'domain';
-    domain: string;
-} | {
-    kind: 'email';
-    address: string;
-} | {
-    kind: 'phone';
-    digits: string;
-};
-
 /** What a replay did, said in lines a person reads. */
 export type ReplayOutcome = 
 /** It could not be replayed at all: no such listen or delivery, or no
@@ -287,6 +252,16 @@ export type MovementTestRunResult = {
 export type AutomationStatus = 'live' | 'setting_up' | 'paused' | 'error';
 
 export type TriggerRunMode = 'off' | 'dry_run' | 'live';
+
+/** Identifier type for automations.trigger_event */
+export type TriggerEventId = string & {
+    __brand: 'automations.trigger_event';
+};
+
+/** Identifier type for automations.trigger_run */
+export type TriggerRunId = string & {
+    __brand: 'automations.trigger_run';
+};
 
 /** Which saved version a run executed, against the one that would run
  *  today. A run pins its version at start, so a firing from before the
@@ -1215,6 +1190,31 @@ export interface DependentCheckResult {
     problemCount: number;
 }
 
+export type Thing = 'automation' | 'connection';
+/** The verbs each thing's statement has: firing is an automation's, using is a connection's. */
+export type StatedVerb<T extends Thing> = T extends 'automation' ? 'read' | 'write' | 'fire' : 'use';
+/**
+ * One entry on a verb's list. Reading, writing and using go to the team or to
+ * named users; firing also admits outsiders, by domain, address or phone.
+ */
+export type Grantee = {
+    kind: 'team';
+} | {
+    kind: 'user';
+    userId: string;
+} | {
+    kind: 'anyone';
+} | {
+    kind: 'domain';
+    domain: string;
+} | {
+    kind: 'email';
+    address: string;
+} | {
+    kind: 'phone';
+    digits: string;
+};
+
 export type StatementRefusal = 'empty' | 'not_found' | 'not_allowed' | 'outsider' | 'not_a_member' | 'not_a_writer' | 'malformed' | 'lf_engine' | 'carried_pin' | 'already_stated';
 
 /** Why a creation's statements were refused: the decision's own reasons, and statements given to a save that overwrites. */
@@ -2003,42 +2003,19 @@ export type ShownGrantee = Exclude<Grantee, {
     email: string | null;
     onTeam: boolean;
 };
+/** The verbs a view lists: a fire list is no longer read or shown. */
+export type ListedVerb<T extends Thing> = Exclude<StatedVerb<T>, 'fire'>;
 export type Shown<T extends Thing> = {
     thing: T;
     id: string;
-    lists: Record<StatedVerb<T>, ShownGrantee[]>;
+    lists: Record<ListedVerb<T>, ShownGrantee[]>;
     /** Whether the caller may change these lists; otherwise they are read-only. */
     mayChange: boolean;
     /** Whether the lists that let someone see it admit the caller alone. */
     onlyYou: boolean;
     /** The caller's own user id as the lists store it, so a page can say "you". */
     viewerUserId: string | null;
-} & Extras<T>;
-/**
- * A connection an automation listens on whose app can post to what it hears,
- * and whether that connection drops the app's own messages and reactions. The
- * connection is named only to someone who may use it; to anyone else the line
- * says how the automation hears, and nothing of which connection that is.
- */
-export type DropsOwnMessagesLine = {
-    on: boolean;
-    mayChange: boolean;
-    connection: {
-        id: string;
-        name: string;
-    } | null;
 };
-/**
- * What only an automation's view says: it is pinned to a version whose arrivals
- * the door cannot judge, or its team runs on lf, whose door the platform does
- * not judge, and either way only anyone may fire it; and how the connections it
- * listens on treat the app's own messages, which its fire list does not speak to.
- */
-export type Extras<T extends Thing> = T extends 'automation' ? {
-    carriedPin: boolean;
-    teamRunsOnLf: boolean;
-    dropsOwnMessages: DropsOwnMessagesLine[];
-} : Record<never, never>;
 export type AccessView = Shown<'automation'> | Shown<'connection'>;
 
 /**
@@ -2258,24 +2235,44 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _input_in: {
                     thing: "automation";
                     id: string;
-                    verb: "read" | "write" | "fire";
-                    grantees: unknown[];
+                    verb: "read" | "write";
+                    grantees: ({
+                        kind: "team";
+                    } | {
+                        kind: "user";
+                        userId: string;
+                    })[];
                 } | {
                     thing: "connection";
                     id: string;
                     verb: "use";
-                    grantees: unknown[];
+                    grantees: ({
+                        kind: "team";
+                    } | {
+                        kind: "user";
+                        userId: string;
+                    })[];
                 };
                 _input_out: {
                     thing: "automation";
                     id: string;
-                    verb: "read" | "write" | "fire";
-                    grantees: Grantee[];
+                    verb: "read" | "write";
+                    grantees: ({
+                        kind: "team";
+                    } | {
+                        kind: "user";
+                        userId: string;
+                    })[];
                 } | {
                     thing: "connection";
                     id: string;
                     verb: "use";
-                    grantees: Grantee[];
+                    grantees: ({
+                        kind: "team";
+                    } | {
+                        kind: "user";
+                        userId: string;
+                    })[];
                 };
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
@@ -7743,9 +7740,9 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         created_by_name: string | null;
                         property_id: PropertyId | null;
                         id: ChangeId;
+                        kind: ChangeKind;
                         created_at: Date;
                         source: ChangeSource;
-                        kind: ChangeKind;
                         edge_id: EdgeId | null;
                         created_by: string | null;
                         request_id: string;
@@ -7790,9 +7787,9 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         created_by_name: string | null;
                         property_id: PropertyId | null;
                         id: ChangeId;
+                        kind: ChangeKind;
                         created_at: Date;
                         source: ChangeSource;
-                        kind: ChangeKind;
                         edge_id: EdgeId | null;
                         created_by: string | null;
                         request_id: string;
@@ -13786,12 +13783,12 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _output_out: typeof _trpc_server.unsetMarker;
             }, {
                 id: string;
+                userId: string | null;
                 name: string | null;
                 phoneNumber: string;
                 createdAt: Date;
                 updatedAt: Date;
                 wordIdentifier: string | null;
-                userId: string | null;
                 isTestNumber: boolean;
                 emojiCode: string | null;
                 verifiedAt: Date | null;
@@ -13819,12 +13816,12 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _output_out: typeof _trpc_server.unsetMarker;
             }, {
                 id: string;
+                userId: string | null;
                 name: string | null;
                 phoneNumber: string;
                 createdAt: Date;
                 updatedAt: Date;
                 wordIdentifier: string | null;
-                userId: string | null;
                 isTestNumber: boolean;
                 emojiCode: string | null;
                 verifiedAt: Date | null;

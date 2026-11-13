@@ -242,14 +242,15 @@ beforeEach(() => {
     {
       read: [team],
       write: [user(ALICE), user(BOB)],
-      fire: [{ kind: 'domain', domain: 'example.com' }, { kind: 'email', address: 'pat@example.com' }],
+      // A fire list stored by an earlier build is neither read nor shown.
+      fire: [{ kind: 'domain', domain: 'example.com' }],
     },
   );
   state({ thing: 'connection', id: FINANCE }, { use: [user(ALICE), user(BOB), user(LEFT)] });
 });
 
 describe('getAutomation', () => {
-  it('returns the three lists, who each named user is, and what the caller may do', async () => {
+  it('returns the read and write lists, who each named user is, and what the caller may do', async () => {
     const answer = await call(getAutomation, { params: { idOrName: 'Deals' } });
     expect(answer.status).toBe(200);
     expect(answer.body).toMatchObject({
@@ -260,20 +261,19 @@ describe('getAutomation', () => {
           { kind: 'user', userId: ALICE, name: null, email: null, onTeam: false },
           { kind: 'user', userId: BOB, name: 'Bob', email: 'bob@example.com', onTeam: true },
         ],
-        fire: [
-          { kind: 'domain', domain: 'example.com' },
-          { kind: 'email', address: 'pat@example.com' },
-        ],
         mayChange: true,
         onlyYou: false,
       },
     });
+    expect((answer.body as { access: object }).access).not.toHaveProperty('fire');
+    expect((answer.body as { access: object }).access).not.toHaveProperty('carriedPin');
+    expect((answer.body as { access: object }).access).not.toHaveProperty('teamRunsOnLf');
   });
 
   it('gives a list that setAccess accepts back unchanged, and stores it as it was', async () => {
     const { body } = await call(getAutomation, { params: { idOrName: 'Deals' } });
-    const { access } = body as { access: Record<'read' | 'write' | 'fire', unknown[]> };
-    for (const verb of ['read', 'write', 'fire'] as const) {
+    const { access } = body as { access: Record<'read' | 'write', unknown[]> };
+    for (const verb of ['read', 'write'] as const) {
       const before = JSON.stringify(listOf(DEALS, verb));
       const answer = await call(setAccess, { body: { automation: 'Deals', verb, grantees: access[verb] } });
       expect(answer.status).toBe(200);
@@ -288,7 +288,7 @@ describe('getAutomation', () => {
 
   it('answers an automation the caller may not read as one that is not there', async () => {
     mockState.rows = mockState.rows.filter((r) => r.target.id !== DEALS);
-    state({ thing: 'automation', id: DEALS }, { read: [user(BOB)], write: [user(BOB)], fire: [user(BOB)] });
+    state({ thing: 'automation', id: DEALS }, { read: [user(BOB)], write: [user(BOB)] });
     const unseen = await call(getAutomation, { as: carol, params: { idOrName: 'Deals' } });
     const missing = await call(getAutomation, { as: carol, params: { idOrName: 'Nowhere' } });
     expect(JSON.stringify(unseen.body)).not.toContain('access');

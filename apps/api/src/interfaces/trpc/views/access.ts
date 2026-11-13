@@ -1,5 +1,5 @@
 // Who may reach one automation or one connection, as the web reads and
-// changes it: an automation's read, write and fire lists, a connection's use
+// changes it: an automation's read and write lists, a connection's use
 // list. The same decisions as REST `setAccess`: reading the lists needs read
 // on the automation (use on the connection), changing one needs write (use);
 // a team admin may read and change every thing's lists on their team. What the
@@ -20,7 +20,7 @@ import {
   setStatement,
   type StatementRefusal,
 } from '../../../services/access/decide';
-import { GranteesInput } from '../../../services/access/stated_input';
+import { MemberGranteesInput } from '../../../services/access/stated_input';
 import { CHANGE_STATEMENT, decidesEach, type Decision } from '../../access_route';
 import { cannotChange } from '../access';
 import { userProcedure as sharedUserProcedure } from '../procedures';
@@ -35,7 +35,7 @@ export type { AccessView };
  */
 export type SetResult = { ok: true; view: AccessView } | { ok: false; refusal: StatementRefusal };
 
-const AUTOMATION_VERBS = ['read', 'write', 'fire'] as const satisfies readonly StatedVerb<'automation'>[];
+const AUTOMATION_VERBS = ['read', 'write'] as const satisfies readonly StatedVerb<'automation'>[];
 
 const NOT_FOUND: Record<Thing, string> = {
   automation: 'That automation was not found.',
@@ -69,8 +69,8 @@ function refusedList(error: unknown): SetResult {
 const ThingInput = z.object({ thing: z.enum(['automation', 'connection']), id: z.string() });
 
 const SetInput = z.discriminatedUnion('thing', [
-  z.object({ thing: z.literal('automation'), id: z.string(), verb: z.enum(AUTOMATION_VERBS), grantees: GranteesInput }),
-  z.object({ thing: z.literal('connection'), id: z.string(), verb: z.literal('use'), grantees: GranteesInput }),
+  z.object({ thing: z.literal('automation'), id: z.string(), verb: z.enum(AUTOMATION_VERBS), grantees: MemberGranteesInput }),
+  z.object({ thing: z.literal('connection'), id: z.string(), verb: z.literal('use'), grantees: MemberGranteesInput }),
 ]);
 
 const accessRouter = (procedure: typeof trpc.procedure) => {

@@ -15,13 +15,20 @@ const NOT_SAVED = "Couldn't save the change. Reload the page and try again.";
 
 type SetInput = RouterInputs["views"]["access"]["set"];
 
+type MemberGrantee = Extract<SetInput, { thing: "connection" }>["grantees"][number];
+
+/** The team and named members: the only entries a list the server takes can hold. */
+function membersOf(grantees: Grantee[]): MemberGrantee[] {
+  return grantees.flatMap((grantee): MemberGrantee[] => (grantee.kind === "team" || grantee.kind === "user" ? [grantee] : []));
+}
+
 /** The change to send, when the verb is one the thing has. */
 function setInputOf(target: { thing: Thing; id: string }, verb: Verb, grantees: Grantee[]): SetInput | null {
   switch (target.thing) {
     case "automation":
-      return verb === "use" ? null : { thing: "automation", id: target.id, verb, grantees };
+      return verb === "use" || verb === "fire" ? null : { thing: "automation", id: target.id, verb, grantees: membersOf(grantees) };
     case "connection":
-      return verb === "use" ? { thing: "connection", id: target.id, verb, grantees } : null;
+      return verb === "use" ? { thing: "connection", id: target.id, verb, grantees: membersOf(grantees) } : null;
     default: {
       const unreachable: never = target.thing;
       return unreachable;
@@ -93,9 +100,9 @@ export function AccessPanel({ thing, id }: { thing: Thing; id: string }) {
     mayChange: view.mayChange,
     onlyYou: view.onlyYou,
     viewerUserId: view.viewerUserId,
-    carriedPin: view.thing === "automation" && view.carriedPin,
-    teamRunsOnLf: view.thing === "automation" && view.teamRunsOnLf,
-    dropsOwnMessages: view.thing === "automation" ? view.dropsOwnMessages : [],
+    carriedPin: false,
+    teamRunsOnLf: false,
+    dropsOwnMessages: [],
   };
 
   return (

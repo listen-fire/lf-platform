@@ -721,7 +721,7 @@ function appMounts(): string[] {
 function statesOnly(automationId: string, teamId: string, grantee: Grantee): void {
   const target: Target = { thing: 'automation', id: automationId };
   mockState.things.set(`automation:${automationId}`, teamId);
-  for (const verb of ['read', 'write', 'fire'] as const) mockState.rows.push({ teamId, target, verb, grantee });
+  for (const verb of ['read', 'write'] as const) mockState.rows.push({ teamId, target, verb, grantee });
 }
 
 beforeEach(() => {
@@ -1503,16 +1503,13 @@ function lockedKeysFor(key: string): string[] {
 }
 
 /**
- * The lists a locked entry carries over MCP, and nothing of its content. An
- * automation's also says whether its fire list takes anyone only (its pin, its
- * team's engine), which is no content of it.
+ * The lists a locked entry carries over MCP, and nothing of its content.
  */
 function expectListsOnly(entry: Record<string, unknown> | undefined, key: string, verbs: string[]): void {
   if (!key.startsWith('GET ')) return;
   const access = entry?.access;
   expect(access).toBeDefined();
-  const facts = verbs.includes('fire') ? ['carriedPin', 'teamRunsOnLf'] : [];
-  expect(Object.keys(access ?? {}).sort()).toEqual([...verbs, 'mayChange', 'onlyYou', ...facts].sort());
+  expect(Object.keys(access ?? {}).sort()).toEqual([...verbs, 'mayChange', 'onlyYou'].sort());
 }
 
 describe('as a team admin whom no list names', () => {
@@ -1543,7 +1540,7 @@ describe('as a team admin whom no list names', () => {
       const entry = lockedEntry(seen.body, SEEDED.automationId);
       expect(entry).toMatchObject({ locked: true, id: SEEDED.automationId, name: SEEDED.automationName });
       expect(Object.keys(entry ?? {}).filter((field) => !lockedKeysFor(asked.key).includes(field))).toEqual([]);
-      expectListsOnly(entry, asked.key, ['read', 'write', 'fire']);
+      expectListsOnly(entry, asked.key, ['read', 'write']);
       return;
     }
     mockState.automations = [];

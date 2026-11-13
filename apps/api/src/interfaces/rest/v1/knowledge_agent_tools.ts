@@ -9,7 +9,7 @@
 // implementation. The route metadata is also registered on the registry
 // (`registerKnowledgeAgentToolRoutes`) for non-MCP discovery.
 
-import { CreationStatementsInput, GranteesInput, LIST_DESCRIPTIONS } from '../../../services/access/stated_input';
+import { CreationStatementsInput, GranteesInput, LIST_DESCRIPTIONS, MemberGranteesInput } from '../../../services/access/stated_input';
 import { randomUUID } from "node:crypto";
 
 import { Router, type RequestHandler } from 'express';
@@ -1450,8 +1450,8 @@ const setAccessSchema = z
   .object({
     automation: z.string().optional(),
     connection: z.string().optional(),
-    verb: z.enum(['read', 'write', 'fire', 'use']),
-    grantees: GranteesInput,
+    verb: z.enum(['read', 'write', 'use']),
+    grantees: MemberGranteesInput,
     team: z.string().optional(),
   })
   .refine((input) => (input.automation === undefined) !== (input.connection === undefined), {
@@ -1518,11 +1518,11 @@ async function listNow(target: Target, verb: SetAccessInput['verb']): Promise<Gr
 }
 
 const SET_ACCESS_DESCRIPTION =
-  'Change who may reach one automation or one connection: replace one of its lists. An automation has three — read, write (change, run, delete, and change these lists; whoever may write may also read) and fire (set it off through its listens) — and a connection one, use. Body: { automation | connection (id or exact name), verb, grantees, team? }. Read, write and use take { kind: "team" } or { kind: "user", userId }; fire also takes { kind: "anyone" }, { kind: "domain", domain }, { kind: "email", address } and { kind: "phone", digits } (digits, country code first). A fire list other than anyone is refused on an automation pinned to 0.12 or older (its `access.carriedPin` is true; upgradeAutomation moves it), and on a team that runs on lf (`access.teamRunsOnLf` is true). A list is never empty, and names only people on the team. Ask the person you are working for who should be on it; never choose for them. This REPLACES the whole list: read the current list first (getAutomation\'s or describeConnection\'s `access`, or a locked entry\'s `access` in listAutomations and listConnections), then pass it back with your change made. Never pass just the one person to add, which would remove everyone else. Changing an automation\'s lists needs write on it; a connection\'s needs use; a team admin may change any on the team. Returns the list as stored. The current lists are in getAutomation\'s and describeConnection\'s `access`; leave out anyone marked `onTeam: false`, who has left the team. Also the top-level "setAccess" tool.';
+  'Change who may reach one automation or one connection: replace one of its lists. An automation has two — read and write (change, run, delete, and change these lists; whoever may write may also read) — and a connection one, use. Body: { automation | connection (id or exact name), verb, grantees, team? }. Each list takes { kind: "team" } or { kind: "user", userId }. A list is never empty, and names only people on the team. Ask the person you are working for who should be on it; never choose for them. This REPLACES the whole list: read the current list first (getAutomation\'s or describeConnection\'s `access`, or a locked entry\'s `access` in listAutomations and listConnections), then pass it back with your change made. Never pass just the one person to add, which would remove everyone else. Changing an automation\'s lists needs write on it; a connection\'s needs use; a team admin may change any on the team. Returns the list as stored. The current lists are in getAutomation\'s and describeConnection\'s `access`; leave out anyone marked `onTeam: false`, who has left the team. Also the top-level "setAccess" tool.';
 
 const READ_ONLY_CONNECTION_MESSAGE = 'You may use this connection but not change who may.';
 
-const WRONG_VERB = "An automation's lists are read, write and fire; a connection's is use.";
+const WRONG_VERB = "An automation's lists are read and write; a connection's is use.";
 
 // Replace one of a thing's lists, as the person the agent works for chose it.
 // The decision is the thing's own: write on the automation, use on the
@@ -2243,7 +2243,7 @@ function registerAutomationToolRoutes(): void {
 
   // automations
   reg('GET', '/automations', 'List saved automations: id, name, status, listeners. Spans every team the connection covers; each item is tagged with its teamId + teamName. A team admin also sees the ones they may not read, `locked: true`, by id, name and `access` (their lists) alone.', { readOnly: true, latency: 'fast' });
-  reg('GET', '/automations/:idOrName', 'Get one saved automation by id or name (across the teams the connection covers): its program, status, listeners, `revision` — a fingerprint of its current source — and `storyUrl`, a link to a picture of what it does that anyone can open (hand it to the user as a labelled link, e.g. [See what this does](url); it needs no login and always shows the current version) and `access` — who may read, write and fire it, in the shape setAccess takes, with `carriedPin` and `teamRunsOnLf`: when either is true, its fire list takes anyone only. Re-read this (don\'t reuse an old copy) before editing an automation you already have, then pass its `revision` back as `expectedRevision` when you save.', { readOnly: true, latency: 'fast' });
+  reg('GET', '/automations/:idOrName', 'Get one saved automation by id or name (across the teams the connection covers): its program, status, listeners, `revision` — a fingerprint of its current source — and `storyUrl`, a link to a picture of what it does that anyone can open (hand it to the user as a labelled link, e.g. [See what this does](url); it needs no login and always shows the current version) and `access` — who may read and write it, in the shape setAccess takes. Re-read this (don\'t reuse an old copy) before editing an automation you already have, then pass its `revision` back as `expectedRevision` when you save.', { readOnly: true, latency: 'fast' });
   reg('GET', '/automations/:idOrName/source', 'Read an automation\'s program text a window at a time, by id or name — cheaper than getAutomation when you only need to see (or re-check) part of a long file. Pass ?offset= (1-based line number, default 1) and ?limit= (line count, default the rest of the file). Returns { id, name, revision, totalLines, offset, lines: [{ n, text }] }. Line numbers are only valid against THIS read — anything else that edits the file moves them, so anchor an edit on the text itself (editAutomation), not on `n`.', { readOnly: true, latency: 'fast' });
   reg('POST', '/automations/:idOrName/edit', 'Change one saved automation by splicing a snippet, without resending the whole program: pass the automation\'s id or name and { oldString, newString, replaceAll?, expectedRevision?, acknowledgeErrors? }. oldString must appear in the CURRENT source exactly once (read it first — readAutomation or getAutomation — and quote enough surrounding text to pin one spot), or the edit is refused with a 400 explaining why: not found, or found more than once (pass replaceAll: true to change every match instead of widening the anchor). Once the anchor resolves, this is exactly saveAutomation with the spliced result as the new source — same expectedRevision conflict check, same check first (an edit with errors is not saved; the diagnostics come back), same acknowledgeErrors consent. Returns save\'s result plus the new `revision`.', { latency: 'medium' });
   reg('GET', '/automations/grep', 'Search across a team\'s automations for a literal snippet (or, with isRegex: true, a regular expression) and get back every matching line: { matches: [{ id, name, teamId, line, text, before, after }], truncated }. Query: pattern, isRegex?, contextLines? (lines of surrounding context per match, default 0), team? (default: every team the connection covers). Capped at 200 matches. Use it to find where something is defined or imported before editing it.', { inputSchema: grepAutomationsSchema, readOnly: true, latency: 'fast' });

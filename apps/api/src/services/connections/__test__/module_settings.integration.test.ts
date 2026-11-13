@@ -24,7 +24,6 @@ import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
 import { FAKE_SLACK_APP_USER, fakeSlackIdentity } from '../../../test/harness/fake_slack_identity';
 import { cleanupTeam } from '../../../test/harness/cleanup';
 import { insertTestListen } from '../../../test/harness/listens';
-import { automationView } from '../../access/listing';
 import { Context } from '../../context';
 import { StatementStore, type Grantee } from '../../access/statement';
 import { persistCredential } from '../../credentials/persist_credential';
@@ -255,9 +254,8 @@ describe('changing a setting', () => {
 });
 
 describe('the automation that listens on it', () => {
-  it('says whether each Slack connection it listens on drops the app’s own messages', async () => {
+  it('finds each Slack connection it listens on, and whether it drops the app’s own messages', async () => {
     const id = await slackConnection({ name: 'Team Slack', workspace: `T-${randomUUID().slice(0, 8)}` });
-    const writer = await member('write');
     const movementId = randomUUID() as MovementId;
     await getAutomationsQb(['movement']).insertInto('movement').values({ id: movementId, team_id: teamId, name: 'Deals', source: '' }).execute();
     await insertTestListen({ teamId, movementId, adapterType: 'slack', edge: 'Messages', delivery: 'connection', credentialsId: id });
@@ -266,10 +264,7 @@ describe('the automation that listens on it', () => {
     await writeSettings(id, {});
     expect(await dropsOwnMessagesOn(movementId)).toEqual([{ connectionId: id, name: 'Team Slack', on: true }]);
 
-    const view = () => runWithPrincipal(userPrincipal({ userId: writer, teamId, access: 'write' }), () => automationView(movementId));
-    expect(await view()).toMatchObject({ dropsOwnMessages: [{ on: true, mayChange: true, connection: { id, name: 'Team Slack' } }] });
-
     await setModuleSetting({ connectionId: id, name: DROP_OWN_MESSAGES, on: false });
-    expect(await view()).toMatchObject({ dropsOwnMessages: [{ on: false }] });
+    expect(await dropsOwnMessagesOn(movementId)).toEqual([{ connectionId: id, name: 'Team Slack', on: false }]);
   });
 });

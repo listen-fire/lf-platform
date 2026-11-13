@@ -186,29 +186,17 @@ beforeEach(() => {
   ]);
   mockState.connections = [{ id: FINANCE_A, team_id: TEAM_A, name: 'Finance' }];
   mockState.things.set(`automation:${DEALS}`, TEAM_A);
-  for (const verb of ['read', 'write', 'fire'] as const) {
+  for (const verb of ['read', 'write'] as const) {
     mockState.rows.push({ teamId: TEAM_A, target: { thing: 'automation', id: DEALS }, verb, grantee: team });
   }
   stateConnection(FINANCE_A, TEAM_A, [team]);
 });
 
 describe('what setAccess answers', () => {
-  it('gives the list as stored, in the shape it is stored in, not as it was sent', async () => {
-    const answer = await call({
-      body: { automation: 'Deals', verb: 'fire', grantees: [{ kind: 'domain', domain: ' Example.COM ' }, { kind: 'email', address: 'Pat@Example.com' }] },
-    });
-    expect(answer).toEqual({
-      status: 200,
-      body: {
-        automation: { id: DEALS, name: 'Deals' },
-        verb: 'fire',
-        grantees: [
-          { kind: 'domain', domain: 'example.com' },
-          { kind: 'email', address: 'pat@example.com' },
-        ],
-      },
-    });
-    expect(listOf(DEALS, 'fire')).toEqual(answer.body.grantees);
+  it('gives the list as stored', async () => {
+    const answer = await call({ body: { automation: 'Deals', verb: 'read', grantees: [user(BOB), team] } });
+    expect(answer).toEqual({ status: 200, body: { automation: { id: DEALS, name: 'Deals' }, verb: 'read', grantees: [user(BOB), team] } });
+    expect(listOf(DEALS, 'read')).toEqual(answer.body.grantees);
   });
 
   it('gives a connection the same way', async () => {
@@ -219,11 +207,10 @@ describe('what setAccess answers', () => {
   it.each([
     ['an automation asked for use', { automation: 'Deals', verb: 'use', grantees: [team] }],
     ['a connection asked for read', { connection: 'Finance', verb: 'read', grantees: [team] }],
-    ['a connection asked for fire', { connection: 'Finance', verb: 'fire', grantees: [team] }],
   ])('refuses %s with a 400 naming the verbs each takes, changing nothing', async (_, body) => {
     const before = JSON.stringify(mockState.rows);
     const answer = await call({ body });
-    expect(answer).toEqual({ status: 400, body: { error: "An automation's lists are read, write and fire; a connection's is use." } });
+    expect(answer).toEqual({ status: 400, body: { error: "An automation's lists are read and write; a connection's is use." } });
     expect(JSON.stringify(mockState.rows)).toBe(before);
   });
 
@@ -236,11 +223,15 @@ describe('what setAccess answers', () => {
     expect(JSON.stringify(answer.body)).toContain('Name exactly one of automation or connection.');
   });
 
-  it('refuses a list of the wrong shape, naming the bad value, and changes nothing', async () => {
+  it.each([
+    ['a fire list', { automation: 'Deals', verb: 'fire', grantees: [team] }],
+    ['a domain', { automation: 'Deals', verb: 'read', grantees: [{ kind: 'domain', domain: 'example.com' }] }],
+    ['anyone', { automation: 'Deals', verb: 'read', grantees: [{ kind: 'anyone' }] }],
+  ])('refuses %s as invalid, changing nothing', async (_, body) => {
     const before = JSON.stringify(mockState.rows);
-    const answer = await call({ body: { automation: 'Deals', verb: 'fire', grantees: [{ kind: 'domain', domain: 'not a domain' }] } });
+    const answer = await call({ body });
     expect(answer.status).toBe(400);
-    expect(answer.body).toMatchObject({ refusal: 'malformed', error: expect.stringContaining('"not a domain"') });
+    expect(answer.body).toMatchObject({ error: 'Invalid request' });
     expect(JSON.stringify(mockState.rows)).toBe(before);
   });
 });

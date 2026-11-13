@@ -19,6 +19,11 @@ const GranteeInput: z.ZodType<Grantee> = z.discriminatedUnion('kind', [
 
 const GranteesInput = z.array(GranteeInput);
 
+/** What setAccess takes: the team or its members, the only grantees a read, write or use list names. */
+const MemberGranteesInput = z.array(
+  z.discriminatedUnion('kind', [z.object({ kind: z.literal('team') }), z.object({ kind: z.literal('user'), userId: z.string() })]),
+);
+
 /** The lists a new automation is created with. Each is optional here so a save without one is refused by name. */
 const CreationStatementsInput: z.ZodType<Partial<CreationStatements>> = z.object({
   read: GranteesInput.optional(),
@@ -41,4 +46,4 @@ const LIST_DESCRIPTIONS = {
 const MISSING_USE_REFUSAL =
   'A new connection needs a statement of who may use it. Ask the person you are working for, then try again with it.';
 
-export { GranteeInput, GranteesInput, CreationStatementsInput, LIST_DESCRIPTIONS, MISSING_USE_REFUSAL };
+export { GranteeInput, GranteesInput, MemberGranteesInput, CreationStatementsInput, LIST_DESCRIPTIONS, MISSING_USE_REFUSAL };
