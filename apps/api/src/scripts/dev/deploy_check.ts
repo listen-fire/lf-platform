@@ -12,7 +12,7 @@ import './_profile_loader';
 import { deployCheckMain } from '../deploy_check';
 
 deployCheckMain()
-  .then(() => process.exit(0))
+  .then((code) => process.exit(code))
   .catch((err) => {
     console.error(err);
     process.exit(1);

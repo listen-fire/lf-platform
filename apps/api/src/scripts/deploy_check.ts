@@ -10,8 +10,12 @@
  * replicas follow it, and which the api waits on. A second run on the same
  * release does nothing.
  *
- * It never fails the deployment: a check that cannot finish logs why and exits
- * 0, because it changes no pin — while a failed one-shot would keep the api from starting.
+ * It fails the deployment in one case only: a run parked on a version this
+ * release does not run (a legacy id, or 0.12, whose engine it dropped), which
+ * nothing here can continue. It is named, and the deployment stops until it is
+ * answered or cancelled on the release that parked it. Otherwise a check that
+ * cannot finish logs why and exits 0, because it changes no pin, while a failed
+ * one-shot would keep the api from starting.
  *
  * Usage:
  *   node build/scripts/deploy_check.js             # run the check
@@ -32,6 +36,7 @@ import {
   type DeployCheckOutcome,
   type DeployCheckSummary,
 } from '../services/translation_graph/movement/language_upgrade';
+import { droppedPins, type DroppedPins } from '../services/translation_graph/movement/dropped_pins';
 import { neverAsAny } from 'movement-engine/public/types';
 
 function outcomeHeading(outcome: DeployCheckOutcome): string {
@@ -89,16 +94,43 @@ export function renderSummary(summary: DeployCheckSummary): string {
   return lines.join('\n');
 }
 
+/** The automations on a version this release does not run, and the runs
+ *  parked on one. Empty when there are none. */
+export function renderDropped(dropped: DroppedPins): string {
+  const lines: string[] = [];
+  if (dropped.automations.length > 0) {
+    lines.push(`On language versions this release does not run (1 to 4, or 0.12): ${dropped.automations.length} automations, which start nothing until they are upgraded`);
+    for (const automation of dropped.automations) lines.push(`  - ${automation.name} (${automation.pin}), team ${automation.teamId}`);
+  }
+  if (dropped.parkedRuns.length > 0) {
+    lines.push(
+      `REFUSED: ${dropped.parkedRuns.length} runs are parked on them, which this release cannot continue. ` +
+        'Answer or cancel each on the release that parked it, then deploy again:',
+    );
+    for (const run of dropped.parkedRuns) lines.push(`  - run ${run.id} of ${run.automation} (${run.pin}), team ${run.teamId}`);
+  }
+  return lines.join('\n');
+}
+
+/** Whether this release may take traffic: not while a run is parked on a
+ *  version it does not run. Every automation on one is named either way. */
+export async function droppedPinsAllowDeploy(): Promise<boolean> {
+  const dropped = await droppedPins();
+  const text = renderDropped(dropped);
+  if (text !== '') console.log(text);
+  if (dropped.parkedRuns.length === 0) return true;
+  logger.error('[DeployCheck] runs are parked on a language version this release does not run: the deployment stops', {
+    runs: dropped.parkedRuns.map((run) => run.id),
+  });
+  return false;
+}
+
 async function printSummary(): Promise<void> {
   const summary = await latestDeployCheckSummary();
   console.log(summary === null ? 'No deploy check has run on this database yet.' : renderSummary(summary));
 }
 
 async function runCheck(): Promise<void> {
-  if (!mounts('automations')) {
-    logger.info('[DeployCheck] this deployment runs no automations — nothing to check');
-    return;
-  }
   const summary = await runDeployCheck(liveDeployCheckDeps(thisDeployCheckRelease(LISTEN_FIRE_VERSION)));
   if (summary === null) {
     logger.info(`[DeployCheck] release ${LISTEN_FIRE_VERSION} was already checked — nothing to do`);
@@ -107,11 +139,20 @@ async function runCheck(): Promise<void> {
   console.log(renderSummary(summary));
 }
 
-export async function deployCheckMain(): Promise<void> {
+/** The exit code the one-shot ends with: 1 only while a run is parked on a
+ *  version this release does not run. */
+export async function deployCheckMain(): Promise<number> {
   if (process.argv.includes('--summary')) {
     await printSummary();
-    return;
+    return 0;
   }
+  if (!mounts('automations')) {
+    logger.info('[DeployCheck] this deployment runs no automations — nothing to check');
+    return 0;
+  }
+  // Outside the try: a deployment that cannot tell whether a run would be
+  // stranded does not go ahead.
+  if (!(await droppedPinsAllowDeploy())) return 1;
   try {
     await runCheck();
   } catch (err) {
@@ -119,13 +160,16 @@ export async function deployCheckMain(): Promise<void> {
       error: err instanceof Error ? (err.stack ?? err.message) : String(err),
     });
   }
+  return 0;
 }
 
 if (require.main === module) {
   deployCheckMain()
-    .then(() => process.exit(0))
+    .then((code) => process.exit(code))
     .catch((err) => {
+      // Only the summary and the parked runs' count reach here: the check
+      // itself is caught inside, and neither may be taken for a pass.
       logger.error('[DeployCheck] failed', err);
-      process.exit(process.argv.includes('--summary') ? 1 : 0);
+      process.exit(1);
     });
 }
