@@ -15,7 +15,7 @@ import type { InstanceSchema } from 'movement-lang';
 import { pinOf } from './pin_of';
 import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/public/adapter';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
-import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
+import type { ParkedScopeState } from 'engine-contracts';
 
 import { createManualAdapter } from '../../translation_graph/adapters/manual';
 import { containerAssociation } from 'movement-engine/public/adapter';
@@ -23,8 +23,8 @@ import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog'
 import { teamOfTenant } from '../../translation_graph/movement/tenant';
 import { tenantIdOf } from 'engine-contracts';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
-import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
-import { type MovementRunResult, type ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
+import { resumeMovement, runMovement } from '../dispatch/dispatch';
+import { type MovementRunResult, type ParkSink } from 'movement-engine/public/movement-engine';
 import { makeTestHost } from 'movement-engine/public/testing';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000078');
@@ -399,7 +399,7 @@ describe("a library closure parked before `IS` against the library's own declara
 // A park names the library its declarations belong to. Resumed against a
 // program that no longer links that library, it refuses rather than resuming
 // silently on the library's file scope (which is chain[0], never rehydrated).
-describe.each([4, 5] as const)('a resume against a program that no longer links the parked library (v%i)', (version) => {
+describe.each([5] as const)('a resume against a program that no longer links the parked library (v%i)', (version) => {
   const unlinked = (h: Harness): Harness => ({
     ...h,
     source: root('', '  write graph-[:note]-> { payload: { x: 1 } }', version),

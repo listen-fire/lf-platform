@@ -14,7 +14,7 @@ import { tenantIdOf } from 'engine-contracts';
 import { createManualAdapter } from '../../translation_graph/adapters/manual';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import { teamOfTenant } from '../../translation_graph/movement/tenant';
-import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runMovement } from '../dispatch/dispatch';
 import { makeTestHost } from 'movement-engine/public/testing';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000097');
@@ -121,11 +121,6 @@ async function runUnder(languageVersion: LanguageVersion) {
 }
 
 describe('a read off one of two records of one type', () => {
-  it('ran under legacy 4: a field it has read its value, one it has not read null, and text plus one is NaN', async () => {
-    const { kg } = await runUnder('4');
-    expect(kg.creates.find((c) => c.fields.payload !== undefined)?.fields.payload).toEqual({ name: 'b', nope: null, sum: Number.NaN });
-  });
-
   it('is refused at check under 0.12', async () => {
     await expect(runUnder(LANGUAGE_VERSION)).rejects.toThrow(/MOV_UNKNOWN_PROPERTY/);
   });

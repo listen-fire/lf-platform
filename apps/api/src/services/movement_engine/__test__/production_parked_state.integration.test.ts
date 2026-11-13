@@ -118,11 +118,11 @@ describe('a run production parked', () => {
     resetWorkHandlersForTests();
   });
 
-  it('on a legacy 4 timer wakes on the legacy engine', async () => {
+  it('on a legacy 4 timer fails when it wakes, saying why: this release carries no engine for it', async () => {
     const { runId } = await load('legacy-4-timer');
     await timersDue(runId);
     await drain();
-    expect(await runOf(runId)).toMatchObject({ status: 'success' });
+    expect(await runOf(runId)).toMatchObject({ status: 'failed', failure_reason: expect.stringContaining('carries no engine for versions 1 to 4') });
   });
 
   describe('on a legacy 4 question stays parked: nothing here can step it', () => {

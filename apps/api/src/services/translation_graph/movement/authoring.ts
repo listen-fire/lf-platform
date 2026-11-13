@@ -33,7 +33,7 @@ import type { TeamFacts } from '@listen-fire/language-versions';
 import type { CatalogGap, ImportedFile } from './catalog';
 import type { MovementValidityStatus } from './store';
 
-import { listUnsupportedConstructs } from '@listen-fire/legacy-engine/services/movement_engine/interpretable';
+import { listUnsupportedConstructs } from '../../movement_engine/dispatch/interpretable';
 import { movementCatalogForTeam } from './catalog';
 import type { CatalogAudience } from './audience';
 import { checkInstalled, routeOf } from './language_route';

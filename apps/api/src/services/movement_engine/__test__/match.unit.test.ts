@@ -74,7 +74,7 @@ jest.mock('../../../lib/prompts/execute', () => ({
   flattenMessages: jest.fn(),
 }));
 
-import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runMovement } from '../dispatch/dispatch';
 
 import { LANGUAGE_VERSION, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
@@ -283,17 +283,6 @@ describe('a match against a system', () => {
     ]);
   });
 
-  it('under version 3 the judge declining is a miss: the scope ends, nothing is written', async () => {
-    arbitrateEntities.mockResolvedValue({ index: null });
-    const email = makeFakeAdapter('email');
-    const attio = makeFakeAdapter('attio', { company: [ACME] });
-    const result = await run(FUZZY_MATCH, { email: email.adapter, attio: attio.adapter }, { languageVersion: '3' });
-
-    expect(arbitrateEntities).toHaveBeenCalledTimes(1);
-    expect(attio.creates).toEqual([]);
-    expect(result.writes).toEqual([]);
-  });
-
   it('a lone EXACT hit needs no judge', async () => {
     const email = makeFakeAdapter('email');
     const attio = makeFakeAdapter('attio', { company: [ACME] });
@@ -308,20 +297,6 @@ describe('a match against a system', () => {
     expect(attio.creates).toEqual([{ recordType: 'note', fields: { title: 'already there' } }]);
   });
 
-  it('under version 3 an unbound match is a gate: what follows runs only when the record exists', async () => {
-    const gate = [
-      '  match crm-[:companies]-> { unique by (`name`), name: "Acme Incorporated" }',
-      '  write crm-[:notes]-> { title: "known company" }',
-    ];
-    const hit = makeFakeAdapter('attio', { company: [ACME] });
-    await run(gate, { email: makeFakeAdapter('email').adapter, attio: hit.adapter }, { languageVersion: '3' });
-    expect(hit.creates.map((c) => c.fields.title)).toEqual(['known company']);
-
-    const miss = makeFakeAdapter('attio');
-    const result = await run(gate, { email: makeFakeAdapter('email').adapter, attio: miss.adapter }, { languageVersion: '3' });
-    expect(miss.creates).toEqual([]);
-    expect(result.writes).toEqual([]);
-  });
 });
 
 describe('the shortlist narrowed by a non-equality conjunct', () => {
@@ -366,20 +341,6 @@ describe('a match against a node this run built', () => {
     expect(found).toMatchObject({ kind: 'match', local: { edge: 'companies' }, committed: false, writtenValues: {} });
   });
 
-  it('under version 3 a miss ends the scope and adds nothing to the edge', async () => {
-    const email = makeFakeAdapter('email');
-    const attio = makeFakeAdapter('attio');
-    await run(
-      [
-        '  write deduped-[:companies]-> { unique by (`name`), name: "Acme" }',
-        '  match deduped-[:companies]-> { unique by (`name`), name: "Beta" }',
-        '  write crm-[:notes]-> { title: "never" }',
-      ],
-      { email: email.adapter, attio: attio.adapter },
-      { languageVersion: '3' },
-    );
-    expect(attio.creates).toEqual([]);
-  });
 });
 
 describe('a miss under legacy version 4', () => {
@@ -424,17 +385,6 @@ describe('a miss under legacy version 4', () => {
       attio: attio.adapter,
     });
     expect(attio.creates).toEqual([{ recordType: 'note', fields: { title: 'found' } }]);
-  });
-
-  it('under version 3 the same miss still ends the scope', async () => {
-    const attio = makeFakeAdapter('attio');
-    const result = await run(
-      NAMED_MISS,
-      { email: makeFakeAdapter('email').adapter, attio: attio.adapter },
-      { languageVersion: '3' },
-    );
-    expect(attio.creates).toEqual([]);
-    expect(result.writes).toEqual([]);
   });
 
   it('a miss against a node this run built binds absent too', async () => {

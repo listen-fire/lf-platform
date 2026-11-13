@@ -18,7 +18,7 @@ import {
 } from 'movement-lang';
 import { describeLanguageVersion, type LanguageRelease } from 'legacy-lang/language_version';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
-import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runMovement } from '../dispatch/dispatch';
 import { currentLanguageVersion } from 'movement-engine/public/adapter-support';
 import { hostSegments, segmentScopedCalls } from 'movement-engine/public/host';
 import { MovementEngineError } from 'movement-engine/public/errors';
@@ -163,14 +163,6 @@ afterEach(() => {
 });
 
 describe('a run honours its language version pin', () => {
-  it('runs under the pin, and every adapter call sees it', async () => {
-    const kg = makeKgFake();
-    const result = await run(kg, '1');
-    expect(kg.updates).toHaveLength(1);
-    expect(kg.seenVersions).toEqual(['1']);
-    expect(result.trace.some((e) => e.kind === 'warning')).toBe(false);
-  });
-
   it('runs under the current version when given none (unchanged for every existing caller)', async () => {
     const kg = makeKgFake();
     await run(kg);
@@ -189,24 +181,6 @@ describe('a run honours its language version pin', () => {
     expect(kg.updates).toEqual([]);
   });
 
-  it('refuses a removed version BY NAME', async () => {
-    mockRelease = { current: 3, supported: new Set([2, 3]), deprecated: new Set() };
-    const kg = makeKgFake();
-    await expect(run(kg, '1')).rejects.toThrow(describeLanguageVersion(1));
-    expect(kg.updates).toEqual([]);
-  });
-
-  it('runs a deprecated pin, with a warning on the run trace naming it', async () => {
-    mockRelease = { current: 3, supported: new Set([1, 2, 3]), deprecated: new Set([1]) };
-    const kg = makeKgFake();
-    const result = await run(kg, '1');
-    expect(kg.updates).toHaveLength(1);
-    const warning = result.trace.find((e) => e.kind === 'warning');
-    expect(warning).toMatchObject({ code: 'MOV_LANGUAGE_VERSION_DEPRECATED' });
-    expect(warning && 'message' in warning ? warning.message : '').toContain(
-      describeLanguageVersion(1),
-    );
-  });
 });
 
 describe('validation honours the pin', () => {

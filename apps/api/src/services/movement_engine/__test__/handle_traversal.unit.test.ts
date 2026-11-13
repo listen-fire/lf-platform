@@ -1,5 +1,5 @@
 import type { InstanceSchema } from 'movement-lang';
-import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runMovement } from '../dispatch/dispatch';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import type {
   Adapter,

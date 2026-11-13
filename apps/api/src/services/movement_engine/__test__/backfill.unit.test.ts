@@ -86,7 +86,7 @@ jest.mock('../../../lib/anthropic', () => ({
 }));
 
 import type { Catalog, InstanceSchema } from 'movement-lang';
-import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runMovement } from '../dispatch/dispatch';
 import {
   snapshotOverManifests,
   staticCatalogFromManifests,

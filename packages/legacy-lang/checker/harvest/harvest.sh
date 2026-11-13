@@ -12,10 +12,10 @@
 # only a harvest can rewrite the pin.
 #
 # Two passes. The first runs the corpora (the version 1 to 4 conformance
-# suites, this package's tests and the engine's) and assembles what it found.
+# suites, this package's tests and the api's engine tests) and assembles what it found.
 # The second runs the tests that read that corpus (CHECKS_CORPUS=1) and check
 # programs of their own made from it: the upgrade loop's rewrites of each
-# version 4 program, and the engine oracles' programs respelled to version 5.
+# version 4 program.
 # They are pinned too, so their texts are found the same way. Their own
 # assertions are about the whole corpus, which the second pass is still
 # completing, so they are run (not recorded) once it is complete, last, with
@@ -52,16 +52,16 @@ harvest() {
 }
 
 if [ "$half" != replay ]; then
-  FIRST=(v1 v2 v3 v4 current api-v4 api-current engine)
+  FIRST=(v1 v2 v3 v4 current api-current)
   for c in "${FIRST[@]}"; do harvest "$c"; done
   first=()
   for c in "${FIRST[@]}"; do first+=("$c=$T/$c.jsonl"); done
   "${FOLD[@]}" "${mode:---partial}" "${first[@]}"
 
-  for c in readers engine-readers; do
+  for c in readers; do
     harvest "$c" 1 || echo "($c: its assertions are checked over the complete corpus below)"
   done
-  "${FOLD[@]}" ${mode:+"$mode"} "${first[@]}" "readers=$T/readers.jsonl" "engine-readers=$T/engine-readers.jsonl"
+  "${FOLD[@]}" ${mode:+"$mode"} "${first[@]}" "readers=$T/readers.jsonl"
 fi
 
 if [ "$half" != assemble ]; then
@@ -70,5 +70,4 @@ if [ "$half" != assemble ]; then
     exit 1
   fi
   CHECKS_CORPUS=1 node "$JEST" --config jest.config.cjs checker/__test__/checks_regression checker/__test__/upgrade_corpus
-  (cd ../legacy-engine && CHECKS_CORPUS=1 node "$JEST" --config jest.config.cjs services/movement_engine/__test__/reachability)
 fi

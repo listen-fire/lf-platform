@@ -15,7 +15,7 @@ import { tenantIdOf } from 'engine-contracts';
 import { createManualAdapter } from '../../translation_graph/adapters/manual';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import { teamOfTenant } from '../../translation_graph/movement/tenant';
-import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runMovement } from '../dispatch/dispatch';
 import { makeTestHost } from 'movement-engine/public/testing';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000098');
@@ -126,11 +126,6 @@ async function runUnder(source: string, languageVersion: LanguageVersion) {
 const payloads = (kg: ReturnType<typeof makeKgFake>) => kg.creates.filter(c => c.fields.payload !== undefined).map(c => c.fields.payload);
 
 describe('a value that may be a record, handed to a built-in that takes a value', () => {
-  it.each(['3', '4'] as const)('ran under %s: the built-in read the record as it was', async version => {
-    expect(payloads((await runUnder(CASES.round!, version)).kg)).toEqual([{ x: Number.NaN }]);
-    expect(payloads((await runUnder(CASES.upper!, version)).kg)).toEqual([{ x: '[OBJECT OBJECT]' }]);
-  });
-
   it.each(Object.keys(CASES))('%s is refused at check under the release pin', async name => {
     await expect(runUnder(CASES[name]!, LANGUAGE_VERSION)).rejects.toThrow(/MOV_RECORD_NOT_A_VALUE \(line \d+\): company is a record, not a value/);
   });

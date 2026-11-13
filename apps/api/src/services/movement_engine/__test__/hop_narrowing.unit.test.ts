@@ -19,7 +19,7 @@ import { LANGUAGE_VERSION, refinementKey } from 'movement-lang';
 import { parseTraversalPath, scanInstanceChains } from 'legacy-lang';
 import type { InstanceSchema } from 'movement-lang';
 import { refineInstanceSchema } from '../../translation_graph/movement/refinements';
-import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runMovement } from '../dispatch/dispatch';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import type { CapturedWrite } from 'movement-engine/public/adapter';
 import type {

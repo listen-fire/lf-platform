@@ -25,8 +25,5 @@
     "types": ["jest", "node"],
     "jsx": "react"
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.json"],
-  // An older release's tests, verbatim — typed against that release's tree.
-  // The recorded engine runs are JSON lines (one recording each), not JSON.
-  "exclude": ["src/__conformance__", "src/services/movement_engine/conformance/__fixtures__"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.json"]
 }

@@ -11,7 +11,7 @@
 // `ident(` = function, backtick properties, `#meta-edges`, `@globals`) but
 // makes no parsing/resolution claims — coloring only.
 
-import { KEYWORDS } from '@listen-fire/legacy-engine/formula/parser';
+import { KEYWORDS } from 'legacy-lang/formula/parser';
 
 export type HighlightClass =
   | 'keyword'

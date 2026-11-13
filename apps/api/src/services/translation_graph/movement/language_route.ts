@@ -16,7 +16,7 @@
 //     reads them.
 //
 // Every verdict, the story and the editor's answers on a pin go through here;
-// no caller hands a semver to legacy-lang's checker or legacy-engine's scan.
+// no caller hands a semver to legacy-lang's checker or the interpretability scan.
 
 import {
   RustCheckRefused,

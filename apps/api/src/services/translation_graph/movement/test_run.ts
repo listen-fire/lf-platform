@@ -24,7 +24,7 @@ import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { anthropicChat } from '../../../lib/anthropic';
 import { runCostCapFromEnv } from 'movement-engine/public/models';
 import { logger } from 'movement-engine/public/log';
-import { heldRunRefusal, runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { heldRunRefusal, runMovement } from '../../movement_engine/dispatch/dispatch';
 import { resolveAdapterSlug } from '../adapters/registry';
 import { resolveAdapter } from '../adapters/resolve';
 import { loadTriggerById } from '../storage/tg_table';

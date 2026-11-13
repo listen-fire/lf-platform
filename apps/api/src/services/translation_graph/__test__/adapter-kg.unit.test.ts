@@ -387,20 +387,7 @@ import { logger } from 'movement-engine/public/log';
 import { persistKgResources } from '../adapters/knowledge_graph_resources';
 import { RESOURCES_REFERENCE_FIELD_ID, type ResourceFilter } from 'movement-engine/public/adapter';
 import { makeStablePosition } from 'engine-contracts/catalog';
-import { surfaceReadAdapter } from '@listen-fire/legacy-engine/services/movement_engine/kg';
 import { instanceSchemaFromDescriptors } from 'movement-engine/public/catalog';
-import type { InstanceSchema } from 'movement-lang';
-
-/** A schema whose `Message` declares the knowledge graph's resources edge, as
- *  the projection flags it. */
-const resourcesSchema: InstanceSchema = {
-  positions: {
-    Message: { properties: {}, edges: { [KG_RESOURCES_EDGE_NAME]: { target: KG_RESOURCE_TYPE_ID, resources: true } } },
-    [KG_RESOURCE_TYPE_ID]: { properties: { Name: 'text', URL: 'text', Type: 'text' }, edges: {} },
-  },
-  collections: {},
-  writableRoots: {},
-};
 import type { SourcePosition } from 'engine-contracts/catalog';
 
 const TEAM_ID = 'team-1' as TeamId;
@@ -854,41 +841,6 @@ describe('KnowledgeGraphAdapter — getResources / writeResource / writeEvidence
     });
   });
 
-  it('`Resources` is an ordinary edge: walked by its name, each landing reads its fields off itself', async () => {
-    // Language 0.12: a node's resources are `c-[f:Resources]-> { … f.URL … }`
-    // — the edge the describe declares, by its name (no `_resources` keying).
-    dbState.resources.push({
-      id: RESOURCE_ID as string,
-      team_id: TEAM_ID as string,
-      type: 'URL',
-      url: 'https://acme.test/deck',
-      name: 'Acme deck',
-      metadata: {},
-    });
-    dbState.nodeResources.push({
-      id: 'nr-by-name',
-      team_id: TEAM_ID as string,
-      node_id: MSG_NODE_ID as string,
-      resource_id: RESOURCE_ID as string,
-    });
-    // Walked as the engine walks it: through the read wrapper, which sends
-    // the schema's resources edge by its reserved fieldId (its address).
-    const adapter = surfaceReadAdapter({ inner: makeAdapter(), schema: resourcesSchema });
-    const related = await adapter.getRelated({
-      position: makeStablePosition({ adapterType: KG_ADAPTER_TYPE, recordType: 'Message', recordId: MSG_NODE_ID as string }),
-      fieldId: KG_RESOURCES_EDGE_NAME,
-      direction: 'outgoing',
-    });
-    expect(related).toHaveLength(1);
-    expect(related[0].position.recordType).toBe(KG_RESOURCE_TYPE_ID);
-    const read = (fieldId: string) => adapter.getFieldValue({ position: related[0].position, fieldId });
-    expect(await read('Name')).toBe('Acme deck');
-    expect(await read('URL')).toBe('https://acme.test/deck');
-    expect(await read('Type')).toBe('URL');
-    // The field reads are local — only the attachment list crossed the wire.
-    expect(graphRequests).toHaveLength(1);
-  });
-
   it('an ontology edge named `Resources` is the ontology\'s: matched by address, never by the display name', async () => {
     graphOntology.nodeTypes.push(
       wireNodeType({ id: 'nt-company', name: 'Company' }),
@@ -920,7 +872,7 @@ describe('KnowledgeGraphAdapter — getResources / writeResource / writeEvidence
       supportsInPlaceUpdate: false,
     });
     expect(projected.schema.positions['Company'].edges[KG_RESOURCES_EDGE_NAME]?.resources).toBeUndefined();
-    for (const adapter of [makeAdapter(), surfaceReadAdapter({ inner: makeAdapter(), schema: projected.schema })]) {
+    for (const adapter of [makeAdapter()]) {
       graphRequests.length = 0;
       await adapter.getRelated({ position: from, fieldId: KG_RESOURCES_EDGE_NAME, direction: 'outgoing' });
       expect(graphRequests.map((r) => r.path)).not.toContain(`/nodes/${MSG_NODE_ID}/resources`);

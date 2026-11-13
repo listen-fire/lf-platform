@@ -3,7 +3,6 @@ on:
   push:
     paths:
       - "apps/api/**"
-      - "packages/legacy-engine/**"
       - "packages/legacy-lang/**"
   workflow_dispatch:
 
@@ -41,7 +40,7 @@ jobs:
           node-version: 22.23.4
           cache: "pnpm"
       # Full workspace install — apps/api typechecks against the platform's
-      # workspace packages (legacy-lang, legacy-engine, the providers) consumed
+      # workspace packages (legacy-lang, the providers) consumed
       # as raw TS source via symlinks; the language's arrive built from npm. A filtered install omits those symlinks → TS2307. (Was
       # `--filter api --filter prisma-generator-casl`.)
       - run: pnpm install --frozen-lockfile
@@ -75,14 +74,13 @@ jobs:
           DATABASE_URL_TEST_READONLY: postgresql://test:test@localhost:5432/test
         run: pnpm test:smoke
       # The platform's proof of language versions 1 to 4: the TypeScript
-      # parser, checker and engine, and the version 1 and 2 corpora. They
-      # borrow nothing from apps/api.
-      - name: Legacy language and engine
+      # parser and checker, and the version 1 and 2 corpora. They borrow
+      # nothing from apps/api.
+      - name: Legacy language
         working-directory: .
         run: |
           status=0
           pnpm --filter @listen-fire/legacy-lang test || status=1
-          pnpm --filter @listen-fire/legacy-engine test || status=1
           pnpm --filter @listen-fire/legacy-lang test:conformance:v1 || status=1
           pnpm --filter @listen-fire/legacy-lang test:conformance:v2 || status=1
           exit $status

@@ -18,7 +18,7 @@ import type { TriggerRunId } from '../../../../generated/kysely/automations/Trig
 import type { TriggerId } from '../../../../generated/kysely/automations/Trigger';
 import type { MovementId } from '../../../../generated/kysely/automations/Movement';
 import type { NodeId } from '../../../../generated/kysely/knowledge/Node';
-import type { MovementRunResult } from '@listen-fire/legacy-engine/services/movement_engine/run';
+import type { MovementRunResult } from 'movement-engine/public/movement-engine';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 
 import { TriggerRunRecorder } from '../../runs/trigger_run';

@@ -23,7 +23,7 @@ import type { Adapter, RuntimeCapabilities } from 'movement-engine/public/adapte
 import { positionData } from 'engine-contracts/catalog';
 import { RunCancelledSignal } from 'movement-engine/public/errors';
 import { VOID_HOST_METHODS, hostMethodPaths, type EngineHost } from 'movement-engine/public/host';
-import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runMovement } from '../../dispatch/dispatch';
 import { credentialIdsFor, makeTestHost } from 'movement-engine/public/testing';
 import { NotJson } from '../../__test__/round_trip_host';
 import { startHostDouble, httpHost, type HostDouble } from '../http_host_double';

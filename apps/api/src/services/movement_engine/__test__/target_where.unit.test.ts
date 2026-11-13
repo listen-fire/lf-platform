@@ -76,7 +76,7 @@ jest.mock('../../../lib/prompts/execute', () => ({
 }));
 
 import { execute } from '../../../lib/prompts/execute';
-import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runMovement } from '../dispatch/dispatch';
 import { meteredArbitration } from '../../translation_graph/engine/entity_match';
 
 import { since } from 'legacy-lang';
@@ -315,15 +315,6 @@ describe('a match whose target carries a WHERE', () => {
     expect(attio.creates).toEqual([{ recordType: 'note', fields: { title: 'active' } }]);
   });
 
-  it('under version 3, when every candidate fails, the match is a miss: the scope ends and nothing is written', async () => {
-    const attio = makeFakeAdapter('attio', { company: [WITHOUT_DEALS] });
-    const result = await run(MATCH_WITH_DEALS_V3, { email: email(), attio: attio.adapter }, { languageVersion: '3' });
-
-    expect(mockExecute).not.toHaveBeenCalled();
-    expect(attio.creates).toEqual([]);
-    expect(result.writes).toEqual([]);
-  });
-
   it('an equality the search never saw narrows — the field comes from readRecord, not the snapshot', async () => {
     mockExecute.mockResolvedValue(judged(0));
     const attio = makeFakeAdapter('attio', { company: [WITHOUT_DEALS, WITH_DEALS] });
@@ -339,20 +330,6 @@ describe('a match whose target carries a WHERE', () => {
     expect(attio.searched[0]).toEqual({ name: 'Example Labs' });
   });
 
-  it('a bare field in the WHERE reads the candidate as well', async () => {
-    mockExecute.mockResolvedValue(judged(0));
-    const attio = makeFakeAdapter('attio', { company: [WITHOUT_DEALS, WITH_DEALS] });
-    const result = await run(
-      [
-        '  co = match crm-[:companies WHERE `region` == "EU"]-> { unique by (FUZZY `name`), name: "Example Labs" }',
-        '  if co != null { write crm-[:notes]-> { title: co.`summary` } }',
-      ],
-      { email: email(), attio: attio.adapter },
-      // Version 5 refuses a bare name here (a variable from outside the walk); the bare reading is version 4's.
-      { languageVersion: '4' },
-    );
-    expect(result.writes[0]).toMatchObject({ kind: 'match', externalId: 'co-active' });
-  });
 });
 
 describe('a write whose target carries a WHERE', () => {

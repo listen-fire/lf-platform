@@ -15,7 +15,7 @@ import { tenantIdOf } from 'engine-contracts';
 import { createManualAdapter } from '../../translation_graph/adapters/manual';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import { teamOfTenant } from '../../translation_graph/movement/tenant';
-import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runMovement } from '../dispatch/dispatch';
 import { makeTestHost } from 'movement-engine/public/testing';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000098');
@@ -148,21 +148,6 @@ async function runUnder(source: string, languageVersion: LanguageVersion) {
 const payloads = (kg: ReturnType<typeof makeKgFake>) => kg.creates.filter(c => c.fields.payload !== undefined).map(c => c.fields.payload);
 
 describe('a collection op\'s typed function, handed members of another type', () => {
-  it.each(['3', '4'] as const)('ran under %s: text or a record reached a number parameter, and the sum came out NaN', async version => {
-    expect(payloads((await runUnder(CASES.textMember!, version)).kg)).toEqual([{ x: [Number.NaN] }]);
-    expect(payloads((await runUnder(CASES.recordMember!, version)).kg)).toEqual([{ x: [Number.NaN] }]);
-  });
-
-  it.each(['3', '4'] as const)('ran under %s: REDUCE\'s text starting value reached a number accumulator', async version => {
-    expect(payloads((await runUnder(CASES.textStart!, version)).kg)).toEqual([{ x: Number.NaN }]);
-  });
-
-  it.each(['3', '4'] as const)('ran under %s: a record reached a text parameter, and was read as "[object Object]"', async version => {
-    expect(payloads((await runUnder(CASES.recordMemberToText!, version)).kg)).toEqual([{ x: ['[OBJECT OBJECT]'] }]);
-    expect(payloads((await runUnder(CASES.recordStart!, version)).kg)).toEqual([{ x: '[object Object]a' }]);
-    expect(payloads((await runUnder(CASES.filterRecordsAsText!, version)).kg)).toEqual([{ n: 1 }]);
-  });
-
   it.each(Object.keys(CASES))('%s is refused at check under 0.12', async name => {
     await expect(runUnder(CASES[name]!, LANGUAGE_VERSION)).rejects.toThrow(/MOV_CALL_ARG_(TYPE|MAYBE_RECORD)/);
   });

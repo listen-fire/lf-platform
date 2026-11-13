@@ -68,7 +68,7 @@ if (checksFile !== undefined) {
 }
 
 if (patternsFile !== undefined) {
-  const { PATTERNS_CATALOG, sourceOf } = require('../../legacy-engine/__fixtures__/oracle/patterns_catalog');
+  const { PATTERNS_CATALOG, sourceOf } = require('../__fixtures__/oracle/patterns_catalog');
   const patterns = JSON.parse(fs.readFileSync(patternsFile, 'utf8'));
   const seen = new Set<string>();
   for (const c of patterns.cases) {

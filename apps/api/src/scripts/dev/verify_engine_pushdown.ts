@@ -24,7 +24,7 @@ import type { TeamId } from '../../generated/kysely/core/Team';
 import type { ExternalServiceCredentialsId } from '../../generated/kysely/automations/ExternalServiceCredentials';
 
 import { AffinityAPIClient } from '@listen-fire/affinity/api_client';
-import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runMovement } from '../../services/movement_engine/dispatch/dispatch';
 import { staticCatalogSnapshot } from '../../services/translation_graph/movement/catalog';
 import { createManualAdapter } from '../../services/translation_graph/adapters/manual';
 import { AffinityAdapter } from '@listen-fire/affinity';

@@ -71,16 +71,14 @@ jest.mock('../../../lib/anthropic', () => ({
 }));
 
 import { LANGUAGE_VERSION } from 'movement-lang';
-import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runMovement } from '../dispatch/dispatch';
 import {
   setRunEngineRecorder,
   type RunEngineRecord,
 } from 'movement-engine/public/movement-engine';
-import type {
-  MovementTransformInvoker,
-  TransformInvocationResult,
-} from '@listen-fire/legacy-engine/services/movement_engine/extraction';
-import type { MovementTraceEntry } from '@listen-fire/legacy-engine/services/movement_engine/expression';
+type MovementTransformInvoker = import('movement-engine/public/host').EngineHost['llm']['transforms'];
+import type { TransformInvocationResult } from 'movement-engine/public/host';
+import type { MovementTraceEntry } from 'movement-engine/public/trace';
 
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import {

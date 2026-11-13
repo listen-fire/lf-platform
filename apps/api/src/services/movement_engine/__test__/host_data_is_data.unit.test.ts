@@ -88,7 +88,7 @@ jest.mock('../../translation_graph/adapters/resolve', () => ({
 
 import { mockCatalogSnapshot, type InstanceSchema } from 'movement-lang';
 import { parseMovementExpression } from 'legacy-lang';
-import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runMovement } from '../dispatch/dispatch';
 import { MovementEngineError } from 'movement-engine/public/errors';
 import type { Adapter, RuntimeCapabilities } from 'movement-engine/public/adapter';
 import { containerAssociation } from 'movement-engine/public/adapter';

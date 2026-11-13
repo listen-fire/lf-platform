@@ -126,7 +126,7 @@ describe('an upgrade held where it is', () => {
     expect((await getMovementRow({ teamId: TEAM, id: importer }))?.languageVersion).toBe('0.12.8');
   });
 
-  it('a legacy 4 automation moves straight to this release, its timer run finishing on the legacy engine', async () => {
+  it('a legacy 4 automation moves straight to this release, and its timer run, which nothing here can continue, fails when it wakes', async () => {
     const { movementId, runId } = await load('legacy-4-timer');
     const first = await upgradeMovement({ teamId: TEAM, id: movementId, acknowledge: false });
     expect(first).toMatchObject({ status: 'needs_acknowledgement', from: { version: '4' } });
@@ -135,7 +135,7 @@ describe('an upgrade held where it is', () => {
     expect((await getMovementRow({ teamId: TEAM, id: movementId }))?.languageVersion).toBe(LANGUAGE_VERSION);
     expect(await runOf(runId)).toMatchObject({ status: 'parked', failure_reason: null });
     await timerWakes(runId);
-    expect(await runOf(runId)).toMatchObject({ status: 'success' });
+    expect(await runOf(runId)).toMatchObject({ status: 'failed', failure_reason: expect.stringContaining('carries no engine for versions 1 to 4') });
   });
 
   it("an edit waiting in another member of the group refuses by that member's name, and nothing moves", async () => {

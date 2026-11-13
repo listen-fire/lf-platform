@@ -10,13 +10,13 @@ import type { InstanceSchema } from 'movement-lang';
 import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/public/adapter';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { tenantIdOf } from 'engine-contracts';
-import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
+import type { ParkedScopeState } from 'engine-contracts';
 
 import { createManualAdapter } from '../../translation_graph/adapters/manual';
 import { containerAssociation } from 'movement-engine/public/adapter';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
-import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
-import { type MovementRunResult, type ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
+import { resumeMovement, runMovement } from '../dispatch/dispatch';
+import { type MovementRunResult, type ParkSink } from 'movement-engine/public/movement-engine';
 import { makeTestHost } from 'movement-engine/public/testing';
 import { teamOfTenant } from '../../translation_graph/movement/tenant';
 

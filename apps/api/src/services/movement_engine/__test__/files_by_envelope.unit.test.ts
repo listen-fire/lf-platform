@@ -15,17 +15,17 @@ import { mockCatalogSnapshot, type InstanceSchema } from 'movement-lang';
 
 import { tenantIdOf } from 'engine-contracts';
 import type { Adapter, FileRef } from 'movement-engine/public/adapter';
-import type { ExtractCallLlmResult } from '@listen-fire/legacy-engine/services/movement_engine/extraction_call';
+import type { ExtractCallLlmResult } from 'movement-engine/public/models';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
-import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
-import type { FileTextResolution } from '@listen-fire/legacy-engine/services/movement_engine/expression';
+import type { ParkedScopeState } from 'engine-contracts';
+import type { FileTextResolution } from 'movement-engine/public/files';
 
 import { containerAssociation } from 'movement-engine/public/adapter';
 import { makeUnstablePosition, positionData } from 'engine-contracts/catalog';
 import { credentialIdsFor, makeFakeParkSink, makeTestHost, endedInRust } from 'movement-engine/public/testing';
 import { isCheckFailure } from 'movement-engine/public/errors';
-import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
-import { runFailureCause, type RunMovementInput } from '@listen-fire/legacy-engine/services/movement_engine/run';
+import { resumeMovement, runMovement } from '../dispatch/dispatch';
+import { runFailureCause, type RunMovementInput } from 'movement-engine/public/movement-engine';
 import { resetRustRunStats, rustRunStats } from 'movement-engine/public/movement-engine';
 import { installMemoryDocumentStore } from '../../translation_graph/engine/files/__test__/memory_document_store';
 import { FileOutsideTeamError } from '../../translation_graph/engine/files/retrieve';

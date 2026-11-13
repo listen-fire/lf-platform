@@ -18,12 +18,12 @@ import { containerAssociation } from 'movement-engine/public/adapter';
 import { makeUnstablePosition, positionData } from 'engine-contracts/catalog';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import { teamOfTenant } from '../../translation_graph/movement/tenant';
-import type { MovementTraceEntry } from '@listen-fire/legacy-engine/services/movement_engine/expression';
+import type { MovementTraceEntry } from 'movement-engine/public/trace';
 import { makeTestHost } from 'movement-engine/public/testing';
-import { resumeMovement, runMovement, settleRaceFrame } from '@listen-fire/legacy-engine/dispatch';
-import { type MovementRunResult, type ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
+import { resumeMovement, runMovement, settleRaceFrame } from '../dispatch/dispatch';
+import { type MovementRunResult, type ParkSink } from 'movement-engine/public/movement-engine';
 import { resetRustRunStats, rustRunStats } from 'movement-engine/public/movement-engine';
-import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
+import type { ParkedScopeState } from 'engine-contracts';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-0000000000c4');
 const KG = 'kg';

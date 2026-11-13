@@ -26,9 +26,9 @@ jest.mock('legacy-lang', () => {
   };
 });
 
-jest.mock('@listen-fire/legacy-engine/services/movement_engine/interpretable', () => {
+jest.mock('../dispatch/interpretable', () => {
   const actual = jest.requireActual(
-    '@listen-fire/legacy-engine/services/movement_engine/interpretable',
+    '../dispatch/interpretable',
   );
   return {
     ...actual,

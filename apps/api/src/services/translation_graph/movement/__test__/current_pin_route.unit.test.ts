@@ -1,6 +1,6 @@
 // A movement on a pin the installed language reads is judged by the wasm
 // checker alone, against the run snapshot: neither legacy-lang's TypeScript
-// checker nor legacy-engine's interpretability scan is asked. A legacy id
+// checker nor the interpretability scan is asked. A legacy id
 // keeps both. A pin the installed language does not read is its version
 // diagnostic alone, nothing asked.
 
@@ -36,8 +36,8 @@ jest.mock('legacy-lang', () => {
   };
 });
 
-jest.mock('@listen-fire/legacy-engine/services/movement_engine/interpretable', () => {
-  const actual = jest.requireActual('@listen-fire/legacy-engine/services/movement_engine/interpretable');
+jest.mock('../../../movement_engine/dispatch/interpretable', () => {
+  const actual = jest.requireActual('../../../movement_engine/dispatch/interpretable');
   return {
     ...actual,
     listUnsupportedConstructs: (...args: unknown[]) => {

@@ -21,10 +21,8 @@ import { tenantIdOf } from 'engine-contracts';
 import type { Adapter } from 'movement-engine/public/adapter';
 import type { LlmCallResult } from 'movement-engine/public/models';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
-import type {
-  FileTextResolution,
-  TransformInvocationResult,
-} from '@listen-fire/legacy-engine/services/movement_engine/extraction';
+import type { FileTextResolution } from 'movement-engine/public/files';
+import type { TransformInvocationResult } from 'movement-engine/public/host';
 
 import { availableChatModels } from 'movement-engine/public/models';
 import { RunCostCapExceeded } from 'movement-engine/public/models';
@@ -40,13 +38,13 @@ import {
   makeTestHost,
   endedInRust,
 } from 'movement-engine/public/testing';
-import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
-import { runFailureCause, type RunMovementInput } from '@listen-fire/legacy-engine/services/movement_engine/run';
+import { resumeMovement, runMovement } from '../dispatch/dispatch';
+import { runFailureCause, type RunMovementInput } from 'movement-engine/public/movement-engine';
 import {
   MovementEngineError,
   isCheckFailure,
 } from 'movement-engine/public/errors';
-import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
+import type { ParkedScopeState } from 'engine-contracts';
 import {
   resetRustRunStats,
   rustRunStats,

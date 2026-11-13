@@ -16,7 +16,7 @@
 //      (plans/ordering-primitives-2026-09-04/1_decisions.md D1)
 
 import type { InstanceSchema } from 'movement-lang';
-import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runMovement } from '../dispatch/dispatch';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import type { CapturedWrite } from 'movement-engine/public/adapter';
 import type {

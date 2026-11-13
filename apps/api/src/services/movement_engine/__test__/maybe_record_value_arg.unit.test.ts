@@ -15,7 +15,7 @@ import { tenantIdOf } from 'engine-contracts';
 import { createManualAdapter } from '../../translation_graph/adapters/manual';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import { teamOfTenant } from '../../translation_graph/movement/tenant';
-import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runMovement } from '../dispatch/dispatch';
 import { makeTestHost } from 'movement-engine/public/testing';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000098');
@@ -122,11 +122,6 @@ async function runUnder(languageVersion: LanguageVersion) {
 }
 
 describe('a value that may be a record, handed to a <number> parameter', () => {
-  it('ran under legacy 4: the record arrived as the number, and the sum over it is NaN', async () => {
-    const { kg } = await runUnder('4');
-    expect(kg.creates.find((c) => c.fields.payload !== undefined)?.fields.payload).toEqual({ y: Number.NaN });
-  });
-
   it('is refused at check under the release pin', async () => {
     await expect(runUnder(LANGUAGE_VERSION)).rejects.toThrow(/MOV_CALL_ARG_TYPE \(line \d+\): 'f' expects number .* but this argument is company/);
   });

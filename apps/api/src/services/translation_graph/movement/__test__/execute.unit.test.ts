@@ -79,14 +79,14 @@ jest.mock('../../../../lib/llm_usage', () => ({
 // registry): the dispatch the firing runs through, and the run entry's
 // `MovementRunFailed`, re-implemented to the same contract — a transparent
 // carrier for the partial write ledger — so the firing's unwrapping is
-// exercised for real. The class itself is covered in
-// movement_engine/__test__/run.unit.test.ts.
-jest.mock('@listen-fire/legacy-engine/dispatch', () => ({
+// exercised for real. The class itself is the engine package's.
+jest.mock('../../../movement_engine/dispatch/dispatch', () => ({
   runMovement: jest.fn(),
   resumeMovement: jest.fn(),
   // The front door's pin refusal is the real one: a pin this build does not
   // run never reaches the catalog.
-  refuseHeldRun: jest.requireActual('@listen-fire/legacy-engine/services/movement_engine/engine_choice').refuseHeldRun,
+  refuseHeldRun: jest.requireActual('../../../movement_engine/dispatch/engine_choice').refuseHeldRun,
+  legacyRunRefusal: jest.requireActual('../../../movement_engine/dispatch/engine_choice').legacyRunRefusal,
 }));
 jest.mock('movement-engine/public/movement-engine', () => {
   class MovementRunFailed extends Error {
@@ -150,11 +150,12 @@ import type { TeamId } from '../../../../generated/kysely/core/Team';
 
 import { LANGUAGE_VERSION } from 'movement-lang';
 import { refusalOf, resumeRefusal, runRefusal } from '@listen-fire/language-versions';
+import { SAME_LINE } from '../../../../test/language_lines';
 
 import { RunLeaseLost } from '../../../movement_engine/run_lease';
 import { movementForTrigger, resumeMovementFiring, runMovementFiring, shippedMovementForTrigger } from '../execute';
 
-const { runMovement, resumeMovement } = jest.requireMock('@listen-fire/legacy-engine/dispatch') as {
+const { runMovement, resumeMovement } = jest.requireMock('../../../movement_engine/dispatch/dispatch') as {
   runMovement: jest.Mock;
   resumeMovement: jest.Mock;
 };
@@ -567,11 +568,11 @@ describe('a firing runs under the movement\'s language version pin', () => {
       teamId: TEAM,
       triggerId: 't-1',
       triggerName: 'movement/intake_file/intake',
-      movement: shippedMovement({ languageVersion: '1' }) as never,
+      movement: shippedMovement({ languageVersion: SAME_LINE }) as never,
       event,
       recordingTriggerType: 'webhook',
     });
-    expect(runMovement).toHaveBeenCalledWith(expect.objectContaining({ languageVersion: '1' }));
+    expect(runMovement).toHaveBeenCalledWith(expect.objectContaining({ languageVersion: SAME_LINE }));
   });
 });
 
@@ -586,7 +587,7 @@ describe('resumeMovementFiring', () => {
     triggerId: 't-1',
     triggerName: 'movement/intake_file/intake',
     pinnedSource: CLEAN_SOURCE,
-    pinnedLanguageVersion: '1',
+    pinnedLanguageVersion: SAME_LINE,
     movementVersionId: 'mv-1',
     runId: 'run-1' as never,
     movementId: 'mov-1',
@@ -598,7 +599,7 @@ describe('resumeMovementFiring', () => {
   it('resumes under the version the run started with, not the movement\'s pin now', async () => {
     resumeMovement.mockResolvedValue({ movementName: 'intake', writes: [], extractionSites: {}, trace: [] });
     await resumeMovementFiring({ ...resumeInput, answer: true });
-    expect(resumeMovement).toHaveBeenCalledWith(expect.objectContaining({ languageVersion: '1' }));
+    expect(resumeMovement).toHaveBeenCalledWith(expect.objectContaining({ languageVersion: SAME_LINE }));
   });
 
   it("a run parked under 0.12, whose engine this platform dropped, is never handed to this release's engines: refused before any catalog is assembled", async () => {
@@ -615,75 +616,6 @@ describe('resumeMovementFiring', () => {
     expect(resumeMovement).toHaveBeenCalledWith(expect.objectContaining({ parkedOnEngine: 'rust' }));
   });
 
-  it('a resumed run that failed after writing records those writes too', async () => {
-    const partial = {
-      movementName: 'intake',
-      writes: [
-        {
-          bindingName: 'co',
-          adapterType: 'attio',
-          recordType: 'attio:companies',
-          created: true,
-          committed: true,
-          externalId: 'ext-1',
-          writtenValues: { name: 'hi' },
-          provenance: {},
-        },
-      ],
-      extractionSites: {},
-      trace: [],
-    };
-    resumeMovement.mockRejectedValue(
-      new MovementRunFailed(new Error('attio: 500 Internal Server Error'), partial),
-    );
-
-    const outcome = await resumeMovementFiring({
-      teamId: TEAM,
-      triggerId: 't-1',
-      triggerName: 'movement/intake_file/intake',
-      pinnedSource: CLEAN_SOURCE,
-      pinnedLanguageVersion: '2',
-      movementVersionId: 'mv-1',
-      runId: 'run-1' as never,
-      movementId: 'mov-1',
-      event,
-      recordingTriggerType: 'webhook',
-      state: { address: 'stmt 0', scopeChain: [] } as never,
-      answer: true,
-    });
-
-    expect(recordStepFailure).toHaveBeenCalledWith(
-      expect.objectContaining({
-        tgId: 'movement:mov-1',
-        message: 'attio: 500 Internal Server Error',
-        partial,
-      }),
-    );
-    expect(finish).toHaveBeenCalledTimes(1);
-    expect(outcome.result).toBeNull();
-  });
-
-  it('a resume that failed with no ledger records the failure alone (unchanged)', async () => {
-    resumeMovement.mockRejectedValue(new Error('MOVENG_RUNTIME: boom'));
-
-    await resumeMovementFiring({
-      teamId: TEAM,
-      triggerId: 't-1',
-      triggerName: 'movement/intake_file/intake',
-      pinnedSource: CLEAN_SOURCE,
-      pinnedLanguageVersion: '2',
-      movementVersionId: 'mv-1',
-      runId: 'run-1' as never,
-      movementId: 'mov-1',
-      event,
-      recordingTriggerType: 'webhook',
-      state: { address: 'stmt 0', scopeChain: [] } as never,
-    });
-
-    const call = recordStepFailure.mock.calls[0][0] as Record<string, unknown>;
-    expect(call.message).toContain('MOVENG_RUNTIME');
-    expect(call.partial).toBeUndefined();
-  });
 });
 
 describe('movementForTrigger', () => {

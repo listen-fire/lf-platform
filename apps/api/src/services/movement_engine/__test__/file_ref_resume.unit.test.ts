@@ -14,10 +14,11 @@ process.env.DATABASE_URL_TEST ??= 'postgresql://unit:unit@localhost:5432/unit-te
 process.env.DATABASE_URL_TEST_READONLY ??= 'postgresql://unit:unit@localhost:5432/unit-test-unused';
 
 import { Readable } from 'node:stream';
-import type { FileTextResolution, MovementTraceEntry } from '@listen-fire/legacy-engine/services/movement_engine/expression';
-import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
-import { type MovementRunResult, type ParkSink, type RunLimitPause } from '@listen-fire/legacy-engine/services/movement_engine/run';
-import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
+import type { FileTextResolution } from 'movement-engine/public/files';
+import type { MovementTraceEntry } from 'movement-engine/public/trace';
+import { resumeMovement, runMovement } from '../dispatch/dispatch';
+import { type MovementRunResult, type ParkSink, type RunLimitPause } from 'movement-engine/public/movement-engine';
+import type { ParkedScopeState } from 'engine-contracts';
 import { assertRunBudget, reportRunCost, runCostCapFromEnv, withSpendMeter } from 'movement-engine/public/models';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import { fileHandle, type Adapter, type FileRef, type RuntimeCapabilities } from 'movement-engine/public/adapter';

@@ -110,15 +110,15 @@ import { writeFileSync } from 'node:fs';
 import { LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 
-import type { ExtractCallLlmInput, ExtractCallLlmResult } from '@listen-fire/legacy-engine/services/movement_engine/extraction_call';
-import type { MovementTransformInvoker } from '@listen-fire/legacy-engine/services/movement_engine/extraction';
+import type { ExtractCallLlmInput, ExtractCallLlmResult } from 'movement-engine/public/models';
+type MovementTransformInvoker = import('movement-engine/public/host').EngineHost['llm']['transforms'];
 import type { CapturedWrite } from 'movement-engine/public/adapter';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { tenantIdOf } from 'engine-contracts';
 import { makeTestHost } from 'movement-engine/public/testing';
 
-import { runMovement } from '@listen-fire/legacy-engine/dispatch';
-import { runFailureCause, type MovementRunResult } from '@listen-fire/legacy-engine/services/movement_engine/run';
+import { runMovement } from '../dispatch/dispatch';
+import { runFailureCause, type MovementRunResult } from 'movement-engine/public/movement-engine';
 import { MovementEngineError } from 'movement-engine/public/errors';
 import { containerAssociation, type Adapter } from 'movement-engine/public/adapter';
 import { makeStablePosition, positionData, positionRecordId, META_RECORD_TYPE } from 'engine-contracts/catalog';

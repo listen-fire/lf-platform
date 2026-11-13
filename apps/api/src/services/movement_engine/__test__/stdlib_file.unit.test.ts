@@ -85,7 +85,7 @@ jest.mock('../../translation_graph/adapters/acting_user/resolve', () => ({
   resolveActingUser: jest.fn(async () => null),
 }));
 
-import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runMovement } from '../dispatch/dispatch';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import type { CapturedWrite } from 'movement-engine/public/adapter';
 import type {

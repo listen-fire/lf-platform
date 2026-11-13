@@ -9,7 +9,7 @@
 //   2. an unstable position (no stable record) is refused at runtime.
 
 import type { InstanceSchema } from 'movement-lang';
-import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runMovement } from '../dispatch/dispatch';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import type {
   Adapter,

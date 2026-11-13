@@ -83,8 +83,8 @@ jest.mock('../../../lib/prompts/execute', () => ({
   flattenMessages: jest.fn(),
 }));
 
-import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
-import { type ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
+import { resumeMovement, runMovement } from '../dispatch/dispatch';
+import { type ParkSink } from 'movement-engine/public/movement-engine';
 
 import { LANGUAGE_VERSION, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
@@ -99,7 +99,7 @@ import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { makeStablePosition, positionData } from 'engine-contracts/catalog';
 import { tenantIdOf } from 'engine-contracts';
 import { makeFakeParkSink, makeTestHost } from 'movement-engine/public/testing';
-import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
+import type { ParkedScopeState } from 'engine-contracts';
 import { resetRustRunStats, rustRunStats } from 'movement-engine/public/movement-engine';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000022');
@@ -311,15 +311,6 @@ const WRITE_ACME = (domain: string) =>
   `  org = write crm-[:companies]-> { unique by (\`name\`), name: "Acme Incorporated", domain: "${domain}" }`;
 
 describe('-[:@old]-> off a write handle', () => {
-  it('the result\'s write record has no old member (version 4), though -[:@old]-> read it during the run', async () => {
-    const body = [WRITE_ACME('new.example'), note('IF EXISTS(org-[:@old]->) THEN "matched" ELSE "created" END')];
-    const crm = await run(body, () => makeCrm([ACME]), { languageVersion: '4' });
-    expect(notes(crm)).toEqual(['matched']);
-    const result = await runOn(body, makeCrm([ACME]).adapter, { languageVersion: '4' });
-    expect(result.writes.length).toBeGreaterThan(0);
-    for (const w of result.writes) expect(Object.hasOwn(w, 'old')).toBe(false);
-  });
-
   it('a created record has no @old', async () => {
     const crm = await run(
       [
@@ -449,15 +440,6 @@ describe('a chained write updates the handle in place (version 4)', () => {
     expect(crm.updates).toEqual([]);
   });
 
-  it('under version 3 write org { … } leaves org as the first handle (stale, as before)', async () => {
-    const crm = await run(
-      [WRITE_ACME('second.example'), '  write org { domain: "third.example" }', note('org.`domain`')],
-      () => makeCrm([ACME]),
-      { languageVersion: '3' },
-    );
-    expect(notes(crm)).toEqual(['second.example']);
-  });
-
   it('x = write org { … } names the same record: x == org, and both read the new value', async () => {
     const crm = await run(
       [
@@ -544,14 +526,6 @@ describe('a handle on a record the adapter matched by its own rule', () => {
     await runOn(BODY, crm.adapter, { languageVersion });
     return notes(crm);
   }
-
-  it('under version 4 reads the record as found', async () => {
-    expect(await on('4')).toEqual(['old.example']);
-  });
-
-  it('under version 3 reads only what the write said', async () => {
-    expect(await on('3')).toEqual([null]);
-  });
 
   it('parks with the record as found and its @old, and resumes (version 5, on the Rust engine)', async () => {
     const parkedBody = [

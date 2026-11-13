@@ -32,7 +32,7 @@ import { mintMovementVersionIfChanged } from '../../translation_graph/movement/v
 import { getAsksQb } from '../../../lib/kysely';
 import { answerAskById } from '../../asks/doors';
 import { notifyEngineOfSettledAsks } from '../../asks/in_process_notifier';
-import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runMovement } from '../../../dispatch/dispatch';
 import { runCatalogSnapshotForTeam } from '../../translation_graph/movement/catalog';
 import { productionEngineHost } from '../../translation_graph/movement/engine_host';
 import { TriggerRunRecorder } from '../../translation_graph/runs/trigger_run';

@@ -79,7 +79,7 @@ jest.mock('../../../lib/anthropic', () => ({
 
 import { LANGUAGE_VERSION, mockCatalogSnapshot, type InstanceSchema, type LanguageVersion } from 'movement-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
-import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runMovement } from '../dispatch/dispatch';
 import type {
   LlmCallInput,
   LlmCallResult,
@@ -355,17 +355,6 @@ describe('a block head rooted at an expression', () => {
   // no named position — so this walk was never checked against the second
   // record, and it runs zero times. Version 3 reads the slot exactly and
   // refuses the walk at save.
-  it('a hop the root has not got runs the body zero times, like any empty traversal (version 2)', async () => {
-    const attio = makeFakeAdapter('attio');
-
-    await run(TWO_NODES + ['  AT(both, 1)-[t:missing]-> {', WRITE_TAG].join('\n'), {
-      attio: attio.adapter,
-      languageVersion: '2',
-    });
-
-    expect(attio.creates).toEqual([]);
-  });
-
   it('a hop the slot has not got is refused before the run under version 3', async () => {
     const attio = makeFakeAdapter('attio');
 

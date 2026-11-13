@@ -7,7 +7,7 @@
 
 import { isLegacyLanguageVersion } from 'legacy-lang';
 import { LANGUAGE_VERSION, type InstanceSchema, type LanguageVersion } from 'movement-lang';
-import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runMovement } from '../dispatch/dispatch';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/public/adapter';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
@@ -256,77 +256,12 @@ describe('IF, AND, OR and COALESCE never reach an operand they do not need', () 
     expect(bodies(creates)).toEqual(['a']);
   });
 
-  it('before version 3 COALESCE evaluated every argument first — unchanged', async () => {
-    const v2 = `${PRELUDE_V4}movement recap(go: <runs-[:Invocation]->>) {
-  x = COALESCE("a", ONLY([1, 2]))
-  write graph-[:note]-> { body: x }
-}
-listen to runs {} fire recap
-`;
-    const kg = makeKgFake();
-    await expect(
-      runMovement({
-        source: v2,
-        event: manualEvent(),
-        teamId: TEAM_ID,
-        catalog,
-        host: makeTestHost({
-          adapters: {
-            resolve: ({ adapterType }: { adapterType: string }) =>
-              adapterType === 'manual' ? manualAdapter : kg.adapter,
-          },
-        }),
-        dryRun: false,
-        languageVersion: '2',
-      }),
-    ).rejects.toThrow(/exactly one/);
-    expect(kg.creates).toEqual([]);
-  });
 });
 
 describe('a function name is the same name in any letter case', () => {
-  it('a listener firing the movement in another case runs it', async () => {
-    const kg = makeKgFake();
-    await runMovement({
-      source: `${PRELUDE_V4}movement recap(go: <runs-[:Invocation]->>) {
-  write graph-[:note]-> { body: "ran" }
-}
-listen to runs {} fire RECAP
-`,
-      event: manualEvent(),
-      teamId: TEAM_ID,
-      catalog,
-      movementName: 'RECAP',
-      host: makeTestHost({
-        adapters: {
-          resolve: ({ adapterType }: { adapterType: string }) =>
-            adapterType === 'manual' ? manualAdapter : kg.adapter,
-        },
-      }),
-      dryRun: false,
-      // Version 5 reads names exactly; letter-case folding is a version 1–4 rule.
-      languageVersion: '4',
-    });
-    expect(bodies(kg.creates)).toEqual(['ran']);
-  });
 });
 
 describe('a closure bound to a name is called like any function', () => {
-  it('its value is what its body returns — bound, nested, by name, in any letter case', async () => {
-    const creates = await runBody(
-      [
-        '  inc = (v: <number>) => v + 1',
-        '  a = inc(2)',
-        '  b = inc(2) * 10',
-        '  c = double(INC(inc(1)))',
-        '  write graph-[:note]-> { payload: { a: a, b: b, c: c } }',
-      ].join('\n'),
-      // Version 5 reads names exactly; letter-case folding is a version 1–4 rule.
-      { languageVersion: '4' },
-    );
-    expect(payload(creates)).toEqual({ a: 3, b: 30, c: 6 });
-  });
-
   it('its body sees the scope it was written in', async () => {
     const creates = await runBody(
       ['  base = 10', '  add = (v: <number>) => v + base', '  write graph-[:note]-> { payload: { v: add(1) } }'].join(
@@ -359,33 +294,6 @@ describe('a closure bound to a name is called like any function', () => {
     expect(bodies(creates)).toEqual(['else']);
   });
 
-  it('before version 3 a closure is not called — the run is refused', async () => {
-    const v2 = `${PRELUDE_V4}movement recap(go: <runs-[:Invocation]->>) {
-  one = () => {
-    return 1
-  }
-  one()
-}
-listen to runs {} fire recap
-`;
-    const kg = makeKgFake();
-    await expect(
-      runMovement({
-        source: v2,
-        event: manualEvent(),
-        teamId: TEAM_ID,
-        catalog,
-        host: makeTestHost({
-          adapters: {
-            resolve: ({ adapterType }: { adapterType: string }) =>
-              adapterType === 'manual' ? manualAdapter : kg.adapter,
-          },
-        }),
-        dryRun: false,
-        languageVersion: '2',
-      }),
-    ).rejects.toThrow(/MOV_CALL_NOT_MOVEMENT/);
-  });
 });
 
 describe('a field read off a nested call that hands back a record', () => {
@@ -393,7 +301,7 @@ describe('a field read off a nested call that hands back a record', () => {
   // a field off it in a write field, in a call's argument, and in a call
   // whose value is bound. Each version on its own engine (4: TypeScript, 5:
   // Rust).
-  for (const version of ['4', LANGUAGE_VERSION] as LanguageVersion[]) {
+  for (const version of [LANGUAGE_VERSION] as LanguageVersion[]) {
     const v4 = isLegacyLanguageVersion(version);
     const fileLevel = `${v4 ? MARK_V4 : MARK}${v4 ? 'movement' : 'function'} pick(t: <text>) {\n  co = write graph-[:note]-> { body: t }\n  return co\n}\n`;
     const pick = v4 ? 'pick(t: "Beta")' : 'pick("Beta")';

@@ -19,13 +19,13 @@ import { type InstanceSchema } from 'movement-lang';
 import type { Adapter, RuntimeCapabilities, WriteInput } from 'movement-engine/public/adapter';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { tenantIdOf } from 'engine-contracts';
-import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
+import type { ParkedScopeState } from 'engine-contracts';
 
 import { createManualAdapter } from '../../translation_graph/adapters/manual';
 import { containerAssociation } from 'movement-engine/public/adapter';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
-import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
-import { type MovementRunResult, type ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
+import { resumeMovement, runMovement } from '../dispatch/dispatch';
+import { type MovementRunResult, type ParkSink } from 'movement-engine/public/movement-engine';
 import { makeTestHost } from 'movement-engine/public/testing';
 import { teamOfTenant } from '../../translation_graph/movement/tenant';
 import { pinOf } from './pin_of';
@@ -302,8 +302,6 @@ const SCENARIOS: Record<string, { body: string[]; payload: unknown }> = {
   },
 };
 
-const FIXTURE = path.join(__dirname, '__fixtures__', 'body_closure_snapshot_parks.json');
-
 /** The parked state of `n` unused body closures, as JSON. */
 async function parkedWith(n: number): Promise<string> {
   const parks = makeParkSink();
@@ -355,28 +353,6 @@ describe('a body closure holds its scope by reference', () => {
     expect(payloadOf(kg.creates)).toEqual({ seen: 'two/two' });
   });
 
-  it('a closure made in a MAP member and returned is written with its scope, and runs as a parallel arm after a park (version 4)', async () => {
-    const parks = makeParkSink();
-    const source = program([
-      '  k = 3',
-      '  arms = MAP([1, 2], (n) => {',
-      '    m = n * k',
-      '    return () => {',
-      '      await sleep(1h)',
-      '      return m + 1',
-      '    }',
-      '  })',
-      '  r = await parallel(arms)',
-      '  write graph-[:note]-> { payload: { r: r } }',
-    ]);
-    const first = await start(source, parks);
-    expect(first.result.parked).toBe(true);
-    const parked = [...parks.parks.values()].map((p) => JSON.stringify(p.state)).join('');
-    expect(parked).toContain('"kind":"scope",');
-    const { result, kg } = await resumeAll(source, parks);
-    expect(result.parked).toBeUndefined();
-    expect(payloadOf(kg.creates)).toEqual({ r: [4, 7] });
-  });
 });
 
 describe('a closure a maker returns, run as an all arm after a park (version 5)', () => {
@@ -440,7 +416,7 @@ describe('a parked run sees what an unparked run sees', () => {
         '  write graph-[:note]-> { payload: { r: r, after: a.body } }',
       ];
 
-  for (const version of [4, 5]) {
+  for (const version of [5]) {
     it(`v${version}: the closures write the outer handle, and the parked run ends as the unparked one`, async () => {
       const run = (source: string, parks: Sink) => {
         const kg = makeKgFake();
@@ -476,39 +452,10 @@ describe('a parked run sees what an unparked run sees', () => {
   }
 });
 
-// A park state of version 1, which only the TypeScript engine (versions 1–4)
-// reads: the scenarios run under 4, the arm joined with `parallel`.
-describe('a park written before body closures held their scope (each with its full snapshot)', () => {
-  const inV4 = (body: string[]): string[] =>
-    body.map((line) => (line === '  r = all(' ? '  r = await parallel([' : line === '  )' ? '  ])' : line));
-  const fixture = JSON.parse(fs.readFileSync(FIXTURE, 'utf8')) as Record<
-    string,
-    Record<string, { kind: 'timer' | 'await' | 'suspension'; state: ParkedScopeState }>
-  >;
-
-  for (const [name, scenario] of Object.entries(SCENARIOS)) {
-    it(`${name}: resumes as it did`, async () => {
-      // The run up to the park, for the join records a MAP or `parallel`
-      // keeps beside it (which hold no closure); the park itself is the old.
-      const parks = makeParkSink();
-      const source = program(inV4(scenario.body));
-      await start(source, parks, 4);
-      expect([...parks.parks.keys()]).toEqual(Object.keys(fixture[name]!));
-      for (const [address, park] of Object.entries(fixture[name]!)) {
-        expect(JSON.stringify(park.state)).not.toContain('"scope":');
-        parks.parks.set(address, park);
-      }
-      const { result, kg } = await resumeAll(source, parks, 4);
-      expect(result.parked).toBeUndefined();
-      expect(payloadOf(kg.creates)).toEqual(scenario.payload);
-    });
-  }
-});
-
 // ── Each version on its own engine ───────────────────────────────────────────
 //
-// A version's engine is its pin: 1–4 run on the TypeScript engine, 5 on the
-// Rust engine, and a park resumes on the engine that wrote it.
+// A version's engine is its pin: this release runs the current one on the Rust
+// engine, and a park resumes on the engine that wrote it.
 
 interface Pinned {
   version?: number;
@@ -646,21 +593,6 @@ const PROBES: Record<string, { body: string[]; payload: unknown; version?: numbe
     ],
     payload: { r: 10, later: 2 },
   },
-  mapMembersReturnClosures: {
-    body: [
-      '  k = 3',
-      '  arms = MAP([1, 2], (n) => {',
-      '    await sleep(1h)',
-      '    m = n * k',
-      '    return () => {',
-      '      return m + 1',
-      '    }',
-      '  })',
-      '  r = await parallel(arms)',
-      '  write graph-[:note]-> { payload: { r: r } }',
-    ],
-    payload: { r: [4, 7] },
-  },
 };
 
 describe('a body closure holds its scope by reference, parked and resumed', () => {
@@ -690,25 +622,7 @@ describe('a body closure holds its scope by reference, parked and resumed', () =
     expect(payload).toEqual({ seen: 'two/two' });
   });
 
-  it('a closure made in a MAP member and returned is written with its scope, and runs as a parallel arm', async () => {
-    const source = program([
-      '  k = 3',
-      '  arms = MAP([1, 2], (n) => {',
-      '    m = n * k',
-      '    return () => {',
-      '      await sleep(1h)',
-      '      return m + 1',
-      '    }',
-      '  })',
-      '  r = await parallel(arms)',
-      '  write graph-[:note]-> { payload: { r: r } }',
-    ]);
-    const { parked, payload } = await parkAndResume(source);
-    expect(parked).toContain('"kind":"scope",');
-    expect(payload).toEqual({ r: [4, 7] });
-  });
-
-  for (const version of [4, 5]) {
+  for (const version of [5]) {
     it(`v${version}: closures a parked MAP member returned write the outer handle, and the parked run ends as the unparked run (M-1)`, async () => {
       // From 5 a closure is not data: a maker hands each closure to a
       // variable, and `all` runs them.
@@ -858,7 +772,7 @@ describe('a parallel / race arm that names a body closure, and a scope cycle', (
     closureArmCapturingHandle: ['one'],
     raceOfClosures: ['f'],
   };
-  for (const version of [4, 5]) {
+  for (const version of [5]) {
     const bodies = { ...cases, ...Object.fromEntries(Object.entries(cycles).map(([name, inner]) => [name, cycle(version, inner)])) };
     for (const [name, body] of Object.entries(bodies)) {
       it(`v${version} ${name}: parked and resumed, with the answer`, async () => {
@@ -901,7 +815,7 @@ describe('a closure whose scope reaches back to itself resumes', () => {
       '    return g',
     ]),
   });
-  for (const version of [3, 4, 5]) {
+  for (const version of [5]) {
     for (const [name, body] of Object.entries(cycles(version))) {
       it(`v${version} ${name}: the resume settles with the answer`, async () => {
         const parks = makeParkSink();
@@ -953,7 +867,7 @@ describe('a receipt of text-returning NAMED arms is a plain value', () => {
     atInRecord: { sink: '{ payload: { x: AT(r, 0) } }', parallel: (c) => c.fields.payload, race: (c) => c.fields.payload },
     atIntoBody: { sink: '{ body: COALESCE(AT(r, 0), "z") }', parallel: (c) => c.fields.body, race: (c) => c.fields.body },
   };
-  for (const version of [3, 4, 5]) {
+  for (const version of [5]) {
     for (const [kind, make] of [['closure', closureProgram], ['movement', movementProgram]] as const) {
       for (const combinator of ['parallel', 'race'] as const) {
         for (const [name, { sink, ...read }] of Object.entries(sinks)) {
@@ -1097,7 +1011,7 @@ describe('a closure bound from a call, then called by name', () => {
       payload: { r: 3 },
     },
   };
-  for (const version of [3, 4, 5]) {
+  for (const version of [5]) {
     for (const [name, shape] of Object.entries(shapes)) {
       it(`v${version} ${name}: runs whole`, async () => {
         const kg = makeKgFake();
@@ -1145,7 +1059,7 @@ describe('a library closure two levels deep is read in the library, as one level
       },
     },
   });
-  for (const version of [3, 5]) {
+  for (const version of [5]) {
     it(`v${version}: with the event described, the chain and its one-level twin end at the check (MOV_WRITE_FIELD_TYPE)`, async () => {
       for (const [source, files] of [
         [twoCalls, chain('b')],
@@ -1165,15 +1079,6 @@ describe('a library closure two levels deep is read in the library, as one level
     const manual = base.adapters.manual;
     return manual === undefined ? input : { ...input, catalog: { ...base, adapters: { ...base.adapters, manual: { ...manual, schemas: {} } } } };
   };
-  it('v3: the chain and its one-level twin write the record as the TypeScript engine always wrote it', async () => {
-    for (const [source, files] of [
-      [twoCalls, chain('b')],
-      [oneCall, oneLevel('b')],
-    ] as const) {
-      const result = await runMovement(undescribed(inputOn(source, makeParkSink(), makeKgFake(), { version: 3, files })));
-      expect(result.writes.map((w) => w.writtenValues)).toEqual([{ payload: { r: { kind: 'event' } } }]);
-    }
-  }, 60_000);
   // With the event undescribed it is still a record, only not which one: from
   // version 5 the checker refuses it in the json field at save time, as it
   // does where the event is described.
@@ -1185,7 +1090,7 @@ describe('a library closure two levels deep is read in the library, as one level
       await expect(runMovement(undescribed(inputOn(source, makeParkSink(), makeKgFake(), { version: 5, files })))).rejects.toThrow('MOVENG_CHECK');
     }
   }, 60_000);
-  for (const version of [3, 5]) {
+  for (const version of [5]) {
     it(`v${version}: the chain and its one-level twin both run, and write it, when the closure returns plain data`, async () => {
       for (const [source, files, payload] of [
         [twoCalls, chain('c + a'), { r: 3 }],

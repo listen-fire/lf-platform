@@ -1,4 +1,4 @@
-import type { MovementTraceEntry } from '@listen-fire/legacy-engine/services/movement_engine/expression';
+import type { MovementTraceEntry } from 'movement-engine/public/trace';
 
 import { runRecordOf } from '../run_record';
 

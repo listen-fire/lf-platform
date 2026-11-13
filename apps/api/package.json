@@ -13,7 +13,7 @@
   "scripts": {
     "cli": "TZ=utc node scripts/cli.js",
     "clean": "rimraf build/",
-    "build": "pnpm clean && TZ=utc NODE_OPTIONS=--max-old-space-size=8192 tsc --project tsconfig.build.json && tsc --project ../../packages/principal/tsconfig.build.json --outDir build/node_modules/principal && tsc --project ../../packages/embedding-providers/tsconfig.build.json --outDir build/node_modules/embedding-providers && tsc --project ../../packages/image-providers/tsconfig.build.json --outDir build/node_modules/image-providers && tsc --project ../../packages/transcription-providers/tsconfig.build.json --outDir build/node_modules/transcription-providers && tsc --project ../../modules/ask/tsconfig.build.json --outDir build/node_modules/@listen-fire/ask && tsc --project ../../modules/kg/tsconfig.build.json --outDir build/node_modules/@listen-fire/kg && tsc --project ../../modules/system/tsconfig.build.json --outDir build/node_modules/@listen-fire/system && tsc --project ../../modules/native-valuations/tsconfig.build.json --outDir build/node_modules/@listen-fire/native-valuations && tsc --project ../../packages/legacy-engine/tsconfig.build.json --outDir build/node_modules/@listen-fire/legacy-engine && tsc --project ../../packages/legacy-lang/tsconfig.build.json --outDir build/node_modules/legacy-lang && tsc --project ../../packages/language-versions/tsconfig.build.json --outDir build/node_modules/@listen-fire/language-versions && tsc --project ../../packages/platform-constants/tsconfig.build.json --outDir build/node_modules/platform-constants && cp ../../packages/legacy-lang/wasm/movement_parser.frozen.wasm build/node_modules/legacy-lang/wasm/ && (cd ../../packages/story-view && pnpm bundle) && resolve-tspaths",
+    "build": "pnpm clean && TZ=utc NODE_OPTIONS=--max-old-space-size=8192 tsc --project tsconfig.build.json && tsc --project ../../packages/principal/tsconfig.build.json --outDir build/node_modules/principal && tsc --project ../../packages/embedding-providers/tsconfig.build.json --outDir build/node_modules/embedding-providers && tsc --project ../../packages/image-providers/tsconfig.build.json --outDir build/node_modules/image-providers && tsc --project ../../packages/transcription-providers/tsconfig.build.json --outDir build/node_modules/transcription-providers && tsc --project ../../modules/ask/tsconfig.build.json --outDir build/node_modules/@listen-fire/ask && tsc --project ../../modules/kg/tsconfig.build.json --outDir build/node_modules/@listen-fire/kg && tsc --project ../../modules/system/tsconfig.build.json --outDir build/node_modules/@listen-fire/system && tsc --project ../../modules/native-valuations/tsconfig.build.json --outDir build/node_modules/@listen-fire/native-valuations && tsc --project ../../packages/legacy-lang/tsconfig.build.json --outDir build/node_modules/legacy-lang && tsc --project ../../packages/language-versions/tsconfig.build.json --outDir build/node_modules/@listen-fire/language-versions && tsc --project ../../packages/platform-constants/tsconfig.build.json --outDir build/node_modules/platform-constants && cp ../../packages/legacy-lang/wasm/movement_parser.frozen.wasm build/node_modules/legacy-lang/wasm/ && (cd ../../packages/story-view && pnpm bundle) && resolve-tspaths",
     "start": "TZ=UTC node build/server.js",
     "dev": "TZ=utc TSC_WATCHFILE=UseFsEventsWithFallbackDynamicPolling ts-node-dev --project tsconfig.dev.json --transpile-only --rs --inspect -r dotenv/config -r tsconfig-paths/register src/server.ts",
     "start:nocompile": "TZ=utc ts-node --project tsconfig.dev.json --swc -r dotenv/config -r tsconfig-paths/register src/server.ts",
@@ -52,7 +52,6 @@
     "dev:fake-model": "TZ=utc ts-node --project tsconfig.dev.json --transpile-only src/scripts/dev/fake_model.ts",
     "dev:fake-crm": "TZ=utc ts-node --project tsconfig.dev.json --transpile-only -r dotenv/config -r tsconfig-paths/register src/scripts/dev/fake_crm_server.ts",
     "dev:automation-eval": "TZ=utc ts-node --project tsconfig.dev.json --transpile-only -r dotenv/config -r tsconfig-paths/register src/scripts/dev/automation_eval/main.ts",
-    "dev:extraction-bakeoff": "TZ=utc ts-node --project tsconfig.dev.json --transpile-only -r dotenv/config -r tsconfig-paths/register src/scripts/dev/extraction_bakeoff.ts",
     "dev:eval-research": "TZ=utc ts-node --project tsconfig.dev.json --transpile-only -r dotenv/config -r tsconfig-paths/register src/scripts/dev/eval_research.ts",
     "dev:eval-entity-judge": "TZ=utc ts-node --project tsconfig.dev.json --transpile-only -r dotenv/config -r tsconfig-paths/register src/scripts/dev/eval_entity_judge.ts",
     "dev:probe-thinking": "TZ=utc ts-node --project tsconfig.dev.json --transpile-only -r dotenv/config -r tsconfig-paths/register src/scripts/dev/probe_thinking_default.ts",
@@ -81,11 +80,6 @@
     "test:integration": "NODE_OPTIONS=--max-old-space-size=8192 jest --config src/test/jest-integration.config.ts",
     "test:unit": "jest --config src/test/jest-unit.config.ts",
     "test:conformance:current": "jest --config src/test/jest-unit.config.ts --testPathPattern current_pin_conformance",
-    "test:conformance:v1": "jest --config src/test/jest-conformance-v1.config.ts",
-    "test:conformance:v2": "jest --config src/test/jest-conformance-v2.config.ts",
-    "test:conformance:v3": "jest --config src/test/jest-conformance-v3.config.ts",
-    "test:conformance:v4": "jest --config src/test/jest-conformance-v4.config.ts",
-    "harvest:engine-runs": "UPDATE_ENGINE_RUNS=1 pnpm test:conformance:v1 && UPDATE_ENGINE_RUNS=1 pnpm test:conformance:v2 && UPDATE_ENGINE_RUNS=1 pnpm test:unit --testPathPattern 'movement_engine/conformance/__test__/engine_runs'",
     "db:restore": ". ./scripts/restore_db_snapshot.sh",
     "db:dump": ". ./scripts/dump_db_snapshot.sh",
     "schema:compare": "bash src/db/compare.sh",
@@ -277,8 +271,7 @@
     "ws": "8.22.0",
     "yahoo-finance2": "3.11.2",
     "yauzl-promise": "4.0.0",
-    "zod": "4.1.12",
-    "@listen-fire/legacy-engine": "workspace:*"
+    "zod": "4.1.12"
   },
   "optionalDependencies": {
     "files-s3": "npm:@listen-fire/files-s3@0.12.8",

@@ -15,7 +15,7 @@ import { tenantIdOf } from 'engine-contracts';
 import { createManualAdapter } from '../../translation_graph/adapters/manual';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import { teamOfTenant } from '../../translation_graph/movement/tenant';
-import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runMovement } from '../dispatch/dispatch';
 import { makeTestHost } from 'movement-engine/public/testing';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000098');
@@ -153,23 +153,7 @@ async function runUnder(source: string, languageVersion: LanguageVersion) {
   return { result, kg };
 }
 
-describe('a call of one of several closures, under versions 3 and 4', () => {
-  it.each(['3', '4'] as const)('under %s a record a later closure returns is written into a text field', async version => {
-    const { kg } = await runUnder(CASES.recordAsText!, version);
-    const written = kg.creates.map(c => c.fields.name);
-    expect(written[0]).toBe('a');
-    expect(written[1]).toMatchObject({ kind: 'handle' });
-  });
-
-  it.each(['3', '4'] as const)('under %s a number reaches a later closure\'s text parameter', async version => {
-    const { kg } = await runUnder(CASES.params!, version);
-    expect(kg.creates.map(c => c.fields.payload)).toEqual([{ x: '1!' }]);
-  });
-
-  it.each(['3', '4'] as const)('under %s a later closure\'s arity fails at run time, on the path that reaches it', async version => {
-    await expect(runUnder(CASES.arity!, version)).rejects.toThrow(/takes 1 argument\(s\), got 0/);
-  });
-
+describe('a call of one of several closures', () => {
   it.each(Object.keys(CASES))('%s is refused at check under 0.12', async name => {
     await expect(runUnder(CASES[name]!, LANGUAGE_VERSION)).rejects.toThrow(/MOVENG_CHECK/);
   });

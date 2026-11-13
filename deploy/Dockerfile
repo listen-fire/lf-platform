@@ -63,7 +63,6 @@ COPY modules/ask/package.json modules/ask/
 COPY modules/kg/package.json modules/kg/
 COPY modules/system/package.json modules/system/
 COPY modules/native-valuations/package.json modules/native-valuations/
-COPY packages/legacy-engine/package.json packages/legacy-engine/
 COPY packages/legacy-lang/package.json packages/legacy-lang/
 COPY packages/language-versions/package.json packages/language-versions/
 COPY --from=language-version-manifests /out/ ./

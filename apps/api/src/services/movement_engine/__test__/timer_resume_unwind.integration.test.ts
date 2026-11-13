@@ -585,42 +585,6 @@ describe('timer_resume — unwind-and-continue matrix (real DB)', () => {
     expect(await remainingParks(runId)).toBe(0);
   });
 
-  // ── §10.4 — parallel + trailing: both branches park; on wake the closer runs
-  // the trailing write EXACTLY ONCE (only when the LAST branch closes the join). ─
-  it('parallel([…]) combinator + trailing (version 3): both arms park; the closer runs the trailing write exactly once', async () => {
-    const { triggerId } = await seedMovement(teamId, {
-      source: PARALLEL_TAIL_V3,
-      languageVersion: '3',
-      firedName: 'parallel_tail_v3',
-      name: 'Parallel combinator tail',
-    });
-
-    await dispatchTriggerByIdEvent({ triggerId, teamId, event: legacyWebhookEvent() });
-    // Both arms parked at their sleep; no writes yet.
-    expect(slackCreates).toHaveLength(0);
-    const parks = await timerParks(teamId);
-    expect(parks).toHaveLength(2);
-    const runId = parks[0].runId;
-    expect((await joinRows(runId))[0].pending).toBe(2);
-
-    await backdate(runId, parks.map((p) => p.address));
-    await resumeTimerHandler.run({ runId }, testWorkContext());
-
-    // Each arm ran its own write …
-    expect(slackCreates.filter((c) => c.channel === '#a')).toHaveLength(1);
-    expect(slackCreates.filter((c) => c.channel === '#b')).toHaveLength(1);
-    // … and the trailing write ran EXACTLY ONCE, reading both arms' slots of the
-    // receipt rebuilt across the resume.
-    expect(slackCreates.filter((c) => c.channel === '#done')).toEqual([
-      { channel: '#done', text: 'DONE AB' },
-    ]);
-
-    expect(await runStatus(runId)).toBe('success');
-    expect(await joinRows(runId)).toEqual([]);
-    expect(await joinBranchExportCount(runId)).toBe(0);
-    expect(await remainingParks(runId)).toBe(0);
-  });
-
   // ── §10 item 11 — assigned fan-out: the trailing read sees what ALL N
   // iterations returned, reconstructed from the store. ────────────────────────
   it('assigned fan-out + trailing read: the aggregate carries ALL N iterations, not just the closer', async () => {
@@ -674,44 +638,6 @@ describe('timer_resume — unwind-and-continue matrix (real DB)', () => {
       { channel: '#done', text: `count=${FANOUT_N}` },
     ]);
     expect(await runStatus(runId)).toBe('success');
-  });
-
-  // ── §10.5 — three levels deep: if { parallel { fanout } { sleep } }; joins
-  // close bottom-up, each ancestor's continuation runs once. ────────────────────
-  it('three levels deep (if > parallel([…]) > fan-out, version 3): joins close bottom-up, trailing runs exactly once', async () => {
-    const { triggerId } = await seedMovement(teamId, {
-      source: DEEP_NEST_V3,
-      languageVersion: '3',
-      firedName: 'deep_nest_v3',
-      name: 'Deep nest (combinator)',
-    });
-
-    await dispatchTriggerByIdEvent({ triggerId, teamId, event: legacyWebhookEvent() });
-    const parks = await timerParks(teamId);
-    // N fan-out leaves (arm 0) + 1 sleep leaf (arm 1).
-    expect(parks).toHaveLength(FANOUT_N + 1);
-    const runId = parks[0].runId;
-    // Two join frames: the inner fan-out (pending N) and the combinator (pending 2).
-    const jr = await joinRows(runId);
-    expect(jr.map((r) => r.pending).sort()).toEqual([2, FANOUT_N].sort());
-
-    await backdate(runId, parks.map((p) => p.address));
-    await resumeTimerHandler.run({ runId }, testWorkContext());
-
-    expect(slackCreates.filter((c) => c.channel === '#alerts')).toHaveLength(FANOUT_N);
-    expect(slackCreates.filter((c) => c.channel === '#other')).toHaveLength(1);
-    // The combinator's continuation (inside the `if`) ran once, with both slots …
-    expect(slackCreates.filter((c) => c.channel === '#joined')).toEqual([
-      { channel: '#joined', text: 'fanned/other' },
-    ]);
-    // … then the body's trailing write, once.
-    expect(slackCreates.filter((c) => c.channel === '#done')).toEqual([
-      { channel: '#done', text: 'DONE' },
-    ]);
-    expect(await runStatus(runId)).toBe('success');
-    expect(await joinRows(runId)).toEqual([]);
-    expect(await joinBranchExportCount(runId)).toBe(0);
-    expect(await remainingParks(runId)).toBe(0);
   });
 
   // ── §10.6 — re-park in a NON-JOIN continuation: the trailing statement is

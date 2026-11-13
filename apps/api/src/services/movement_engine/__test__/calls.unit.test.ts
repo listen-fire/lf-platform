@@ -82,11 +82,11 @@ jest.mock('../../../lib/anthropic', () => ({
   MAX_CHAT_CONTINUATIONS: 5,
 }));
 
-import { runMovement } from '@listen-fire/legacy-engine/dispatch';
-import { runFailureCause } from '@listen-fire/legacy-engine/services/movement_engine/run';
+import { runMovement } from '../dispatch/dispatch';
+import { runFailureCause } from 'movement-engine/public/movement-engine';
 
 import type { CapturedWrite } from 'movement-engine/public/adapter';
-import { MovementEngineError } from '@listen-fire/legacy-engine/services/movement_engine/expression';
+import { MovementEngineError } from 'movement-engine/public/errors';
 import { LANGUAGE_VERSION } from 'movement-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
@@ -251,84 +251,6 @@ const INTAKE_G = [
 ].join('\n');
 
 describe('§G — _resources block → call with a synthesised node arg → dropbox writes', () => {
-  it('lands one dropbox write per file, provenance flowing from the resource read', async () => {
-    const email = makeFakeAdapter('email', {
-      resources: [
-        {
-          externalId: 'att-1',
-          name: 'pitch.pdf',
-          data: { filename: 'pitch.pdf', data: 'BYTES-1' },
-        },
-        {
-          externalId: 'att-2',
-          name: 'model.xlsx',
-          data: { filename: 'model.xlsx', data: 'BYTES-2' },
-        },
-      ],
-    });
-    const dropbox = makeFakeAdapter('dropbox');
-
-    const result = await runMovement({
-      source: INTAKE_G,
-      // `_resources` off an adapter's record is a version 1–4 read (the
-      // test after this one is version 5's refusal).
-      languageVersion: '4',
-      movementName: 'intake',
-      event: webhookEvent('email', { subject: 'Acme deck' }),
-      teamId: TEAM_ID,
-      catalog,
-      credentialIds: CREDENTIAL_IDS,
-      host: makeTestHost({
-        adapters: {
-          resolve: makeResolver({ email: email.adapter, dropbox: dropbox.adapter }),
-        },
-      }),
-    });
-
-    // One dropbox create per resource, fields read off the in-memory
-    // position the inline literal synthesised.
-    expect(dropbox.creates).toEqual([
-      { recordType: 'file', fields: { name: 'pitch.pdf', data: 'BYTES-1' } },
-      { recordType: 'file', fields: { name: 'model.xlsx', data: 'BYTES-2' } },
-    ]);
-
-    // The firing record carries ONLY the adapter writes (the literal
-    // is in-memory — not an effect), and each written field's trail
-    // reaches back THROUGH the call + synthesised position to the resource
-    // field the value was read from.
-    expect(result.writes).toEqual([
-      {
-        adapterType: 'dropbox',
-        recordType: 'file',
-        created: true,
-        committed: true,
-        externalId: 'ext-dropbox-1',
-        writtenValues: { name: 'pitch.pdf', data: 'BYTES-1' },
-        outcome: 'create',
-        provenance: {
-          name: [{ kind: 'resource', externalId: 'att-1', name: 'pitch.pdf', field: 'filename' }],
-          data: [{ kind: 'resource', externalId: 'att-1', name: 'pitch.pdf', field: 'data' }],
-        },
-        resultData: {},
-        origin: { kind: 'write', writeIndex: 0, externalId: 'ext-dropbox-1' },
-      },
-      {
-        adapterType: 'dropbox',
-        recordType: 'file',
-        created: true,
-        committed: true,
-        externalId: 'ext-dropbox-2',
-        writtenValues: { name: 'model.xlsx', data: 'BYTES-2' },
-        outcome: 'create',
-        provenance: {
-          name: [{ kind: 'resource', externalId: 'att-2', name: 'model.xlsx', field: 'filename' }],
-          data: [{ kind: 'resource', externalId: 'att-2', name: 'model.xlsx', field: 'data' }],
-        },
-        resultData: {},
-        origin: { kind: 'write', writeIndex: 1, externalId: 'ext-dropbox-2' },
-      },
-    ]);
-  });
 });
 
 describe('§G under 0.12 — `_resources` off an adapter record is not read', () => {
@@ -492,33 +414,6 @@ describe('multi-parameter callees — any arity by call (entries stay arity-1)',
       }),
     });
 
-    expect(attio.creates).toEqual([
-      { recordType: 'company', fields: { name: 'Acme Corp', summary: 'warm intro' } },
-    ]);
-  });
-
-  it('an out-of-order call binds by argument name, not by position', async () => {
-    expect(PAIRED_OUT_OF_ORDER).not.toBe(PAIRED_NAMED); // the swap took
-    const email = makeFakeAdapter('email');
-    const attio = makeFakeAdapter('attio');
-
-    await runMovement({
-      source: PAIRED_OUT_OF_ORDER,
-      languageVersion: '4',
-      movementName: 'intake',
-      event: webhookEvent('email', { subject: 'Acme Corp', text: 'warm intro' }),
-      teamId: TEAM_ID,
-      catalog,
-      credentialIds: CREDENTIAL_IDS,
-      host: makeTestHost({
-        adapters: {
-          resolve: makeResolver({ email: email.adapter, attio: attio.adapter }),
-        },
-      }),
-    });
-
-    // Exactly what the in-order call produces: c is still the company,
-    // n is still the note — argument order carries no meaning.
     expect(attio.creates).toEqual([
       { recordType: 'company', fields: { name: 'Acme Corp', summary: 'warm intro' } },
     ]);

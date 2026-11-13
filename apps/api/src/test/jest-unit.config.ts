@@ -26,7 +26,7 @@ export default {
   testMatch: ['**/*.unit.test.ts'],
   // Older language versions' corpora run under their own version, via
   // jest-conformance-v<n>.config.ts — never under the current one.
-  testPathIgnorePatterns: ['/node_modules/', '/__conformance__/'],
+  testPathIgnorePatterns: ['/node_modules/'],
   // ts-jest required for Prisma >= 5.10.x (babel-jest cannot load the client).
   // Transpile only: types are owned by `pnpm code:type-check`, and per-worker
   // type-checking was most of each suite's fixed cost.

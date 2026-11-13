@@ -34,7 +34,7 @@ import { neverAsAny } from 'movement-engine/public/types';
 import { isLegacyLanguageVersion } from 'legacy-lang';
 import { describeError } from 'movement-engine/public/errors';
 import { logger } from 'movement-engine/public/log';
-import { refuseHeldRun, runMovement, resumeMovement, settleRaceFrame } from '@listen-fire/legacy-engine/dispatch';
+import { legacyRunRefusal, refuseHeldRun, runMovement, resumeMovement, settleRaceFrame } from '../../movement_engine/dispatch/dispatch';
 import { MovementRunFailed, runFailureCause, type CancelGate, type MovementRunResult } from 'movement-engine/public/movement-engine';
 import { makeDbCancelGate, type DbCancelGate } from '../../movement_engine/cancel_gate';
 import { carriedParksOf, carriedRunLaneOf, resumeCarriedSegment, runCarriedSegment } from './carried_run';
@@ -325,18 +325,11 @@ function neededBy(door: FiringDoor): RunningCapability {
   }
 }
 
-/** What a start of a legacy id is told: this release starts no new run on
- *  them, and carries no old engine for them. */
-export function legacyStartRefusal(pin: LanguageVersion): string {
-  return `this automation is pinned to language version ${pin}, and this release starts no new run on versions 1 to 4: upgrade it to ${LANGUAGE_VERSION}`;
-}
-
 /** Why `pin`'s version does not serve `door`, in the registry's text;
- *  undefined when it does. A legacy id's listens are read only by the carried
- *  version they ran beside, so `judged` is the door that reaches one; Run now
- *  says the same where it is pressed (run_now.ts). */
+ *  undefined when it does. A legacy id is served by no door: this platform no
+ *  longer carries its engine. */
 export function doorRefusal(pin: LanguageVersion, door: FiringDoor): string | undefined {
-  if (isLegacyLanguageVersion(pin)) return door.kind === 'judged' ? legacyStartRefusal(pin) : undefined;
+  if (isLegacyLanguageVersion(pin)) return legacyRunRefusal(pin, neededBy(door));
   return refusalOf(pin, neededBy(door));
 }
 

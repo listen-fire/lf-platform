@@ -40,7 +40,7 @@ import {
 } from '../adapters/manual';
 import { manualListenerMovements } from './files';
 import { getMovementRow, type MovementRow } from './store';
-import { heldRunRefusal } from '@listen-fire/legacy-engine/dispatch';
+import { heldRunRefusal, legacyRunRefusal } from '../../movement_engine/dispatch/dispatch';
 import {
   describeRunAwaits,
   type AwaitDescription,
@@ -62,7 +62,6 @@ import { QUEUED_RUN_WORK_KINDS } from '../../work/kinds';
 import { carriedRunLaneOf } from './carried_run';
 import { CARRIED_RUN_NOW_NAME, carriedRunTriggerId, queueCarriedRunNow } from './carried_run_now';
 import { isLegacyLanguageVersion } from 'legacy-lang';
-import { legacyStartRefusal } from './execute';
 
 export interface MovementRunNowSuccess {
   ok: true;
@@ -225,7 +224,7 @@ export async function runMovementAsync(
  *  version's run host (./carried_run_now.ts). Undefined for any other. */
 async function carriedRunNowOf(input: RunMovementNowInput, row: MovementRow): Promise<MovementRunAsyncResult | undefined> {
   // No new run starts on a legacy id: said here, with the remedy.
-  if (isLegacyLanguageVersion(row.languageVersion)) return { ok: false, errors: [legacyStartRefusal(row.languageVersion)] };
+  if (isLegacyLanguageVersion(row.languageVersion)) return { ok: false, errors: [legacyRunRefusal(row.languageVersion, 'run')] };
   const lane = await carriedRunLaneOf(row.languageVersion);
   if (lane === undefined) return undefined;
   return queueCarriedRunNow({

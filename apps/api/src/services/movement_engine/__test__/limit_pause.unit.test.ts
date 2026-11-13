@@ -23,9 +23,9 @@ process.env.ENCRYPTION_SALT_BASE64 ??= Buffer.alloc(16, 2).toString('base64');
 process.env.DATABASE_URL_TEST ??= 'postgresql://unit:unit@localhost:5432/unit-test-unused';
 process.env.DATABASE_URL_TEST_READONLY ??= 'postgresql://unit:unit@localhost:5432/unit-test-unused';
 
-import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
-import { runFailureCause, MovementRunFailed, type MovementRunResult, type ParkSink, type RunLimitPause } from '@listen-fire/legacy-engine/services/movement_engine/run';
-import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
+import { resumeMovement, runMovement } from '../dispatch/dispatch';
+import { runFailureCause, MovementRunFailed, type MovementRunResult, type ParkSink, type RunLimitPause } from 'movement-engine/public/movement-engine';
+import type { ParkedScopeState } from 'engine-contracts';
 import { RunCostCapExceeded } from 'movement-engine/public/models';
 import { assertRunBudget, reportRunCost, runCostCapFromEnv, withSpendMeter } from 'movement-engine/public/models';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';

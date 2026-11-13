@@ -19,8 +19,8 @@ import { FileOutsideTeamError, withFileOwners } from 'movement-engine/public/fil
 import type { LlmCallResult } from 'movement-engine/public/models';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { credentialIdsFor, makeTestHost } from 'movement-engine/public/testing';
-import { runMovement } from '@listen-fire/legacy-engine/dispatch';
-import { runFailureCause } from '@listen-fire/legacy-engine/services/movement_engine/run';
+import { runMovement } from '../dispatch/dispatch';
+import { runFailureCause } from 'movement-engine/public/movement-engine';
 
 import { services } from '../../../adapters/registry';
 import { UnconfiguredOcrAdapter } from '../../../adapters/ocr/unconfigured';

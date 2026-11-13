@@ -1,10 +1,8 @@
 // A parked state names its contract version, and every entry that reads one
 // back (a resume, a race settlement) checks it before it
-// rehydrates anything. Each engine reads its own version: the TypeScript
-// engine (language versions 1–4) writes and reads 1, the Rust engine (5 on)
-// writes 4 (since listen-fire 0.14) and reads 3 and 4, so a run 0.13 parked
-// still resumes. A version neither reads, or the other engine's, is refused
-// loudly.
+// rehydrates anything. The Rust engine writes 4 (since listen-fire 0.14) and
+// reads 3 and 4, so a run 0.13 parked still resumes. A version it does not
+// read, the retired TypeScript engine's 1 among them, is refused loudly.
 
 import { pinOf } from './pin_of';
 import { tenantIdOf, type AnyParkedScopeState } from 'engine-contracts';
@@ -13,7 +11,7 @@ import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { createManualAdapter } from '../../translation_graph/adapters/manual';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import { teamOfTenant } from '../../translation_graph/movement/tenant';
-import { resumeMovement, runMovement, settleRaceFrame } from '@listen-fire/legacy-engine/dispatch';
+import { resumeMovement, runMovement, settleRaceFrame } from '../dispatch/dispatch';
 import { makeFakeParkSink, makeTestHost } from 'movement-engine/public/testing';
 
 const TEAM_ID = tenantIdOf('00000000-0000-0000-0000-000000000078');
@@ -94,13 +92,6 @@ const UNREAD = 'the parked state carries park state version 2, which this releas
 /** Each pin, the version its engine writes, and how it refuses the other's. */
 const ENGINES = [
   {
-    pin: 4,
-    engine: 'TypeScript',
-    writes: 1,
-    other: 3,
-    refusal: 'the parked state carries park state version 3, which only the Rust engine reads (the TypeScript engine reads version 1)',
-  },
-  {
     pin: 5,
     engine: 'Rust',
     writes: 4,
@@ -117,26 +108,6 @@ describe.each(ENGINES)('a parked state on the $engine engine (language version $
     expect(resumed.parked).toBeUndefined();
   });
 
-  it("refuses the other engine's version on a resume, before anything is rehydrated", async () => {
-    const state = restamped(await parkedState(pin), other);
-    const refused = runInput(pin);
-    await expect(resumeMovement({ ...refused.input, state })).rejects.toThrow(refusal);
-    expect(refused.resolved).toEqual([]);
-  });
-
-  it('refuses a version this release does not read on a resume, before anything is rehydrated', async () => {
-    const state = restamped(await parkedState(pin), 2);
-    const refused = runInput(pin);
-    await expect(resumeMovement({ ...refused.input, state })).rejects.toThrow(UNREAD);
-    expect(refused.resolved).toEqual([]);
-  });
-
-  it('refuses a version this release does not read on a race settlement, before anything is rehydrated', async () => {
-    const state = restamped(await parkedState(pin), 2);
-    const refused = runInput(pin);
-    await expect(settleRaceFrame({ ...refused.input, state, frameAddress: 's0' })).rejects.toThrow(UNREAD);
-    expect(refused.resolved).toEqual([]);
-  });
 });
 
 it('the Rust engine resumes a version 3 state, as a run 0.13 parked holding no kept walk', async () => {

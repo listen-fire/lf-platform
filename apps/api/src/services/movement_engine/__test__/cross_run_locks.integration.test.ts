@@ -74,9 +74,9 @@ import { Client } from 'pg';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 import { tenantIdOf } from 'engine-contracts';
 import type { InstanceSchema } from 'movement-lang';
-import type { MovementTransformInvoker } from '@listen-fire/legacy-engine/services/movement_engine/extraction';
+type MovementTransformInvoker = import('movement-engine/public/host').EngineHost['llm']['transforms'];
 
-import { runMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runMovement } from '../dispatch/dispatch';
 import { getDatabaseUrl } from '../../../prisma';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import {

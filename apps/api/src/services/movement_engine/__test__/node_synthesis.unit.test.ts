@@ -74,9 +74,9 @@ jest.mock('../../../lib/anthropic', () => ({
   MAX_CHAT_CONTINUATIONS: 5,
 }));
 
-import { runMovement, resumeMovement } from '@listen-fire/legacy-engine/dispatch';
-import type { ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
-import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
+import { runMovement, resumeMovement } from '../dispatch/dispatch';
+import type { ParkSink } from 'movement-engine/public/movement-engine';
+import type { ParkedScopeState } from 'engine-contracts';
 
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import {
@@ -1624,7 +1624,6 @@ describe('the combinators — arms, ties and slots (sync paths)', () => {
   });
 
   it.each([
-    ['parallel (version 4)', 'movement', 'crm = attio(credentials: acme_main)', '  r = await parallel([', '  ])', 'COALESCE(AT(r, 1), "empty")', '[AT(r, 0)]', '4' as const],
     ['all, which replaces it (version 5)', 'function', 'crm = connect attio using acme_main', '  r = all(', '  )', 'coalesce(r[1], "empty")', '[r[0]]', undefined],
   ])('an arm that hands nothing back is a null slot: %s', async (_label, keyword, crm, open, close, summary, domains, languageVersion) => {
     const email = makeFakeAdapter('email');
@@ -1651,43 +1650,6 @@ describe('the combinators — arms, ties and slots (sync paths)', () => {
     expect(attio.creates[0]?.fields.domains).toBe('value');
   });
 
-  it('a race over no arms can never settle, and says so at run time (version 4)', async () => {
-    const email = makeFakeAdapter('email');
-    const attio = makeFakeAdapter('attio');
-    await expect(
-      run(
-        [
-          'movement intake(msg: <inbox-[:message]->>) {',
-          '  crm = attio(credentials: acme_main)',
-          '  arms = []',
-          '  r = await race(arms)',
-          '}',
-        ].join('\n'),
-        {},
-        // Under 5 the checker refuses arms it cannot see are closures, so
-        // the run-time refusal is pinned where it can still be reached.
-        { email: email.adapter, attio: attio.adapter, languageVersion: '4' },
-      ),
-    ).rejects.toThrow(/can never settle/);
-  });
-
-  it('a parallel over no arms ran nothing, and the run proceeds (version 4)', async () => {
-    const email = makeFakeAdapter('email');
-    const attio = makeFakeAdapter('attio');
-    await run(
-      [
-        'movement intake(msg: <inbox-[:message]->>) {',
-        '  crm = attio(credentials: acme_main)',
-        '  arms = []',
-        '  r = await parallel(arms)',
-        '  write crm-[:companies]-> { name: "after" }',
-        '}',
-      ].join('\n'),
-      {},
-      { email: email.adapter, attio: attio.adapter, languageVersion: '4' },
-    );
-    expect(attio.creates.map((w) => w.fields.name)).toEqual(['after']);
-  });
 });
 
 // ── The appendable run-local node ───────────────────────────────────────────

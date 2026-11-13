@@ -1,27 +1,16 @@
-// The engine/host seam, pinned on the platform's side. The legacy engine (the
-// TypeScript engine for language versions 1–4) reaches the database, the model
-// provider, billing, adapter implementations and run recording only through
-// the `EngineHost` it is handed — never by importing them — and the host's
-// round trip below carries plain data only. The engine's own purity is pinned
-// by the engine package's tests (it is the language's; this app installs it).
-//
-// Imports are read with the TypeScript compiler, not a regex, so a multi-line
-// import or an `import { type X }` is classified the way the compiler sees it.
-// Type-only imports are allowed from anywhere: they vanish at compile time.
+// The engine/host seam, pinned on the platform's side: the host's round trip
+// carries plain data only. The engine's own purity is pinned by the engine
+// package's tests (it is the language's; this app installs it).
 
-import { builtinModules } from 'node:module';
-import fs from 'node:fs';
-import path from 'node:path';
 import { Readable } from 'node:stream';
 
-import ts from 'typescript';
 import { LANGUAGE_VERSION, mockCatalogSnapshot, type InstanceSchema } from 'movement-lang';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { CapturedWrite } from 'movement-engine/public/adapter';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
-import type { MovementTraceEntry } from '@listen-fire/legacy-engine/services/movement_engine/expression';
-import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
+import type { MovementTraceEntry } from 'movement-engine/public/trace';
+import type { ParkedScopeState } from 'engine-contracts';
 
 import {
   iterateRelatedPages,
@@ -47,377 +36,12 @@ import {
   type RenderFile,
   type ResolveFileText,
 } from 'movement-engine/public/host';
-import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
-import { MovementRunFailed, type ParkSink, type ResumeMovementInput, type RunLimitPause, type RunMovementInput } from '@listen-fire/legacy-engine/services/movement_engine/run';
+import { resumeMovement, runMovement } from '../dispatch/dispatch';
+import { MovementRunFailed, type ParkSink, type ResumeMovementInput, type RunLimitPause, type RunMovementInput } from 'movement-engine/public/movement-engine';
 import { makeFakeParkSink, makeMemoryParkSources, makeTestHost, type TestHostOverrides } from 'movement-engine/public/testing';
 import { methodPaths, notJsonAt, roundTripHost } from './round_trip_host';
 import { HOST_FAMILIES_VERSION, type LoggedArrival } from 'engine-contracts';
 import { tenantOfTeam } from '../../translation_graph/movement/tenant';
-
-const ENGINE_DIR = path.resolve(__dirname, '..');
-const SRC_DIR = path.resolve(__dirname, '../../..');
-/** The platform's package for language versions 1–4: the TypeScript engine,
- *  its paths mirroring apps/api/src. */
-const LEGACY_DIR = path.resolve(SRC_DIR, '../../../packages/legacy-engine');
-const LEGACY_ENGINE_DIR = path.join(LEGACY_DIR, 'services/movement_engine');
-
-/** A movement_engine file where it lives: the legacy engine package, or this
- *  app's host side. */
-function engineFile(file: string): string {
-  const inPackage = path.join(LEGACY_ENGINE_DIR, file);
-  return fs.existsSync(inPackage) ? inPackage : path.join(ENGINE_DIR, file);
-}
-
-/** Legacy engine files that must import no host code. */
-const PURE_FILES = [
-  'builtins.ts',
-  'declared_shape.ts',
-  'effect_locks.ts',
-  'engine_choice.ts',
-  'expression.ts',
-  'extraction.ts',
-  'extraction_call.ts',
-  'fans.ts',
-  'interpretable.ts',
-  'kg.ts',
-  'local_edge_adapter.ts',
-  'ts_program_check.ts',
-  'run.ts',
-  'run_context.ts',
-  'serialize.ts',
-  'write_ledger.ts',
-];
-
-/** Host implementations that still live in this directory: they wire the
- *  engine to Postgres, the work queue and the run recorder. */
-const HOST_SIDE_FILES = [
-  'await_description.ts',
-  'await_resume.ts',
-  'cancel_gate.ts',
-  'limit_pause.ts',
-  'limit_resume.ts',
-  'park_sink.ts',
-  'resume_step.ts',
-  'run_engine_record.ts',
-  'run_host.ts',
-  'doors_hold.ts',
-  'run_host_deliveries.ts',
-  'run_host_queue.ts',
-  'run_host_store.ts',
-  'callback_fire.ts',
-  'callback_store.ts',
-  'carried_correlations.ts',
-  'carried_host.ts',
-  'carried_records.ts',
-  'run_host_waits.ts',
-  'run_lease.ts',
-  'run_writes.ts',
-  'single_flight.ts',
-  'timer_resume.ts',
-];
-
-/** The host-side modules that turn a file descriptor into bytes, or bytes
- *  into a URL. */
-const BYTE_READERS = ['retrieve', 'redeem', 'expose', 'fetch-stream'];
-
-/** Module paths are relative to apps/api/src, without extension. */
-const FORBIDDEN: Array<{ matches: (module: string) => boolean; reason: string }> = [
-  { matches: under('lib/kysely'), reason: 'the database client (the host owns storage)' },
-  { matches: under('generated/kysely'), reason: 'generated database code (types only)' },
-  { matches: under('generated/prisma'), reason: 'generated database code (types only)' },
-  { matches: (m) => m === 'prisma' || m.startsWith('@prisma/'), reason: 'the database client' },
-  { matches: under('lib/anthropic'), reason: 'the model provider (the host supplies `llm`)' },
-  { matches: under('lib/llm_usage'), reason: 'billing context (the host wraps model calls)' },
-  {
-    matches: under('lib/run_spend'),
-    reason:
-      "a priced call's spend meter (the host meters its calls; the engine keeps the run's ledger)",
-  },
-  {
-    matches: under('services/translation_graph/segment_scope'),
-    reason: "a segment's host scope (the engine holds only the segment's id)",
-  },
-  {
-    matches: under('services/translation_graph/adapters'),
-    reason: 'adapter implementations (the host supplies `adapters`)',
-  },
-  {
-    matches: under('services/translation_graph/runs'),
-    reason: 'run recording (the host supplies `trace`)',
-  },
-  { matches: under('services/translation_graph/movement'), reason: 'the production host itself' },
-  { matches: under('services/document'), reason: 'document storage (the host supplies `files`)' },
-  {
-    matches: (m) =>
-      BYTE_READERS.some((reader) => m === `services/translation_graph/engine/files/${reader}`),
-    reason: 'a file byte reader (bytes stay on the host: the engine holds descriptors)',
-  },
-  { matches: under('services/work'), reason: 'the work queue (the host supplies `park`)' },
-  { matches: under('services/interaction'), reason: 'run failure reporting (host side)' },
-  { matches: under('services/webhook_sync'), reason: 'inbound sync (host side)' },
-  {
-    matches: (m) =>
-      HOST_SIDE_FILES.some((f) => m === `services/movement_engine/${f.replace(/\.ts$/, '')}`),
-    reason: 'a host-side movement_engine module',
-  },
-];
-
-const ALLOWED: Array<(module: string) => boolean> = [
-  (m) => m === 'movement-lang' || m.startsWith('movement-lang/'),
-  // The engine's public entries: what its embedders are meant to take. The
-  // engine package's own tests pin what they re-export.
-  (m) => m.startsWith('public/'),
-  // The TypeScript checker and catalog the legacy engine runs pins 1-4 against.
-  (m) => m === 'legacy-lang' || m.startsWith('legacy-lang/'),
-  // The language versions this build carries: which one a release pin runs on.
-  // Pure lookup over the pin; it reaches no host.
-  (m) => m === '@listen-fire/language-versions',
-  // The contracts the engine speaks: data shapes and the protocol schema.
-  (m) => m === 'engine-contracts' || m.startsWith('engine-contracts/'),
-  (m) => m === 'zod',
-  (m) => m.startsWith('node:') || builtinModules.includes(m),
-  under('lib/utils'),
-  // The spend vocabulary both sides speak: budgets, cost lines, the cap.
-  under('lib/run_cost'),
-  under('lib/models'),
-  under('lib/prompts'),
-  under('services/logger'),
-  // Shared engine helpers that are pure computation over engine data:
-  // resource stamping and filtering, the model choice for an extraction's
-  // size.
-  (m) => m === 'services/translation_graph/engine/files/resources',
-  (m) => m === 'services/translation_graph/engine/batched_extraction/model_choice',
-  under('services/translation_graph/uniqueness'),
-  under('services/translation_graph/required_fields'),
-  under('services/translation_graph/types'),
-  under('services/translation_graph/mutation_context'),
-  // The adapter protocol: the contract the engine calls adapters through, no
-  // implementation.
-  under('services/translation_graph/adapter'),
-  (m) => PURE_FILES.some((f) => m === `services/movement_engine/${f.replace(/\.ts$/, '')}`),
-];
-
-/** The one clock read the legacy engine keeps: an expression evaluated outside any
- *  run (an editor preview, a lone expression's test) has no run instant to
- *  answer from, so it reads the wall clock. Inside a run the instant is the
- *  segment's (`RunContext.pinnedNow`). */
-const OUT_OF_RUN_CLOCK = { file: engineFile('expression.ts'), fn: 'pinnedNow' };
-
-/** `a.b.c` for a chain of property reads off an identifier; undefined for
- *  anything else (a call, an element access). */
-function propertyPath(node: ts.Expression): string | undefined {
-  if (ts.isIdentifier(node)) return node.text;
-  if (ts.isPropertyAccessExpression(node)) {
-    const base = propertyPath(node.expression);
-    return base === undefined ? undefined : `${base}.${node.name.text}`;
-  }
-  return undefined;
-}
-
-/** Every place `file` reads a clock or mints an id itself, as `line: what`.
- *  The engine asks the host for both (`clock.now`, `ids.mint`), so a
- *  recorded run replays to the same instants and ids. */
-function entropyReads(file: string, text = fs.readFileSync(file, 'utf8')): string[] {
-  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
-  const reads: string[] = [];
-  const at = (node: ts.Node, what: string): void => {
-    reads.push(`${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}: ${what}`);
-  };
-  const exempt = (node: ts.Node): boolean => {
-    if (file !== OUT_OF_RUN_CLOCK.file) return false;
-    for (let up: ts.Node | undefined = node; up !== undefined; up = up.parent) {
-      if (ts.isFunctionDeclaration(up) && up.name?.text === OUT_OF_RUN_CLOCK.fn) return true;
-    }
-    return false;
-  };
-  // Local names bound to the crypto module itself (a default or namespace
-  // import): a `random*` member read off one is a mint.
-  const cryptoNames = new Set(['crypto']);
-  const visit = (node: ts.Node): void => {
-    if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
-      const module = node.moduleSpecifier.text;
-      if (module === 'uuid' || module === 'nanoid' || module.startsWith('uuid/')) at(node, `imports '${module}'`);
-      if (module === 'crypto' || module === 'node:crypto') {
-        const clause = node.importClause;
-        if (clause?.name !== undefined) cryptoNames.add(clause.name.text);
-        const bindings = clause?.namedBindings;
-        if (bindings !== undefined && ts.isNamedImports(bindings)) {
-          for (const element of bindings.elements) {
-            const name = (element.propertyName ?? element.name).text;
-            if (name.startsWith('random')) at(node, `imports ${name} from '${module}'`);
-          }
-        } else if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
-          cryptoNames.add(bindings.name.text);
-        }
-      }
-    } else if (ts.isPropertyAccessExpression(node)) {
-      const read = propertyPath(node);
-      const [head, second, third] = read?.split('.') ?? [];
-      if (
-        read === 'Date.now' ||
-        read === 'Math.random' ||
-        read === 'performance.now' ||
-        read === 'process.hrtime' ||
-        read === 'process.hrtime.bigint' ||
-        (head !== undefined && cryptoNames.has(head) && second?.startsWith('random') === true && third === undefined) ||
-        (head === 'globalThis' && second === 'crypto' && third !== undefined)
-      ) {
-        at(node, read ?? '');
-        return;
-      }
-    } else if (
-      ts.isNewExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === 'Date' &&
-      (node.arguments === undefined || node.arguments.length === 0) &&
-      !exempt(node)
-    ) {
-      at(node, 'new Date()');
-    } else if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === 'Date') {
-      at(node, 'Date()');
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
-  return reads;
-}
-
-function under(prefix: string): (module: string) => boolean {
-  return (m) => m === prefix || m.startsWith(`${prefix}/`);
-}
-
-/** A relative specifier becomes a path under apps/api/src (the legacy engine
- *  mirrors it); a bare one stays, the engine's own entries as `public/<entry>`. */
-function moduleOf(fromFile: string, specifier: string): string {
-  if (specifier.startsWith('movement-engine/')) return specifier.slice('movement-engine/'.length);
-  if (!specifier.startsWith('.')) return specifier;
-  const root = fromFile.startsWith(LEGACY_DIR + path.sep) ? LEGACY_DIR : SRC_DIR;
-  const resolved = path.relative(root, path.resolve(path.dirname(fromFile), specifier));
-  return resolved
-    .split(path.sep)
-    .join('/')
-    .replace(/\.(ts|js)$/, '')
-    .replace(/\/index$/, '');
-}
-
-/** Every specifier the file loads at run time, with the value names it takes
- *  from it when it names them (undefined: the whole module). */
-function valueImports(file: string): Array<{ specifier: string; names?: string[] }> {
-  const source = ts.createSourceFile(
-    file,
-    fs.readFileSync(file, 'utf8'),
-    ts.ScriptTarget.Latest,
-    true,
-  );
-  const imports: Array<{ specifier: string; names?: string[] }> = [];
-  const valueNames = (elements: ts.NodeArray<ts.ImportSpecifier | ts.ExportSpecifier>): string[] =>
-    elements.filter((element) => !element.isTypeOnly).map((element) => (element.propertyName ?? element.name).text);
-  const visit = (node: ts.Node): void => {
-    if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
-      if (!isTypeOnlyImport(node)) {
-        const clause = node.importClause;
-        const bindings = clause?.namedBindings;
-        const named = clause !== undefined && clause.name === undefined && bindings !== undefined && ts.isNamedImports(bindings);
-        imports.push({ specifier: node.moduleSpecifier.text, ...(named ? { names: valueNames(bindings.elements) } : {}) });
-      }
-    } else if (
-      ts.isExportDeclaration(node) &&
-      node.moduleSpecifier !== undefined &&
-      ts.isStringLiteral(node.moduleSpecifier)
-    ) {
-      if (!isTypeOnlyExport(node)) {
-        const clause = node.exportClause;
-        const named = clause !== undefined && ts.isNamedExports(clause);
-        imports.push({ specifier: node.moduleSpecifier.text, ...(named ? { names: valueNames(clause.elements) } : {}) });
-      }
-    } else if (ts.isCallExpression(node) && isLoaderCall(node)) {
-      const [arg] = node.arguments;
-      if (arg !== undefined && ts.isStringLiteralLike(arg)) imports.push({ specifier: arg.text });
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
-  return imports;
-}
-
-function isTypeOnlyImport(node: ts.ImportDeclaration): boolean {
-  const clause = node.importClause;
-  if (clause === undefined) return false;
-  if (clause.isTypeOnly) return true;
-  if (clause.name !== undefined) return false;
-  const bindings = clause.namedBindings;
-  return (
-    bindings !== undefined &&
-    ts.isNamedImports(bindings) &&
-    bindings.elements.length > 0 &&
-    bindings.elements.every((element) => element.isTypeOnly)
-  );
-}
-
-function isTypeOnlyExport(node: ts.ExportDeclaration): boolean {
-  if (node.isTypeOnly) return true;
-  const clause = node.exportClause;
-  return (
-    clause !== undefined &&
-    ts.isNamedExports(clause) &&
-    clause.elements.length > 0 &&
-    clause.elements.every((element) => element.isTypeOnly)
-  );
-}
-
-function isLoaderCall(node: ts.CallExpression): boolean {
-  return (
-    node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-    (ts.isIdentifier(node.expression) && node.expression.text === 'require')
-  );
-}
-
-describe('the engine/host seam', () => {
-  it('classifies every movement_engine file of this app and the legacy engine as pure or host side, exactly once', () => {
-    const onDisk = [ENGINE_DIR, LEGACY_ENGINE_DIR]
-      .flatMap((dir) => fs.readdirSync(dir))
-      .filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts'))
-      .sort();
-    const listed = [...PURE_FILES, ...HOST_SIDE_FILES].sort();
-    expect(new Set(listed).size).toBe(listed.length);
-    expect(listed).toEqual(onDisk);
-  });
-
-  it('keeps every pure file in the legacy engine package, so no shell needs this app to run one', () => {
-    expect(PURE_FILES.filter((f) => !fs.existsSync(path.join(LEGACY_ENGINE_DIR, f)))).toEqual([]);
-  });
-
-  it('pure legacy engine files import no host code', () => {
-    const violations: string[] = [];
-    for (const file of PURE_FILES) {
-      const filePath = engineFile(file);
-      for (const { specifier } of valueImports(filePath)) {
-        const module = moduleOf(filePath, specifier);
-        const forbidden = FORBIDDEN.find((rule) => rule.matches(module));
-        if (forbidden !== undefined) {
-          violations.push(`${file} imports '${specifier}': ${forbidden.reason}`);
-        } else if (!ALLOWED.some((allowed) => allowed(module))) {
-          violations.push(
-            `${file} imports '${specifier}': not on the seam's allow list (reach it through the host, or allow it here with the reason)`,
-          );
-        }
-      }
-    }
-    expect(violations).toEqual([]);
-  });
-
-  it('pure legacy engine files read no clock and mint no id of their own', () => {
-    const violations = PURE_FILES.map(engineFile).flatMap((file) =>
-      entropyReads(file).map((read) => `${path.relative(SRC_DIR, file)}:${read}`),
-    );
-    expect(violations).toEqual([]);
-  });
-
-  it('lets the one out-of-run clock through, and only there', () => {
-    expect(entropyReads(OUT_OF_RUN_CLOCK.file, 'function pinnedNow() { return new Date(); }')).toEqual([]);
-    expect(entropyReads(OUT_OF_RUN_CLOCK.file, 'function other() { return new Date(); }')).toEqual(['1: new Date()']);
-  });
-});
 
 describe('the engine/host seam carries data', () => {
   // A file crosses as its descriptor: FILE() asks the host to render and gets
@@ -800,11 +424,6 @@ const ROUND_TRIP_PRELUDE = [
   '',
 ].join('\n');
 
-/** The same prelude as versions 1–4 read it, for a run pinned to one of them. */
-const ROUND_TRIP_PRELUDE_V4 = ROUND_TRIP_PRELUDE.replace('fetchUrl as fetch_url', 'fetch_url')
-  .replace('inbox = connect email', 'inbox = email()')
-  .replace('crm = connect attio using acme_main', 'crm = attio(credentials: acme_main)');
-
 interface FakeCrm {
   adapter: Adapter;
   creates: Array<{ recordType: string; fields: Record<string, unknown> }>;
@@ -993,16 +612,16 @@ function roundTripEvent(
 function roundTrip(
   body: string[],
   overrides: TestHostOverrides & { crm?: FakeCrm; inbox?: Adapter } = {},
-  options: { version4?: boolean; imports?: string[] } = {},
+  options: { imports?: string[] } = {},
 ) {
   const crm = overrides.crm ?? fakeCrm();
   const inbox = overrides.inbox ?? pagedInbox().adapter;
   const { crm: _crm, inbox: _inbox, ...hostOverrides } = overrides;
   const input = () => ({
     source: [
-      options.version4 === true ? ROUND_TRIP_PRELUDE_V4 : ROUND_TRIP_PRELUDE,
+      ROUND_TRIP_PRELUDE,
       ...(options.imports ?? []),
-      `${options.version4 === true ? 'movement' : 'function'} intake(m: <inbox-[:message]->>) {`,
+      'function intake(m: <inbox-[:message]->>) {',
       ...body,
       '}',
     ].join('\n'),
@@ -1031,6 +650,11 @@ function roundTrip(
       resumeMovement({ ...input(), state, ...extra }),
   };
 }
+
+/** Methods the manifest still declares that only a program of versions 1 to 4
+ *  reached (`write … bind`, the extraction keyword's minted ids), and this
+ *  platform no longer runs one. */
+const REACHED_BY_NO_PROGRAM = (method: string): boolean => method.startsWith('park.bindings.') || method === 'ids.mint';
 
 describe('the round trip', () => {
   it('names the method and the path of whatever JSON cannot carry', async () => {
@@ -1201,47 +825,6 @@ describe('every family crosses as JSON', () => {
     ]);
   });
 
-  familyRun('bindings: a bound counterpart found, gone, forgotten and rebound', async () => {
-    const recorded: unknown[] = [];
-    const h = roundTrip(
-      [
-        '  co = match crm-[:companies]-> { unique by (`name`)',
-        '    name: "Acme"',
-        '  }',
-        // Since version 4 a match may find nothing, so the bind is guarded.
-        '  if co != null { write crm-[:notes]-> bind co { title: m.`subject` } }',
-      ],
-      {
-        crm: fakeCrm({
-          candidates: [
-            { adapterType: 'attio', externalId: 'co-1', data: { name: 'Acme', summary: 's' } },
-          ],
-          updatesFind: false,
-        }),
-        park: {
-          bindings: {
-            record: async (input) => {
-              recorded.push(input);
-            },
-            findBoundCounterpart: async () => ({
-              adapterType: 'attio',
-              instanceKey: 'k',
-              typeId: 'company',
-              recordId: 'co-gone',
-            }),
-            delete: async () => {},
-          },
-        },
-      },
-      { version4: true },
-    );
-    // `write … bind` is a version 1–4 construct (retired under 5 by the
-    // checker, MOV_WRITE_BIND_RETIRED).
-    await h.run({ languageVersion: '4' });
-    expect(h.crm.creates).toHaveLength(1);
-    expect(recorded).toHaveLength(1);
-  });
-
   familyRun('parks: an all join, a race settled', async () => {
     const parks = joiningParkSink();
     const h = roundTrip(
@@ -1407,40 +990,6 @@ describe('every family crosses as JSON', () => {
     expect(h.crm.creates).toEqual([{ recordType: 'note', fields: { title: 'the digest' } }]);
   });
 
-  // Only the extraction keyword stamps its sources with minted ids, and the
-  // keyword is versions 1–4 only (from 5 nothing a program writes reaches
-  // `ids.mint`), so this family's run is pinned to 4 in its spelling.
-  familyRun('the clock and ids: a segment with no firing instant, an extraction stamping its sources', async () => {
-    const minted: number[] = [];
-    const h = roundTrip(
-      [
-        '  found = extract from [m.`subject`] {',
-        '    digest: "a one-line summary"',
-        '  }',
-        '  write crm-[:notes]-> { title: found.`digest` }',
-      ],
-      {
-        ids: {
-          mint: async ({ count }) => {
-            minted.push(count);
-            return Array.from({ length: count }, (_, i) => `resource-${i + 1}`);
-          },
-        },
-        llm: {
-          client: {
-            call: async () => {
-              throw new Error('test: no model');
-            },
-          },
-        },
-      },
-      { version4: true },
-    );
-    // The source is a resource before the model is asked anything.
-    await expect(h.run({ firedAt: undefined, languageVersion: '4' })).rejects.toThrow('test: no model');
-    expect(minted).toEqual([1]);
-  });
-
   // Waits (host families version 2): an await on a listenable edge reads the
   // wait the record opened as it entered, binds what counts, and otherwise
   // parks on the wait, woken by what arrived while it parked.
@@ -1515,7 +1064,7 @@ describe('every family crosses as JSON', () => {
   it('reached every method on the manifest', () => {
     const skipped = [...declared].filter((name) => !ran.has(name));
     if (skipped.length > 0) return;
-    expect([...REACHED].sort()).toEqual(hostMethodPaths().sort());
+    expect([...REACHED].sort()).toEqual(hostMethodPaths().filter((method) => !REACHED_BY_NO_PROGRAM(method)).sort());
   });
 });
 

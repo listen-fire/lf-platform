@@ -7,8 +7,8 @@ jest.mock('../store', () => ({ getMovementRow: jest.fn() }));
 jest.mock('../../adapters/resolve', () => ({ resolveAdapter: jest.fn() }));
 jest.mock('../../../../lib/anthropic', () => ({ anthropicChat: jest.fn() }));
 jest.mock('../catalog', () => ({ runCatalogSnapshotForTeam: jest.fn() }));
-jest.mock('@listen-fire/legacy-engine/dispatch', () => ({
-  ...jest.requireActual('@listen-fire/legacy-engine/services/movement_engine/engine_choice'),
+jest.mock('../../../movement_engine/dispatch/dispatch', () => ({
+  ...jest.requireActual('../../../movement_engine/dispatch/engine_choice'),
   runMovement: jest.fn(),
 }));
 

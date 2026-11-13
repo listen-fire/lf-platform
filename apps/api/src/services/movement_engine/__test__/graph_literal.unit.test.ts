@@ -72,11 +72,11 @@ jest.mock('../../../lib/anthropic', () => ({
   MAX_CHAT_CONTINUATIONS: 5,
 }));
 
-import { runMovement, resumeMovement } from '@listen-fire/legacy-engine/dispatch';
+import { runMovement, resumeMovement } from '../dispatch/dispatch';
 import { LANGUAGE_VERSION } from 'movement-lang';
 import { spelledFor } from 'legacy-lang/checker/__test__/surface_spelling';
-import type { ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
-import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
+import type { ParkSink } from 'movement-engine/public/movement-engine';
+import type { ParkedScopeState } from 'engine-contracts';
 
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
 import {

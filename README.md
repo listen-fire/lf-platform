@@ -96,9 +96,8 @@ Applications:
 
 Packages:
 
-- [`@listen-fire/legacy-lang`](packages/legacy-lang): the TypeScript parser, checker and editor service for the legacy language ids 1-4, and their parity proof against the language's checker. Private.
+- [`@listen-fire/legacy-lang`](packages/legacy-lang): the TypeScript parser, checker and editor service for the legacy language ids 1-4, the frozen dialect a 0.12 pin is judged and upgraded in, the legacy formula text parser, and their parity proof against the language's checker. Private.
 - [`packages/principal`](packages/principal): the identity contracts (Principal and Directory) that `core` and the single-tenant stub both satisfy.
-- [`@listen-fire/legacy-engine`](packages/legacy-engine): the deprecated legacy ids' (1-4) formula text parser, platform-only.
 - [`@listen-fire/trpc`](packages/trpc): the generated tRPC types the web app builds against.
 - [`packages/story-view`](packages/story-view): the shareable picture of an automation's structure.
 

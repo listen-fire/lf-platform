@@ -16,9 +16,9 @@ process.env.ENCRYPTION_SALT_BASE64 ??= Buffer.alloc(16, 2).toString('base64');
 process.env.DATABASE_URL_TEST ??= 'postgresql://unit:unit@localhost:5432/unit-test-unused';
 process.env.DATABASE_URL_TEST_READONLY ??= 'postgresql://unit:unit@localhost:5432/unit-test-unused';
 
-import { resumeMovement, runMovement } from '@listen-fire/legacy-engine/dispatch';
-import { runFailureCause, type MovementRunResult, type ParkSink } from '@listen-fire/legacy-engine/services/movement_engine/run';
-import type { ParkedScopeState } from '@listen-fire/legacy-engine/services/movement_engine/serialize';
+import { resumeMovement, runMovement } from '../dispatch/dispatch';
+import { runFailureCause, type MovementRunResult, type ParkSink } from 'movement-engine/public/movement-engine';
+import type { ParkedScopeState } from 'engine-contracts';
 import { CallDepthExceeded } from 'movement-engine/public/limits';
 import { assertRunBudget, reportRunCost, runCostCapFromEnv, withSpendMeter } from 'movement-engine/public/models';
 import { staticCatalogSnapshot } from '../../translation_graph/movement/catalog';
@@ -569,18 +569,5 @@ describe('the call depth after a resume', () => {
       '}',
     ].join('\n');
 
-    it('counts the arm as a call: five deep fits a limit of five', async () => {
-      const { h, cause } = await pausedThenResumed(source, 5);
-      expect(cause).toBeUndefined();
-      expect(h.plugin.charged).toEqual(['p3', 'p2', 'p1']);
-      expect(h.attio.creates.map((c) => c.name)).toEqual(['done']);
-    });
-
-    it('counts the arm as a call: five deep is refused at a limit of four', async () => {
-      const { h, cause } = await pausedThenResumed(source, 4);
-      expect(cause).toBeInstanceOf(CallDepthExceeded);
-      expect((cause as CallDepthExceeded).chain).toEqual(['intake', 'deep', 'crawl', 'crawl', 'crawl', 'crawl']);
-      expect(h.attio.creates).toEqual([]);
-    });
   });
 });
