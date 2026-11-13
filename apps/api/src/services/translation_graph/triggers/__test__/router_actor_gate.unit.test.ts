@@ -1,7 +1,5 @@
-// Who may start an automation is its fire list's, judged at the door (Task 8),
-// and Slack's own setting drops the app's messages (Task 10). The router's
-// ownership gate is left only for a carried pin, whose receipts never say who
-// acted, so no fire list can judge them.
+// The router's ownership gate runs for every pin: only registered team members'
+// Slack messages set an automation off.
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
@@ -61,8 +59,8 @@ beforeEach(() => {
   });
 });
 
-describe('the ownership gate in the router', () => {
-  it.each(['0.12.13', '1', '4'])('stops a stranger on a carried pin (%s)', async (pin) => {
+describe('the gate runs for a current pin as it does on main', () => {
+  it.each([LANGUAGE_VERSION, '0.12.13'])('suppresses an unregistered Slack sender on a %s automation', async (pin) => {
     pinnedTo(pin);
     mockResolveActingUser.mockResolvedValue(null);
     const result = await dispatchTriggerByIdEvent({ triggerId: 't1', event: slackMessage, teamId: TEAM_ID });
@@ -70,21 +68,11 @@ describe('the ownership gate in the router', () => {
     expect(mockRunMovementFiring).not.toHaveBeenCalled();
   });
 
-  it('lets a registered user through on a carried pin', async () => {
-    pinnedTo('0.12.13');
+  it.each([LANGUAGE_VERSION, '0.12.13'])('lets a registered Slack sender through on a %s automation', async (pin) => {
+    pinnedTo(pin);
     mockResolveActingUser.mockResolvedValue({ id: 'u-1', email: 'ada@example.com', name: 'Ada' });
     const result = await dispatchTriggerByIdEvent({ triggerId: 't1', event: slackMessage, teamId: TEAM_ID });
     expect(result.droppedReason).toBeUndefined();
-    expect(mockRunMovementFiring).toHaveBeenCalledTimes(1);
-  });
-
-  it('is not consulted on the current pin: its fire list judged the stranger at the door', async () => {
-    pinnedTo(LANGUAGE_VERSION);
-    mockResolveActingUser.mockResolvedValue(null);
-    const result = await dispatchTriggerByIdEvent({ triggerId: 't1', event: slackMessage, teamId: TEAM_ID });
-    expect(result.droppedReason).toBeUndefined();
-    expect(mockResolveActingUser).not.toHaveBeenCalled();
-    expect(mockResolveAdapter).not.toHaveBeenCalled();
     expect(mockRunMovementFiring).toHaveBeenCalledTimes(1);
   });
 });

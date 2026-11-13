@@ -22,7 +22,6 @@ import {
 } from '../runs/trigger_run';
 import { runModeGate } from './run_mode';
 import { consultActorGate } from './actor_gate';
-import { pinIsCarried } from '../../access/carried_pin';
 import * as loopGuard from '../../loop_guard';
 import { isWriteEffect } from 'movement-engine/public/trace';
 import { notifyBreach } from '../../loop_guard/notify';
@@ -173,12 +172,7 @@ export async function dispatchTriggerByIdEvent(
 
   // A run's own echo is the loop breaker's (inbound/loop_breaker.ts): it
   // caps every chain of writes and arrivals as a queued run starts.
-  //
-  // Who may start an automation on the current pin is its fire list's, judged
-  // at the door; Slack's own setting drops the app's messages. A carried pin's
-  // receipts never say who acted, so no fire list can judge them (its list is
-  // forced to anyone): the ownership gate stays the stranger check there.
-  if (!dryRun && !refused && fired?.kind === 'shipped' && pinIsCarried(fired.movement.row.languageVersion)) {
+  if (!dryRun && !refused) {
     const sourceAdapter = await resolveAdapter({
       adapterType: input.event.adapterType,
       teamId: input.teamId,
@@ -186,8 +180,10 @@ export async function dispatchTriggerByIdEvent(
     });
 
     // ── OWNERSHIP GATE (§6.4b — registered actors only, where declared) ────
-    // It asks the source adapter "is the sender one of ours". Fail closed; the
-    // delivery stays replayable.
+    // It asks the source adapter "is the sender one of ours". Slack
+    // is the declaring adapter today: its parser forwards every inner event,
+    // bots included, so without this a listen+reply movement replies to its
+    // own replies forever. Fail closed; the delivery stays replayable.
     const actorGate = await consultActorGate({
       teamId: input.teamId,
       sourceAdapter,

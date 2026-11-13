@@ -1263,8 +1263,6 @@ function upgradeMessage(result: Exclude<UpgradeMovementResult, { status: 'not_fo
     result.movesWith !== undefined
       ? ` It moves together with ${result.movesWith.map((m) => `'${m.automation.name}'`).join(', ')}, which it shares imports with (movesWith, each with its own upgradedSource).`
       : '';
-  // Moving off a version that forced its fire list to anyone restates who may set it off.
-  const fire = result.changes?.fire !== undefined ? ` ${result.changes.fire}` : '';
   switch (result.status) {
     case 'already_current':
       return `Already written for ${result.from.version}, which the installed language ${to} reads. Nothing to do.`;
@@ -1282,9 +1280,9 @@ function upgradeMessage(result: Exclude<UpgradeMovementResult, { status: 'not_fo
     case 'needs_acknowledgement':
       return (rewritten
         ? `Clean under ${to} once its old spellings are rewritten (upgradedSource). \`changes\` says what moving changes: each rewritten line, and what else is different. Call again with acknowledge: true to save that text and move it there; ${meanwhile}.`
-        : `Clean under ${to}. \`changes\` says what moving changes. Call again with acknowledge: true to move it there; ${meanwhile}.`) + together + fire;
+        : `Clean under ${to}. \`changes\` says what moving changes. Call again with acknowledge: true to move it there; ${meanwhile}.`) + together;
     case 'upgraded':
-      return `Upgraded to ${to}${rewritten ? ', its text rewritten into that version\'s spelling (upgradedSource)' : ''}. New runs use it; runs already in progress finish under the version they started with.${fire}${together}${result.warnings !== undefined ? ` Left paused (warnings): ${result.warnings.join(' ')}` : ''}`;
+      return `Upgraded to ${to}${rewritten ? ', its text rewritten into that version\'s spelling (upgradedSource)' : ''}. New runs use it; runs already in progress finish under the version they started with.${together}${result.warnings !== undefined ? ` Left paused (warnings): ${result.warnings.join(' ')}` : ''}`;
     default:
       return neverAsAny(result.status);
   }

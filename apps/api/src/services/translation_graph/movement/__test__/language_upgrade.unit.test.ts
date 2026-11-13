@@ -50,14 +50,6 @@ jest.mock('../catalog', () => ({ movementCatalogForTeam: jest.fn() }));
 // use on every connection the rewritten texts name. Nobody asks unless a case
 // says who is upgrading.
 jest.mock('../../../access/decide', () => ({ accessTo: jest.fn(async () => true) }));
-// Who may fire it once it moves is the access service's (leaving_carried_pin
-// over Postgres: upgrade_restates_fire.integration.test.ts); nothing changes
-// unless a case says so.
-jest.mock('../../../access/leaving_carried_pin', () => ({
-  fireOnLeaving: jest.fn(async () => undefined),
-  restateFireOnLeaving: jest.fn(async () => undefined),
-  fireSentence: () => 'Only the team may set it off; setAccess changes who may.',
-}));
 jest.mock('../save_access', () => ({
   connectionsNamed: jest.fn(async () => []),
   unusableConnections: jest.fn(async () => []),
@@ -76,7 +68,6 @@ import { bringUpListensLater } from '../listens_up';
 import { accessTo } from '../../../access/decide';
 import { holdsOnMoving } from '../upgrade_holds';
 import { connectionsNamed, unusableConnections } from '../save_access';
-import { fireOnLeaving, restateFireOnLeaving } from '../../../access/leaving_carried_pin';
 import {
   runDeployCheck,
   upgradeMovement,
@@ -525,37 +516,6 @@ describe('an explicit upgrade by the compatibility rule', () => {
     // Its text did not change: it is still a save, under the new pin, so its
     // listens are provisioned there.
     expect(advanced).toEqual([{ to: CUR, source: 'source of older' }]);
-  });
-
-  it('off a carried pin: says who may set it off once moved, and restates the fire list in the move', async () => {
-    jest.mocked(getMovementRow).mockResolvedValueOnce(movement({ id: 'carried', languageVersion: '4' }));
-    jest.mocked(assessMovementValidity).mockReturnValueOnce({ status: 'valid', reason: null } as never);
-    jest.mocked(fireOnLeaving).mockResolvedValueOnce({ kind: 'restated', grantees: [{ kind: 'team' }], runsOnLf: false });
-    const { validate } = recorded();
-    const order: string[] = [];
-    enterTransaction.mockImplementationOnce(async () => {
-      order.push('transaction');
-    });
-    jest.mocked(restateFireOnLeaving).mockImplementationOnce(async () => {
-      order.push('restated');
-    });
-
-    const result = await upgradeMovement({
-      teamId: 'team-1',
-      id: 'carried',
-      acknowledge: true,
-      validate,
-      advance: async () => async () => {
-        order.push('moved');
-        return { ok: true };
-      },
-    });
-
-    expect(result).toEqual(
-      expect.objectContaining({ status: 'upgraded', changes: expect.objectContaining({ fire: 'Only the team may set it off; setAccess changes who may.' }) }),
-    );
-    expect(order).toEqual(['transaction', 'moved', 'restated']);
-    expect(restateFireOnLeaving).toHaveBeenCalledWith({ teamId: 'team-1', id: 'carried', from: '4', source: 'source of carried', to: CUR });
   });
 
   it('a pin on the installed line is already current', async () => {

@@ -24,14 +24,12 @@ export function deriveIdentityNote(manifest: AdapterManifest): string | undefine
     );
   }
 
-  // Inbound: a globally-addressable channel (anyone could reach it). Who may
-  // set an automation off is its fire list; only a version pinned to 0.12
-  // still fires solely for people the team already knows, since its arrivals
-  // cannot be judged. The `false`/absent case is either not an inbound source
-  // or gated upstream — the system's own trigger note covers it.
+  // Inbound: a globally-addressable channel (anyone could reach it) only fires
+  // for people the team already knows. The `false`/absent case is either not an
+  // inbound source or gated upstream — the system's own trigger note covers it.
   if (manifest.inboundRequiresRegisteredActor === true) {
     parts.push(
-      `Who may set off a listener on it is the automation's fire list (see setAccess); activity from anyone else is refused before anything runs, and listed as refused. An automation pinned to 0.12 fires only for activity from people set up on this team. So if someone's activity isn't triggering it, check its fire list, and whether a teammate it names is set up on the team: tell the user that rather than promising it works for everyone.`,
+      `A listener on it fires only for activity from people set up on this team; activity from anyone else — a guest, an outside collaborator, a teammate without an account — is dropped before anything runs. So if a teammate's activity isn't triggering it, they are most likely not set up on the team yet: tell the user that rather than promising it works for everyone.`,
     );
   }
 
