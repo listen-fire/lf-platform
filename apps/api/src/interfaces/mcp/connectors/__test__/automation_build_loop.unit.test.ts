@@ -3,15 +3,19 @@
 // read chapters, and call independent tools together. Pinned because these
 // sentences are what turn a 13-call build into a 4-call one.
 
+import { carriedVersions, currentVersion, untilUpgraded } from '@listen-fire/language-versions';
+
 import { AUTOMATION_INSTRUCTIONS, automationConnectorOptions } from '../automation';
 
 const tools = automationConnectorOptions().tools ?? {};
 const description = (name: string) => tools[name]?.description ?? '';
 
 describe('what upgradeAutomation says of a carried line', () => {
-  it('says what the registry says: 0.12 keeps firing, so nothing invites a second automation beside it', () => {
-    expect(description('upgradeAutomation')).toContain('Until it is upgraded, on 0.12, its listens keep firing');
-    expect(description('upgradeAutomation')).not.toContain('do not fire');
+  it('says what the registry says of each line it carries, and nothing of 0.12, which it dropped', () => {
+    for (const version of carriedVersions().filter((carried) => carried !== currentVersion())) {
+      expect(description('upgradeAutomation')).toContain(`Until it is upgraded, on ${version.key}, ${untilUpgraded(version.release)}.`);
+    }
+    expect(description('upgradeAutomation')).not.toContain('on 0.12,');
   });
 });
 

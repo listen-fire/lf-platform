@@ -628,7 +628,7 @@ export async function projectStoryView(row: {
 }): Promise<StoryViewResult> {
   const movement = { id: row.id, name: row.name };
   const route = routeOf(row.languageVersion ?? LANGUAGE_VERSION);
-  if (route.kind === 'refused') {
+  if (route.kind === 'refused' || route.kind === 'dropped') {
     return { ok: false, reason: 'unreadable', movement, problems: [storyProblemOf(route.diagnostic)] };
   }
   if (route.kind === 'carried') return carriedStoryView({ ...row, movement, pin: route.pin, lane: route.lane });

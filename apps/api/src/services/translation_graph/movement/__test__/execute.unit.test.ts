@@ -388,13 +388,11 @@ describe('runMovementFiring', () => {
     expect(outcome.error).toContain(runRefusal('0.13.0'));
   });
 
-  it("a press of a 0.12 automation runs on 0.12's own run host, on the event in 0.12's own shape, and this release's catalog never reads it", async () => {
+  it('a press of a 0.12 automation, whose engine this platform dropped, is refused before any catalog is assembled, on no engine', async () => {
     const { runCarriedSegment } = jest.requireMock('../carried_run') as { runCarriedSegment: jest.Mock };
-    runCarriedSegment.mockResolvedValueOnce({ movementName: 'intake', writes: [], extractionSites: {}, trace: [] });
-    const pressed = { pipelineInputId: 'trigger:mov-1', adapterType: 'manual', triggerType: 'webhook', payload: { text: 'x' }, onlyZeroTwelveKnows: true };
     const outcome = await runMovementFiring({
       teamId: TEAM,
-      door: { kind: 'manual', event: pressed },
+      door: { kind: 'manual', event: { pipelineInputId: 'trigger:mov-1', adapterType: 'manual', triggerType: 'webhook', payload: { text: 'x' } } },
       triggerId: 'mov-1',
       triggerName: 'Run now',
       movement: shippedMovement({ languageVersion: '0.12.13' }) as never,
@@ -404,8 +402,9 @@ describe('runMovementFiring', () => {
 
     expect(runCatalogSnapshotForTeam).not.toHaveBeenCalled();
     expect(runMovement).not.toHaveBeenCalled();
-    expect(runCarriedSegment).toHaveBeenCalledWith(expect.objectContaining({ pin: '0.12.13', imports: 'shipped', triggerRunId: 'run-1', event: pressed }));
-    expect(outcome.result?.movementName).toBe('intake');
+    expect(runCarriedSegment).not.toHaveBeenCalled();
+    expect(outcome.result).toBeNull();
+    expect(outcome.error).toContain(runRefusal('0.12.13'));
   });
 
   it("a listen's firing of an automation on a version this build does not carry (a leftover trigger row) asks for listen first: refused, recorded failed, run on no engine", async () => {
@@ -602,12 +601,12 @@ describe('resumeMovementFiring', () => {
     expect(resumeMovement).toHaveBeenCalledWith(expect.objectContaining({ languageVersion: '1' }));
   });
 
-  it("a run parked under a carried version is never handed to this release's engines: refused before any catalog is assembled", async () => {
+  it("a run parked under 0.12, whose engine this platform dropped, is never handed to this release's engines: refused before any catalog is assembled", async () => {
     const outcome = await resumeMovementFiring({ ...resumeInput, pinnedLanguageVersion: '0.12.13', answer: true });
 
     expect(runCatalogSnapshotForTeam).not.toHaveBeenCalled();
     expect(resumeMovement).not.toHaveBeenCalled();
-    expect(outcome.error).toContain("never on this release's");
+    expect(outcome.error).toContain(resumeRefusal('0.12.13'));
   });
 
   it('resumes on the engine the run row says parked it', async () => {

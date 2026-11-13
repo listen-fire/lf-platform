@@ -78,7 +78,7 @@ export function renderSummary(summary: DeployCheckSummary): string {
     }
   }
   const legacy = summary.legacyStopped ?? [];
-  if (legacy.length > 0) lines.push(`  On language versions 1 to 4 — no new run starts on them until they are upgraded: ${legacy.length}`);
+  if (legacy.length > 0) lines.push(`  On language versions 1 to 4 or 0.12, which this release does not run — no new run starts on them until they are upgraded: ${legacy.length}`);
   for (const entry of legacy) {
     lines.push(`    - ${entry.name} (${entry.pin}): ${entry.remedy}`);
     if (entry.waitingRuns.length > 0) {

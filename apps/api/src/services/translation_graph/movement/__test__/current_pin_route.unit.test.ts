@@ -159,11 +159,17 @@ describe('routeOf', () => {
 });
 
 describe('routeOf, by the versions this build carries', () => {
-  it("a 0.12 pin is its own version's to check, and this release's checker never reads it", () => {
-    expect(versionOf('0.12.13')?.provides.check.kind).toBe('carried');
-    expect(routeOf('0.12.13')).toEqual({ kind: 'carried', pin: '0.12.13', lane: expect.any(Function) });
-    expect(() => diagnose(BARE_MANUAL, '0.12.13')).toThrow("language version 0.12.13 is checked by its own release against its own catalog");
-    expect({ ...counters }).toEqual({ rust: 0, ts: 0, scan: 0 });
+  it('a 0.12 pin, whose engine this platform dropped, is judged by the frozen checker in its 0.12 dialect, never scanned for the TypeScript engine', () => {
+    expect(versionOf('0.12.13')).toBeUndefined();
+    expect(routeOf('0.12.13')).toEqual({
+      kind: 'dropped',
+      pin: '0.12.13',
+      dialect: '5',
+      diagnostic: expect.objectContaining({ code: expect.stringMatching(/^MOV_LANGUAGE_VERSION_/), message: expect.stringContaining('0.12.13') }),
+    });
+    const { validation, counters: asked } = diagnose(LEGACY_BARE_MANUAL, '0.12.13');
+    expect(validation.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+    expect(asked).toEqual({ rust: 0, ts: 1, scan: 0 });
   });
 });
 

@@ -1,6 +1,4 @@
-import * as lang012 from '@listen-fire/lang-0.12';
 import { LANGUAGE_VERSION } from 'movement-lang';
-import * as currentErrors from 'movement-engine/public/errors';
 
 import {
   carriedVersions,
@@ -18,16 +16,9 @@ import {
   runningOf,
   verifyCarriedVersions,
   versionOf,
-  versionOfLegacyId,
 } from '..';
 
 describe('the language versions this build carries', () => {
-  it('a 0.12 pin belongs to the 0.12 entry, whichever 0.12 release wrote it', () => {
-    for (const pin of ['0.12.0', '0.12.13', '0.12.99']) {
-      expect(versionOf(pin)).toMatchObject({ key: '0.12', release: '0.12.13' });
-    }
-  });
-
   it('the current release pin belongs to the current entry, which checks and runs', () => {
     expect(versionOf(LANGUAGE_VERSION)).toBe(currentVersion());
     expect(currentVersion()).toMatchObject({
@@ -42,38 +33,13 @@ describe('the language versions this build carries', () => {
     expect(isCurrent(LANGUAGE_VERSION)).toBe(true);
   });
 
-  it('0.12 is checked and run by its own packages', async () => {
-    const running = runningOf('0.12.0');
-    expect(running.kind).toBe('carried');
-    if (running.kind !== 'carried') return;
-    const lane = await running.lane();
-    expect(typeof lane.runSegment).toBe('function');
-    expect(runRefusal('0.12.0')).toBeUndefined();
-  });
-
-  it('0.12 checks, runs, resumes and listens by its own lane', async () => {
-    const checking = checkingOf('0.12.0');
-    expect(checking.kind).toBe('carried');
-    if (checking.kind !== 'carried') return;
-    expect(typeof (await checking.lane()).checkSource).toBe('function');
-    const resuming = resumingOf('0.12.0');
-    expect(resuming.kind).toBe('carried');
-    if (resuming.kind !== 'carried') return;
-    expect(typeof (await resuming.lane()).drainDueTimers).toBe('function');
-    expect(listeningOf('0.12.0').kind).toBe('carried');
-    expect(isCurrent('0.12.0')).toBe(false);
-    expect(resumeRefusal('0.12.4')).toBeUndefined();
-    expect(refusalOf('0.12.4', 'listen')).toBeUndefined();
-    expect(providedFlagsFor('0.12.4')).toEqual({ check: true, run: true, resume: true, listen: true });
-  });
-
   it('says what an automation does until it is upgraded, from what its version provides', () => {
-    expect(untilUpgraded('0.12.13')).toBe('its listens keep firing, and a run of it that waits (an ask, a pause) resumes');
+    expect(untilUpgraded(LANGUAGE_VERSION)).toBe('its listens keep firing, and a run of it that waits (an ask, a pause) resumes');
     expect(untilUpgraded('0.14.0')).toBe('its listens do not fire, and a run of it that would wait (an ask, a pause) is stopped');
   });
 
   it('a key no entry carries and a text that is no version belong to none, and are refused in the language\'s own text', () => {
-    for (const pin of ['0.13.0', '0.14.2', '1.0.0', 'latest']) {
+    for (const pin of ['0.12.0', '0.12.13', '0.13.0', '0.14.2', '1.0.0', 'latest']) {
       expect(versionOf(pin)).toBeUndefined();
       expect(runningOf(pin)).toEqual({ kind: 'held' });
       expect(resumingOf(pin)).toEqual({ kind: 'held' });
@@ -85,34 +51,22 @@ describe('the language versions this build carries', () => {
     }
   });
 
-  it("legacy ids share 0.12's key, as they ran beside 0.12 in production, and no release's capabilities serve them", () => {
+  it('legacy ids are carried by no entry, so every capability is held; they keep the key of 0.12, which they ran beside, for imports', () => {
     for (const pin of ['1', '2', '3', '4']) {
-      expect(versionOfLegacyId(pin)).toMatchObject({ key: '0.12' });
-      expect(importKeyOf(pin)).toBe('0.12');
       expect(versionOf(pin)).toBeUndefined();
+      expect(providedFlagsFor(pin)).toEqual({ check: false, run: false, resume: false, listen: false });
+      expect(importKeyOf(pin)).toBe('0.12');
     }
     expect(importKeyOf('0.12.3')).toBe('0.12');
     expect(importKeyOf(LANGUAGE_VERSION)).toBe(currentVersion().key);
     expect(importKeyOf('5')).toBe('5');
-    expect(versionOfLegacyId('0.12.0')).toBeUndefined();
   });
 
-  it('carries each key once, the current one first', () => {
-    const keys = carriedVersions().map((v) => v.key);
-    expect(new Set(keys).size).toBe(keys.length);
-    expect(carriedVersions()[0]).toBe(currentVersion());
+  it('carries the current version alone: 0.12 and the legacy ids are dropped, and 0.15 is carried only once 0.16 is current', () => {
+    expect(carriedVersions()).toEqual([currentVersion()]);
   });
 
   it('every carried package set loads as the release its entry names', async () => {
     await expect(verifyCarriedVersions()).resolves.toBeUndefined();
-    await expect(versionOf('0.12.0')!.load()).resolves.toMatchObject({ LANGUAGE_VERSION: '0.12.13' });
-  });
-
-  it("each version's error classes are its own: one version's throw is not the other's class", () => {
-    expect(lang012.errors.MovementEngineError).not.toBe(currentErrors.MovementEngineError);
-    expect(lang012.errors.RunCancelledSignal).not.toBe(currentErrors.RunCancelledSignal);
-    expect(lang012.errors.RunLeaseLost).not.toBe(currentErrors.RunLeaseLost);
-    const thrownBy012 = new lang012.errors.MovementEngineError('MOVENG_UNSUPPORTED', 'from 0.12');
-    expect(thrownBy012).not.toBeInstanceOf(currentErrors.MovementEngineError);
   });
 });

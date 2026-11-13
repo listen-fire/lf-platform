@@ -1,8 +1,0 @@
-// The legacy-lang comparison tests, typed. The main tsconfig leaves them out because
-// they import legacy-lang's sources, which resolve their own packages; a test that
-// is typed nowhere drifts from the signatures it calls.
-{
-  "extends": "./tsconfig.json",
-  "include": ["__test__/legacy_lang/**/*.ts"],
-  "exclude": ["node_modules"]
-}

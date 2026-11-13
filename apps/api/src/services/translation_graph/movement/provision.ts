@@ -841,7 +841,7 @@ async function provisionListeners(input: {
     input.timer ? input.timer.within(name, run) : run();
 
   const route = routeOf(input.movementRow.languageVersion);
-  if (route.kind === 'refused') {
+  if (route.kind === 'refused' || route.kind === 'dropped') {
     return { ok: false, diagnostics: [route.diagnostic], catalogNotes: teamCatalog.notes };
   }
   if (route.kind === 'carried') {
@@ -1778,7 +1778,7 @@ function isRunnable(row: MovementRow): boolean {
   if (runningOf(row.languageVersion).kind === 'carried') return movementFileFacets(row.source, row.languageVersion).runnableOnDemand;
   const route = routeOf(row.languageVersion);
   // A pin this platform does not run has nothing "Run now" can start.
-  if (route.kind === 'refused' || route.kind === 'carried') return false;
+  if (route.kind === 'refused' || route.kind === 'carried' || route.kind === 'dropped') return false;
   try {
     // A legacy pin's listens do not run under this release.
     if (route.kind === 'legacy') return false;

@@ -99,7 +99,8 @@ export function formatMovementDiagnostics(
  * injected catalog — pure given it; unit-testable without I/O. Which checker
  * judges is the pin's (`routeOf`): an installed pin is the wasm checker's
  * against the run snapshot, a legacy id is parse + TypeScript check + the
- * engine's dry interpretability scan, and any other pin is refused.
+ * engine's dry interpretability scan, a dropped release's is that parse and
+ * check in legacy-lang's dialect of its surface, and any other pin is refused.
  */
 export function diagnoseMovementSource(
   source: string,
@@ -140,7 +141,10 @@ export function diagnoseMovementSource(
     case 'installed':
       return diagnoseInstalled(source, route.pin, options);
     case 'legacy':
-      return diagnoseLegacy(source, route.pin, options);
+      return diagnoseLegacy(source, { dialect: route.pin, scanned: true }, options);
+    // The TypeScript engine never ran a release, so nothing scans for it.
+    case 'dropped':
+      return diagnoseLegacy(source, { dialect: route.dialect, scanned: false }, options);
     case 'carried':
       throw new Error(
         `language version ${route.pin} is checked by its own release against its own catalog (validateMovementForTeam), never against this release's`,
@@ -207,13 +211,15 @@ function diagnoseInstalled(
   return validationOf(program, across !== undefined ? [...importsAcrossVersions(program, pin, across), ...diagnostics] : diagnostics, lines);
 }
 
-/** legacy-lang's verdict: its parse and TypeScript check, then the engine's
- *  dry interpretability scan the save path applies. */
+/** legacy-lang's verdict: its parse and TypeScript check under `dialect`,
+ *  then, when `scanned`, the engine's dry interpretability scan the save path
+ *  applies. */
 function diagnoseLegacy(
   source: string,
-  languageVersion: LanguageVersion,
+  read: { dialect: LanguageVersion; scanned: boolean },
   options: Parameters<typeof diagnoseMovementSource>[1],
 ): MovementValidation {
+  const languageVersion = read.dialect;
   const lines = source.split('\n');
   let program: Program;
   try {
@@ -237,7 +243,7 @@ function diagnoseLegacy(
   // not support — error severity, since the save would refuse with
   // status 'error'. Spans aren't statically available from the scan;
   // the construct names carry the repair signal.
-  for (const construct of listUnsupportedConstructs(source, { languageVersion, ...resolving })) {
+  for (const construct of read.scanned ? listUnsupportedConstructs(source, { languageVersion, ...resolving }) : []) {
     collected.push({
       code: 'MOV_ENGINE_UNSUPPORTED',
       message: `the engine does not support ${construct} yet — remove it to save this file live`,

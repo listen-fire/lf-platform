@@ -16,7 +16,6 @@ import { Router, type RequestHandler } from 'express';
 import { z } from 'zod';
 import { currentPrincipal } from 'principal';
 import { LANGUAGE_VERSION, type LanguageVersion } from 'movement-lang';
-import { isLegacyLanguageVersion } from 'legacy-lang';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { UserId } from '../../../generated/kysely/core/User';
@@ -1250,11 +1249,10 @@ const upgradeMovementSchema = z.object({
 function upgradeMessage(result: Exclude<UpgradeMovementResult, { status: 'not_found' }>): string {
   const to = result.to.version;
   const rewritten = result.upgradedSource !== undefined;
-  // A legacy id still runs on the platform's own engine; a release pin of an
-  // older line is refused by this release until it moves.
-  const meanwhile = isLegacyLanguageVersion(result.from.version)
-    ? 'it keeps running as it does now until then'
-    : refusalOf(result.from.version, 'run') === undefined
+  // A version this platform carries runs where it is; any other is refused by
+  // this release until it moves.
+  const meanwhile =
+    refusalOf(result.from.version, 'run') === undefined
       ? `until then it stays on ${result.from.version}, and runs there when someone starts it; ${untilUpgraded(result.from.version)}`
       : `until then ${to} refuses to run it`;
   // An import is allowed only between files on one version, so the files it

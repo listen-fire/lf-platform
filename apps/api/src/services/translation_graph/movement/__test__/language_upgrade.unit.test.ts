@@ -401,7 +401,7 @@ describe('a pin by the compatibility rule', () => {
     expect(issues.map((e) => e.reason)).toEqual([expect.stringContaining(OLDER_LINE), expect.stringContaining(NEWER_LINE)]);
   });
 
-  it("a 0.12 pin is validated under 0.12 by 0.12's own checker, and its listens keep firing: nothing is unprovisioned", async () => {
+  it('a 0.12 pin, whose engine this platform dropped, is judged as a legacy id is: stopped first, then validated under its own pin and under the installed language', async () => {
     const store = fakeStore({
       movements: [
         movement({ id: 'clean-012', languageVersion: '0.12.13' }),
@@ -413,26 +413,25 @@ describe('a pin by the compatibility rule', () => {
     const summary = await runDeployCheck(store.deps);
 
     expectNoPinMoved();
-    // Validated under its own pin, never under the current version, and the
-    // verdict recorded against that pin.
+    expect(store.unprovisioned).toEqual(['clean-012', 'broken-012']);
     expect(store.validations.map((v) => [v.movement.id, v.languageVersion, v.upgradingFrom])).toEqual([
       ['clean-012', '0.12.13', undefined],
+      ['clean-012', CUR, '0.12.13'],
       ['broken-012', '0.12.4', undefined],
     ]);
     expect(store.validity.get('clean-012')).toBe('0.12.13');
     expect(store.validity.get('broken-012')).toBe('0.12.4');
     expect(summary?.automations.map((a) => [a.name, a.outcome])).toEqual([
-      ['clean-012', 'carried'],
-      ['broken-012', 'carried'],
+      ['clean-012', 'upgradable'],
+      ['broken-012', 'refused'],
     ]);
-    expect(store.unprovisioned).toEqual([]);
-    const details = summary?.automations.map((a) => a.detail) ?? [];
-    expect(details[0]).toContain('checked under 0.12.13, it validates');
-    expect(details[1]).toContain('checked under 0.12.4, it does not validate (line 3: no field Textt)');
-    for (const detail of details) expect(detail).toContain('its listens fire on');
+    expect(summary?.legacyStopped?.map((entry) => [entry.name, entry.pin, entry.remedy])).toEqual([
+      ['clean-012', '0.12.13', `this release starts no new run on version 0.12.13: upgrade it to ${CUR}`],
+      ['broken-012', '0.12.4', `this release starts no new run on version 0.12.4: upgrade it to ${CUR}`],
+    ]);
   });
 
-  it('a 0.12 pin whose check throws keeps listening: a check that cannot run stops nothing', async () => {
+  it('a 0.12 pin whose check throws has already stopped: a check that cannot run leaves nothing firing', async () => {
     const store = fakeStore({ movements: [movement({ id: 'unreadable-012', languageVersion: '0.12.13' })], verdicts: {} });
     const order: string[] = [];
     const unprovision = store.deps.unprovision;
@@ -442,15 +441,13 @@ describe('a pin by the compatibility rule', () => {
     };
     store.deps.validate = async () => {
       order.push('validate');
-      throw new Error('the 0.12 lane failed to load');
+      throw new Error('the frozen parser failed to load');
     };
 
     const summary = await runDeployCheck(store.deps);
 
-    expect(order).toEqual(['validate']);
-    expect(store.unprovisioned).toEqual([]);
-    expect(summary?.automations.map((a) => [a.name, a.outcome])).toEqual([['unreadable-012', 'carried']]);
-    expect(summary?.automations[0]?.detail).toContain('its listens fire on');
+    expect(order).toEqual(['unprovision', 'validate']);
+    expect(summary?.automations.map((a) => [a.name, a.outcome])).toEqual([['unreadable-012', 'unverified']]);
   });
 
   it('keys the release by the installed language and the legacy ids', async () => {
@@ -1264,6 +1261,54 @@ describe('an upgrade from an older release line, over the installed checker', ()
     expect(advanced).toEqual([{ to: CUR, source: upgraded }]);
   });
 
+  it('a 0.12 pin upgrades through the frozen parser: the deploy check reads it in the frozen dialect of 0.12 and offers the rewrite, and the upgrade moves it', async () => {
+    const pinned = [
+      'import { gh as gh_module, mail as mail_module } from adapters',
+      'gh = connect gh_module',
+      'mail = connect mail_module',
+      'function triage(n: <gh-[:Notification]->>) {',
+      '  write mail-[:Messages]-> { To: n.Reason }',
+      '}',
+      '',
+      'listen to gh { events: ["mention", "assign"] } fire triage',
+      '',
+    ].join('\n');
+    const upgraded = pinned
+      .replace('<gh-[:Notification]->>', '<gh-[:Notifications]->>')
+      .replace('listen to gh { events: ["mention", "assign"] } fire triage', 'listen to gh-[n:Notifications WHERE n.Reason IN ["mention", "assign"]]-> fire triage');
+    const row = movement({ id: 'triage', languageVersion: '0.12.13', source: pinned });
+    const store = fakeStore({ movements: [row], verdicts: {} });
+    store.deps.validate = async (validation) => {
+      store.validations.push(validation);
+      return realValidate(validation);
+    };
+
+    const summary = await runDeployCheck(store.deps);
+
+    // The text reads clean under its own pin, as the frozen parser reads it...
+    expect(store.validity.get('triage')).toBe('0.12.13');
+    expect((await realValidate({ movement: row, languageVersion: '0.12.13' })).diagnostics).toEqual([]);
+    // ...and the upgraded text under it is read with 0.12's meaning: the
+    // parameter names a position type there, not a collection.
+    expect((await realValidate({ movement: { ...row, source: upgraded }, languageVersion: '0.12.13' })).diagnostics).toEqual([
+      expect.objectContaining({ code: 'MOV_UNKNOWN_POSITION', severity: 'error', message: expect.stringContaining('it has: Notification') }),
+    ]);
+    expect(store.unprovisioned).toEqual(['triage']);
+    expect(summary?.automations).toEqual([
+      expect.objectContaining({ name: 'triage', outcome: 'warned', from: { version: '0.12.13', name: '0.12.13' } }),
+    ]);
+    expect(store.events.find((e) => e.kind === VALIDATION_ISSUE.id)?.reason).toContain('Upgrading the automation rewrites what the checker can fix');
+    expect(summary?.legacyStopped?.map((entry) => entry.name)).toEqual(['triage']);
+
+    jest.mocked(getMovementRow).mockResolvedValue(row);
+    jest.mocked(assessMovementValidity).mockReturnValue({ status: 'valid', reason: null } as never);
+    const { advanced, advance } = advanceSpy();
+    const result = await upgradeMovement({ teamId: 'team-1', id: 'triage', acknowledge: true, validate: realValidate, advance });
+
+    expect(result).toMatchObject({ status: 'upgraded', from: { version: '0.12.13' }, to: { version: CUR } });
+    expect(advanced).toEqual([{ to: CUR, source: upgraded }]);
+  });
+
   it('holds the pin on `lazy`, which no rewrite replaces, even when every fix is asked for', async () => {
     const pinned = PINNED_0_12.replace('  m = write', '  later = lazy gh-[:Notifications]->\n  m = write');
     jest.mocked(getMovementRow).mockResolvedValue(movement({ id: 'triage', languageVersion: '0.12.13', source: pinned }));
@@ -1497,12 +1542,11 @@ describe('what an upgrade says it changes', () => {
   it('says runs, help and checking move, and that listens start only where they did not fire', () => {
     const changesFrom = (languageVersion: string, currentVersionId: string | null) =>
       upgradeChanges({ movement: { languageVersion, source: 'a', currentVersionId }, rewritten: 'a', to: '0.15.1' });
-    const carried = changesFrom('0.12.13', 'v1');
-    expect(carried.text).toEqual([]);
-    expect(carried.behaviour.join(' ')).toContain('runs already in progress finish under 0.12.13');
-    expect(carried.behaviour.join(' ')).toContain('Help moves with it');
-    // 0.12's listens fire where it is: moving starts nothing.
-    expect(carried.behaviour.join(' ')).not.toContain('listens start firing');
+    const dropped = changesFrom('0.12.13', 'v1');
+    expect(dropped.text).toEqual([]);
+    expect(dropped.behaviour.join(' ')).toContain('Help moves with it');
+    // This platform no longer fires 0.12's listens: moving starts them.
+    expect(dropped.behaviour[0]).toContain('Its listens start firing under 0.15.1');
     expect(changesFrom('0.14.0', 'v1').behaviour[0]).toContain('Its listens start firing under 0.15.1');
     expect(changesFrom('0.14.0', null).behaviour.join(' ')).not.toContain('listens start firing');
   });

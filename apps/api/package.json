@@ -146,7 +146,6 @@
     "@listen-fire/handbook": "0.15.2",
     "@listen-fire/ask": "workspace:*",
     "@listen-fire/judge-llm": "0.12.9",
-    "@listen-fire/lang-0.12": "workspace:*",
     "@listen-fire/language-versions": "workspace:*",
     "@listen-fire/mcp": "0.12.14",
     "@listen-fire/native-valuations": "workspace:*",

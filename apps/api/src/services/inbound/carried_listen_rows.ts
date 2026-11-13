@@ -4,8 +4,7 @@
 
 import { sql } from 'kysely';
 
-import { isLegacyLanguageVersion } from 'legacy-lang';
-import { versionOf, versionOfLegacyId, type CarriedVersion, type ListeningLane } from '@listen-fire/language-versions';
+import { versionOf, type ListeningLane } from '@listen-fire/language-versions';
 
 import type { TriggerId } from '../../generated/kysely/automations/Trigger';
 import type { TeamId } from '../../generated/kysely/core/Team';
@@ -43,16 +42,12 @@ interface Raw {
   cron_last_fired_at: Date | null;
 }
 
-function versionOfPin(pin: string): CarriedVersion | undefined {
-  return isLegacyLanguageVersion(pin) ? versionOfLegacyId(pin) : versionOf(pin);
-}
-
 /** A row that fires as a carried version's listen: a leftover a run keeps fires
  *  nothing, and a row with a listen plan is the current version's. */
 function asCarried(raw: Raw): CarriedListenRow | null {
   const config = (raw.config ?? {}) as Record<string, unknown>;
   if ('listen' in config || config.leftoverForUnfinishedRuns === true) return null;
-  if (versionOfPin(raw.language_version)?.listenRows === undefined) return null;
+  if (versionOf(raw.language_version)?.listenRows === undefined) return null;
   return {
     id: raw.id,
     teamId: raw.team_id as TeamId,
@@ -121,5 +116,5 @@ export async function lockCarriedListenRow(id: TriggerId): Promise<CarriedListen
 
 /** The lane that reads a row: loaded only now, for a row it has to read. */
 export async function laneOfRow(row: Pick<CarriedListenRow, 'pin'>): Promise<ListeningLane | undefined> {
-  return versionOfPin(row.pin)?.listenRows?.();
+  return versionOf(row.pin)?.listenRows?.();
 }

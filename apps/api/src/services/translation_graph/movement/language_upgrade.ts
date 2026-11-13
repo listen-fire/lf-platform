@@ -18,7 +18,10 @@
 // newer release is `refused` with the rule's text, and `upgradeMovement` is
 // how an older one moves. A legacy id is validated under its own pin, which must pass (the
 // release preserves every legacy version's behaviour, so a failure there is a
-// bug in that preservation), then under the installed language. Clean there — no errors, and no diagnostic the
+// bug in that preservation), then under the installed language. A pin of the
+// release this platform dropped (0.12) is judged the same way, its own pin read
+// by legacy-lang's frozen parser in its dialect of that surface, after its
+// listens are stopped. Clean there — no errors, and no diagnostic the
 // checker raised because the check is a move up (one marking a construct whose
 // meaning changed) — makes the movement `upgradable`: offered the upgrade,
 // pin untouched. Any other warning (a cost note, say) reads the same under
@@ -108,6 +111,7 @@ import { withTeamContext } from './firing_context';
 import { currentContext } from '../../context';
 import { importGroupOf } from './imports_across_versions';
 import { holdDoorsAlone } from '../../movement_engine/run_host_deliveries';
+import { readOnlyByFrozenParser } from './language_route';
 import { DoorsTryAgain } from '../../movement_engine/doors_hold';
 import { notifyWork } from '../../work/drain';
 import { bringUpListensLater } from './listens_up';
@@ -369,9 +373,10 @@ export interface DeployCheckSummary {
   ranAt: string;
   counts: Record<DeployCheckOutcome, number>;
   automations: DeployCheckEntry[];
-  /** Every automation on a legacy version: this release starts no new run on
-   *  them. Each names the runs paused on a question, a callback or a reply,
-   *  which it cannot continue. */
+  /** Every automation on a version this release reads only through the
+   *  frozen parser (a legacy id, or 0.12): it starts no new run on them. Each
+   *  names the runs paused on a question, a callback or a reply, which it
+   *  cannot continue. */
   legacyStopped?: Array<{ name: string; pin: LanguageVersion; movementId: string; waitingRuns: string[]; remedy: string }>;
 }
 
@@ -460,11 +465,11 @@ export async function runDeployCheck(deps: DeployCheckDeps): Promise<DeployCheck
     entries.push(entry);
   }
 
-  const legacy = movements.filter((movement) => isLegacyLanguageVersion(movement.languageVersion));
+  const legacy = movements.filter((movement) => readOnlyByFrozenParser(movement.languageVersion));
   const waiting = legacy.length > 0 && deps.runsWaitingOnKeys !== undefined ? await deps.runsWaitingOnKeys(legacy.map((movement) => movement.id)) : new Map<string, ReadonlyArray<{ id: string }>>();
   const legacyStopped = legacy.map((movement) => {
     const waitingRuns = (waiting.get(movement.id) ?? []).map((run) => run.id);
-    logger.warn('[DeployCheck] an automation on a legacy version starts no new run until it is upgraded', {
+    logger.warn('[DeployCheck] an automation on a version this release does not run starts no new run until it is upgraded', {
       movementId: movement.id,
       teamId: movement.teamId,
       languageVersion: movement.languageVersion,
@@ -523,9 +528,13 @@ async function checkOne(input: {
   const releaseLanguage = deps.release.language;
   const pin = movement.languageVersion;
 
-  if (!isLegacyLanguageVersion(pin)) return checkReleasePin({ deps, movement, current, at });
+  if (!readOnlyByFrozenParser(pin)) return checkReleasePin({ deps, movement, current, at });
+  // A release this platform dropped stops first, as any release pin whose
+  // listens it does not fire: a check that fails cannot leave it firing.
+  if (!isLegacyLanguageVersion(pin)) await deps.unprovision(movement);
 
-  // (a) Under its own pin — what it runs as today. It must pass.
+  // (a) Under its own pin, as legacy-lang's frozen parser reads it. It must
+  // pass.
   const underPin = await deps.validate(validationUnder(movement, pin));
   await deps.recordValidity({ movement, validation: underPin, checkedAgainst: pin });
   const pinErrors = errorsOf(underPin.diagnostics);

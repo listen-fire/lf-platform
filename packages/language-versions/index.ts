@@ -45,7 +45,7 @@ import {
   type LanguageVersion,
 } from 'movement-lang';
 
-import type { StoryIR, StoryProblem, StoryValidityStatus } from 'legacy-lang';
+import { isLegacyLanguageVersion, type StoryIR, type StoryProblem, type StoryValidityStatus } from 'legacy-lang';
 import type { AdapterEventPhraseVocabulary, BrandIcon } from 'movement-engine/public/adapter';
 
 import type { ListeningLane, ModulePlatform, ResumingLane, RunningLane } from './running';
@@ -323,12 +323,6 @@ export interface CarriedVersion {
   readonly key: string;
   /** The exact release whose packages this build carries for the key. */
   readonly release: LanguageVersion;
-  /** The legacy ids (from before the language was versioned by its release)
-   *  that ran beside this release in production, so they share its key: an
-   *  import between them and this release's programs is on one version.
-   *  They are checked and run by the legacy packages, never by this entry's
-   *  capabilities. */
-  readonly legacyIds?: readonly LanguageVersion[];
   /** Loads the version's package set (lazily: an older line's wasm and engine
    *  are instantiated only when something asks for them). */
   load(): Promise<VersionPackages>;
@@ -360,25 +354,7 @@ const CURRENT_VERSION: CarriedVersion = {
   provides: { check: CURRENT, help: CURRENT, run: CURRENT, resume: CURRENT, listen: CURRENT },
 };
 
-const CARRIED: readonly CarriedVersion[] = [
-  CURRENT_VERSION,
-  // Carried for the automations pinned to 0.12 and the runs 0.12 parked, so
-  // they keep their own release's meaning after the platform moved on.
-  {
-    key: '0.12',
-    release: '0.12.13',
-    legacyIds: ['1', '2', '3', '4'],
-    load: () => import('@listen-fire/lang-0.12'),
-    provides: {
-      check: { kind: 'carried', lane: () => import('@listen-fire/lang-0.12') },
-      help: { kind: 'carried', lane: () => import('@listen-fire/lang-0.12') },
-      run: { kind: 'carried', lane: () => import('@listen-fire/lang-0.12') },
-      resume: { kind: 'carried', lane: () => import('@listen-fire/lang-0.12') },
-      listen: { kind: 'carried', lane: () => import('@listen-fire/lang-0.12') },
-    },
-    listenRows: () => import('@listen-fire/lang-0.12'),
-  },
-];
+const CARRIED: readonly CarriedVersion[] = [CURRENT_VERSION];
 
 let carriedByKey: ReadonlyMap<string, CarriedVersion> | undefined;
 
@@ -398,18 +374,6 @@ function byKey(): ReadonlyMap<string, CarriedVersion> {
   return entries;
 }
 
-const BY_LEGACY_ID: ReadonlyMap<string, CarriedVersion> = (() => {
-  const byId = new Map<string, CarriedVersion>();
-  for (const version of CARRIED) {
-    for (const id of version.legacyIds ?? []) {
-      if (compatibilityKey(id) !== undefined) throw new Error(`the language version registry names release ${id} as a legacy id`);
-      if (byId.has(id)) throw new Error(`the language version registry files legacy id ${id} twice`);
-      byId.set(id, version);
-    }
-  }
-  return byId;
-})();
-
 /** Every version this build carries, the current one first. */
 export function carriedVersions(): readonly CarriedVersion[] {
   return CARRIED;
@@ -428,18 +392,15 @@ export function versionOf(pin: LanguageVersion): CarriedVersion | undefined {
   return key === undefined ? undefined : byKey().get(key);
 }
 
-/** The carried version whose key a legacy id shares (the release it ran
- *  beside in production); undefined for anything else. */
-export function versionOfLegacyId(pin: LanguageVersion): CarriedVersion | undefined {
-  return BY_LEGACY_ID.get(pin);
-}
+const LEGACY_IDS_KEY = '0.12';
 
 /** The key two pins are compared by when one program imports another: a
- *  release's compatibility key, the key of the release a legacy id ran
- *  beside, and the text itself for anything else (so it matches only
- *  itself). */
+ *  release's compatibility key, and the text itself for anything else (so it
+ *  matches only itself), except the legacy ids. They ran beside 0.12 in
+ *  production, and imports between them and 0.12's programs were allowed, so
+ *  they keep 0.12's key: an upgrade still moves such a group together. */
 export function importKeyOf(pin: LanguageVersion): string {
-  return versionOfLegacyId(pin)?.key ?? compatibilityKey(pin) ?? pin;
+  return isLegacyLanguageVersion(pin) ? LEGACY_IDS_KEY : (compatibilityKey(pin) ?? pin);
 }
 
 /** Whether `pin` is on the current version: the platform's own core reads
@@ -461,10 +422,10 @@ export function checkingOf(pin: LanguageVersion): CheckCapability {
   return providedFor(pin).check;
 }
 
-/** How `pin` is taught. A legacy id was taught from the release it ran beside,
- *  and an upgrade is what moves it on. */
+/** How `pin` is taught; undefined for a pin no entry carries (a legacy id
+ *  among them: an upgrade is what moves it on). */
 export function helpingOf(pin: LanguageVersion): { release: LanguageVersion; help: HelpCapability } | undefined {
-  const version = versionOf(pin) ?? versionOfLegacyId(pin);
+  const version = versionOf(pin);
   return version === undefined ? undefined : { release: version.release, help: version.provides.help };
 }
 
@@ -473,8 +434,7 @@ export function runningOf(pin: LanguageVersion): RunCapability {
   return providedFor(pin).run;
 }
 
-/** How a parked run of `pin` resumes. A run a legacy id pinned resumes on the
- *  legacy packages, and is not asked here. */
+/** How a parked run of `pin` resumes. */
 export function resumingOf(pin: LanguageVersion): ResumeCapability {
   return providedFor(pin).resume;
 }

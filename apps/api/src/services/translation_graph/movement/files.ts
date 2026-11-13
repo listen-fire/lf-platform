@@ -28,7 +28,7 @@ import { fileExports, referencedFileImports } from 'legacy-lang';
 
 import { isCurrent } from '@listen-fire/language-versions';
 
-import { routeOf } from './language_route';
+import { isLegacyLanguageVersion } from 'legacy-lang';
 import { getMovementRowByName, listMovementRows, type MovementValidityStatus } from './store';
 
 /** Defensive bound on the import closure — no sane library graph nests
@@ -147,7 +147,7 @@ export function manualListenerMovements(program: Program, options: { languageVer
   const constructionAdapters = new Map<string, string>();
   // Past the legacy ids `manual` is the run host's own unit: `listen to manual
   // fire backfill` needs no construction, unless the file binds the name itself.
-  const hostUnits = routeOf(options.languageVersion ?? LANGUAGE_VERSION).kind !== 'legacy' ? RUN_HOST_UNITS : [];
+  const hostUnits = !isLegacyLanguageVersion(options.languageVersion ?? LANGUAGE_VERSION) ? RUN_HOST_UNITS : [];
   for (const unit of hostUnits) constructionAdapters.set(unit, unit);
   for (const statement of program.statements) {
     if (statement.kind === 'import') {

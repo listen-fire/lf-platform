@@ -149,6 +149,7 @@ async function answerAt<T>(request: EditorRequest, ask: Ask<T>, askCarried: AskC
   switch (route.kind) {
     case 'legacy':
       return { kind: 'legacy-presentation', pin };
+    case 'dropped':
     case 'refused':
       // The binding's own empty answer: it never asks the artifact for a pin
       // this release does not read, so the empty snapshot is never read.
@@ -215,6 +216,7 @@ export async function agentCompletionsAt(input: {
       const { items } = getMovementCompletions(input.source, input.offset, snapshot, { languageVersion: input.pin });
       return { completions: items.map(itemOf) };
     }
+    case 'dropped':
     case 'refused':
       return {
         completions: [],

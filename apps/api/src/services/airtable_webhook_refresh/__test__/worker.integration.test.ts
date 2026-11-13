@@ -67,7 +67,7 @@ afterAll(async () => {
   await cleanupTeam(teamId);
 });
 
-it("refreshes a listens' subscription as its edge, and a 0.12 webhook through 0.12's own module", async () => {
+it("refreshes a listens' subscription as its edge, and leaves a 0.12 webhook, which no carried version holds, to the subscription retry", async () => {
   await subscription({ externalId: 'ach-edge', subscriptions: { digest: 'd1', edge: 'Changes', filter: FILTER, constructionArgs: { base: 'app1' } } });
   await subscription({ externalId: 'ach-legacy', subscriptions: ['record.created'] });
 
@@ -77,6 +77,5 @@ it("refreshes a listens' subscription as its edge, and a 0.12 webhook through 0.
   expect(refreshEventSubscription).toHaveBeenCalledTimes(1);
   expect(refreshEventSubscription).toHaveBeenCalledWith({ edge: 'Changes', filter: FILTER, externalId: 'ach-edge' });
   expect(await windowOf('ach-edge')).toEqual(NOW);
-  expect(refreshEventSubscription).toHaveBeenCalledTimes(1);
-  expect(await windowOf('ach-legacy')).toEqual(NOW);
+  expect(await windowOf('ach-legacy')).not.toEqual(NOW);
 });

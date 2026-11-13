@@ -25,8 +25,7 @@ import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { MovementRow } from './store';
 
-import { isCurrent, versionOf, versionOfLegacyId } from '@listen-fire/language-versions';
-import { isLegacyLanguageVersion } from 'legacy-lang';
+import { isCurrent, versionOf } from '@listen-fire/language-versions';
 
 import { getAutomationsQb } from '../../../lib/kysely';
 import { listenConfigSchema, type SavedListen } from '../../inbound/listen_door';
@@ -50,7 +49,7 @@ export async function carryingFromShipped(row: Pick<MovementRow, 'currentVersion
   const shipped = await loadPinnedVersion(row.currentVersionId);
   if (shipped === null || isCurrent(shipped.languageVersion)) return undefined;
   const pin: LanguageVersion = shipped.languageVersion;
-  const load = (isLegacyLanguageVersion(pin) ? versionOfLegacyId(pin) : versionOf(pin))?.listenRows;
+  const load = versionOf(pin)?.listenRows;
   if (load === undefined) return undefined;
   const lane = await load();
   let statements: readonly CarriedFileListener[] | null = null;

@@ -1,7 +1,8 @@
 // What holds an automation where it is at an upgrade, whatever its diagnostics
 // say, over rows production's own code wrote (`movement_engine/__test__/fixtures`):
-// a run waiting on a callback or an await under its version, and an edit waiting
-// for confirmation. A run waiting on a timer holds nothing.
+// a run waiting on a callback or an await under a version this release does not
+// run, and an edit waiting for confirmation. A run waiting on a timer holds
+// nothing.
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -83,13 +84,14 @@ describe('an upgrade held where it is', () => {
     await cleanupTeam(TEAM);
   });
 
-  it.each(['callback', 'ask'])('a run parked on a %s refuses by name, with the run', async (fixture) => {
+  it.each(['callback', 'ask'])('a 0.12 run parked on a %s refuses by name, with the run, and the only remedy there is', async (fixture) => {
     const { movementId, runId, name } = await load(fixture);
     const result = await upgrade(movementId);
     expect(result).toMatchObject({ status: 'blocked' });
     if (result.status !== 'blocked') return;
     expect(result.detail).toContain(name);
     expect(result.detail).toContain(runId);
+    expect(result.detail).toContain('which it cannot resume: cancel it, then upgrade the automation');
     expect((await getMovementRow({ teamId: TEAM, id: movementId }))?.languageVersion).toBe('0.12.8');
   });
 
@@ -100,11 +102,11 @@ describe('an upgrade held where it is', () => {
     if (result.status !== 'blocked') return;
     expect(result.detail).toContain(name);
     expect(result.detail).toContain(runId);
-    expect(result.detail).toContain('which this release cannot resume: cancel it, then upgrade the automation');
+    expect(result.detail).toContain('which it cannot resume: cancel it, then upgrade the automation');
     expect(result.detail).not.toContain('until they finish');
   });
 
-  it('a run parked on a timer holds nothing: it finishes on its own version', async () => {
+  it('a run parked on a timer holds nothing', async () => {
     const { movementId } = await load('timer');
     expect(await upgrade(movementId)).toMatchObject({ status: 'upgraded' });
   });
@@ -122,55 +124,6 @@ describe('an upgrade held where it is', () => {
     expect(result.detail).toContain(name);
     expect(result.detail).toContain('nothing moved');
     expect((await getMovementRow({ teamId: TEAM, id: importer }))?.languageVersion).toBe('0.12.8');
-  });
-
-  it('a 0.12 run on a timer finishes on its own pin through a real upgrade, ending in its write', async () => {
-    const { movementId, runId, triggerId } = await load('timer');
-    expect(await upgradeMovement({ teamId: TEAM, id: movementId, acknowledge: true })).toMatchObject({ status: 'upgraded' });
-    expect((await getMovementRow({ teamId: TEAM, id: movementId }))?.languageVersion).toBe(LANGUAGE_VERSION);
-    expect(await runOf(runId)).toMatchObject({ status: 'parked', failure_reason: null });
-    expect(await triggerOf(triggerId)).toBeDefined();
-    await timerWakes(runId);
-    expect(await runOf(runId)).toMatchObject({ status: 'success' });
-    expect(await written()).toEqual(['written before the park: timer']);
-  });
-
-  it('an upgrade that retires the trigger row a timer run names keeps it as a leftover that fires nothing, and the run finishes', async () => {
-    const { movementId, runId, triggerId } = await load('timer');
-    // A listen the new plan cannot match to any listen of the new text.
-    await getAutomationsQb(['trigger']).updateTable('trigger').set({ kind: 'listen_the_new_text_has_no_match_for', run_mode: 'live', config: JSON.stringify({ overrideActingUserToCreator: true }) as never }).where('id', '=', triggerId as never).execute();
-    expect(await upgradeMovement({ teamId: TEAM, id: movementId, acknowledge: true })).toMatchObject({ status: 'upgraded' });
-    expect(await runOf(runId)).toMatchObject({ status: 'parked', failure_reason: null });
-
-    const listeners = await listDerivedTriggerRows(movementId);
-    expect(listeners.map((row) => row.id)).not.toContain(triggerId);
-    expect(listeners).toHaveLength(1);
-    expect((await savedListens({ teamId: TEAM, movementId: movementId as never })).map((listen) => listen.triggerId)).toEqual([listeners[0]?.id]);
-    // Who a resumed run acts as is read from the row's config, so that stays.
-    expect(await triggerOf(triggerId)).toMatchObject({ run_mode: 'off', config: { leftoverForUnfinishedRuns: true, overrideActingUserToCreator: true } });
-
-    await timerWakes(runId);
-    expect(await runOf(runId)).toMatchObject({ status: 'success' });
-    expect(await written()).toEqual(['written before the park: timer']);
-  });
-
-  it('a later save that renames the movement leaves the waiting run what it fired; the leftover goes once the run has finished', async () => {
-    const { movementId, runId, triggerId } = await load('timer');
-    expect(await upgradeMovement({ teamId: TEAM, id: movementId, acknowledge: true })).toMatchObject({ status: 'upgraded' });
-    const upgraded = await getMovementRow({ teamId: TEAM, id: movementId });
-    if (upgraded === null) throw new Error('test: no movement');
-    const renamed = upgraded.source.replaceAll('nap', 'doze');
-    expect(await saveMovement({ audience: { for: 'run' }, teamId: TEAM, id: movementId, source: renamed })).toMatchObject({ ok: true });
-    expect(await runOf(runId)).toMatchObject({ status: 'parked', failure_reason: null });
-    expect(await triggerOf(triggerId)).toMatchObject({ run_mode: 'off', config: { leftoverForUnfinishedRuns: true } });
-    expect((await listDerivedTriggerRows(movementId)).map((row) => row.firedMovementName)).toEqual(['doze']);
-
-    await timerWakes(runId);
-    expect(await runOf(runId)).toMatchObject({ status: 'success' });
-    expect(await written()).toEqual(['written before the park: timer']);
-
-    expect(await saveMovement({ audience: { for: 'run' }, teamId: TEAM, id: movementId, source: renamed.replaceAll('doze', 'rest') })).toMatchObject({ ok: true });
-    expect(await triggerOf(triggerId)).toBeUndefined();
   });
 
   it('a legacy 4 automation moves straight to this release, its timer run finishing on the legacy engine', async () => {

@@ -16,8 +16,7 @@ import { sql } from 'kysely';
 import { z } from 'zod';
 import { logger } from 'movement-engine/public/log';
 import type { DeliverySource, NewWorkRow } from 'movement-engine/public/run-host';
-import { isLegacyLanguageVersion } from 'legacy-lang';
-import { carriedVersions, versionOf, versionOfLegacyId, type CarriedEvent, type CarriedKeptDelivery, type CarriedVersion, type ListenRow, type ListeningLane } from '@listen-fire/language-versions';
+import { carriedVersions, versionOf, type CarriedEvent, type CarriedKeptDelivery, type CarriedVersion, type ListenRow, type ListeningLane } from '@listen-fire/language-versions';
 
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { WorkContext, WorkHandler } from '../work/kinds';
@@ -68,12 +67,6 @@ const readDeliveryRowSchema = z.object({
 });
 type ReadDeliveryRow = z.infer<typeof readDeliveryRowSchema>;
 
-/** The version a trigger row's pin reads under: a legacy id's rows were written
- *  by the release it ran beside, and refused by name when they match. */
-function versionOfRow(pin: string): CarriedVersion | undefined {
-  return isLegacyLanguageVersion(pin) ? versionOfLegacyId(pin) : versionOf(pin);
-}
-
 /** The kinds a listen on this origin's module may be filed under. */
 function kindsOf(origin: Pick<DeliveryOrigin, 'adapterType' | 'providerKey'>): string[] {
   return [...new Set([origin.adapterType, ...(origin.providerKey !== undefined ? [origin.providerKey] : []), ...siblingKindsForAdapter(origin.adapterType)])];
@@ -118,7 +111,7 @@ async function versionsConcerned(db: StoreDb, origin: DeliveryOrigin, subscripti
     .execute();
   const listening = new Set(
     pins.flatMap((row) => {
-      const version = versionOfRow(row.language_version);
+      const version = versionOf(row.language_version);
       return version !== undefined && version.provides.listen.kind === 'carried' ? [version.key] : [];
     }),
   );
@@ -204,7 +197,7 @@ export async function carriedListensOn(origin: Pick<DeliveryOrigin, 'teamId' | '
   const rows = await shippedListenRows(origin);
   const live = await Promise.all(
     rows.map(async (row) => {
-      const version = listening.find((candidate) => candidate.key === versionOfRow(row.pin)?.key);
+      const version = listening.find((candidate) => candidate.key === versionOf(row.pin)?.key);
       if (version?.listenRows === undefined) return [];
       return (await version.listenRows()).isListenRow(row) ? [{ ...row, lane: version.listenRows }] : [];
     }),
@@ -237,7 +230,7 @@ async function shippedListenRows(origin: Pick<DeliveryOrigin, 'teamId' | 'adapte
  *  whose firing is refused by name. */
 async function listenRowsFor(row: ReadDeliveryRow, version: CarriedVersion): Promise<ListenRow[]> {
   if (version.provides.listen.kind !== 'carried') return [];
-  return (await shippedListenRows(row)).filter((listen) => versionOfRow(listen.pin)?.key === version.key);
+  return (await shippedListenRows(row)).filter((listen) => versionOf(listen.pin)?.key === version.key);
 }
 
 async function keptDeliveryOf(row: ReadDeliveryRow): Promise<CarriedKeptDelivery | null> {

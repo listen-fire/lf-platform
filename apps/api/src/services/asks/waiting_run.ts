@@ -1,12 +1,13 @@
-// Whether the run parked on an ask is on a legacy language version, which this
-// release cannot resume: its answer can go nowhere.
+// Whether the run parked on an ask is on a language version this release reads
+// only through the frozen parser (a legacy id, or 0.12), which it cannot
+// resume: its answer can go nowhere.
 
 import { ASK_ADAPTER_TYPE } from '@listen-fire/ask';
-import { isLegacyLanguageVersion } from 'legacy-lang';
 
 import type { AskId } from '../../generated/kysely/asks/Ask';
 
 import { getAutomationsQb } from '../../lib/kysely';
+import { readOnlyByFrozenParser } from '../translation_graph/movement/language_route';
 
 export async function waitingRunIsLegacy(askId: AskId): Promise<boolean> {
   const row = await getAutomationsQb(['adapter_await', 'trigger_run', 'movement_version'])
@@ -17,5 +18,5 @@ export async function waitingRunIsLegacy(askId: AskId): Promise<boolean> {
     .where('adapter_await.correlation_key', '=', askId as unknown as string)
     .select('movement_version.language_version')
     .executeTakeFirst();
-  return row !== undefined && isLegacyLanguageVersion(row.language_version);
+  return row !== undefined && readOnlyByFrozenParser(row.language_version);
 }

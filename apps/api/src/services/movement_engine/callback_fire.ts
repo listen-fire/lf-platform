@@ -16,7 +16,7 @@
 
 import { z } from 'zod';
 import { logger } from 'movement-engine/public/log';
-import { isLegacyLanguageVersion } from 'legacy-lang';
+import { readOnlyByFrozenParser } from '../translation_graph/movement/language_route';
 import { correlatedAwaitsLane, type CarriedBodyOutcome, type CarriedBodyRun, type ResumingLane } from '@listen-fire/language-versions';
 
 import type { WorkHandler } from '../work/kinds';
@@ -109,10 +109,11 @@ export async function fireCallback(input: {
 }): Promise<CallbackFireOutcome> {
   const existing = await getDoorCallback(input.id);
   if (existing === null) return { kind: 'not_found' };
-  // A call that is over answers as over, below: `held` is for a run that could
-  // still be stopped.
-  const open = existing.status === 'live' && (existing.expiresAt === null || existing.expiresAt.getTime() > Date.now());
-  if (open && (await runIsOnLegacyPin(existing.runId))) return { kind: 'held', callback: existing };
+  // A call that is over answers as over: `held` is for a run that could still
+  // be stopped.
+  if (existing.status !== 'live') return { kind: 'closed', callback: existing };
+  if (existing.expiresAt !== null && existing.expiresAt.getTime() <= Date.now()) return { kind: 'expired', callback: existing };
+  if (await runIsOnDroppedPin(existing.runId)) return { kind: 'held', callback: existing };
 
   const bound = bindSuppliedValue(existing.params, input.values, input.suppliedValue);
   if (!bound.ok) return { kind: 'mismatch', callback: existing, message: bound.message };
@@ -170,14 +171,16 @@ export async function fireCallback(input: {
   }
 }
 
-async function runIsOnLegacyPin(runId: string): Promise<boolean> {
+/** Whether the run is on a version this release reads only through the frozen
+ *  parser (a legacy id, or 0.12), which it cannot resume. */
+async function runIsOnDroppedPin(runId: string): Promise<boolean> {
   const version = await getAutomationsQb(['trigger_run', 'movement_version'])
     .selectFrom('trigger_run')
     .innerJoin('movement_version', 'movement_version.id', 'trigger_run.movement_version_id')
     .where('trigger_run.id', '=', triggerRunIdOf(runId))
     .select('movement_version.language_version')
     .executeTakeFirst();
-  return version !== undefined && isLegacyLanguageVersion(version.language_version);
+  return version !== undefined && readOnlyByFrozenParser(version.language_version);
 }
 
 /** The run's lease for the body to run under now, or null when the body

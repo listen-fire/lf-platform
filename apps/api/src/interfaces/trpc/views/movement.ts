@@ -331,6 +331,10 @@ function languageRouteOf(pin: LanguageVersion): MovementLanguageRoute {
     case 'installed':
     case 'refused':
       return { kind: route.kind };
+    // The browser presents nothing of it, and its lint is the server's, which
+    // answers with the frozen parser's verdict.
+    case 'dropped':
+      return { kind: 'refused' };
     case 'carried': {
       const { run, resume, listen } = providedFlagsFor(pin);
       return { kind: route.kind, provides: { run, resume, listen } };

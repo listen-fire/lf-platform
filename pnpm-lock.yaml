@@ -232,9 +232,6 @@ importers:
       '@listen-fire/kg':
         specifier: workspace:*
         version: link:../../modules/kg
-      '@listen-fire/lang-0.12':
-        specifier: workspace:*
-        version: link:../../packages/lang-0.12
       '@listen-fire/language-versions':
         specifier: workspace:*
         version: link:../../packages/language-versions
@@ -1097,120 +1094,11 @@ importers:
         specifier: 5.5.4
         version: 5.5.4
 
-  packages/lang-0.12:
-    dependencies:
-      '@listen-fire/affinity':
-        specifier: 0.12.7
-        version: 0.12.7(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/airtable':
-        specifier: 0.12.7
-        version: 0.12.7(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/anthropic':
-        specifier: 0.12.7
-        version: 0.12.7(@listen-fire/engine@0.12.13)
-      '@listen-fire/attio':
-        specifier: 0.12.7
-        version: 0.12.7(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/dealroom':
-        specifier: 0.12.7
-        version: 0.12.7(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/dropbox':
-        specifier: 0.12.6
-        version: 0.12.6(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/email':
-        specifier: 0.12.6
-        version: 0.12.6(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/engine':
-        specifier: 0.12.13
-        version: 0.12.13
-      '@listen-fire/engine-contracts':
-        specifier: 0.12.13
-        version: 0.12.13
-      '@listen-fire/evertrace':
-        specifier: 0.12.7
-        version: 0.12.7(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/gmail':
-        specifier: 0.12.10
-        version: 0.12.10(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/google-drive':
-        specifier: 0.12.7
-        version: 0.12.7(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/google-sheets':
-        specifier: 0.12.6
-        version: 0.12.6(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/granola':
-        specifier: 0.12.7
-        version: 0.12.7(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/handbook':
-        specifier: 0.12.8
-        version: 0.12.8(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)
-      '@listen-fire/judge-llm':
-        specifier: 0.12.7
-        version: 0.12.7(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/mcp':
-        specifier: 0.12.11
-        version: 0.12.11(@cfworker/json-schema@4.1.1)(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)(zod@4.6.7)
-      '@listen-fire/module-kit':
-        specifier: 0.12.10
-        version: 0.12.10(@listen-fire/engine-contracts@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/module-runtime':
-        specifier: 0.12.8
-        version: 0.12.8(@listen-fire/engine-contracts@0.12.13)
-      '@listen-fire/movement-lang':
-        specifier: 0.12.13
-        version: 0.12.13
-      '@listen-fire/pdf':
-        specifier: 0.12.6
-        version: 0.12.6(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/postgres-limiter':
-        specifier: 0.12.7
-        version: 0.12.7(@listen-fire/engine@0.12.13)
-      '@listen-fire/slack':
-        specifier: 0.12.7
-        version: 0.12.7(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/telegram':
-        specifier: 0.12.6
-        version: 0.12.6(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/wake-cloud-tasks':
-        specifier: 0.12.7
-        version: 0.12.7(@listen-fire/engine-contracts@0.12.13)
-      '@listen-fire/web':
-        specifier: 0.12.7
-        version: 0.12.7(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/whatsapp':
-        specifier: 0.12.8
-        version: 0.12.8(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      zod:
-        specifier: 4.6.7
-        version: 4.6.7
-    devDependencies:
-      '@listen-fire/fake-channels':
-        specifier: 0.12.8
-        version: 0.12.8(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)
-      '@types/jest':
-        specifier: 29.5.14
-        version: 29.5.14
-      '@types/node':
-        specifier: 20.16.5
-        version: 20.16.5
-      jest:
-        specifier: 29.7.0
-        version: 29.7.0(@types/node@20.16.5)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@swc/core@1.3.101(@swc/helpers@0.5.15))(@types/node@20.16.5)(typescript@5.5.4))
-      ts-jest:
-        specifier: 29.2.5
-        version: 29.2.5(@babel/core@7.24.5)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.24.5))(esbuild@0.23.1)(jest@29.7.0(@types/node@20.16.5)(babel-plugin-macros@3.1.0)(ts-node@10.9.2(@swc/core@1.3.101(@swc/helpers@0.5.15))(@types/node@20.16.5)(typescript@5.5.4)))(typescript@5.5.4)
-      typescript:
-        specifier: 5.5.4
-        version: 5.5.4
-
   packages/language-versions:
     dependencies:
       '@listen-fire/kg':
         specifier: workspace:*
         version: link:../../modules/kg
-      '@listen-fire/lang-0.12':
-        specifier: workspace:*
-        version: link:../lang-0.12
       '@listen-fire/slack':
         specifier: 0.13.5
         version: 0.13.5(@listen-fire/engine-contracts@0.15.3)(@listen-fire/engine@0.15.3)(@listen-fire/movement-lang@0.15.3)(tsx@4.21.0)
@@ -3203,14 +3091,6 @@ packages:
   '@lezer/lr@1.4.10':
     resolution: {integrity: sha512-rnCpTIBafOx4mRp43xOxDJbFipJm/c0cia/V5TiGlhmMa+wsSdoGmUN3w5Bqrks/09Q/D4tNAmWaT8p6NRi77A==}
 
-  '@listen-fire/affinity@0.12.7':
-    resolution: {integrity: sha512-iUThqUvNIuY4KMA3/YihWTsQaDOr2dmMkR81z6p2FMnPqrJNltJa1TjCb1LmaLS3AwNAYec/EFBNlf8lxQNkwA==}
-    engines: {node: '>=22.23.4 <23'}
-    peerDependencies:
-      '@listen-fire/engine': '>=0.12.0 <1.0.0'
-      '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
-      '@listen-fire/movement-lang': '>=0.12.0 <1.0.0'
-
   '@listen-fire/affinity@0.14.2':
     resolution: {integrity: sha512-Yfxn8GnZC9jvWG1LKuoZz7iVyZjastECGRMDbKdblynKevzFr9wA9yRQ5EIqv0de1rXDCawiELQtLxfOj0FLow==}
     engines: {node: '>=22.23.4 <23'}
@@ -3218,14 +3098,6 @@ packages:
       '@listen-fire/engine': '>=0.13.0 <1.0.0'
       '@listen-fire/engine-contracts': '>=0.13.0 <1.0.0'
       '@listen-fire/movement-lang': '>=0.13.0 <1.0.0'
-
-  '@listen-fire/airtable@0.12.7':
-    resolution: {integrity: sha512-zBXRkM5A78B1wR83hH1MoSWNzrQfQPuSumaFv7kAfXQ+fA1IuKtqFJuq+AUj0GUEQ2UjPaAnn4vvZ9SiAUDFEw==}
-    engines: {node: '>=22.23.4 <23'}
-    peerDependencies:
-      '@listen-fire/engine': '>=0.12.0 <1.0.0'
-      '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
-      '@listen-fire/movement-lang': '>=0.12.0 <1.0.0'
 
   '@listen-fire/airtable@0.14.0':
     resolution: {integrity: sha512-BxGfgZ+ZJ9cSifkBXIcJDXaW9lQGsp8jk3TjMpTMnnHZQ8pOPujxiYYYxfHwgG8wUWcYGkB8eJ6KmmmlZCnyWA==}
@@ -3241,24 +3113,8 @@ packages:
     peerDependencies:
       '@listen-fire/engine': '>=0.12.0 <1.0.0'
 
-  '@listen-fire/attio@0.12.7':
-    resolution: {integrity: sha512-zvf8Nbp91KSedPLXNPbh48GtddEQla1nKKuJ3wjAv6uHrVOZgYPW9/l88tKtNs1kW3G9rTvYp6JCwCe7uvcUbQ==}
-    engines: {node: '>=22.23.4 <23'}
-    peerDependencies:
-      '@listen-fire/engine': '>=0.12.0 <1.0.0'
-      '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
-      '@listen-fire/movement-lang': '>=0.12.0 <1.0.0'
-
   '@listen-fire/attio@0.13.2':
     resolution: {integrity: sha512-5KPi7THTBHssMy0Bmn9QIJE1RPypudA+qI1XqQwrVHqY5KjQpWIVMIwSwjsortH+NUBhAm0FDOXIAGfGx1BwSQ==}
-    engines: {node: '>=22.23.4 <23'}
-    peerDependencies:
-      '@listen-fire/engine': '>=0.12.0 <1.0.0'
-      '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
-      '@listen-fire/movement-lang': '>=0.12.0 <1.0.0'
-
-  '@listen-fire/dealroom@0.12.7':
-    resolution: {integrity: sha512-R4LmAs2DIDU3LxZa37KvCBw7mjcTU1+NMrd14AlKR4Br/YXbVQ6CCObg/S4tjtQ3NcYVX5EpeQGxaavUCz4ZAw==}
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@listen-fire/engine': '>=0.12.0 <1.0.0'
@@ -3273,14 +3129,6 @@ packages:
       '@listen-fire/engine-contracts': '>=0.13.0 <1.0.0'
       '@listen-fire/movement-lang': '>=0.13.0 <1.0.0'
 
-  '@listen-fire/dropbox@0.12.6':
-    resolution: {integrity: sha512-0Z7DNW3O/7tLIv5CrLo21SVX41X4z/haNTDRe2gnBhMR1ITbgQzvghMAIQEvcRBb7MeRARll+muz5OXlUG8WEw==}
-    engines: {node: '>=22.23.4 <23'}
-    peerDependencies:
-      '@listen-fire/engine': '>=0.12.0 <1.0.0'
-      '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
-      '@listen-fire/movement-lang': '>=0.12.0 <1.0.0'
-
   '@listen-fire/dropbox@0.12.8':
     resolution: {integrity: sha512-09j+csq7XRez9ysAaxkx4fMJ/vY+kPL6KVI2yqS/rIWyB8Gv/ZcEZioAfuUjRvM2RVxQ3dEz1J7Ys8bkKLai3A==}
     engines: {node: '>=22.23.4 <23'}
@@ -3289,13 +3137,6 @@ packages:
       '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
       '@listen-fire/movement-lang': '>=0.12.0 <1.0.0'
 
-  '@listen-fire/email@0.12.6':
-    resolution: {integrity: sha512-l1NiNnUhw7PANu3FmzPU2hYiiNttMOI4t5bM+hz1v53RapXy3lKLKUh2rpd3pkQPUsT6pnpSOEgsoIa3Wjpz+g==}
-    engines: {node: '>=22.23.4 <23'}
-    peerDependencies:
-      '@listen-fire/engine': '>=0.12.0 <1.0.0'
-      '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
-
   '@listen-fire/email@0.13.2':
     resolution: {integrity: sha512-rwxe1ZnRwy2MBKgNGuE4CqCiwj6HACdKWonHAQwG+AorhOyCJHrOW7ThuboJk8Hc6YlpiMA1r04AAlLRuiGw7w==}
     engines: {node: '>=22.23.4 <23'}
@@ -3303,29 +3144,13 @@ packages:
       '@listen-fire/engine': '>=0.12.0 <1.0.0'
       '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
 
-  '@listen-fire/engine-contracts@0.12.13':
-    resolution: {integrity: sha512-XOGtfg23Wtxzi+7U0qlvd7UuDpKFIrG7PL+BEW7v9lS6Kt+XaG6G0uk83Hc7nNqGw6kmZgP/fKSyUIo1FNhkPw==}
-    engines: {node: '>=22.23.4 <23'}
-
   '@listen-fire/engine-contracts@0.15.3':
     resolution: {integrity: sha512-BnY0RYQkOJy4vG1Y1qZsSp4wR9f0Yn0C6j+sUwdJ6nFMpAS4bB3LmCUnSUTBzaGoBgFTs8Lfr0wxqe41eODy1w==}
-    engines: {node: '>=22.23.4 <23'}
-
-  '@listen-fire/engine@0.12.13':
-    resolution: {integrity: sha512-d0s38tcgsvDCkOpIfvQvW0feLOgIBF/rkjcsmK77GI/jt8VWybGJMkN7S8TvXghPqCY8kAzaFSPc/61MzFu0tQ==}
     engines: {node: '>=22.23.4 <23'}
 
   '@listen-fire/engine@0.15.3':
     resolution: {integrity: sha512-nFF5AEWi3ZlnZZhGVRf1jYc3sZFv7SNj/wwbaVwK/xO8JaLak4E5ZhVDfuEJ6lx7WQlp+ZsKvKo/AWeL8Bj+zQ==}
     engines: {node: '>=22.23.4 <23'}
-
-  '@listen-fire/evertrace@0.12.7':
-    resolution: {integrity: sha512-FY5GVDm3jzlHiSGkFk6/1uaptYECbrGxmHfEW7cUVS3YtSqvG3YcahLONsW8ZwigK1xhQ5nwmCKi+3bwLzfC2g==}
-    engines: {node: '>=22.23.4 <23'}
-    peerDependencies:
-      '@listen-fire/engine': '>=0.12.0 <1.0.0'
-      '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
-      '@listen-fire/movement-lang': '>=0.12.0 <1.0.0'
 
   '@listen-fire/evertrace@0.13.2':
     resolution: {integrity: sha512-GJGUxEWczRIHCcMZTxe//a9C0s2N/u7tYu4SB5odHfOnafrZMy8Xb0qskGX9djDzImIXstEQGAxQEG6bNFSz3A==}
@@ -3335,23 +3160,12 @@ packages:
       '@listen-fire/engine-contracts': '>=0.13.0 <1.0.0'
       '@listen-fire/movement-lang': '>=0.13.0 <1.0.0'
 
-  '@listen-fire/fake-channels@0.12.8':
-    resolution: {integrity: sha512-x6t5LoM1YSgiByKsRh3mBQKvsn83W9U/4i0kBQQ3BYZ94/eYLP0jYkTYGZfQ+EONNDh4gBl1rvyqKOq52wv22g==}
-    engines: {node: '>=22.23.4 <23'}
-    hasBin: true
-    peerDependencies:
-      '@listen-fire/engine': '>=0.12.0 <1.0.0'
-
   '@listen-fire/fake-channels@0.13.2':
     resolution: {integrity: sha512-rQ47KhuB802ll9MX/njunGCadKtiz1tb7vhKIwTxR6bcxMl7Gna+14QEqH9YI81PMxEpINiCKwjieqxiQnAhqg==}
     engines: {node: '>=22.23.4 <23'}
     hasBin: true
     peerDependencies:
       '@listen-fire/engine': '>=0.12.0 <1.0.0'
-
-  '@listen-fire/file-text@0.12.6':
-    resolution: {integrity: sha512-+ao8ucmpxs3wZWCwpan2IF2dEMEZHCMltp9bQx5nYbac1LPc0rpDQL3cez94zUknw14bE/BlDpcu8UoV9YtkEg==}
-    engines: {node: '>=22.23.4 <23'}
 
   '@listen-fire/file-text@0.12.7':
     resolution: {integrity: sha512-OZI2wy7SlNHHB7TVcSL7rKZ53k8DfAaQbeBVlWeZ6OsWWH3hmS34wqZdk6M4XU3bo/KmPvnP/m37e8vvX2Ha/g==}
@@ -3360,14 +3174,6 @@ packages:
   '@listen-fire/files-s3@0.12.8':
     resolution: {integrity: sha512-V91p8MzaxOsnA+bGNrVRXoZ4rw/K4K/8eJOZmDyi6TSnjgozg7YCgYAhPjhKN4gm0g3Thafij6zIvcGl2S6Hsw==}
     engines: {node: '>=22.23.4 <23'}
-
-  '@listen-fire/gmail@0.12.10':
-    resolution: {integrity: sha512-2juyLl044B9p39XPN1wRsBL8pX11DQYJcMqPX73jp61pOXd2SzP0wsYdtOvUAFuoZ/n2I4Xb/ivSk2CIWA5WHw==}
-    engines: {node: '>=22.23.4 <23'}
-    peerDependencies:
-      '@listen-fire/engine': '>=0.12.0 <1.0.0'
-      '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
-      '@listen-fire/movement-lang': '>=0.12.0 <1.0.0'
 
   '@listen-fire/gmail@0.13.3':
     resolution: {integrity: sha512-x7vnFuzYXDDRMg+X0Bw72nFpHTYwtxrHcyI6Ii+a5evBDwyI4MKGG9weJhE3Ev0k4wyySrd3tN2bFHhjPhPCgg==}
@@ -3383,30 +3189,8 @@ packages:
     peerDependencies:
       '@listen-fire/engine': '>=0.12.0 <1.0.0'
 
-  '@listen-fire/google-drive@0.12.7':
-    resolution: {integrity: sha512-QCkFB9r5QghyfZksfq7oU6ntPVXAoXtN0UykXbK8EdLTxDKOczUzBTEdD9fJIwP9CIW2+ekkaCZXuHPTycpU8A==}
-    engines: {node: '>=22.23.4 <23'}
-    peerDependencies:
-      '@listen-fire/engine': '>=0.12.0 <1.0.0'
-
-  '@listen-fire/google-sheets@0.12.6':
-    resolution: {integrity: sha512-cTv1HZlqB6ICYr/UxeR6/hW6/3zJH419psCfF0/XFn74psKu76hEwP8AkHcmrza4BsyB6tQWk0cMUoY5MDf3gQ==}
-    engines: {node: '>=22.23.4 <23'}
-    peerDependencies:
-      '@listen-fire/engine': '>=0.12.0 <1.0.0'
-      '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
-      '@listen-fire/movement-lang': '>=0.12.0 <1.0.0'
-
   '@listen-fire/google-sheets@0.13.0':
     resolution: {integrity: sha512-MSkKx9n8cavI74rIur6Pgcyy+LBIwA2MSI2xdl4AYvzUHzh3ly4qE2qTJ9AKqAQZxQEuoKswE/ixAng3Xq1gwA==}
-    engines: {node: '>=22.23.4 <23'}
-    peerDependencies:
-      '@listen-fire/engine': '>=0.12.0 <1.0.0'
-      '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
-      '@listen-fire/movement-lang': '>=0.12.0 <1.0.0'
-
-  '@listen-fire/granola@0.12.7':
-    resolution: {integrity: sha512-Pg7+gd4fl9ZvhLnC1+jziLF3IHpjAnUWFdQdkEwlzmv5c/aakx4xKuJ/QkStFCMUOCsRr3Wc01YOhNhLdRK+Cg==}
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@listen-fire/engine': '>=0.12.0 <1.0.0'
@@ -3421,14 +3205,6 @@ packages:
       '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
       '@listen-fire/movement-lang': '>=0.12.0 <1.0.0'
 
-  '@listen-fire/handbook@0.12.8':
-    resolution: {integrity: sha512-X5K8DeH5Yxjh8kNy/gG4qadDjUcPWkeSQlSf/X8Yxajt0ZtIK+wlCo8jQ67EFHt6JRA80542tUnuo1mZxvK8TA==}
-    engines: {node: '>=22.23.4 <23'}
-    peerDependencies:
-      '@listen-fire/engine': '>=0.12.0 <1.0.0'
-      '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
-      '@listen-fire/movement-lang': '>=0.12.0 <1.0.0'
-
   '@listen-fire/handbook@0.15.2':
     resolution: {integrity: sha512-giIiei1NMzgK85Vg3qTA3RzzS5h5lP8Dn6h0NvVx4L8ebrhfE0dX9S9HlmuK3gJlLHTlce3LomBjQ54VwKTlXQ==}
     engines: {node: '>=22.23.4 <23'}
@@ -3437,14 +3213,6 @@ packages:
       '@listen-fire/engine-contracts': '>=0.15.0 <1.0.0'
       '@listen-fire/movement-lang': '>=0.15.0 <1.0.0'
 
-  '@listen-fire/judge-llm@0.12.7':
-    resolution: {integrity: sha512-nFJavAISBlH16vg7GUKEhm9cG6NjIYaZ9weBx9fn5jep3SX7OEhz9QUp/mC3kQjZp2vG+x/qaJhqs8r08Tf4Xg==}
-    engines: {node: '>=22.23.4 <23'}
-    hasBin: true
-    peerDependencies:
-      '@listen-fire/engine': '>=0.12.0 <1.0.0'
-      '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
-
   '@listen-fire/judge-llm@0.12.9':
     resolution: {integrity: sha512-U2Go92TgkHeNS/D3z9M7TMev9eke/NDds+GMu1RxrA+tH/uqI8RA1AF+9Pud/PiLnw9eHQBJxZpqIk7ifD4C8A==}
     engines: {node: '>=22.23.4 <23'}
@@ -3452,14 +3220,6 @@ packages:
     peerDependencies:
       '@listen-fire/engine': '>=0.12.0 <1.0.0'
       '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
-
-  '@listen-fire/mcp@0.12.11':
-    resolution: {integrity: sha512-oIVHwgEK0ofB+TUxAN9z+gWJJ6hBnWjNTACwrbRIIOOH5sSBUJcXub0JbTFeGuP/vnj22iioTR7XCuTtuKurFw==}
-    engines: {node: '>=22.23.4 <23'}
-    peerDependencies:
-      '@listen-fire/engine': '>=0.12.0 <1.0.0'
-      '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
-      '@listen-fire/movement-lang': '>=0.12.0 <1.0.0'
 
   '@listen-fire/mcp@0.12.14':
     resolution: {integrity: sha512-yI2JiJd4qx7EkLNTCbOxxZMy4hIDzqvxA2vHBt5dDIcgrGtYSWI0tVk1EdffgFhN+6a3ITE3xjdc3AN1YRy3Mw==}
@@ -3489,18 +3249,6 @@ packages:
       google-auth-library:
         optional: true
       openai:
-        optional: true
-
-  '@listen-fire/module-kit@0.12.10':
-    resolution: {integrity: sha512-uBrdvxpW0NCVc4RkWc9b2u4RuMDjRE0k4VOm+KDrOeC9rkGpiiavuH/ttqQvX/wfrAfYCYQa8qlnglzgo78zFA==}
-    engines: {node: '>=22.23.4 <23'}
-    hasBin: true
-    peerDependencies:
-      '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
-      '@listen-fire/movement-lang': '>=0.12.0 <1.0.0'
-      tsx: 4.21.0
-    peerDependenciesMeta:
-      tsx:
         optional: true
 
   '@listen-fire/module-kit@0.14.0':
@@ -3533,10 +3281,6 @@ packages:
     peerDependencies:
       '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
 
-  '@listen-fire/movement-lang@0.12.13':
-    resolution: {integrity: sha512-3vOtOjndVdalDou+GHOx8PM7eDeyWXf7LJbjE4FulYfD3BPUxRN0czLj8nsfBwnVZI+GXITeJybizq+tIlU0kg==}
-    engines: {node: '>=22.23.4 <23'}
-
   '@listen-fire/movement-lang@0.15.3':
     resolution: {integrity: sha512-o3e1iV6kz5rXNMbSGJWecUYKDCW0l2m6LhNqMZpg5Y/AIOCnuUKLpALBAleUz0NSh5QSVXEbW18NQsLpEo0CJA==}
     engines: {node: '>=22.23.4 <23'}
@@ -3546,13 +3290,6 @@ packages:
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@listen-fire/engine': '>=0.12.0 <1.0.0'
-
-  '@listen-fire/pdf@0.12.6':
-    resolution: {integrity: sha512-3ShFtSDKprNQbsx6B/TjGAffUQMAT0sVPtwY5R36hs7MzT9qobgPfgWjppW4Xmy8jaEAisP0iIPDHe1p/QeLDA==}
-    engines: {node: '>=22.23.4 <23'}
-    peerDependencies:
-      '@listen-fire/engine': '>=0.12.0 <1.0.0'
-      '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
 
   '@listen-fire/pdf@0.12.8':
     resolution: {integrity: sha512-rjiLkrQWTxNVJQpUAWp3E4oJCYnEJvVMzb9gmD/rqWewHqK8alRwOpEnTOKNNozw75aWugu6d0j3s4VmvXb9dg==}
@@ -3567,14 +3304,6 @@ packages:
     peerDependencies:
       '@listen-fire/engine': '>=0.12.0 <1.0.0'
 
-  '@listen-fire/slack@0.12.7':
-    resolution: {integrity: sha512-O9Av55BqPTqtRQwfd8oG9nE/B/0K7VcPHW6yghsvIK5OH4L6hVVtBMDr2SFfJFEJY17BY5WHZ6jnMhHtPk75Pg==}
-    engines: {node: '>=22.23.4 <23'}
-    peerDependencies:
-      '@listen-fire/engine': '>=0.12.0 <1.0.0'
-      '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
-      '@listen-fire/movement-lang': '>=0.12.0 <1.0.0'
-
   '@listen-fire/slack@0.13.5':
     resolution: {integrity: sha512-PxAjS3nG0PnFpbwg6wc0jBnCqRimqR0nAsd4rKqUkfnZcXx7fPq/W1TiB67ulZ5J7RIBKLdareeSIp0z8kYxWg==}
     engines: {node: '>=22.23.4 <23'}
@@ -3582,14 +3311,6 @@ packages:
       '@listen-fire/engine': '>=0.14.0 <1.0.0'
       '@listen-fire/engine-contracts': '>=0.14.0 <1.0.0'
       '@listen-fire/movement-lang': '>=0.14.0 <1.0.0'
-
-  '@listen-fire/telegram@0.12.6':
-    resolution: {integrity: sha512-J0anW1jlolNr01qO5yexHXUJXqZl/ElElvaxR6IQLvGK4nnRpJvqKJ6BR60AOlog+8i7yBGPSjtnRUMAo3Di0Q==}
-    engines: {node: '>=22.23.4 <23'}
-    peerDependencies:
-      '@listen-fire/engine': '>=0.12.0 <1.0.0'
-      '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
-      '@listen-fire/movement-lang': '>=0.12.0 <1.0.0'
 
   '@listen-fire/telegram@0.13.4':
     resolution: {integrity: sha512-vAiWOju21h50TnbZJAjmxnLPIILhqbFoCU+Se6ixJKTFAmDPYRhih+wFg5hiIsXf6GJSZD9Sy17FRk8HjKGdjg==}
@@ -3613,22 +3334,6 @@ packages:
       '@listen-fire/engine': '>=0.15.2 <1.0.0'
       '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
       '@listen-fire/movement-lang': '>=0.15.2 <1.0.0'
-
-  '@listen-fire/web@0.12.7':
-    resolution: {integrity: sha512-H86DUx18txlF+PyS5sQH7BNOgNwW+YNiE3V2W46iyiB8r6MiNLDGeZm6ZsEUBZ3eLk2zsPJJ9YTzGl6cV5ozFg==}
-    engines: {node: '>=22.23.4 <23'}
-    peerDependencies:
-      '@listen-fire/engine': '>=0.12.0 <1.0.0'
-      '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
-      '@listen-fire/movement-lang': '>=0.12.0 <1.0.0'
-
-  '@listen-fire/whatsapp@0.12.8':
-    resolution: {integrity: sha512-BR/nEeYUUxcSMW04hlUXiUugGzwGPAamXtkonN1QFIKrC5VWKsl2HtsI3ikUZRoNo1b3+sYEDpiw2xyWIujAsw==}
-    engines: {node: '>=22.23.4 <23'}
-    peerDependencies:
-      '@listen-fire/engine': '>=0.12.0 <1.0.0'
-      '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
-      '@listen-fire/movement-lang': '>=0.12.0 <1.0.0'
 
   '@listen-fire/whatsapp@0.13.4':
     resolution: {integrity: sha512-H/ZjdmbPd/qxyqQFqn3862qrNjzS2ts5jgOpmtdreVn3/tOZrCRsKHFF6wC00++krWQEkgqz/gY9xngInyVNdw==}
@@ -13965,21 +13670,6 @@ snapshots:
     dependencies:
       '@lezer/common': 1.5.2
 
-  '@listen-fire/affinity@0.12.7(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)':
-    dependencies:
-      '@listen-fire/anthropic': 0.12.7(@listen-fire/engine@0.12.13)
-      '@listen-fire/engine': 0.12.13
-      '@listen-fire/engine-contracts': 0.12.13
-      '@listen-fire/module-kit': 0.12.10(@listen-fire/engine-contracts@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/movement-lang': 0.12.13
-      date-fns: 3.6.0
-      exponential-backoff: 3.1.1
-      lodash: 4.18.1
-      tldts: 6.1.44
-      zod: 4.6.7
-    transitivePeerDependencies:
-      - tsx
-
   '@listen-fire/affinity@0.14.2(@listen-fire/engine-contracts@0.15.3)(@listen-fire/engine@0.15.3)(@listen-fire/movement-lang@0.15.3)(tsx@4.21.0)':
     dependencies:
       '@listen-fire/anthropic': 0.12.7(@listen-fire/engine@0.15.3)
@@ -13995,18 +13685,6 @@ snapshots:
     transitivePeerDependencies:
       - tsx
 
-  '@listen-fire/airtable@0.12.7(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)':
-    dependencies:
-      '@listen-fire/engine': 0.12.13
-      '@listen-fire/engine-contracts': 0.12.13
-      '@listen-fire/module-kit': 0.12.10(@listen-fire/engine-contracts@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/movement-lang': 0.12.13
-      exponential-backoff: 3.1.1
-      lru-cache: 10.4.3
-      zod: 4.6.7
-    transitivePeerDependencies:
-      - tsx
-
   '@listen-fire/airtable@0.14.0(@listen-fire/engine-contracts@0.15.3)(@listen-fire/engine@0.15.3)(@listen-fire/movement-lang@0.15.3)(tsx@4.21.0)':
     dependencies:
       '@listen-fire/engine': 0.15.3
@@ -14018,14 +13696,6 @@ snapshots:
     transitivePeerDependencies:
       - tsx
 
-  '@listen-fire/anthropic@0.12.7(@listen-fire/engine@0.12.13)':
-    dependencies:
-      '@anthropic-ai/sdk': 0.126.0(zod@4.6.7)
-      '@listen-fire/engine': 0.12.13
-      exponential-backoff: 3.1.1
-      jsonrepair: 3.8.0
-      zod: 4.6.7
-
   '@listen-fire/anthropic@0.12.7(@listen-fire/engine@0.15.3)':
     dependencies:
       '@anthropic-ai/sdk': 0.126.0(zod@4.6.7)
@@ -14033,18 +13703,6 @@ snapshots:
       exponential-backoff: 3.1.1
       jsonrepair: 3.8.0
       zod: 4.6.7
-
-  '@listen-fire/attio@0.12.7(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)':
-    dependencies:
-      '@listen-fire/engine': 0.12.13
-      '@listen-fire/engine-contracts': 0.12.13
-      '@listen-fire/module-kit': 0.12.10(@listen-fire/engine-contracts@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/movement-lang': 0.12.13
-      exponential-backoff: 3.1.1
-      lru-cache: 10.4.3
-      zod: 4.6.7
-    transitivePeerDependencies:
-      - tsx
 
   '@listen-fire/attio@0.13.2(@listen-fire/engine-contracts@0.15.3)(@listen-fire/engine@0.15.3)(@listen-fire/movement-lang@0.15.3)(tsx@4.21.0)':
     dependencies:
@@ -14054,16 +13712,6 @@ snapshots:
       '@listen-fire/movement-lang': 0.15.3
       exponential-backoff: 3.1.1
       lru-cache: 10.4.3
-      zod: 4.6.7
-    transitivePeerDependencies:
-      - tsx
-
-  '@listen-fire/dealroom@0.12.7(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)':
-    dependencies:
-      '@listen-fire/engine': 0.12.13
-      '@listen-fire/engine-contracts': 0.12.13
-      '@listen-fire/module-kit': 0.12.10(@listen-fire/engine-contracts@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/movement-lang': 0.12.13
       zod: 4.6.7
     transitivePeerDependencies:
       - tsx
@@ -14078,16 +13726,6 @@ snapshots:
     transitivePeerDependencies:
       - tsx
 
-  '@listen-fire/dropbox@0.12.6(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)':
-    dependencies:
-      '@listen-fire/engine': 0.12.13
-      '@listen-fire/engine-contracts': 0.12.13
-      '@listen-fire/module-kit': 0.12.10(@listen-fire/engine-contracts@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/movement-lang': 0.12.13
-      zod: 4.6.7
-    transitivePeerDependencies:
-      - tsx
-
   '@listen-fire/dropbox@0.12.8(@listen-fire/engine-contracts@0.15.3)(@listen-fire/engine@0.15.3)(@listen-fire/movement-lang@0.15.3)(tsx@4.21.0)':
     dependencies:
       '@listen-fire/engine': 0.15.3
@@ -14096,21 +13734,6 @@ snapshots:
       '@listen-fire/movement-lang': 0.15.3
       zod: 4.6.7
     transitivePeerDependencies:
-      - tsx
-
-  '@listen-fire/email@0.12.6(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)':
-    dependencies:
-      '@listen-fire/engine': 0.12.13
-      '@listen-fire/engine-contracts': 0.12.13
-      '@listen-fire/module-kit': 0.12.10(@listen-fire/engine-contracts@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      form-data: 4.0.6
-      html-to-text: 9.0.5
-      mailgun.js: 10.2.3
-      zod: 4.6.7
-    transitivePeerDependencies:
-      - '@listen-fire/movement-lang'
-      - debug
-      - supports-color
       - tsx
 
   '@listen-fire/email@0.13.2(@listen-fire/engine-contracts@0.15.3)(@listen-fire/engine@0.15.3)(@listen-fire/movement-lang@0.15.3)(tsx@4.21.0)':
@@ -14128,22 +13751,9 @@ snapshots:
       - supports-color
       - tsx
 
-  '@listen-fire/engine-contracts@0.12.13':
-    dependencies:
-      '@listen-fire/movement-lang': 0.12.13
-      zod: 4.6.7
-
   '@listen-fire/engine-contracts@0.15.3':
     dependencies:
       '@listen-fire/movement-lang': 0.15.3
-      zod: 4.6.7
-
-  '@listen-fire/engine@0.12.13':
-    dependencies:
-      '@listen-fire/engine-contracts': 0.12.13
-      '@listen-fire/module-runtime': 0.12.8(@listen-fire/engine-contracts@0.12.13)
-      '@listen-fire/movement-lang': 0.12.13
-      safe-stable-stringify: 2.5.0
       zod: 4.6.7
 
   '@listen-fire/engine@0.15.3':
@@ -14154,16 +13764,6 @@ snapshots:
       safe-stable-stringify: 2.5.0
       zod: 4.6.7
 
-  '@listen-fire/evertrace@0.12.7(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)':
-    dependencies:
-      '@listen-fire/engine': 0.12.13
-      '@listen-fire/engine-contracts': 0.12.13
-      '@listen-fire/module-kit': 0.12.10(@listen-fire/engine-contracts@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/movement-lang': 0.12.13
-      zod: 4.6.7
-    transitivePeerDependencies:
-      - tsx
-
   '@listen-fire/evertrace@0.13.2(@listen-fire/engine-contracts@0.15.3)(@listen-fire/engine@0.15.3)(@listen-fire/movement-lang@0.15.3)(tsx@4.21.0)':
     dependencies:
       '@listen-fire/engine': 0.15.3
@@ -14173,19 +13773,6 @@ snapshots:
       zod: 4.6.7
     transitivePeerDependencies:
       - tsx
-
-  '@listen-fire/fake-channels@0.12.8(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)':
-    dependencies:
-      '@listen-fire/engine': 0.12.13
-      '@listen-fire/module-kit': 0.12.10(@listen-fire/engine-contracts@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      better-sqlite3: 11.10.0
-      express: 4.22.1
-      tsx: 4.21.0
-      zod: 4.6.7
-    transitivePeerDependencies:
-      - '@listen-fire/engine-contracts'
-      - '@listen-fire/movement-lang'
-      - supports-color
 
   '@listen-fire/fake-channels@0.13.2(@listen-fire/engine-contracts@0.15.3)(@listen-fire/engine@0.15.3)(@listen-fire/movement-lang@0.15.3)':
     dependencies:
@@ -14199,17 +13786,6 @@ snapshots:
       - '@listen-fire/engine-contracts'
       - '@listen-fire/movement-lang'
       - supports-color
-
-  '@listen-fire/file-text@0.12.6':
-    dependencies:
-      exceljs: 4.4.0
-      hot-formula-parser: 4.0.0
-      sax: 1.4.1
-      tmp: 0.2.7
-      unpdf: 1.8.1
-      yauzl-promise: 4.0.0
-    transitivePeerDependencies:
-      - '@napi-rs/canvas'
 
   '@listen-fire/file-text@0.12.7':
     dependencies:
@@ -14231,20 +13807,6 @@ snapshots:
       - '@listen-fire/engine-contracts'
       - aws-crt
     optional: true
-
-  '@listen-fire/gmail@0.12.10(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)':
-    dependencies:
-      '@listen-fire/engine': 0.12.13
-      '@listen-fire/engine-contracts': 0.12.13
-      '@listen-fire/google-sheets': 0.12.6(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/module-kit': 0.12.10(@listen-fire/engine-contracts@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/movement-lang': 0.12.13
-      googleapis: 164.1.0
-      html-to-text: 9.0.5
-      zod: 4.6.7
-    transitivePeerDependencies:
-      - supports-color
-      - tsx
 
   '@listen-fire/gmail@0.13.3(@listen-fire/engine-contracts@0.15.3)(@listen-fire/engine@0.15.3)(@listen-fire/movement-lang@0.15.3)(tsx@4.21.0)':
     dependencies:
@@ -14273,30 +13835,6 @@ snapshots:
       - supports-color
       - tsx
 
-  '@listen-fire/google-drive@0.12.7(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)':
-    dependencies:
-      '@listen-fire/engine': 0.12.13
-      '@listen-fire/google-sheets': 0.12.6(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/module-kit': 0.12.10(@listen-fire/engine-contracts@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      googleapis: 164.1.0
-      zod: 4.6.7
-    transitivePeerDependencies:
-      - '@listen-fire/engine-contracts'
-      - '@listen-fire/movement-lang'
-      - supports-color
-      - tsx
-
-  '@listen-fire/google-sheets@0.12.6(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)':
-    dependencies:
-      '@listen-fire/engine': 0.12.13
-      '@listen-fire/engine-contracts': 0.12.13
-      '@listen-fire/module-kit': 0.12.10(@listen-fire/engine-contracts@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/movement-lang': 0.12.13
-      exponential-backoff: 3.1.1
-      zod: 4.6.7
-    transitivePeerDependencies:
-      - tsx
-
   '@listen-fire/google-sheets@0.13.0(@listen-fire/engine-contracts@0.15.3)(@listen-fire/engine@0.15.3)(@listen-fire/movement-lang@0.15.3)(tsx@4.21.0)':
     dependencies:
       '@listen-fire/engine': 0.15.3
@@ -14304,16 +13842,6 @@ snapshots:
       '@listen-fire/module-kit': 0.14.0(@listen-fire/engine-contracts@0.15.3)(@listen-fire/movement-lang@0.15.3)(tsx@4.21.0)
       '@listen-fire/movement-lang': 0.15.3
       exponential-backoff: 3.1.1
-      zod: 4.6.7
-    transitivePeerDependencies:
-      - tsx
-
-  '@listen-fire/granola@0.12.7(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)':
-    dependencies:
-      '@listen-fire/engine': 0.12.13
-      '@listen-fire/engine-contracts': 0.12.13
-      '@listen-fire/module-kit': 0.12.10(@listen-fire/engine-contracts@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/movement-lang': 0.12.13
       zod: 4.6.7
     transitivePeerDependencies:
       - tsx
@@ -14328,28 +13856,11 @@ snapshots:
     transitivePeerDependencies:
       - tsx
 
-  '@listen-fire/handbook@0.12.8(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)':
-    dependencies:
-      '@listen-fire/engine': 0.12.13
-      '@listen-fire/engine-contracts': 0.12.13
-      '@listen-fire/movement-lang': 0.12.13
-
   '@listen-fire/handbook@0.15.2(@listen-fire/engine-contracts@0.15.3)(@listen-fire/engine@0.15.3)(@listen-fire/movement-lang@0.15.3)':
     dependencies:
       '@listen-fire/engine': 0.15.3
       '@listen-fire/engine-contracts': 0.15.3
       '@listen-fire/movement-lang': 0.15.3
-
-  '@listen-fire/judge-llm@0.12.7(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)':
-    dependencies:
-      '@listen-fire/engine': 0.12.13
-      '@listen-fire/engine-contracts': 0.12.13
-      '@listen-fire/module-kit': 0.12.10(@listen-fire/engine-contracts@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/module-runtime': 0.12.8(@listen-fire/engine-contracts@0.12.13)
-      zod: 4.6.7
-    transitivePeerDependencies:
-      - '@listen-fire/movement-lang'
-      - tsx
 
   '@listen-fire/judge-llm@0.12.9(@listen-fire/engine-contracts@0.15.3)(@listen-fire/engine@0.15.3)(@listen-fire/movement-lang@0.15.3)(tsx@4.21.0)':
     dependencies:
@@ -14361,19 +13872,6 @@ snapshots:
     transitivePeerDependencies:
       - '@listen-fire/movement-lang'
       - tsx
-
-  '@listen-fire/mcp@0.12.11(@cfworker/json-schema@4.1.1)(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)(zod@4.6.7)':
-    dependencies:
-      '@listen-fire/engine': 0.12.13
-      '@listen-fire/engine-contracts': 0.12.13
-      '@listen-fire/module-kit': 0.12.10(@listen-fire/engine-contracts@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/movement-lang': 0.12.13
-      '@modelcontextprotocol/sdk': 1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7)
-    transitivePeerDependencies:
-      - '@cfworker/json-schema'
-      - supports-color
-      - tsx
-      - zod
 
   '@listen-fire/mcp@0.12.14(@cfworker/json-schema@4.1.1)(@listen-fire/engine-contracts@0.15.3)(@listen-fire/engine@0.15.3)(@listen-fire/movement-lang@0.15.3)(tsx@4.21.0)(zod@4.6.7)':
     dependencies:
@@ -14400,15 +13898,6 @@ snapshots:
       google-auth-library: 10.3.0
       openai: 5.22.0(ws@8.22.0)(zod@4.6.7)
 
-  '@listen-fire/module-kit@0.12.10(@listen-fire/engine-contracts@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)':
-    dependencies:
-      '@listen-fire/engine-contracts': 0.12.13
-      '@listen-fire/module-runtime': 0.12.8(@listen-fire/engine-contracts@0.12.13)
-      '@listen-fire/movement-lang': 0.12.13
-      zod: 4.6.7
-    optionalDependencies:
-      tsx: 4.21.0
-
   '@listen-fire/module-kit@0.14.0(@listen-fire/engine-contracts@0.15.3)(@listen-fire/movement-lang@0.15.3)(tsx@4.21.0)':
     dependencies:
       '@listen-fire/engine-contracts': 0.15.3
@@ -14427,19 +13916,10 @@ snapshots:
     optionalDependencies:
       tsx: 4.21.0
 
-  '@listen-fire/module-runtime@0.12.8(@listen-fire/engine-contracts@0.12.13)':
-    dependencies:
-      '@listen-fire/engine-contracts': 0.12.13
-      zod: 4.6.7
-
   '@listen-fire/module-runtime@0.12.8(@listen-fire/engine-contracts@0.15.3)':
     dependencies:
       '@listen-fire/engine-contracts': 0.15.3
       zod: 4.6.7
-
-  '@listen-fire/movement-lang@0.12.13':
-    dependencies:
-      typescript: 5.5.4
 
   '@listen-fire/movement-lang@0.15.3':
     dependencies:
@@ -14456,15 +13936,6 @@ snapshots:
       - supports-color
     optional: true
 
-  '@listen-fire/pdf@0.12.6(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)':
-    dependencies:
-      '@listen-fire/engine': 0.12.13
-      '@listen-fire/engine-contracts': 0.12.13
-      '@listen-fire/module-kit': 0.12.10(@listen-fire/engine-contracts@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-    transitivePeerDependencies:
-      - '@listen-fire/movement-lang'
-      - tsx
-
   '@listen-fire/pdf@0.12.8(@listen-fire/engine-contracts@0.15.3)(@listen-fire/engine@0.15.3)(@listen-fire/movement-lang@0.15.3)(tsx@4.21.0)':
     dependencies:
       '@listen-fire/engine': 0.15.3
@@ -14474,14 +13945,6 @@ snapshots:
       - '@listen-fire/movement-lang'
       - tsx
 
-  '@listen-fire/postgres-limiter@0.12.7(@listen-fire/engine@0.12.13)':
-    dependencies:
-      '@listen-fire/engine': 0.12.13
-      pg: 8.12.0
-      zod: 4.6.7
-    transitivePeerDependencies:
-      - pg-native
-
   '@listen-fire/postgres-limiter@0.12.7(@listen-fire/engine@0.15.3)':
     dependencies:
       '@listen-fire/engine': 0.15.3
@@ -14489,19 +13952,6 @@ snapshots:
       zod: 4.6.7
     transitivePeerDependencies:
       - pg-native
-
-  '@listen-fire/slack@0.12.7(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)':
-    dependencies:
-      '@listen-fire/engine': 0.12.13
-      '@listen-fire/engine-contracts': 0.12.13
-      '@listen-fire/module-kit': 0.12.10(@listen-fire/engine-contracts@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/movement-lang': 0.12.13
-      '@slack/web-api': 7.11.0
-      zod: 4.6.7
-    transitivePeerDependencies:
-      - debug
-      - supports-color
-      - tsx
 
   '@listen-fire/slack@0.13.5(@listen-fire/engine-contracts@0.15.3)(@listen-fire/engine@0.15.3)(@listen-fire/movement-lang@0.15.3)(tsx@4.21.0)':
     dependencies:
@@ -14516,16 +13966,6 @@ snapshots:
       - supports-color
       - tsx
 
-  '@listen-fire/telegram@0.12.6(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)':
-    dependencies:
-      '@listen-fire/engine': 0.12.13
-      '@listen-fire/engine-contracts': 0.12.13
-      '@listen-fire/module-kit': 0.12.10(@listen-fire/engine-contracts@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/movement-lang': 0.12.13
-      zod: 4.6.7
-    transitivePeerDependencies:
-      - tsx
-
   '@listen-fire/telegram@0.13.4(@listen-fire/engine-contracts@0.15.3)(@listen-fire/engine@0.15.3)(@listen-fire/movement-lang@0.15.3)(tsx@4.21.0)':
     dependencies:
       '@listen-fire/engine': 0.15.3
@@ -14535,14 +13975,6 @@ snapshots:
       zod: 4.6.7
     transitivePeerDependencies:
       - tsx
-
-  '@listen-fire/wake-cloud-tasks@0.12.7(@listen-fire/engine-contracts@0.12.13)':
-    dependencies:
-      '@listen-fire/engine-contracts': 0.12.13
-      '@listen-fire/module-runtime': 0.12.8(@listen-fire/engine-contracts@0.12.13)
-      google-auth-library: 10.3.0
-    transitivePeerDependencies:
-      - supports-color
 
   '@listen-fire/wake-cloud-tasks@0.12.7(@listen-fire/engine-contracts@0.15.3)':
     dependencies:
@@ -14565,32 +13997,6 @@ snapshots:
       zod: 4.6.7
     transitivePeerDependencies:
       - '@napi-rs/canvas'
-      - tsx
-
-  '@listen-fire/web@0.12.7(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)':
-    dependencies:
-      '@listen-fire/anthropic': 0.12.7(@listen-fire/engine@0.12.13)
-      '@listen-fire/engine': 0.12.13
-      '@listen-fire/engine-contracts': 0.12.13
-      '@listen-fire/file-text': 0.12.6
-      '@listen-fire/module-kit': 0.12.10(@listen-fire/engine-contracts@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/movement-lang': 0.12.13
-      html-to-text: 9.0.5
-      jspdf: 4.2.1
-      zod: 4.6.7
-    transitivePeerDependencies:
-      - '@napi-rs/canvas'
-      - tsx
-
-  '@listen-fire/whatsapp@0.12.8(@listen-fire/engine-contracts@0.12.13)(@listen-fire/engine@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)':
-    dependencies:
-      '@listen-fire/engine': 0.12.13
-      '@listen-fire/engine-contracts': 0.12.13
-      '@listen-fire/module-kit': 0.12.10(@listen-fire/engine-contracts@0.12.13)(@listen-fire/movement-lang@0.12.13)(tsx@4.21.0)
-      '@listen-fire/movement-lang': 0.12.13
-      mime: 4.0.3
-      zod: 4.6.7
-    transitivePeerDependencies:
       - tsx
 
   '@listen-fire/whatsapp@0.13.4(@listen-fire/engine-contracts@0.15.3)(@listen-fire/engine@0.15.3)(@listen-fire/movement-lang@0.15.3)(tsx@4.21.0)':

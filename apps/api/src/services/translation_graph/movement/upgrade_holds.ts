@@ -1,7 +1,7 @@
 // What holds an automation at its version whatever its diagnostics say: a move
 // would change what it does (an edit nobody confirmed goes live), or strand a run
-// (one parked on a key, which only its own version can resume, and on a legacy id
-// nothing here can). Its own module
+// (one parked on a key, which only its own version can resume, and on a version
+// this release does not run nothing here can). Its own module
 // because it reads the rows; `language_upgrade.ts` decides what to do with the
 // answer.
 
@@ -11,7 +11,7 @@ import type { MovementRow } from './store';
 
 import { sql } from 'kysely';
 
-import { isLegacyLanguageVersion } from 'legacy-lang';
+import { readOnlyByFrozenParser } from './language_route';
 
 import { getAutomationsQb } from '../../../lib/kysely';
 import { resolveAdapterSlug } from '../adapters/registry';
@@ -35,8 +35,8 @@ export async function holdsOnMoving(group: readonly MovementRow[]): Promise<stri
   const held = await runsWaitingOnKeys(group.map((member) => member.id));
   for (const member of group) {
     const waiting = held.get(member.id) ?? [];
-    const legacy = waiting.filter((run) => isLegacyLanguageVersion(run.pin)).map((run) => run.id);
-    const carried = waiting.filter((run) => !isLegacyLanguageVersion(run.pin)).map((run) => run.id);
+    const legacy = waiting.filter((run) => readOnlyByFrozenParser(run.pin)).map((run) => run.id);
+    const carried = waiting.filter((run) => !readOnlyByFrozenParser(run.pin)).map((run) => run.id);
     if (carried.length > 0) {
       holds.push(
         `${member.name} has ${carried.length === 1 ? 'a run' : `${carried.length} runs`} waiting on a callback or an await under its current language version (${carried.join(', ')}), which only that version can resume: it stays there until they finish, or cancel them first`,
@@ -46,7 +46,7 @@ export async function holdsOnMoving(group: readonly MovementRow[]): Promise<stri
     if (legacy.length > 0) {
       const [them, it] = legacy.length === 1 ? ['a run', 'it'] : [`${legacy.length} runs`, 'them'];
       holds.push(
-        `${member.name} has ${them} waiting on a question, a callback or a reply under a legacy language version (${legacy.join(', ')}), which this release cannot resume: cancel ${it}, then upgrade the automation`,
+        `${member.name} has ${them} waiting on a question, a callback or a reply under a language version this release does not run (${legacy.join(', ')}), which it cannot resume: cancel ${it}, then upgrade the automation`,
       );
     }
   }

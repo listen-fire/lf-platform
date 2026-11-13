@@ -1,6 +1,8 @@
 // An agent working on an automation is taught that automation's language
-// version, through the real handlers: the 0.12 package answers a 0.12 pin, and
-// the current book answers everything else, a new automation included.
+// version, through the real handlers: the current book answers the current
+// version and a new automation; a version no entry carries (0.12, which this
+// platform dropped, and a legacy id) is refused rather than answered from
+// another version's book.
 
 jest.mock('../../../../services/access/decide', () => jest.requireActual('../../../../test/access_defaults').teamDefaults());
 jest.mock('../../../../services/translation_graph/movement/store', () => ({
@@ -96,15 +98,7 @@ function onPin(pin: string): void {
 }
 
 describe('readHandbook', () => {
-  it("a 0.12 automation reads handbook 0.12.8's own chapters, labelled", async () => {
-    onPin('0.12.13');
-    const { body } = await call(readBookHandler, { body: { handbook: 'automations', chapter: 'system:manual', automation: 'movement-1' } });
-    expect(field(body, 'content')).toContain('to manual fire');
-    expect(field(body, 'content')).not.toContain('-[:Invocations]->');
-    expect(field(body, 'language')).toMatchObject({ version: '0.12.13', current: false, handbook: '0.12.8' });
-  });
-
-  it('the same chapter for a current automation teaches the current spelling', async () => {
+  it('a current automation is taught the current spelling, labelled', async () => {
     onPin(LANGUAGE_VERSION);
     const { body } = await call(readBookHandler, { body: { handbook: 'automations', chapter: 'system:manual', automation: 'movement-1' } });
     expect(field(body, 'content')).toContain('-[:Invocations]->');
@@ -118,25 +112,11 @@ describe('readHandbook', () => {
     expect(getMovementRow).not.toHaveBeenCalled();
   });
 
-  it('the front page and its anchors are 0.12\'s', async () => {
-    onPin('0.12.8');
-    const front = await call(readBookHandler, { body: { handbook: 'automations', automation: 'movement-1' } });
-    expect(field(front.body, 'content')).toContain('connect attio using acme');
-    const anchor = await call(readBookHandler, { body: { handbook: 'automations', chapter: 'front#build-loop', automation: 'movement-1' } });
-    expect(field(anchor.body, 'content')).toContain('getStarted');
-  });
-
-  it('a legacy id is taught from the release it ran beside', async () => {
-    onPin('4');
-    const { body } = await call(readBookHandler, { body: { handbook: 'automations', chapter: 'system:manual', automation: 'movement-1' } });
-    expect(field(body, 'language')).toMatchObject({ version: '4', handbook: '0.12.8' });
-  });
-
   it('finds an automation by its exact name', async () => {
     jest.mocked(getMovementRow).mockResolvedValue(null);
-    jest.mocked(getMovementRowByName).mockResolvedValue(row('0.12.13'));
+    jest.mocked(getMovementRowByName).mockResolvedValue(row(LANGUAGE_VERSION));
     const { body } = await call(readBookHandler, { body: { handbook: 'automations', automation: 'Echo' } });
-    expect(field(body, 'language')).toMatchObject({ version: '0.12.13' });
+    expect(field(body, 'language')).toMatchObject({ version: LANGUAGE_VERSION });
   });
 
   it('names an automation that is not there', async () => {
@@ -147,28 +127,35 @@ describe('readHandbook', () => {
   });
 
   it('a version named outright wins, and one nothing teaches is refused rather than answered', async () => {
-    const named = await call(readBookHandler, { body: { handbook: 'automations', languageVersion: '0.12.0' } });
-    expect(field(named.body, 'language')).toMatchObject({ version: '0.12.0', handbook: '0.12.8' });
-    const refused = await call(readBookHandler, { body: { handbook: 'automations', languageVersion: '0.9.0' } });
-    expect(String(field(refused.body, 'error'))).toContain('0.9.0');
-    expect(field(refused.body, 'content')).toBeUndefined();
+    const named = await call(readBookHandler, { body: { handbook: 'automations', languageVersion: LANGUAGE_VERSION } });
+    expect(field(named.body, 'language')).toMatchObject({ version: LANGUAGE_VERSION });
+    for (const pin of ['0.12.0', '0.9.0']) {
+      const refused = await call(readBookHandler, { body: { handbook: 'automations', languageVersion: pin } });
+      expect(String(field(refused.body, 'error'))).toContain(pin);
+      expect(field(refused.body, 'content')).toBeUndefined();
+    }
   });
+});
 
-  it('another handbook is the same book under any version', async () => {
-    onPin('0.12.13');
-    const { body } = await call(readBookHandler, { body: { handbook: 'knowledge-model', automation: 'movement-1' } });
-    expect(field(body, 'bookId')).toBe('knowledge-model');
+describe('an automation on a version no entry carries', () => {
+  it.each(['0.12.13', '4'])('on %s is refused by every help tool, never answered from another version', async (pin) => {
+    onPin(pin);
+    const answers = [
+      await call(readBookHandler, { body: { handbook: 'automations', chapter: 'system:manual', automation: 'movement-1' } }),
+      await call(searchLanguageHandler, { body: { query: 'run on demand manual', automation: 'movement-1' } }),
+      await call(showExampleHandler, { body: { query: 'run on demand', automation: 'movement-1' } }),
+      await call(listCatalogHandler, { query: { automation: 'movement-1' } }),
+      await call(describeInstanceHandler, { body: { system: 'manual', automation: 'movement-1' } }),
+      await call(getStartedHandler, { query: { automation: 'movement-1' } }),
+    ];
+    for (const { body } of answers) {
+      expect(String(field(body, 'error'))).toContain(pin);
+      expect(JSON.stringify(body)).not.toContain('-[:Invocations]->');
+    }
   });
 });
 
 describe('searchLanguage', () => {
-  it("a 0.12 automation searches 0.12's book", async () => {
-    onPin('0.12.13');
-    const { body } = await call(searchLanguageHandler, { body: { query: 'run on demand manual', automation: 'movement-1' } });
-    expect(field(body, 'language')).toMatchObject({ version: '0.12.13' });
-    expect(JSON.stringify(field(body, 'results'))).not.toContain('-[:Invocations]->');
-  });
-
   it('a new automation searches the current book', async () => {
     const { body } = await call(searchLanguageHandler, { body: { query: 'COALESCE' } });
     expect(field(body, 'language')).toBeUndefined();
@@ -177,41 +164,8 @@ describe('searchLanguage', () => {
 });
 
 describe('showExample', () => {
-  it('says plainly 0.12 has none, and answers from its own search', async () => {
-    onPin('0.12.13');
-    const { body } = await call(showExampleHandler, { body: { query: 'run on demand', automation: 'movement-1' } });
-    expect(body).toEqual(expect.stringContaining('has no micro examples'));
-    expect(body).not.toEqual(expect.stringContaining('-[:Invocations]->'));
-  });
-
   it('a new automation gets the micro examples', async () => {
     const { body } = await call(showExampleHandler, { body: {} });
     expect(body).toEqual(expect.stringContaining('Every example'));
-  });
-});
-
-describe('the systems', () => {
-  it("listConnections is 0.12's catalog, labelled, with no current spelling", async () => {
-    onPin('0.12.13');
-    const { body } = await call(listCatalogHandler, { query: { automation: 'movement-1' } });
-    expect(field(body, 'language')).toMatchObject({ version: '0.12.13' });
-    expect(Object.keys(field(body, 'adapters') as object)).toEqual(expect.arrayContaining(['manual', 'attio']));
-    expect(JSON.stringify(body)).not.toContain('writtenAs');
-  });
-
-  it("describeConnection answers in 0.12's words, and says what it does not read", async () => {
-    onPin('0.12.13');
-    const { body } = await call(describeInstanceHandler, { body: { system: 'manual', position: 'x', automation: 'movement-1' } });
-    expect(body).toEqual(expect.stringContaining('### manual'));
-    expect(body).toEqual(expect.stringContaining('Invocation'));
-    expect(body).toEqual(expect.stringContaining('position: not read under 0.12.13'));
-  });
-
-  it("getStarted is 0.12's front page and systems", async () => {
-    onPin('0.12.13');
-    const { body } = await call(getStartedHandler, { query: { automation: 'movement-1' } });
-    expect(body).toEqual(expect.stringContaining('written in language 0.12.13'));
-    expect(body).toEqual(expect.stringContaining('connect attio using acme'));
-    expect(body).toEqual(expect.stringContaining('### manual'));
   });
 });

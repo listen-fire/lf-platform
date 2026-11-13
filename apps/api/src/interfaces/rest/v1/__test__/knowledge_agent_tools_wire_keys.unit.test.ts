@@ -373,11 +373,11 @@ describe('POST /automations/upgrade — id or name resolves to the team\'s autom
     expect(upgradeMovementMock).toHaveBeenCalledWith(expect.objectContaining({ teamId: 'T1', id: 'mv-7' }));
   });
 
-  it('tells an agent a 0.12 automation keeps firing until it moves, as the registry says', async () => {
-    upgradeMovementMock.mockResolvedValueOnce({ status: 'needs_acknowledgement', from: { version: '0.12.13' }, to: { version: '0.15.1' }, diagnostics: [] } as never);
+  it.each(['0.12.13', '4'])('tells an agent an automation on %s, which this platform no longer runs, is refused until it moves', async (pin) => {
+    upgradeMovementMock.mockResolvedValueOnce({ status: 'needs_acknowledgement', from: { version: pin }, to: { version: '0.15.1' }, diagnostics: [] } as never);
     const res = fakeRes();
     await call(upgradeMovementHandler, { automation: 'mv-1', team: 'T1' }, res);
-    expect(JSON.stringify(res.body)).toContain('until then it stays on 0.12.13, and runs there when someone starts it; its listens keep firing');
+    expect(JSON.stringify(res.body)).toContain('until then 0.15.1 refuses to run it');
   });
 
   it('reports an error and upgrades nothing for an unknown name', async () => {

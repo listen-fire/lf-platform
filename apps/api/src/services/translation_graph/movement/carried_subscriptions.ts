@@ -16,8 +16,7 @@ import type { WebhookSubscriptionId } from '../../../generated/kysely/automation
 import type { AdapterManifest } from 'movement-engine/public/adapter';
 import type { Channel, ChannelRegistration, ListeningLane } from '@listen-fire/language-versions';
 
-import { isLegacyLanguageVersion } from 'legacy-lang';
-import { carriedVersions, versionOf, versionOfLegacyId, type CarriedVersion } from '@listen-fire/language-versions';
+import { carriedVersions, versionOf } from '@listen-fire/language-versions';
 import { UNREGISTERED_SECRET } from 'movement-engine/public/inbound';
 import { logger } from 'movement-engine/public/log';
 
@@ -28,11 +27,6 @@ import { resolveAdapterSlug } from '../adapters/registry';
 import { modulePlatform } from './carried_run';
 
 export const MOVEMENT_LISTEN_PROVISIONER = 'movement-listen';
-
-/** The version a kept row's pin reads under. */
-function versionOfPin(pin: string): CarriedVersion | undefined {
-  return isLegacyLanguageVersion(pin) ? versionOfLegacyId(pin) : versionOf(pin);
-}
 
 /** A row in the form production keeps a channel. */
 export interface ChannelRowHeld {
@@ -85,7 +79,7 @@ export async function carriedChannelsOf(input: {
   const wanted: WantedChannels[] = [];
   for (const version of carriedVersions()) {
     if (version.listenRows === undefined) continue;
-    const theirs = kept.filter((row) => versionOfPin(row.pin)?.key === version.key);
+    const theirs = kept.filter((row) => versionOf(row.pin)?.key === version.key);
     if (theirs.length === 0) continue;
     const lane = await version.listenRows();
     const { channels, notes } = lane.channelsOf(

@@ -119,7 +119,8 @@ describe.each([4, 2])('doors at a pool of %i', (poolMax) => {
       .insertInto('external_service_credentials')
       .values({ id: credentialsId as never, team_id: teamId, type: 'SLACK' as never, name: 'slack_conn', identifier: `teamId:${slackTeam}`, app_id: 'listen-fire', credentials: Buffer.from('unused') })
       .execute();
-    // A listen pinned to the carried version, so each keep asks what it owes it.
+    // A listen pinned to 0.12, which no version reads here: each keep asks what
+    // it owes it, and owes it nothing.
     await at.getAutomationsQb(['movement']).insertInto('movement').values({ id: movementId, team_id: teamId, name: 'heard', source: '', language_version: '0.12.13' }).execute();
     await at
       .getAutomationsQb(['trigger'])
@@ -134,7 +135,7 @@ describe.each([4, 2])('doors at a pool of %i', (poolMax) => {
     await withinBudget('cleaning up', at.cleanupTeam(teamId));
   });
 
-  it('seven Slack events claimed by one pass all finish, each kept once with what it owes the carried version', async () => {
+  it('seven Slack events claimed by one pass all finish, each kept once', async () => {
     at.resetWorkHandlersForTests();
     at.registerSlackEventWork();
     const eventIds = Array.from({ length: 7 }, () => `Ev${randomUUID()}`);
@@ -155,7 +156,7 @@ describe.each([4, 2])('doors at a pool of %i', (poolMax) => {
     expect(rows.every((row) => row.judged)).toBe(true);
     const readings = await sql<{ count: number }>`
       select count(*)::int as count from automations.work where team_id = ${teamId}::uuid and kind = 'read_delivery'`.execute(at.globalQb);
-    expect(readings.rows[0]?.count).toBe(7);
+    expect(readings.rows[0]?.count).toBe(0);
   }, 60_000);
 
   it('more doors than there are connections each wait their turn on the lock, and none fails', async () => {

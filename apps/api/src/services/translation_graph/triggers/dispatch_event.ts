@@ -17,11 +17,10 @@ import type { TriggerRunId } from '../../../generated/kysely/automations/Trigger
 import type { DroppedReason } from './dropped_reason';
 
 import { WireActorCandidate } from 'engine-contracts';
-import { isLegacyLanguageVersion } from 'legacy-lang';
 import { logger } from 'movement-engine/public/log';
 import { neverAsAny } from 'movement-engine/public/types';
 import { isWriteEffect } from 'movement-engine/public/trace';
-import { versionOfLegacyId, versionOf, type CarriedEvent, type ListeningLane, type ModulePlatform } from '@listen-fire/language-versions';
+import { versionOf, type CarriedEvent, type ListeningLane, type ModulePlatform } from '@listen-fire/language-versions';
 
 import { handleError } from '../../../lib/errors';
 import { getAutomationsQb } from '../../../lib/kysely';
@@ -66,7 +65,7 @@ function queuedRunWorkKey(runId: string): string {
 /** The lane that reads a row's event: the version of its automation's pin. */
 async function listeningLaneOf(movement: ShippedMovement): Promise<ListeningLane | undefined> {
   const pin = movement.version.languageVersion;
-  const version = isLegacyLanguageVersion(pin) ? versionOfLegacyId(pin) : versionOf(pin);
+  const version = versionOf(pin);
   return version?.listenRows?.();
 }
 

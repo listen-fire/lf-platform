@@ -1,8 +1,8 @@
-// Project A's production settings, honoured by each version inside one
-// process: MOVEMENT_MAX_SEGMENT_SECONDS by each version's own engine (its
-// segment wall clock), AFFINITY_MAX_CALLS_PER_RUN by each version's own
-// Affinity module (its run-scoped call count). One jest process runs a 0.12
-// segment on 0.12's run host and a 0.15 segment on this release's engine.
+// Project A's production settings, honoured inside the process:
+// MOVEMENT_MAX_SEGMENT_SECONDS by the engine (its segment wall clock),
+// AFFINITY_MAX_CALLS_PER_RUN by the Affinity module (its run-scoped call
+// count). A carried version honours them through its own engine and modules,
+// which its own package proves.
 
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -11,91 +11,20 @@ import { credentialIdsFor, makeTestHost } from 'movement-engine/public/testing';
 import { positionData } from 'movement-engine/public/catalog';
 import { isAdapterCallCeilingExceeded, withSegment } from 'movement-engine/public/adapter-support';
 import type { Adapter } from 'movement-engine/public/adapter';
-import { InMemoryWriteLocks } from 'movement-engine/public/write-locks';
+import type { EngineHost } from 'movement-engine/public/host';
 import { runMovement } from 'movement-engine/public/movement-engine';
 import { mockCatalogSnapshot, LANGUAGE_VERSION } from 'movement-lang';
 import { AffinityAPIClient } from '@listen-fire/affinity/api_client';
 
-import { runningOf, type RunPlatform, type RunningLane, type TeamFacts } from '..';
-
 const TEAM = '00000000-0000-4000-8000-000000000012';
 
-const refused = (what: string) => async (): Promise<never> => {
-  throw new Error(`${what} is not part of this test`);
-};
-
-function team(credentials: TeamFacts['credentials'] = []): TeamFacts {
-  return { credentials, files: [], connectOf: () => 'key-entry', kgChangeWebhooks: false, mcpEnabled: false, whatsappNumber: null };
-}
-
-/** The platform as a fake: a file render that takes `renderMs`, and modules
- *  hosted with `fields` as their credential. */
-function platform(input: { renderMs?: number; fields?: Record<string, string> } = {}): RunPlatform {
-  const log = { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
-  return {
-    recordEngine: () => {},
-    modules: {
-      hostFor: () => ({
-        credential: { name: 'api_key', fields: async () => input.fields ?? {}, update: async () => {} },
-        kv: { get: refused('kv'), set: refused('kv'), delete: refused('kv'), list: refused('kv'), compareAndSet: refused('kv') },
-        files: { put: refused('files'), read: refused('files'), expose: refused('files') },
-      }),
-      parts: {
-        askAnswerUrl: () => '',
-        kgStore: () => {
-          throw new Error('no kg');
-        },
-        kgChangeWebhooks: false,
-        slackChat: refused('slack'),
-        readFile: refused('readFile'),
-        whatsappNumber: null,
-        isExposedFileUrl: () => false,
-      systemRecords: { failedRuns: async () => [], storedEvents: async () => [], webBaseUrl: () => '' },
-        remoteInstall: refused('remote installs'),
-        readDocument: refused('readDocument'),
-      },
-      log,
-      validateResults: false,
-    },
-    credentials: { belongsTo: () => true },
-    llm: { client: { call: refused('llm') }, extractCall: { call: refused('extract') }, transforms: { invoke: refused('plugins') }, arbitrateEntities: refused('judge') },
-    files: {
-      resolveFileText: refused('file text'),
-      render: async ({ content }) => {
-        await new Promise((resolve) => setTimeout(resolve, input.renderMs ?? 0));
-        return { __brand: 'FileRef', name: 'out.txt', contentType: 'text/plain', size: content.length, source: { store: 'document', objectUri: 'mem://out' } } as never;
-      },
-    },
-    withFileOwners: (_owners, call) => call(),
-    bindings: { record: refused('bindings'), findBoundCounterpart: refused('bindings'), delete: refused('bindings') },
-    locks: new InMemoryWriteLocks(),
-    actingUser: async () => null,
-    control: { cancelled: async () => false, cancelledNow: async () => false, leaseLost: () => false },
+/** A file render that takes `ms`. */
+const slowRender =
+  (ms: number): EngineHost['files']['render'] =>
+  async ({ content }) => {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+    return { __brand: 'FileRef', name: 'out.txt', contentType: 'text/plain', size: content.length, source: { store: 'document', objectUri: 'mem://out' } } as never;
   };
-}
-
-async function lane012(): Promise<RunningLane> {
-  const running = runningOf('0.12.13');
-  if (running.kind !== 'carried') throw new Error('0.12 does not run on this build');
-  return running.lane();
-}
-
-async function run012(source: string, movementName: string, p: RunPlatform, credentials: TeamFacts['credentials'] = []) {
-  const lane = await lane012();
-  return lane.runSegment(
-    {
-      source,
-      pin: '0.12.13',
-      movementName,
-      event: lane.manualInvocationEvent({ key: 'limits', invocation: { firedAt: new Date().toISOString(), text: 'x' } }),
-      teamId: TEAM,
-      firedAt: new Date().toISOString(),
-      runId: 'run-012',
-      team: team(credentials),
-    },
-    p,
-  );
-}
 
 function withEnv(name: string, value: string) {
   const before = process.env[name];
@@ -130,16 +59,10 @@ function sourceAdapter(): Adapter {
   };
 }
 
-describe('MOVEMENT_MAX_SEGMENT_SECONDS, read by each version in one process', () => {
+describe('MOVEMENT_MAX_SEGMENT_SECONDS', () => {
   withEnv('MOVEMENT_MAX_SEGMENT_SECONDS', '1');
 
-  it('stops a 0.12 segment that outlives it, with 0.12\'s own wall-clock failure', async () => {
-    const source = 'function slow(run: <manual-[:Invocation]->>) {\n  f = File.from("x", "text")\n  return f\n}\nlisten to manual fire slow\n';
-    const outcome = await run012(source, 'slow', platform({ renderMs: 1_500 }));
-    expect(outcome).toMatchObject({ kind: 'failed', code: 'MOVENG_LIMIT_WALL_CLOCK' });
-  }, 30_000);
-
-  it('stops a 0.15 segment that outlives it, in the same process', async () => {
+  it('stops a segment that outlives it', async () => {
     const catalog = mockCatalogSnapshot({
       adapters: {
         email: {
@@ -170,18 +93,14 @@ describe('MOVEMENT_MAX_SEGMENT_SECONDS, read by each version in one process', ()
       credentialIds: credentialIdsFor(catalog, (name) => `cred-${name}`),
       host: makeTestHost({
         adapters: { resolve: () => sourceAdapter() },
-        files: { render: platform({ renderMs: 1_500 }).files.render },
+        files: { render: slowRender(1_500) },
       }),
     }).catch((error: unknown) => error);
     expect(String(failure)).toContain('MOVENG_LIMIT_WALL_CLOCK');
   }, 30_000);
 });
 
-const SYNC =
-  'import { affinity } from adapters\nimport { `Acme Affinity` } from credentials\n\ncrm = connect affinity using `Acme Affinity`\n\n' +
-  'function sync(run: <manual-[:Invocation]->>) {\n  write crm-[:Organization]-> {\n    Name: run.Text\n  }\n}\n\nlisten to manual fire sync\n';
-
-describe('AFFINITY_MAX_CALLS_PER_RUN, read by each version\'s Affinity module in one process', () => {
+describe("AFFINITY_MAX_CALLS_PER_RUN, read by the Affinity module", () => {
   withEnv('AFFINITY_MAX_CALLS_PER_RUN', '2');
   let server: http.Server;
   let baseUrl: string;
@@ -192,7 +111,7 @@ describe('AFFINITY_MAX_CALLS_PER_RUN, read by each version\'s Affinity module in
     server = http.createServer((req, res) => {
       requests += 1;
       res.writeHead(200, { 'content-type': 'application/json' });
-      // A read of an organization of this release is answered as Affinity does; a 0.12 run's reads fail on `[]`.
+      // A read of an organization is answered as Affinity does; anything else on `[]`.
       res.end(answersOrganizations && req.url?.startsWith('/organizations/') === true ? JSON.stringify({ id: 1 }) : '[]');
     });
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -202,22 +121,7 @@ describe('AFFINITY_MAX_CALLS_PER_RUN, read by each version\'s Affinity module in
     await new Promise((resolve) => server.close(resolve));
   });
 
-  it('a 0.12 run against Affinity stops at the ceiling: 0.12\'s Affinity module counts its calls in the run\'s segment', async () => {
-    requests = 0;
-    const source = SYNC;
-    const outcome = await run012(source, 'sync', platform({ fields: { apiKey: 'k', baseUrl } }), [
-      { id: 'cred-affinity', name: 'Acme Affinity', type: 'AFFINITY' },
-    ]);
-    expect(outcome.kind).not.toBe('ran');
-    expect(JSON.stringify(outcome)).toContain('AFFINITY_MAX_CALLS_PER_RUN');
-  }, 30_000);
-
-  it('a 0.15 run\'s Affinity module stops at the same ceiling, in the process a 0.12 run just did', async () => {
-    // The 0.12 run first: both versions' copies of the run scope live in this process.
-    requests = 0;
-    await run012(SYNC, 'sync', platform({ fields: { apiKey: 'k', baseUrl } }), [{ id: 'cred-affinity', name: 'Acme Affinity', type: 'AFFINITY' }]);
-
-    // Then this release's Affinity module, in a segment as the engine's host opens one.
+  it('stops a run at the ceiling, in a segment as the engine\'s host opens one', async () => {
     requests = 0;
     answersOrganizations = true;
     const client = new AffinityAPIClient({ apiKey: 'k', baseUrl });

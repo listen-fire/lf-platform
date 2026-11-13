@@ -19,7 +19,7 @@ import { makeMetaPosition } from 'movement-engine/public/catalog';
 import { BASE_RUNTIME_CAPABILITIES } from 'movement-engine/public/adapter';
 import { defineModule, type ModuleContext } from 'module-kit';
 import { airtableModule } from '@listen-fire/airtable';
-import { runningOf } from '@listen-fire/language-versions';
+import { carriedVersions } from '@listen-fire/language-versions';
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 
@@ -108,16 +108,15 @@ describe("a carried version's module, hosted by the platform", () => {
   });
 
   it('every module a carried version reaches has a line on this platform', async () => {
-    const running = runningOf('0.12.13');
-    if (running.kind !== 'carried') throw new Error('0.12 does not run on this build');
-    const lane = await running.lane();
-    const types = lane.hostedModuleTypes();
-    expect(types).toContain('affinity');
-    const lineless = types.filter((adapterType) => {
-      const entry = BUILTIN_MODULES[adapterType];
-      return entry?.kind !== 'adapter' || entry.line !== 'module';
-    });
-    expect(lineless).toEqual([]);
+    for (const version of carriedVersions()) {
+      const { run } = version.provides;
+      if (run.kind !== 'carried') continue;
+      const lineless = (await run.lane()).hostedModuleTypes().filter((adapterType) => {
+        const entry = BUILTIN_MODULES[adapterType];
+        return entry?.kind !== 'adapter' || entry.line !== 'module';
+      });
+      expect([version.key, lineless]).toEqual([version.key, []]);
+    }
   });
 
   it("refuses a declaration this platform cannot read, by the module's name", () => {
