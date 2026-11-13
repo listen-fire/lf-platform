@@ -26,6 +26,14 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 
 <!-- add merged PRs here -->
 
+## [0.15.3] - 2026-11-12
+
+A patch on 0.15.2. The language core stays at 0.15.2; only the Affinity module and the platform's own Bright Data and LinkedIn handling move. Nothing needs setting: the new Bright Data settings default to the values below.
+
+- Affinity module 0.14.2: an organisation whose domain Affinity refuses (a punycode domain, say) is now written without the domain instead of failing, and the ops Slack channel gets an alert naming the organisation and the domain.
+- A LinkedIn profile that Bright Data reports as a dead page is logged as information, not an error. The page cannot be opened (private, renamed or gone), and research carries on without it, so it no longer alerts on a healthy run. Every other Bright Data error code still logs as an error.
+- Failed Bright Data searches now slow every search down once they come in a row. A single failure worth retrying (a 5xx, a timeout, an empty or malformed reply) only makes that search wait 15 seconds before its retry, and other searches carry on. The second failure in a row closes the search zone for every process for 15 seconds, the third for 30, and the fourth and later for 60, each spread by up to 20% either side; a success starts the count again. A 429 always closes the zone at once, for at least its `Retry-After` (30 seconds when it names none). At most 4 searches run at once, beside the 14 a minute. The new settings `BRIGHT_DATA_SERP_CONCURRENT`, `BRIGHT_DATA_SERP_BACKOFF_BASE_MS`, `BRIGHT_DATA_SERP_BACKOFF_MAX_MS` and `BRIGHT_DATA_SERP_BACKOFF_JITTER` each default to those values, so nothing needs setting. Each search's log line now carries the pause it set (`pauseMs`) and whether it closed the zone (`closedZone`).
+
 ## [0.15.2] - 2026-11-06
 
 The platform release that matches the language's 0.15.2, and the first full release since 0.12.13. It moves the core from 0.12.13 to 0.15.2 through 0.13 and 0.15.1, so the lines below name the core at each step; the catalog block says where it ended. Automations pinned to 0.12 keep running on 0.12's own engine in the same service until each is upgraded. Moving off 0.12.13 asks something of you: read [`deploy/UPGRADING.md`](deploy/UPGRADING.md), from "Before moving off 0.12.13".
@@ -2321,7 +2329,8 @@ Releases before v0.11 are kept one file per minor line, newest first:
 - [v0.2.x](docs/changelog/v0.2.md) (v0.2.0)
 - [v0.1.x](docs/changelog/v0.1.md) (v0.1.0 to v0.1.2)
 
-[Unreleased]: https://github.com/listen-fire/lf-platform/compare/v0.15.2...HEAD
+[Unreleased]: https://github.com/listen-fire/lf-platform/compare/v0.15.3...HEAD
+[0.15.3]: https://github.com/listen-fire/lf-platform/compare/v0.15.2...v0.15.3
 [0.15.2]: https://github.com/listen-fire/lf-platform/compare/v0.12.13...v0.15.2
 [0.12.13]: https://github.com/listen-fire/lf-platform/compare/v0.12.11...v0.12.13
 [0.12.11]: https://github.com/listen-fire/lf-platform/compare/v0.12.8...v0.12.11

@@ -24,5 +24,24 @@ reportAffinityWriteFailuresTo(async ({ kind, detail }) => {
         opsTitle: 'Affinity error adding a field value',
       });
       return;
+    case 'domain':
+      await sendSlackNotification({
+        type: 'DEALFLOW',
+        text: `:warning: Affinity refused an organisation's domain, written without it (${detail})`,
+        opsTitle: 'Affinity refused an organisation domain',
+      });
+      return;
+    default: {
+      // The type check catches a new kind at the next bump; until then a newer
+      // module still alerts, because throwing here would fail the write the
+      // module chose to walk past.
+      const unknownKind: never = kind;
+      await sendSlackNotification({
+        type: 'DEALFLOW',
+        text: `:warning: Affinity refused a ${String(unknownKind)} write (${detail})`,
+        opsTitle: 'Affinity refused a write',
+      });
+      return;
+    }
   }
 });

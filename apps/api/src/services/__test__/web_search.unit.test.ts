@@ -14,8 +14,9 @@ jest.mock('../../lib/web_search', () => ({
 }));
 
 import { installLimiter, MemoryLimiter } from 'movement-engine/public/limiter';
+import { logger } from 'movement-engine/public/log';
 
-import { parseBrightDataSerpPerMinute, WebSearchService } from '../web_search';
+import { brightDataSerpPacing, WebSearchService } from '../web_search';
 
 const fetchMock = jest.fn();
 global.fetch = fetchMock as never;
@@ -39,20 +40,29 @@ beforeEach(() => {
   // more than a default minute's worth between them; the limit itself is
   // under test below.
   process.env.BRIGHT_DATA_SERP_PER_MINUTE = '1000';
+  delete process.env.BRIGHT_DATA_SERP_CONCURRENT;
+  delete process.env.BRIGHT_DATA_SERP_BACKOFF_BASE_MS;
+  delete process.env.BRIGHT_DATA_SERP_BACKOFF_MAX_MS;
+  delete process.env.BRIGHT_DATA_SERP_BACKOFF_JITTER;
+  // The middle of the spread, so a pause lands exactly on its curve; the
+  // spread itself is under test below.
+  jest.spyOn(Math, 'random').mockReturnValue(0.5);
 });
 
 afterEach(() => {
   jest.useRealTimers();
+  jest.restoreAllMocks();
 });
 
 afterAll(() => {
   process.env = ORIGINAL_ENV;
 });
 
-// The two retry waits in web_search.ts. Advancing fake timers by these
-// flushes a wait without sleeping the suite.
-const RETRY_DELAY_MS = 15_000;
-const RATE_LIMIT_RETRY_DELAY_MS = 30_000;
+// The default pauses in web_search.ts: a first failure's, and a 429's that
+// names no wait. Advancing fake timers by these flushes a pause without
+// sleeping the suite.
+const FIRST_PAUSE_MS = 15_000;
+const RATE_LIMIT_PAUSE_MS = 30_000;
 
 const jsonResponse = (body: unknown, init: ResponseInit = {}) =>
   new Response(JSON.stringify(body), { status: 200, ...init });
@@ -315,7 +325,7 @@ describe('WebSearchService.search — brightdata response mapping', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ organic: [] }));
 
     const promise = WebSearchService.search('acme');
-    await jest.advanceTimersByTimeAsync(RETRY_DELAY_MS);
+    await jest.advanceTimersByTimeAsync(FIRST_PAUSE_MS);
 
     expect((await promise).items).toEqual([]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -326,7 +336,7 @@ describe('WebSearchService.search — brightdata response mapping', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ organic: [] }));
 
     const promise = WebSearchService.search('acme');
-    await jest.advanceTimersByTimeAsync(RETRY_DELAY_MS);
+    await jest.advanceTimersByTimeAsync(FIRST_PAUSE_MS);
 
     expect((await promise).items).toEqual([]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -369,7 +379,7 @@ describe('WebSearchService.search — brightdata retries', () => {
     );
 
     const promise = WebSearchService.search('acme');
-    await jest.advanceTimersByTimeAsync(RETRY_DELAY_MS);
+    await jest.advanceTimersByTimeAsync(FIRST_PAUSE_MS);
 
     expect((await promise).items).toEqual([
       { link: 'https://example.com/', title: 'Example', snippet: undefined },
@@ -382,7 +392,7 @@ describe('WebSearchService.search — brightdata retries', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ organic: [] }));
 
     const promise = WebSearchService.search('acme');
-    await jest.advanceTimersByTimeAsync(RETRY_DELAY_MS);
+    await jest.advanceTimersByTimeAsync(FIRST_PAUSE_MS);
 
     expect((await promise).items).toEqual([]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -393,7 +403,7 @@ describe('WebSearchService.search — brightdata retries', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ organic: [] }));
 
     const promise = WebSearchService.search('acme');
-    await jest.advanceTimersByTimeAsync(RETRY_DELAY_MS);
+    await jest.advanceTimersByTimeAsync(FIRST_PAUSE_MS);
 
     expect((await promise).items).toEqual([]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
@@ -407,15 +417,30 @@ describe('WebSearchService.search — brightdata retries', () => {
 
     const promise = WebSearchService.search('acme');
 
-    await jest.advanceTimersByTimeAsync(RETRY_DELAY_MS);
+    await jest.advanceTimersByTimeAsync(FIRST_PAUSE_MS);
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    await jest.advanceTimersByTimeAsync(RATE_LIMIT_RETRY_DELAY_MS - RETRY_DELAY_MS);
+    await jest.advanceTimersByTimeAsync(RATE_LIMIT_PAUSE_MS - FIRST_PAUSE_MS);
     expect((await promise).items).toEqual([]);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("waits the wait Bright Data's Retry-After names, not the default", async () => {
+  it("waits the wait Bright Data's Retry-After names when it is longer than the pause", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response('', { status: 200, headers: { 'x-brd-status-code': '429', 'retry-after': '45' } }),
+    );
+    fetchMock.mockResolvedValueOnce(jsonResponse({ organic: [] }));
+
+    const promise = WebSearchService.search('acme');
+
+    await jest.advanceTimersByTimeAsync(44_999);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await jest.advanceTimersByTimeAsync(1);
+    expect((await promise).items).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('a Retry-After shorter than the pause waits the pause', async () => {
     fetchMock.mockResolvedValueOnce(
       new Response('', { status: 200, headers: { 'x-brd-status-code': '429', 'retry-after': '7' } }),
     );
@@ -423,7 +448,7 @@ describe('WebSearchService.search — brightdata retries', () => {
 
     const promise = WebSearchService.search('acme');
 
-    await jest.advanceTimersByTimeAsync(6_999);
+    await jest.advanceTimersByTimeAsync(FIRST_PAUSE_MS - 1);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     await jest.advanceTimersByTimeAsync(1);
     expect((await promise).items).toEqual([]);
@@ -435,7 +460,7 @@ describe('WebSearchService.search — brightdata retries', () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ organic: [] }));
 
     const promise = WebSearchService.search('acme');
-    await jest.advanceTimersByTimeAsync(RATE_LIMIT_RETRY_DELAY_MS - 1);
+    await jest.advanceTimersByTimeAsync(RATE_LIMIT_PAUSE_MS - 1);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     await jest.advanceTimersByTimeAsync(1);
     expect((await promise).items).toEqual([]);
@@ -478,31 +503,85 @@ describe('WebSearchService.search — brightdata retries', () => {
     const expectation = expect(WebSearchService.search('acme')).rejects.toThrow(
       /^Bright Data SERP request failed after 3 attempts: #1 timed out \(\d+ms\); #2 Bright Data reported 502: waiting for selector "#main" failed \(\d+ms\); #3 response was not JSON \(200, 0 bytes\) \(\d+ms\)$/,
     );
-    await jest.advanceTimersByTimeAsync(RETRY_DELAY_MS);
-    await jest.advanceTimersByTimeAsync(RETRY_DELAY_MS);
+    // The first failure waits 15s, and so does the second in a row.
+    await jest.advanceTimersByTimeAsync(FIRST_PAUSE_MS);
+    await jest.advanceTimersByTimeAsync(FIRST_PAUSE_MS);
     await expectation;
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });
 
-describe('BRIGHT_DATA_SERP_PER_MINUTE', () => {
-  it('defaults to 14 when unset or blank', () => {
-    expect(parseBrightDataSerpPerMinute(undefined)).toBe(14);
-    expect(parseBrightDataSerpPerMinute('  ')).toBe(14);
+describe('Bright Data SERP pacing settings', () => {
+  it('each has a default, so an unset or blank environment needs nothing', () => {
+    const defaults = {
+      perMinute: 14,
+      concurrent: 4,
+      backoffBaseMs: 15_000,
+      backoffMaxMs: 60_000,
+      backoffJitter: 0.2,
+    };
+    expect(brightDataSerpPacing({})).toEqual(defaults);
+    expect(
+      brightDataSerpPacing({
+        BRIGHT_DATA_SERP_PER_MINUTE: '  ',
+        BRIGHT_DATA_SERP_CONCURRENT: '',
+        BRIGHT_DATA_SERP_BACKOFF_BASE_MS: ' ',
+        BRIGHT_DATA_SERP_BACKOFF_MAX_MS: '',
+        BRIGHT_DATA_SERP_BACKOFF_JITTER: ' ',
+      }),
+    ).toEqual(defaults);
   });
 
-  it('reads a positive whole number', () => {
-    expect(parseBrightDataSerpPerMinute('30')).toBe(30);
+  it('reads each one', () => {
+    expect(
+      brightDataSerpPacing({
+        BRIGHT_DATA_SERP_PER_MINUTE: '30',
+        BRIGHT_DATA_SERP_CONCURRENT: '2',
+        BRIGHT_DATA_SERP_BACKOFF_BASE_MS: '1000',
+        BRIGHT_DATA_SERP_BACKOFF_MAX_MS: '8000',
+        BRIGHT_DATA_SERP_BACKOFF_JITTER: '0',
+      }),
+    ).toEqual({
+      perMinute: 30,
+      concurrent: 2,
+      backoffBaseMs: 1_000,
+      backoffMaxMs: 8_000,
+      backoffJitter: 0,
+    });
   });
 
-  it.each(['fourteen', '0', '-5', '1.5', '14/min'])(
-    'refuses %p naming the variable',
+  describe.each([
+    'BRIGHT_DATA_SERP_PER_MINUTE',
+    'BRIGHT_DATA_SERP_CONCURRENT',
+    'BRIGHT_DATA_SERP_BACKOFF_BASE_MS',
+    'BRIGHT_DATA_SERP_BACKOFF_MAX_MS',
+  ])('%s', (name) => {
+    it.each(['fourteen', '0', '-5', '1.5', '14/min'])('refuses %p naming the variable', (raw) => {
+      expect(() => brightDataSerpPacing({ [name]: raw })).toThrow(
+        `${name}="${raw}" is not a positive whole number`,
+      );
+    });
+  });
+
+  it.each(['1', '1.5', '-0.1', 'a fifth', '20%'])(
+    'refuses a jitter of %p naming the variable',
     (raw) => {
-      expect(() => parseBrightDataSerpPerMinute(raw)).toThrow(
-        `BRIGHT_DATA_SERP_PER_MINUTE="${raw}" is not a positive whole number`,
+      expect(() => brightDataSerpPacing({ BRIGHT_DATA_SERP_BACKOFF_JITTER: raw })).toThrow(
+        `BRIGHT_DATA_SERP_BACKOFF_JITTER="${raw}" is not a fraction from 0 up to, but not including, 1`,
       );
     },
   );
+
+  it('refuses a ceiling below the first pause', () => {
+    expect(() =>
+      brightDataSerpPacing({
+        BRIGHT_DATA_SERP_BACKOFF_BASE_MS: '20000',
+        BRIGHT_DATA_SERP_BACKOFF_MAX_MS: '10000',
+      }),
+    ).toThrow(
+      'BRIGHT_DATA_SERP_BACKOFF_MAX_MS (10000) is below BRIGHT_DATA_SERP_BACKOFF_BASE_MS (20000)',
+    );
+  });
 });
 
 // Measured in production: thirty-odd searches demanded at once, and Bright
@@ -516,6 +595,9 @@ describe('Bright Data SERP pacing', () => {
     process.env.BRIGHT_DATA_ACCESS_TOKEN = 'token-123';
     process.env.BRIGHT_DATA_SERP_ZONE = 'serp_zone';
     process.env.BRIGHT_DATA_SERP_PER_MINUTE = '14';
+    // These demand dozens at once to find the minute's limit; the cap on how
+    // many run at once is under test below.
+    process.env.BRIGHT_DATA_SERP_CONCURRENT = '1000';
     fetchMock.mockImplementation(async () => jsonResponse({ organic: [] }));
   });
 
@@ -584,5 +666,296 @@ describe('Bright Data SERP pacing', () => {
     await jest.advanceTimersByTimeAsync(MINUTE_MS);
     await Promise.all(searches);
     expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+});
+
+// Measured in production: about 30% of searches failed under load, and only a
+// 429 slowed the others down. A lone failure only delays its own retry; failures
+// in a row close the zone for every search, for longer the more follow.
+describe('Bright Data SERP failures pause the zone', () => {
+  beforeEach(() => {
+    process.env.WEB_SEARCH_PROVIDER = 'brightdata';
+    process.env.BRIGHT_DATA_ACCESS_TOKEN = 'token-123';
+    process.env.BRIGHT_DATA_SERP_ZONE = 'serp_zone';
+  });
+
+  const badGateway = () =>
+    new Response('', { status: 200, headers: { 'x-brd-status-code': '502' } });
+  const found = () => jsonResponse({ organic: [] });
+
+  /** When each request reached Bright Data, counted from now. */
+  function recordSends(reply: () => Response): number[] {
+    const start = Date.now();
+    const sentAt: number[] = [];
+    fetchMock.mockImplementation(async () => {
+      sentAt.push(Date.now() - start);
+      return reply();
+    });
+    return sentAt;
+  }
+
+  /** Each reply held open until the test answers it. */
+  function holdReplies(): Array<(response: Response) => void> {
+    const answers: Array<(response: Response) => void> = [];
+    fetchMock.mockImplementation(() => new Promise<Response>((resolve) => answers.push(resolve)));
+    return answers;
+  }
+
+  function loggedClosures(info: jest.SpyInstance): unknown[] {
+    return info.mock.calls
+      .filter(([message]) => message === '[web_search] Bright Data SERP request')
+      .map(([, meta]: unknown[]) =>
+        typeof meta === 'object' && meta !== null && 'closedZone' in meta ? meta.closedZone : undefined,
+      );
+  }
+
+  function loggedPauses(info: jest.SpyInstance): unknown[] {
+    return info.mock.calls
+      .filter(([message]) => message === '[web_search] Bright Data SERP request')
+      .map(([, meta]: unknown[]) =>
+        typeof meta === 'object' && meta !== null && 'pauseMs' in meta ? meta.pauseMs : undefined,
+      );
+  }
+
+  it('one 502 delays only its own retry: a different query starts at once', async () => {
+    fetchMock.mockResolvedValueOnce(badGateway());
+    fetchMock.mockImplementation(async () => found());
+
+    const first = WebSearchService.search('first');
+    await jest.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const second = WebSearchService.search('second');
+    await jest.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    // The failed search's own retry still waits its 15s.
+    await jest.advanceTimersByTimeAsync(FIRST_PAUSE_MS - 1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await jest.advanceTimersByTimeAsync(1);
+    await Promise.all([first, second]);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('a search waiting out its own retry holds no slot: with the cap at 1, another search runs meanwhile', async () => {
+    process.env.BRIGHT_DATA_SERP_CONCURRENT = '1';
+    fetchMock.mockResolvedValueOnce(badGateway());
+    fetchMock.mockImplementation(async () => found());
+
+    const first = WebSearchService.search('first');
+    await jest.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const second = WebSearchService.search('second');
+    await jest.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await second;
+
+    await jest.advanceTimersByTimeAsync(FIRST_PAUSE_MS);
+    await first;
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('two 502s in a row close the zone: a different query waits 15s', async () => {
+    fetchMock.mockResolvedValueOnce(badGateway());
+    fetchMock.mockResolvedValueOnce(badGateway());
+    fetchMock.mockImplementation(async () => found());
+
+    const first = WebSearchService.search('first');
+    await jest.advanceTimersByTimeAsync(0);
+    const second = WebSearchService.search('second');
+    await jest.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const third = WebSearchService.search('third');
+    await jest.advanceTimersByTimeAsync(FIRST_PAUSE_MS - 1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    await jest.advanceTimersByTimeAsync(1);
+    await Promise.all([first, second, third]);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+  });
+
+  it('a search waiting for a free slot is not let in between the second failure and the zone closing', async () => {
+    process.env.BRIGHT_DATA_SERP_CONCURRENT = '1';
+    fetchMock.mockResolvedValueOnce(badGateway());
+    fetchMock.mockResolvedValueOnce(badGateway());
+    fetchMock.mockImplementation(async () => found());
+
+    const first = WebSearchService.search('first');
+    const second = WebSearchService.search('second');
+    const third = WebSearchService.search('third');
+    await jest.advanceTimersByTimeAsync(FIRST_PAUSE_MS - 1);
+    // The first failed, the second failed in a row and closed the zone, and
+    // the third, holding the next slot, still waits.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    await jest.advanceTimersByTimeAsync(1);
+    await Promise.all([first, second, third]);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+  });
+
+  it('failures in a row close the zone for 15s, 30s, then the 60s ceiling, and the log says each', async () => {
+    const info = jest.spyOn(logger, 'info');
+    const sentAt = recordSends(badGateway);
+
+    const first = WebSearchService.search('first').catch((error: unknown) => error);
+    await jest.advanceTimersByTimeAsync(30_000);
+    expect(await first).toBeInstanceOf(Error);
+
+    // A new search carries on the zone's run of failures, not a fresh one.
+    const second = WebSearchService.search('second').catch((error: unknown) => error);
+    await jest.advanceTimersByTimeAsync(3 * 60_000);
+    expect(await second).toBeInstanceOf(Error);
+
+    // The first failure waits on its own, the second closes the zone for 15s,
+    // the third for 30s, the fourth and later for 60s.
+    expect(sentAt).toEqual([0, 15_000, 30_000, 60_000, 120_000, 180_000]);
+    expect(loggedPauses(info)).toEqual([15_000, 15_000, 30_000, 60_000, 60_000, 60_000]);
+    expect(loggedClosures(info)).toEqual([false, true, true, true, true, true]);
+  });
+
+  it('a success resets the run of failures, so the next single failure closes nothing', async () => {
+    fetchMock.mockResolvedValueOnce(badGateway());
+    fetchMock.mockResolvedValueOnce(badGateway());
+    fetchMock.mockResolvedValueOnce(found());
+    fetchMock.mockResolvedValueOnce(badGateway());
+    fetchMock.mockImplementation(async () => found());
+
+    const first = WebSearchService.search('first');
+    await jest.advanceTimersByTimeAsync(2 * FIRST_PAUSE_MS);
+    await first;
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+
+    // Without the reset this would be a third failure in a row.
+    const second = WebSearchService.search('second');
+    await jest.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    const other = WebSearchService.search('other');
+    await jest.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    await other;
+
+    await jest.advanceTimersByTimeAsync(FIRST_PAUSE_MS);
+    await second;
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+  });
+
+  it('a 429 closes the zone on its first occurrence, for its Retry-After when that is longer than the curve', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response('', { status: 200, headers: { 'x-brd-status-code': '429', 'retry-after': '45' } }),
+    );
+    fetchMock.mockImplementation(async () => found());
+
+    const first = WebSearchService.search('first');
+    await jest.advanceTimersByTimeAsync(0);
+    const second = WebSearchService.search('second');
+    await jest.advanceTimersByTimeAsync(44_999);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await jest.advanceTimersByTimeAsync(1);
+    await Promise.all([first, second]);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("a 429's Retry-After longer than the curve is honoured further along the run too", async () => {
+    fetchMock.mockResolvedValueOnce(badGateway());
+    fetchMock.mockResolvedValueOnce(
+      new Response('', { status: 200, headers: { 'x-brd-status-code': '429', 'retry-after': '45' } }),
+    );
+    const sentAt = recordSends(found);
+
+    const promise = WebSearchService.search('acme');
+    // The curve says 15s for the second failure; Bright Data asked for 45s.
+    await jest.advanceTimersByTimeAsync(FIRST_PAUSE_MS + 45_000);
+    await promise;
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(sentAt).toEqual([FIRST_PAUSE_MS + 45_000]);
+  });
+
+  it('runs at most 4 searches at once, and a fifth starts when one finishes', async () => {
+    const answers = holdReplies();
+
+    const searches = Array.from({ length: 5 }, (_, i) => WebSearchService.search(`q${i}`));
+    await jest.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+
+    // However long the four take, the fifth waits for one of them.
+    await jest.advanceTimersByTimeAsync(80_000);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+
+    answers[0](found());
+    await jest.advanceTimersByTimeAsync(0);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+
+    for (const answer of answers.slice(1)) answer(found());
+    await Promise.all(searches);
+  });
+
+  describe('each setting overrides its default', () => {
+    it('BRIGHT_DATA_SERP_CONCURRENT', async () => {
+      process.env.BRIGHT_DATA_SERP_CONCURRENT = '2';
+      const answers = holdReplies();
+
+      const searches = Array.from({ length: 3 }, (_, i) => WebSearchService.search(`q${i}`));
+      await jest.advanceTimersByTimeAsync(0);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+
+      answers[0](found());
+      await jest.advanceTimersByTimeAsync(0);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+
+      for (const answer of answers.slice(1)) answer(found());
+      await Promise.all(searches);
+    });
+
+    it('BRIGHT_DATA_SERP_BACKOFF_BASE_MS', async () => {
+      process.env.BRIGHT_DATA_SERP_BACKOFF_BASE_MS = '1000';
+      fetchMock.mockResolvedValueOnce(badGateway());
+      fetchMock.mockImplementation(async () => found());
+
+      const promise = WebSearchService.search('acme');
+      await jest.advanceTimersByTimeAsync(999);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      await jest.advanceTimersByTimeAsync(1);
+      await promise;
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('BRIGHT_DATA_SERP_BACKOFF_MAX_MS', async () => {
+      process.env.BRIGHT_DATA_SERP_BACKOFF_MAX_MS = '20000';
+      const sentAt = recordSends(badGateway);
+
+      const first = WebSearchService.search('first').catch((error: unknown) => error);
+      await jest.advanceTimersByTimeAsync(30_000);
+      expect(await first).toBeInstanceOf(Error);
+      const second = WebSearchService.search('second').catch((error: unknown) => error);
+      await jest.advanceTimersByTimeAsync(60_000);
+      expect(await second).toBeInstanceOf(Error);
+      // The third failure in a row would close the zone for 30s; the 20s
+      // ceiling holds it to 20s.
+      expect(sentAt).toEqual([0, 15_000, 30_000, 50_000, 70_000, 90_000]);
+    });
+
+    it.each([
+      // [setting, random, pause]: the default spreads ±20%, a set one by its own fraction.
+      [undefined, 0, 12_000],
+      [undefined, 0.75, 16_500],
+      ['0.5', 0, 7_500],
+      ['0.5', 0.75, 18_750],
+      ['0', 0, 15_000],
+    ])('BRIGHT_DATA_SERP_BACKOFF_JITTER=%p with a random draw of %p pauses %pms', async (jitter, random, pause) => {
+      if (jitter !== undefined) process.env.BRIGHT_DATA_SERP_BACKOFF_JITTER = jitter;
+      jest.spyOn(Math, 'random').mockReturnValue(random);
+      fetchMock.mockResolvedValueOnce(badGateway());
+      fetchMock.mockImplementation(async () => found());
+
+      const promise = WebSearchService.search('acme');
+      await jest.advanceTimersByTimeAsync(pause - 1);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      await jest.advanceTimersByTimeAsync(1);
+      await promise;
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
   });
 });
