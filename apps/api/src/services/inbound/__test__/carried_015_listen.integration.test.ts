@@ -1,16 +1,20 @@
-// One Slack delivery, two versions (real Postgres, the real door and drains):
-// a team has a 0.16 automation and a 0.15.3 automation listening to the same
-// Slack connection. The row's pin chooses who reads it. The current door judges
-// only the 0.16 row, with this release's judge and its filter; the 0.15 row is
-// read again by 0.15's own Slack module, judged by 0.15's judge, and gated by
-// the old ownership gate, which asks 0.15's module who sent the message. An
-// unregistered sender is suppressed there; a team member's message runs the
-// 0.15 automation on 0.15's engine.
+// One Slack delivery, two versions (real Postgres, the real door, save and
+// drains): a team has a 0.16 automation and a 0.15.3 automation listening to
+// the same Slack connection. A save of the 0.15.3 automation plans its listen
+// with 0.15's own planner and ships it as a 0.15 row. The row's pin chooses who
+// reads it. The current door judges only the 0.16 row, with this release's
+// judge and its filter; the 0.15 row is read again by 0.15's own Slack module,
+// judged by 0.15's judge, and gated by the old ownership gate, which asks
+// 0.15's module who sent the message. An unregistered sender is suppressed
+// there; a team member's message runs the 0.15 automation on 0.15's engine. An
+// edit re-plans the row under 0.15; an upgrade re-plans it as 0.16's, and the
+// old gate no longer reads it.
 //
 // The one network seam is Slack's Web API, a local stand-in both releases'
 // modules reach as the test-harness team's fake. This release's module is
 // stood in for by its arrivals, as the door tests do: this test is about who
-// judges which row, and the 0.16 judge runs for real over them.
+// judges which row, and the 0.16 judge runs for real over them. The upgrade's
+// check reads this release's real Slack module, against the same stand-in.
 
 import { createServer, type Server } from 'node:http';
 import { randomUUID } from 'node:crypto';
@@ -28,7 +32,7 @@ jest.mock('../../translation_graph/adapters/resolve', () => ({
 }));
 
 import { LANGUAGE_VERSION } from 'movement-lang';
-import { versionOf } from '@listen-fire/language-versions';
+import { versionOf, type ListeningLane } from '@listen-fire/language-versions';
 
 import type { Arrival } from 'engine-contracts';
 import type { TeamId } from '../../../generated/kysely/core/Team';
@@ -44,13 +48,13 @@ import { insertTestListen, takenEquals } from '../../../test/harness/listens';
 import { ProvisioningService } from '../../provisioning';
 import { SLACK_APP_ID } from '../../credentials/app_id';
 import { drainUntilIdle, inProcessNotifier, resetWorkHandlersForTests, setWorkNotifier } from '../../work/drain';
-import { modulePlatform } from '../../translation_graph/movement/carried_run';
 import { registerCarriedRunWork } from '../../translation_graph/movement/carried_run_now';
-import { mintMovementVersionIfChanged } from '../../translation_graph/movement/version_store';
+import { upgradeMovement } from '../../translation_graph/movement/language_upgrade';
+import { saveMovement } from '../../translation_graph/movement/provision';
 import { registerDispatchWork } from '../../translation_graph/triggers/dispatch_event';
 import { handleSlackEventsInbound } from '../../webhook_sync/slack_events';
 import { registerReadDeliveryWork } from '../carried_delivery';
-import { savedListens } from '../listen_door';
+import { listenConfigSchema, savedListens } from '../listen_door';
 
 const SLACK_TEAM = 'T015';
 
@@ -79,11 +83,19 @@ const SLACK_015 =
   'function intake(m: <chat-[:Message]->>) {\n  who = @user_email\n  return who\n}\n' +
   'listen to chat-[:Channels]->-[m:Messages WHERE m.Message != ""]-> fire intake\n';
 
+/** The edit: the listen now fires for "deploy" only. */
+const SLACK_015_EDITED =
+  'import { slack } from adapters\nimport { deals } from credentials\nchat = connect slack using deals\n' +
+  'function intake(m: <chat-[:Message]->>) {\n  said = m.Message\n  return said\n}\n' +
+  'listen to chat-[:Channels]->-[m:Messages WHERE m.Message == "deploy"]-> fire intake\n';
+
 let slack: Server;
 let teamId: TeamId;
 let credentialsId: ExternalServiceCredentialsId;
 let listen016: TriggerId;
 let listen015: TriggerId;
+let carried: MovementId;
+let lane: ListeningLane;
 
 function envelope(input: { user: string; text: string; ts: string }) {
   return {
@@ -92,6 +104,12 @@ function envelope(input: { user: string; text: string; ts: string }) {
     event_id: `Ev${input.ts}`,
     event: { type: 'message', channel: 'C1', user: input.user, text: input.text, ts: input.ts },
   };
+}
+
+/** This release's real Slack module, which the upgrade's check reads. */
+function current016RealModule(): void {
+  const actual: typeof import('../../translation_graph/adapters/resolve') = jest.requireActual('../../translation_graph/adapters/resolve');
+  mockResolve.mockImplementation(actual.resolveAdapter);
 }
 
 /** This release's Slack module, as far as this test needs it: the message as
@@ -158,34 +176,13 @@ beforeAll(async () => {
   await getAutomationsQb(['movement']).insertInto('movement').values({ id: current, team_id: teamId, name: 'current', source: '', language_version: LANGUAGE_VERSION }).execute();
   listen016 = await insertTestListen({ teamId, movementId: current, adapterType: 'slack', edge: 'Messages', delivery: 'connection', credentialsId, movement: 'heard', taken: takenEquals('Message', 'go') });
 
-  // The 0.15.3 automation: shipped, and its listen planned by 0.15's own check.
-  const carried = randomUUID() as MovementId;
+  // The 0.15.3 automation, written then and never shipped: its listen is
+  // planned by the save below.
+  carried = randomUUID() as MovementId;
   await getAutomationsQb(['movement']).insertInto('movement').values({ id: carried, team_id: teamId, name: 'intake', source: SLACK_015, description: '', language_version: '0.15.3' }).execute();
-  await mintMovementVersionIfChanged({ teamId, movementId: carried, source: SLACK_015, languageVersion: '0.15.3' });
-  const lane = await versionOf('0.15.3')?.listenRows?.();
-  if (lane === undefined) throw new Error('test: 0.15 carries no listen lane');
-  const planned = await lane.planListens({
-    source: SLACK_015,
-    pin: '0.15.3',
-    file: 'intake',
-    team: { credentials: [{ id: credentialsId, name: 'deals', type: 'SLACK' }], files: [], connectOf: () => 'oauth', kgChangeWebhooks: false, mcpEnabled: false, whatsappNumber: null },
-    connected: { teamId, modules: modulePlatform() },
-  });
-  if (!planned.ok || planned.listens.length !== 1 || planned.refused.length > 0) throw new Error(`test: 0.15 did not plan the listen: ${JSON.stringify(planned)}`);
-  listen015 = randomUUID() as TriggerId;
-  await getAutomationsQb(['trigger'])
-    .insertInto('trigger')
-    .values({
-      id: listen015,
-      team_id: teamId,
-      name: 'movement/intake/intake',
-      kind: 'slack',
-      config: JSON.stringify({ listen: planned.listens[0] }),
-      movement_id: carried,
-      fired_movement_name: 'intake',
-      credentials_id: credentialsId,
-    })
-    .execute();
+  const listening = await versionOf('0.15.3')?.listenRows?.();
+  if (listening === undefined) throw new Error('test: 0.15 carries no listen lane');
+  lane = listening;
 });
 
 afterAll(async () => {
@@ -209,6 +206,8 @@ const pinOfRun = async (triggerId: TriggerId) =>
       .select('movement_version.language_version as pin')
       .executeTakeFirstOrThrow()
   ).pin;
+const rowsOf = (movementId: MovementId) =>
+  getAutomationsQb(['trigger']).selectFrom('trigger').where('movement_id', '=', movementId).select(['id', 'config', 'run_mode', 'credentials_id']).execute();
 const firesFor = async () => (await workOf('fire_event')).map((row) => (row.payload as { triggerId?: string }).triggerId);
 /** Each pass of the drain claims what is due; a row one pass queues (a judged
  *  receipt's dispatch, a run) is the next pass's. */
@@ -219,10 +218,21 @@ async function drainAll(): Promise<void> {
   }
 }
 const clearFires = () => getAutomationsQb(['work']).deleteFrom('work').where('team_id', '=', teamId).where('kind', '=', 'fire_event').execute();
+const save = (source: string) => saveMovement({ audience: { for: 'run' }, teamId, id: carried, source });
 
 describe('one Slack delivery read by the version each listen is pinned to (real Postgres)', () => {
-  it("the current door judges only the 0.16 row: the 0.15 row is no listen of this release's", async () => {
+  it("a fresh save of the 0.15.3 automation ships its listen as 0.15's row, which the current door skips", async () => {
+    const saved = await save(SLACK_015);
+    expect(saved).toEqual(expect.objectContaining({ ok: true, warnings: [], listeners: [expect.objectContaining({ kind: 'slack', movementName: 'intake', credentialsId, runMode: 'live', reused: false })] }));
+    if (!saved.ok) return;
+    listen015 = saved.listeners[0]!.triggerId as TriggerId;
+    const rows = await rowsOf(carried);
+    expect(rows).toEqual([expect.objectContaining({ id: listen015, run_mode: 'live', credentials_id: credentialsId })]);
+    // The row is 0.15's own plan, which only 0.15's reader claims.
+    expect(lane.isListenRow({ config: rows[0]!.config })).toBe(true);
     expect((await savedListens({ teamId, adapterType: 'slack' })).map((listen) => listen.triggerId)).toEqual([listen016]);
+    // The pin is 0.15.3 still: a save never moves it.
+    expect((await getAutomationsQb(['movement']).selectFrom('movement').where('id', '=', carried).select('language_version').executeTakeFirstOrThrow()).language_version).toBe('0.15.3');
   });
 
   it("an unregistered sender's message: 0.16's filter fires nothing, and 0.15's old gate suppresses its listen", async () => {
@@ -256,5 +266,49 @@ describe('one Slack delivery read by the version each listen is pinned to (real 
     expect(await pinOfRun(listen015)).toBe('0.15.3');
     // No 0.16 receipt came of the 0.15 reading.
     expect(await receiptsOf(listen016)).toEqual([]);
+  });
+
+  it('an edit re-plans the 0.15 row in place, and 0.15 judges the edited filter', async () => {
+    const before = (await rowsOf(carried))[0]!.config;
+    const saved = await save(SLACK_015_EDITED);
+    expect(saved).toEqual(expect.objectContaining({ ok: true, listeners: [expect.objectContaining({ triggerId: listen015, reused: true })] }));
+    const rows = await rowsOf(carried);
+    expect(rows.map((row) => row.id)).toEqual([listen015]);
+    expect(rows[0]!.config).not.toEqual(before);
+    expect(lane.isListenRow({ config: rows[0]!.config })).toBe(true);
+
+    // "go" passed the old filter; the edited one fires for "deploy" only.
+    await handleSlackEventsInbound(envelope({ user: 'U1', text: 'go', ts: '1700000000.000300' }));
+    await clearFires();
+    await drainAll();
+    expect(await runsOf(listen015)).toHaveLength(1);
+
+    await handleSlackEventsInbound(envelope({ user: 'U1', text: 'deploy', ts: '1700000000.000400' }));
+    await clearFires();
+    await drainAll();
+    const runs = await runsOf(listen015);
+    expect(runs).toHaveLength(2);
+    expect(runs.at(-1)).toEqual(expect.objectContaining({ status: 'success', failure_reason: null }));
+  });
+
+  it("an upgrade to this release re-plans the row as 0.16's: the current door reads it, and 0.15's reader and gate no longer do", async () => {
+    const before = (await rowsOf(carried))[0]!.config;
+    current016RealModule();
+    const upgraded = await upgradeMovement({ teamId, id: carried, acknowledge: true, applyAllFixes: true });
+    current016Module();
+    expect(upgraded).toEqual(expect.objectContaining({ status: 'upgraded' }));
+    expect((await getAutomationsQb(['movement']).selectFrom('movement').where('id', '=', carried).select('language_version').executeTakeFirstOrThrow()).language_version).toBe(LANGUAGE_VERSION);
+
+    const rows = await rowsOf(carried);
+    // The row keeps its id (and its history), its plan now this release's.
+    expect(rows.map((row) => row.id)).toEqual([listen015]);
+    expect(rows[0]!.config).not.toEqual(before);
+    expect(listenConfigSchema.safeParse(rows[0]!.config).success).toBe(true);
+    expect((await savedListens({ teamId, adapterType: 'slack' })).map((listen) => listen.triggerId).sort()).toEqual([listen016, listen015].sort());
+
+    // A delivery now queues no reading under 0.15: nothing pinned to it listens.
+    const readingsBefore = (await workOf('read_delivery')).length;
+    await handleSlackEventsInbound(envelope({ user: 'U2', text: 'deploy', ts: '1700000000.000500' }));
+    expect(await workOf('read_delivery')).toHaveLength(readingsBefore);
   });
 });

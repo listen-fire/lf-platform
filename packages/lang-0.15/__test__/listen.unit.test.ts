@@ -86,17 +86,17 @@ const message = (text: string) =>
 describe("a 0.15 listen, by 0.15's planner, module and judge", () => {
   it("plans a Slack listen into a row in 0.15's own listen shape", async () => {
     const planned = await planListens({ source: SLACK_015, pin: '0.15.3', file: 'intake', team: team(), connected: { teamId: 'team-1', modules: modules() } });
-    expect(planned).toEqual({ ok: true, refused: [], listens: [expect.objectContaining({ pipeline: expect.stringContaining('intake'), plan: expect.objectContaining({ movement: 'intake' }) })] });
+    expect(planned).toEqual({ ok: true, refused: [], listens: [{ listen: expect.objectContaining({ pipeline: expect.stringContaining('intake'), plan: expect.objectContaining({ movement: 'intake' }) }), textRunMode: 'live' }] });
     if (!planned.ok) return;
-    expect(isListenRow({ config: { listen: planned.listens[0] } })).toBe(true);
+    expect(isListenRow({ config: { listen: planned.listens[0]?.listen } })).toBe(true);
     // A row another release planned is not 0.15's: its plan does not read as 0.15's.
-    expect(isListenRow({ config: { listen: { ...planned.listens[0], plan: { lane: 'x' } } } })).toBe(false);
+    expect(isListenRow({ config: { listen: { ...planned.listens[0]?.listen, plan: { lane: 'x' } } } })).toBe(false);
   });
 
   it("reads a kept Slack delivery with 0.15's module and fires the listen its judge passes", async () => {
     const planned = await planListens({ source: SLACK_015, pin: '0.15.3', file: 'intake', team: team(), connected: { teamId: 'team-1', modules: modules() } });
     if (!planned.ok) throw new Error('unplanned');
-    const row = { id: 'trigger-1', credentialsId: 'c1', config: { listen: planned.listens[0] } };
+    const row = { id: 'trigger-1', credentialsId: 'c1', config: { listen: planned.listens[0]?.listen } };
     const read = (text: string) =>
       readDelivery(
         { teamId: 'team-1', adapterType: 'slack', credentialsId: 'c1', matchAnyCredential: true, delivery: { body: message(text) }, listens: [row], now: new Date().toISOString() },
@@ -109,5 +109,14 @@ describe("a 0.15 listen, by 0.15's planner, module and judge", () => {
 
     const gate = await gateFiring({ teamId: 'team-1', adapterType: 'slack', credentialsId: 'c1', config: row.config, event: fired.receipts[0]?.event ?? {} }, modules());
     expect(gate).toEqual({ kind: 'needs-actor', candidates: [expect.objectContaining({ identity: expect.objectContaining({ identifier: 'U1', email: 'ada@example.com' }) })] });
+  });
+
+  it("keeps the run mode the fired function's writes imply: a rehearsing connection's listen is dry_run", async () => {
+    const rehearsing =
+      'import { slack } from adapters\nimport { deals } from credentials\nchat = connect slack using deals { dryRun: true }\n' +
+      'function intake(m: <chat-[:Message]->>) {\n  chat-[ch:Channels]-> {\n    write ch-[:Messages]-> { Message: "seen" }\n  }\n}\n' +
+      'listen to chat-[:Channels]->-[m:Messages WHERE m.Message != ""]-> fire intake\n';
+    const planned = await planListens({ source: rehearsing, pin: '0.15.3', file: 'intake', team: team(), connected: { teamId: 'team-1', modules: modules() } });
+    expect(planned).toEqual({ ok: true, refused: [], listens: [expect.objectContaining({ textRunMode: 'dry_run' })] });
   });
 });

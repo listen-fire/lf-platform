@@ -500,15 +500,24 @@ export type CarriedSystemRecords = SystemRecords;
  *  module and the movement it fires, and the connection it names. */
 export type CarriedListenConfig = Readonly<Record<string, unknown>> & {
   pipeline: string;
-  plan: { readonly adapter: string; readonly movement: string };
+  /** `alias`: a `listen as "…"`'s name, which names its trigger row. */
+  plan: { readonly adapter: string; readonly movement: string; readonly alias?: string };
   credentialName?: string;
   constructionArgs?: Record<string, string>;
 };
 
+/** One listen as its version plans it: the config its row keeps, and the
+ *  dry_run⇄live axis its fired function's writes imply, read off the
+ *  version's own parse. */
+export interface PlannedListen {
+  listen: CarriedListenConfig;
+  textRunMode: 'live' | 'dry_run';
+}
+
 /** A file's listens as its version plans them; a listen the platform would
  *  not fire as written is refused by name. A text the version cannot read has
  *  its refusal instead. */
-export type PlannedListens = { ok: true; listens: CarriedListenConfig[]; refused: string[] } | { ok: false; refused: string };
+export type PlannedListens = { ok: true; listens: PlannedListen[]; refused: string[] } | { ok: false; refused: string };
 
 /** A carried version's listens, in the plan shape every version's trigger rows
  *  share: the row's pin chooses the version, and only that version plans,

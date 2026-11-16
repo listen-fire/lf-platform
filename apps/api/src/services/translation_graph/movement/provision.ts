@@ -149,8 +149,9 @@ import {
   type MovementValidityAssessment,
 } from './authoring';
 import { checkInstalled, routeOf } from './language_route';
-import { notListenedDiagnostic, validateUnderCarried } from './carried_check';
-import { runningOf } from '@listen-fire/language-versions';
+import { notListenedDiagnostic, teamFactsOf, validateUnderCarried } from './carried_check';
+import { listeningOf, runningOf, type ListeningLane, type TeamFacts } from '@listen-fire/language-versions';
+import { neverAsAny } from 'movement-engine/public/types';
 import { plannedListensOfSource } from './listen_plans';
 import { carriedPauses, listenIdentityOf, type CarriedPause } from './carried_pauses';
 import { carriedRunTriggerId } from './carried_names';
@@ -273,9 +274,10 @@ function configKeyOf(
   resolvedAddress?: Record<string, string>,
 ): string | null {
   // A planned listen is named by its pipeline: its plan and its connection's
-  // construction, digested as listen-fire names it.
-  const planned = listenConfigSchema.safeParse(config);
-  if (planned.success) return planned.data.listen.pipeline;
+  // construction, digested as listen-fire names it. Every version's rows keep
+  // it there, and only the row's own version reads the rest of its plan.
+  const pipeline = pipelineOfConfig(config);
+  if (pipeline !== null) return pipeline;
   if (resolvedAddress !== undefined && Object.keys(resolvedAddress).length > 0) {
     return Object.entries(resolvedAddress)
       .sort(([a], [b]) => a.localeCompare(b))
@@ -305,8 +307,8 @@ export function inboundAddressOf(config: Record<string, unknown>): string | null
  *  never the resolved node-type UUID; `identityKeyOf` keeps using the
  *  UUID-preferring chain so trigger identity is unaffected). */
 function surfaceConfigKeyOf(config: Record<string, unknown>): string | null {
-  const planned = listenConfigSchema.safeParse(config);
-  if (planned.success) return planned.data.listen.pipeline;
+  const pipeline = pipelineOfConfig(config);
+  if (pipeline !== null) return pipeline;
   if (typeof config['key'] === 'string') return config['key'] as string;
   if (typeof config['type'] === 'string') return config['type'] as string;
   if (typeof config['schedule'] === 'string') return config['schedule'] as string;
@@ -696,38 +698,32 @@ function keepingCarriedFrom(config: Record<string, unknown>, kept: unknown): Rec
 
 // ── Provision: check the program, then reconcile the listeners ──────────────
 
-async function provisionListeners(input: {
-  teamId: TeamId;
+/** What a save's listens are planned from: this release's catalog, or, for a
+ *  pin a carried version checks, the team as that version read it for its
+ *  check (`carried_check.ts`), whose own planner plans them. */
+type SaveCatalog =
+  | { kind: 'current'; teamCatalog: TeamMovementCatalog }
+  | { kind: 'carried'; team: TeamFacts; notes: string[] };
+
+/** A file's listens as its version plans them, each the row it wants. */
+type DesiredListeners = { ok: true; desired: DesiredListener[]; infos: Diagnostic[] } | ProvisionMovementFailure;
+
+const AT_START = { start: { line: 1, col: 1 }, end: { line: 1, col: 1 } };
+
+/** Under this release: its checker's plans against the run snapshot. */
+async function desiredUnderCurrent(input: {
   movementRow: MovementRow;
   source: string;
   teamCatalog: TeamMovementCatalog;
-  /** A CONSENTED non-valid save still SHIPS (decision 3b) — derive its
-   *  listeners from the parse despite check errors, so the declared listens
-   *  exist and the movement genuinely fires-and-fails. Collection is already
-   *  defensive: unresolvable pieces are skipped. */
   provisionDespiteErrors?: boolean;
-  /** The save's timer, when this runs under one — the two network-backed
-   *  halves (address resolution, subscription sync) are reported inside the
-   *  `listeners` step rather than hidden in it (./timing.ts). */
-  timer?: StepTimer;
-  /** Inside a caller's open transaction those two halves are left to the
-   *  caller's work row (./listens_up.ts): no provider is called while it is
-   *  open or for a rollback. */
-  providersLater?: boolean;
-  /** A language upgrade: see `reconcileDerivedTriggers`. */
-  keepPauses?: boolean;
-}): Promise<ProvisionMovementResult> {
-  const { teamCatalog } = input;
-  const within = <T>(name: string, run: () => Promise<T>): Promise<T> =>
-    input.timer ? input.timer.within(name, run) : run();
-
+  within: <T>(name: string, run: () => Promise<T>) => Promise<T>;
+}): Promise<DesiredListeners> {
+  const { teamCatalog, within } = input;
   const route = routeOf(input.movementRow.languageVersion);
   if (route.kind === 'refused' || route.kind === 'dropped') {
     return { ok: false, diagnostics: [route.diagnostic], catalogNotes: teamCatalog.notes };
   }
-  if (route.kind === 'carried') {
-    return { ok: false, diagnostics: [notListenedDiagnostic(route.pin)], catalogNotes: teamCatalog.notes };
-  }
+  if (route.kind === 'carried') throw new Error(`a ${route.pin} pin is planned by its own version, never against this release's catalog`);
   // A legacy pin's listens cannot fire under this release: inbound judges by
   // the listen plans only this release's checker makes. It is refused by
   // name until it is upgraded.
@@ -738,7 +734,7 @@ async function provisionListeners(input: {
         {
           code: 'MOV_LANGUAGE_VERSION_UNSUPPORTED',
           message: `this automation is pinned to language version ${route.pin}, whose listens this release no longer runs: upgrade it to ${LANGUAGE_VERSION}`,
-          span: { start: { line: 1, col: 1 }, end: { line: 1, col: 1 } },
+          span: AT_START,
         },
       ],
       catalogNotes: teamCatalog.notes,
@@ -789,6 +785,93 @@ async function provisionListeners(input: {
         ? (teamCatalog.resolveCredentialId(listen.credentialName) ?? null)
         : null,
   }));
+  return { ok: true, desired, infos };
+}
+
+/** Under the carried version the pin chooses: its own planner reads the text
+ *  and plans each listen in its own listen shape, with the run mode its own
+ *  parse implies. The save's check is that version's too, so it is not made
+ *  again here, and its diagnostics are the save's. */
+async function desiredUnderCarried(input: {
+  teamId: TeamId;
+  movementRow: MovementRow;
+  source: string;
+  team: TeamFacts;
+  notes: string[];
+  provisionDespiteErrors?: boolean;
+  within: <T>(name: string, run: () => Promise<T>) => Promise<T>;
+}): Promise<DesiredListeners> {
+  const pin = input.movementRow.languageVersion;
+  const listening = listeningOf(pin);
+  let lane: ListeningLane;
+  switch (listening.kind) {
+    case 'carried':
+      lane = await listening.lane();
+      break;
+    case 'held':
+      return { ok: false, diagnostics: [notListenedDiagnostic(pin)], catalogNotes: input.notes };
+    case 'current':
+      throw new Error(`a ${pin} pin is planned by this release's checker, never by a carried version's`);
+    default:
+      return neverAsAny(listening);
+  }
+  // The connected systems are read through the platform's hosting of the
+  // version's own modules, as its check read them.
+  const { modulePlatform } = await import('./carried_run');
+  const planned = await input.within('listenPlan', () =>
+    lane.planListens({ source: input.source, pin, team: input.team, connected: { teamId: input.teamId, modules: modulePlatform() }, file: input.movementRow.name }),
+  );
+  if (!planned.ok) return { ok: false, diagnostics: [{ code: 'MOV_PARSE', message: planned.refused, span: AT_START }], catalogNotes: input.notes };
+  if (planned.refused.length > 0 && input.provisionDespiteErrors !== true) {
+    return { ok: false, errors: planned.refused, catalogNotes: input.notes };
+  }
+  // The credential a listen names is the team's connection of that name, as
+  // the version's catalog resolved it for the check.
+  const credentialOf = (name: string): string | null => input.team.credentials.find((row) => row.name === name)?.id ?? null;
+  const desired: DesiredListener[] = planned.listens.map(({ listen, textRunMode }) => ({
+    movementName: listen.plan.movement,
+    adapter: listen.plan.adapter,
+    ...(listen.plan.alias !== undefined ? { alias: listen.plan.alias } : {}),
+    config: { listen },
+    textRunMode,
+    credentialsId: listen.credentialName !== undefined ? credentialOf(listen.credentialName) : null,
+  }));
+  return { ok: true, desired, infos: [] };
+}
+
+async function provisionListeners(input: {
+  teamId: TeamId;
+  movementRow: MovementRow;
+  source: string;
+  catalog: SaveCatalog;
+  /** A CONSENTED non-valid save still SHIPS (decision 3b) — derive its
+   *  listeners from the parse despite check errors, so the declared listens
+   *  exist and the movement genuinely fires-and-fails. Collection is already
+   *  defensive: unresolvable pieces are skipped. */
+  provisionDespiteErrors?: boolean;
+  /** The save's timer, when this runs under one — the two network-backed
+   *  halves (address resolution, subscription sync) are reported inside the
+   *  `listeners` step rather than hidden in it (./timing.ts). */
+  timer?: StepTimer;
+  /** Inside a caller's open transaction those two halves are left to the
+   *  caller's work row (./listens_up.ts): no provider is called while it is
+   *  open or for a rollback. */
+  providersLater?: boolean;
+  /** A language upgrade: see `reconcileDerivedTriggers`. */
+  keepPauses?: boolean;
+}): Promise<ProvisionMovementResult> {
+  const { catalog } = input;
+  const within = <T>(name: string, run: () => Promise<T>): Promise<T> =>
+    input.timer ? input.timer.within(name, run) : run();
+  const notes = catalog.kind === 'current' ? catalog.teamCatalog.notes : catalog.notes;
+  const despite = input.provisionDespiteErrors === true ? { provisionDespiteErrors: true } : {};
+
+  const wanted =
+    catalog.kind === 'current'
+      ? await desiredUnderCurrent({ movementRow: input.movementRow, source: input.source, teamCatalog: catalog.teamCatalog, within, ...despite })
+      : await desiredUnderCarried({ teamId: input.teamId, movementRow: input.movementRow, source: input.source, team: catalog.team, notes: catalog.notes, within, ...despite });
+  if (!wanted.ok) return wanted;
+  const { desired, infos } = wanted;
 
   const { listeners, reconciles, leftPaused } = await within('reconcile', () =>
     reconcileDerivedTriggers({
@@ -831,14 +914,17 @@ async function provisionListeners(input: {
     return subscriptionSync.notes;
   };
 
-  const subscriptionNotes = input.providersLater === true ? [] : await reachProviders();
+  // This release's member listing and subscription sync read only the rows
+  // pinned to it (listen_resolve.ts, listen_subscriptions.ts): a carried
+  // version's listens reach their providers through its own modules.
+  const subscriptionNotes = input.providersLater === true || catalog.kind === 'carried' ? [] : await reachProviders();
 
   return {
     ok: true,
     movementName: input.movementRow.name,
     listeners,
     infos,
-    catalogNotes: [...teamCatalog.notes, ...subscriptionNotes],
+    catalogNotes: [...notes, ...subscriptionNotes],
     // Save-time warnings are assembled by `saveMovement` — provisioning
     // itself has no view of the rest of the team's automations.
     warnings: [],
@@ -1062,9 +1148,9 @@ interface SaveCheck {
   validity: MovementValidityAssessment;
   notes: string[];
   gaps: CatalogGap[];
-  /** This release's catalog, which the listeners are provisioned from;
-   *  absent for a pin a carried version checks, whose catalog is its own. */
-  teamCatalog?: TeamMovementCatalog;
+  /** What the listeners are planned from: the catalog or the team facts the
+   *  check read. */
+  catalog: SaveCatalog;
 }
 
 async function checkForSave({ input, row, timer }: { input: SaveMovementInput; row: MovementRow; timer: StepTimer }): Promise<SaveCheck> {
@@ -1072,8 +1158,11 @@ async function checkForSave({ input, row, timer }: { input: SaveMovementInput; r
   // against its own catalog; this release's catalog is never assembled for it.
   const route = routeOf(row.languageVersion);
   if (route.kind === 'carried') {
+    // One read of the team for the check and the plan, so the listens are
+    // planned against what was checked.
+    const team = teamFactsOf(input.teamId, { audience: input.audience });
     const checked = await timer.step('diagnose', () =>
-      validateUnderCarried({ teamId: input.teamId, source: input.source, pin: route.pin, lane: route.lane, audience: input.audience }),
+      validateUnderCarried({ teamId: input.teamId, source: input.source, pin: route.pin, lane: route.lane, audience: input.audience, team }),
     );
     const carried = { ...checked, diagnostics: await hideUnreadableLibraries(checked.diagnostics, input) };
     return {
@@ -1081,6 +1170,7 @@ async function checkForSave({ input, row, timer }: { input: SaveMovementInput; r
       validity: assessMovementValidity({ diagnostics: carried.diagnostics, gaps: carried.gaps }),
       notes: carried.catalogNotes,
       gaps: carried.gaps,
+      catalog: { kind: 'carried', team: await team, notes: carried.catalogNotes },
     };
   }
 
@@ -1119,7 +1209,7 @@ async function checkForSave({ input, row, timer }: { input: SaveMovementInput; r
     validity: assessMovementValidity({ diagnostics: validation.diagnostics, gaps: teamCatalog.gaps }),
     notes: teamCatalog.notes,
     gaps: teamCatalog.gaps,
-    teamCatalog,
+    catalog: { kind: 'current', teamCatalog },
   };
 }
 
@@ -1388,7 +1478,7 @@ async function runSave(
     }),
   );
 
-  const { validation, validity, notes, gaps, teamCatalog } = await checkForSave({ input, row, timer });
+  const { validation, validity, notes, gaps, catalog } = await checkForSave({ input, row, timer });
   const sourceHash = movementSourceHash(input.source);
 
   // The acting user for journey milestones: a UI save threads it through
@@ -1455,23 +1545,20 @@ async function runSave(
   // best-effort: a consented-broken source may not compile far enough to
   // derive them, in which case the EXISTING trigger rows stay and now fire
   // this new source (which fails — fires-and-fails, by design).
-  // A pin a carried version checks ships its text, and its listens are not
-  // planned here: that version plans its own, and says so until it does.
-  const provisioned: ProvisionMovementResult =
-    teamCatalog === undefined
-      ? { ok: false, diagnostics: [notListenedDiagnostic(row.languageVersion)], catalogNotes: notes }
-      : await timer.step('listeners', () => provisionListeners({
-          teamId: input.teamId as TeamId,
-          movementRow: row,
-          source: input.source,
-          teamCatalog,
-          timer,
-          ...(input.inTransaction !== undefined ? { providersLater: true } : {}),
-          ...(input.languageUpgrade !== undefined ? { keepPauses: true } : {}),
-          // A consented non-valid save ships: derive its declared listens despite
-          // check errors so it genuinely fires-and-fails (decision 3b).
-          ...(consented ? { provisionDespiteErrors: true } : {}),
-        }));
+  const provisioned: ProvisionMovementResult = await timer.step('listeners', () =>
+    provisionListeners({
+      teamId: input.teamId as TeamId,
+      movementRow: row,
+      source: input.source,
+      catalog,
+      timer,
+      ...(input.inTransaction !== undefined ? { providersLater: true } : {}),
+      ...(input.languageUpgrade !== undefined ? { keepPauses: true } : {}),
+      // A consented non-valid save ships: derive its declared listens despite
+      // check errors so it genuinely fires-and-fails (decision 3b).
+      ...(consented ? { provisionDespiteErrors: true } : {}),
+    }),
+  );
 
   // Every shipped save is what runs — mint its immutable version (deduped by
   // content hash) so runs pin it and the version-match rule has its anchor.
@@ -1484,26 +1571,22 @@ async function runSave(
     }),
   );
 
-  // A carried version's save is its text and its check, under its own pin;
-  // nothing of this release's listener reconciliation reads its text.
-  if (teamCatalog === undefined) {
+  // A carried version whose listens are held: the text is saved and checked
+  // under its own pin, and its listens are not planned, which the person is
+  // told in the registry's words. That is not a failed save.
+  if (catalog.kind === 'carried' && !provisioned.ok && listeningOf(row.languageVersion).kind === 'held') {
     recordMilestones();
-    // The text is saved, under its pin, whether or not its version plans
-    // listens yet: that is what a person is told, and not a failed save.
-    if (!provisioned.ok) {
-      return {
-        ok: true,
-        movementId: row.id,
-        movementName: name,
-        listeners: [],
-        infos: [],
-        catalogNotes: notes,
-        warnings: (provisioned.diagnostics ?? []).map((diagnostic) => diagnostic.message),
-        ...playback,
-        validity,
-      };
-    }
-    return { ...provisioned, ...playback, movementId: row.id, validity };
+    return {
+      ok: true,
+      movementId: row.id,
+      movementName: name,
+      listeners: [],
+      infos: [],
+      catalogNotes: notes,
+      warnings: (provisioned.diagnostics ?? []).map((diagnostic) => diagnostic.message),
+      ...playback,
+      validity,
+    };
   }
 
   if (!provisioned.ok && validity.status === 'valid') {
@@ -1523,7 +1606,13 @@ async function runSave(
   // success case.
   recordMilestones();
 
-  const declaredNames = declaredMovementNames(input.source);
+  // The movements the text declares, or null when it cannot be read. A carried
+  // version's text is read only by that version, whose planner says whether
+  // it reads and names no declarations, so no collision is told of it.
+  const declaredNames =
+    catalog.kind === 'current' ? declaredMovementNames(input.source)
+    : !provisioned.ok && (provisioned.diagnostics ?? []).some((diagnostic) => diagnostic.code === 'MOV_PARSE') ? null
+    : [];
   const shippedWarnings = [
     ...(await timer.step('collisions', () =>
       movementNameCollisionWarnings({

@@ -125,11 +125,13 @@ function isConstruction(value: unknown): value is ConstructionCall {
 }
 
 /** One connection a program makes: the adapter, the credential import name
- *  it is made with, and whether it pins an entry position. */
+ *  it is made with, and the names of its other arguments (those its module's
+ *  manifest names as position args pin an entry position; a platform argument
+ *  such as `dry_run` pins none). */
 export interface ConstructedInstance {
   adapter: string;
   credentialName?: string;
-  positioned: boolean;
+  argNames: string[];
 }
 
 /** What `program` connects: its constructions anywhere, through the names its
@@ -147,7 +149,7 @@ export function constructedInstances(program: Program, adapters: ReadonlySet<str
     const adapter = imported.get(callee) ?? callee;
     if (!adapters.has(adapter)) return [];
     const credential = args.find((arg) => arg.name === 'credentials')?.value.raw.replace(/^`(.*)`$/, '$1');
-    return [{ adapter, ...(credential !== undefined ? { credentialName: credential } : {}), positioned: args.some((arg) => arg.name !== 'credentials') }];
+    return [{ adapter, ...(credential !== undefined ? { credentialName: credential } : {}), argNames: args.flatMap((arg) => (arg.name === 'credentials' ? [] : [arg.name])) }];
   });
 }
 
@@ -212,11 +214,11 @@ async function readConnected(
     const key = `${instance.adapter}|${instance.credentialName ?? ''}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    if (instance.positioned) {
-      unread.set(instance.adapter, 'a construction that pins an entry position is read only through production\'s demand passes, which this platform does not carry for 0.12');
+    const manifest = manifests.find((m) => m.adapterType === instance.adapter);
+    if (manifest?.positionArgs?.some((arg) => instance.argNames.includes(arg.name)) === true) {
+      unread.set(instance.adapter, 'a construction that pins an entry position is read only through production\'s demand passes, which this platform does not carry for 0.15');
       continue;
     }
-    const manifest = manifests.find((m) => m.adapterType === instance.adapter);
     const credential = instance.credentialName !== undefined ? byName[instance.credentialName] : undefined;
     if (manifest === undefined || (instance.credentialName !== undefined && credential === undefined)) continue;
     const credentialsId = credential?.id;

@@ -26,6 +26,7 @@ import {
 import { checkAnswerInRust, type EdgeListening, type InstanceSchema } from '@listen-fire/movement-lang';
 
 import { readProgram } from './check';
+import { movementWriteRunMode } from './run_mode';
 import { manifestsOf } from './manifests';
 import { moduleTable } from './modules';
 import type { ModulePlatform } from './run_types';
@@ -121,19 +122,29 @@ function listenShapeOf(schema: InstanceSchema | undefined, plan: ListenPlan): Pi
   return { members: memberPlans(plan).map(shapeOf) };
 }
 
-/** A 0.15 file's listens as its own check plans them, each the config its
- *  trigger row keeps; one the platform would not fire as written is refused
- *  by name. A text 0.15 cannot read has its refusal instead. */
+/** One listen as 0.15's check plans it: the config its trigger row keeps, and
+ *  the dry_run⇄live axis its fired function's writes imply. */
+export interface PlannedListen {
+  listen: ListenConfig;
+  textRunMode: 'live' | 'dry_run';
+}
+
+/** A 0.15 file's listens as its own check plans them; one the platform would
+ *  not fire as written is refused by name. A text 0.15 cannot read has its
+ *  refusal instead. */
 export async function planListens(
   request: CheckRequest & { file: string },
-): Promise<{ ok: true; listens: ListenConfig[]; refused: string[] } | { ok: false; refused: string }> {
+): Promise<{ ok: true; listens: PlannedListen[]; refused: string[] } | { ok: false; refused: string }> {
   const read = await readProgram(request);
   if (!read.readable) return { ok: false, refused: read.refusal.message };
   const { program, teamCatalog } = read;
   const snapshot = teamCatalog.snapshot;
   const answer = checkAnswerInRust(request.source, snapshot, { languageVersion: request.pin });
   const planned = plannedListensOf({ file: request.file, program, plans: listenPlansOf(answer) });
-  const listens: ListenConfig[] = [];
+  // A movement whose writes are mixed runs live: the engine takes one switch.
+  const textRunModeOf = (movement: string): PlannedListen['textRunMode'] =>
+    movementWriteRunMode({ program, movement, pin: request.pin }).mode === 'dry_run' ? 'dry_run' : 'live';
+  const listens: PlannedListen[] = [];
   const refused: string[] = [];
   for (const listen of planned) {
     const why = unfiredHere(listen.plan);
@@ -151,7 +162,7 @@ export async function planListens(
       }
     }
     const schema = listenSchemaOf(snapshot.adapters[listen.plan.adapter], listen);
-    listens.push({
+    const config: ListenConfig = {
       pipeline: listen.pipeline,
       plan: listen.plan,
       ...(listen.credentialName !== undefined ? { credentialName: listen.credentialName } : {}),
@@ -160,7 +171,8 @@ export async function planListens(
       fieldIds: fieldIdsOf(schema),
       ...(landing !== undefined ? { landing } : {}),
       ...listenShapeOf(schema, listen.plan),
-    });
+    };
+    listens.push({ listen: config, textRunMode: textRunModeOf(listen.plan.movement) });
   }
   return { ok: true, listens, refused };
 }

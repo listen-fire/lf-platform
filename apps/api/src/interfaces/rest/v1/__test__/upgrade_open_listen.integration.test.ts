@@ -72,7 +72,7 @@ beforeEach(async () => {
     .values({ id: slack, team_id: teamId, type: ExternalServiceType.SLACK, name: 'Slack', credentials: null, user_id: null, app_id: SLACK_APP_ID.movements })
     .execute();
   movementId = randomUUID() as MovementId;
-  // A 0.15.3 save is refused now, so the row is written as one made then.
+  // A 0.15.3 automation written then and never shipped.
   await getAutomationsQb(['movement'])
     .insertInto('movement')
     .values({ id: movementId, team_id: teamId, name: 'old_slack', source: OLD_SLACK, description: '', language_version: '0.15.3' })
