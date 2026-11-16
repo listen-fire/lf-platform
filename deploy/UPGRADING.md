@@ -50,11 +50,13 @@ On `v0.1.0` it did not: `up.sh` exported those values, an exported value wins ov
 
 Migrations run as the one-shot `migrate` service, to completion, **before** the new api starts — the api's `depends_on` says so, so a restart never races the schema. That is where an upgrade fails if it is going to: `docker compose logs migrate`.
 
-Before the deploy check, the same one-shot states what has no access statement yet: every automation and connection saved before statements existed is given the reach its team has today (the team may read, write and use it), so the access checks change nobody's reach. A thing that already has a statement is never touched, so a second run changes nothing. Unlike the deploy check it fails the upgrade if it cannot finish. `up.sh` runs the statement step once more after the api is healthy, to catch what the previous api created while it ran.
+Before the deploy check, the same one-shot states what has no access statement yet: every automation and connection saved before statements existed is given the reach its team has today (the team may read, write and use it), so the access checks change nobody's reach. A thing that already has a statement is never touched, so a second run changes nothing. It fails the upgrade if it cannot finish.
+
+The statement step runs a second time once the new api is healthy, to catch what the previous api created while it ran. `up.sh` does this for you. Anywhere else, run it yourself: on an installation that runs `migrate` as a job (Cloud Run, say), execute the whole job again; on one with a pre-deploy command (Render), run `node build/scripts/state_unstated.js` from a shell on the api. Running the whole job again is safe: the migrations have nothing left to apply, the statement step touches only what is unstated, and the deploy check sees this release was already checked and does nothing.
 
 Stop the previous api's drain before the new api starts. While it runs, the previous api still creates automations and connections with no statement; the statement run above gives them one.
 
-The same one-shot then runs the deploy check, once per release. Every saved automation is written for a language release (its pin, shown as a version such as 0.12.0); the check re-validates each one and moves none: an automation moves to a newer release only when someone upgrades it. It reports which ones validate cleanly under the new release's current version, and for the rest shows what stands in the way on the automation in the app and as a `Validation Issue` event. It never fails the upgrade. `up.sh` prints its summary once the api is healthy; `docker compose run --rm --no-deps --entrypoint /usr/local/bin/with-generated-env api node build/scripts/deploy_check.js --summary` prints it again.
+The same one-shot then runs the deploy check, once per release. Every saved automation is written for a language release (its pin, shown as a version such as 0.12.0); the check re-validates each one and moves none: an automation moves to a newer release only when someone upgrades it. It reports which ones validate cleanly under the new release's current version, and for the rest shows what stands in the way on the automation in the app and as a `Validation Issue` event. It fails the upgrade in two cases only: while a run is parked on a language version this release does not run (see "Before upgrading: automations on language versions 1 to 4 or 0.12"), and when it cannot tell whether one is. Anything else that stops it finishing is logged, and the upgrade goes on. `up.sh` prints its summary once the api is healthy; `docker compose run --rm --no-deps --entrypoint /usr/local/bin/with-generated-env api node build/scripts/deploy_check.js --summary` prints it again.
 
 Migrations are forward-only and append-only from `v0.1.0`. A published release never edits or removes a migration an earlier release applied, so the ledger of a running installation is always a prefix of the new version's, and applying the difference is the whole of the schema change.
 
@@ -103,44 +105,36 @@ Anything that happened between the upgrade and the rollback is in the newer data
 
 **Do not `down -v`.** It destroys `listen-fire-config` along with the data, and every stored third-party credential in the database you just restored becomes permanently unreadable.
 
-## Before moving off 0.12.13: automations on language versions 1 to 4
+## Before upgrading: automations on language versions 1 to 4 or 0.12
 
-This release starts no new run on language versions 1 to 4, and carries no engine for what those runs were paused on. Upgrading such an automation straight to the current language stays supported.
+This release runs automations pinned to 0.16 and to 0.15; a 0.15 automation keeps its pin and runs on the carried 0.15 engine. It runs nothing on language versions 1 to 4 or 0.12, and carries no engine for what their runs were paused on. Upgrading such an automation straight to the current language stays supported.
 
-**Before you deploy, on 0.12.13,** run these two queries, read only, against the database. The deploy check cannot be run first: it runs in the new release's `migrate` step, once.
+The deploy check stops the deployment while a run of such an automation is parked, whatever it waits on (a question, a callback, a reply or a timer). **Before you deploy, on the release you run now,** run these two queries, read only, against the database. The deploy check cannot be run first: it runs in the new release's `migrate` step.
 
 ```sql
--- the automations on language versions 1 to 4
+-- the automations on language versions 1 to 4 or 0.12
 select m.team_id, m.name as automation, m.language_version as version
 from automations.movement m
-where m.language_version in ('1', '2', '3', '4')
+where m.language_version in ('1', '2', '3', '4') or m.language_version like '0.12.%'
 order by m.team_id, m.name;
 
--- the runs of those automations paused on a question, a callback or a reply
-select m.team_id, m.name as automation, m.language_version as version, r.id as run, r.status
+-- the parked runs that stop the deployment
+select r.team_id, m.name as automation, v.language_version as version, r.id as run
 from automations.trigger_run r
 join automations.movement_version v on v.id = r.movement_version_id
 join automations.movement m on m.id = v.movement_id
-where m.language_version in ('1', '2', '3', '4')
-  and r.host = 'platform'
-  and r.status in ('running', 'parked')
-  and (
-    exists (select 1 from automations.adapter_await a where a.run_id = r.id)
-    or exists (select 1 from automations.callback c where c.run_id = r.id and c.status = 'live')
-  )
-order by m.team_id, m.name, r.id;
+where r.host = 'platform'
+  and r.status = 'parked'
+  and (v.language_version in ('1', '2', '3', '4') or v.language_version like '0.12.%')
+order by r.team_id, m.name, r.id;
 ```
 
-- Answer or cancel each run the second query lists. After the deploy it cannot continue, and going back to 0.12.13 means restoring the snapshot.
+- Answer or cancel each run the second query lists, on the release you run now. After the deploy it cannot continue, and going back means restoring the snapshot.
+- Leaving 0.15.x, an installation whose second query returns nothing has nothing to do here.
 
-**What the deploy check tells you, after the deploy.** It prints every automation on those versions, with the remedy, and every run of theirs it found paused on a question, a callback or a reply. For those runs it can only say what is still possible: cancel the run, then upgrade the automation.
+**What the deploy check tells you.** It prints every automation on those versions, with the remedy, and every run of theirs parked; if any is parked, it stops the deployment and says to answer or cancel each run on the release that parked it.
 
-**After the deploy, for an automation on those versions:**
-
-- **Run now and a listen are refused.** The refusal says why and gives the remedy: upgrade it.
-- **A question answered on a paused run is refused at the door.** The page says the run can't continue, and that its owner can cancel it. Nothing is recorded.
-- **A run paused on a timer resumes.** If it then reaches a question or a callback, it fails at that statement, with the reason on the run.
-- **Such a run holds its automation at its version.** Cancel the run to upgrade the automation.
+**After the deploy, an automation on those versions is held.** It does not run, listen, resume or present until it is upgraded. Its text is still checked, by the frozen 0.12 parser, and it upgrades through that parser.
 
 ## Rolling out beside 0.12.13
 
