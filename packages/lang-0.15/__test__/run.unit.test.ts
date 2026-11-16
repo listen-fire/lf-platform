@@ -57,12 +57,12 @@ function platform(parked: TimerPark[], actingUser: RunPlatform['actingUser'] = a
   return {
     modules: modules(),
     recordEngine: () => {},
-    credentials: { owns: async () => true },
+    credentials: { belongsTo: () => true },
     llm: { client: { call: refused }, extractCall: { call: refused }, transforms: { invoke: refused }, arbitrateEntities: refused },
     files: { resolveFileText: refused, render: refused },
     withFileOwners: (_owners, call) => call(),
     bindings: { record: refused, findBoundCounterpart: refused, delete: refused },
-    locks: { acquire: refused, release: refused, open: refused },
+    locks: { holder: () => { throw new Error('no locks in this test'); } },
     actingUser,
     control: { cancelled: async () => false, cancelledNow: async () => false, leaseLost: () => false },
     park: {
