@@ -30,7 +30,8 @@ import { movementCatalogForTeam, movementCatalogSnapshotForTeam, type TeamMoveme
 import { audienceKey, type CatalogAudience } from './audience';
 import { editorTeamFactsOf } from './carried_check';
 import { routeOf } from './language_route';
-import { getMovementRow } from './store';
+import { getMovementRow, getMovementRowByName } from './store';
+import { accessTo } from '../../access/decide';
 
 /**
  * The pin an editor request is answered under: the movement's when `id` is
@@ -177,8 +178,21 @@ export function hoverAt(request: EditorRequest): Promise<EditorAnswer<HoverCard 
   return answerAt(request, hoverInWasm, (lane, asked) => lane.hoverAt(asked));
 }
 
-export function defineAt(request: EditorRequest): Promise<EditorAnswer<Definition | null>> {
-  return answerAt(request, definitionAt, (lane, asked) => lane.definitionAt(asked));
+export async function defineAt(request: EditorRequest): Promise<EditorAnswer<Definition | null>> {
+  const answered = await answerAt(request, definitionAt, (lane, asked) => lane.definitionAt(asked));
+  if (answered.kind !== 'answer') return answered;
+  return { kind: 'answer', answer: await withoutUnreadableLibrary(answered.answer, request) };
+}
+
+/** A definition inside a library the person may use but not read says where
+ *  in its text the name is, and so how long the body is: they get none. */
+async function withoutUnreadableLibrary(definition: Definition | null, request: EditorRequest): Promise<Definition | null> {
+  if (definition === null || !('file' in definition) || definition.file === null) return definition;
+  const { audience } = request;
+  if (audience.for === 'run') return definition;
+  const library = await getMovementRowByName({ teamId: request.teamId, name: definition.file });
+  if (library === null) return definition;
+  return (await accessTo(audience.for, { target: { thing: 'automation', id: library.id }, verb: 'read' })) ? definition : null;
 }
 
 interface AgentCompletions {

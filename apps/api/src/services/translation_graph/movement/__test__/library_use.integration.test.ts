@@ -31,6 +31,10 @@ import { persistCredential, updateStoredCredential } from '../../../credentials/
 import { libraryRefusal } from '../library_refusal';
 import { runMovementTestRun } from '../test_run';
 import { saveMovement } from '../provision';
+import { assessMovementValidity } from '../authoring';
+import { defineAt, hoverAt } from '../language_service';
+import { liveDeployCheckDeps, thisDeployCheckRelease, upgradeMovement, validationUnder, type ValidateUnder } from '../language_upgrade';
+import { getMovementRow } from '../store';
 import { dispatchTriggerByIdEvent } from '../../triggers/router';
 import { mintMovementVersionIfChanged } from '../version_store';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
@@ -476,5 +480,78 @@ describe('use on a library (real Postgres)', () => {
     expect(recorded).toContain('helpers');
     expect(recorded).not.toContain('nosuch');
     expect(recorded).not.toMatch(/helpers\\?" line \d/);
+  });
+  describe('use_without_read_sees_no_source, once a diagnostic is stored or handed on', () => {
+    const FAULT = '"helpers" line 2: Unknown name \'nosuch\'';
+    const inLibrary: ValidateUnder = async () => ({
+      ok: false,
+      diagnostics: [{ code: 'MOV_NAME_UNRESOLVED', message: FAULT, severity: 'error', line: 1, col: 1, endLine: 1, endCol: 2, sourceLine: '' }],
+      listenerCount: 0,
+      firedMovements: [],
+      catalogNotes: [],
+      gaps: [],
+    });
+    const OLD = '0.12.8';
+
+    async function oldGroup(): Promise<{ importer: string; helpers: string }> {
+      const helpers = await file('helpers', LIBRARY, { read: [user(bob)], write: [user(bob)], use: [user(alice)] });
+      const importer = await file('sales', IMPORTER, { read: [team], write: [user(bob), user(alice)] });
+      await getAutomationsQb(['movement']).updateTable('movement').set({ language_version: OLD }).where('team_id', '=', teamId).execute();
+      return { importer, helpers };
+    }
+
+    it('an upgrade stores the fault without the library’s lines, and shows its writer, who may read the library, the fault', async () => {
+      const { importer } = await oldGroup();
+      const result = await upgradeMovement({ teamId, id: importer, acknowledge: false, by: asUser(bob), validate: inLibrary });
+      expect(result).toMatchObject({ status: 'blocked' });
+      expect(JSON.stringify(result)).toContain('nosuch');
+
+      const row = await getMovementRow({ teamId, id: importer });
+      expect(JSON.stringify(row?.upgradeDiagnostics)).toContain('helpers');
+      expect(JSON.stringify(row?.upgradeDiagnostics)).not.toContain('nosuch');
+    });
+
+    it('an upgrade by someone who may use the library but not read it is refused before any fault is shown', async () => {
+      const { importer } = await oldGroup();
+      const result = await upgradeMovement({ teamId, id: importer, acknowledge: false, by: asUser(alice), validate: inLibrary });
+      expect(result).toMatchObject({ status: 'blocked' });
+      expect(JSON.stringify(result)).not.toContain('nosuch');
+    });
+
+    it('the deploy check’s validation, which reaches system events and the stored report, names the library without its lines', async () => {
+      const { importer } = await oldGroup();
+      await getAutomationsQb(['movement']).updateTable('movement').set({ source: BROKEN_LIBRARY }).where('team_id', '=', teamId).where('name', '=', 'helpers').execute();
+      const movement = await getMovementRow({ teamId, id: importer });
+      if (movement === null) throw new Error('importer missing');
+      const { validate } = liveDeployCheckDeps(thisDeployCheckRelease('test'));
+      const validation = await validate(validationUnder(movement, LANGUAGE_VERSION));
+      const shown = JSON.stringify(validation.diagnostics);
+      expect(shown).toContain('helpers');
+      expect(shown).not.toContain('nosuch');
+    });
+
+    it('a stored validity reason carries the library’s name and no lines, whoever checked', () => {
+      const assessed = assessMovementValidity({
+        diagnostics: [{ code: 'MOV_NAME_UNRESOLVED', message: FAULT, severity: 'error', line: 1, col: 1, endLine: 1, endCol: 2, sourceLine: '' }],
+        gaps: [],
+      });
+      expect(assessed.status).toBe('invalid');
+      expect(JSON.stringify(assessed.reason)).toContain('helpers');
+      expect(JSON.stringify(assessed.reason)).not.toContain('nosuch');
+    });
+
+    it('hover and go to definition on a library’s function give a use-only person nothing of its body', async () => {
+      const body = 'export function tally(t: <text>) {\n  return "needle_in_the_body"\n}\n';
+      await file('helpers', body, { read: [user(bob)], write: [user(bob)], use: [user(alice)] });
+      const offset = IMPORTER.indexOf('tally(run');
+      const asked = { teamId, audience: { for: asUser(alice) }, source: IMPORTER, offset: offset + 1 };
+      const hover = await hoverAt(asked);
+      const defined = await defineAt(asked);
+      expect(JSON.stringify([hover, defined])).not.toContain('needle_in_the_body');
+      expect(defined).toEqual({ kind: 'answer', answer: null });
+
+      const asReader = await defineAt({ ...asked, audience: { for: asUser(bob) } });
+      expect(asReader).toMatchObject({ answer: { file: 'helpers' } });
+    });
   });
 });

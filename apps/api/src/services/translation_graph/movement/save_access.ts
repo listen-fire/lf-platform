@@ -27,6 +27,7 @@ import { getRemoteAdapter } from '../adapters/remote/store';
 import { teamAdapterManifests } from '../adapters/team_manifests';
 import { constructionsOf, loadCredentialRows } from './catalog';
 import { movementFileFacets } from './files';
+import { libraryFaultRecord, librariesInMessage } from './library_faults';
 import { getMovementRow, getMovementRowByName, type MovementRow } from './store';
 
 /** Why a creation's statements were refused: the decision's own reasons, and statements given to a save that overwrites. */
@@ -198,22 +199,6 @@ export function librariesRefusal(unusable: readonly NamedLibrary[]): { refused: 
   };
 }
 
-// How the checker reports a fault inside an imported file: on the importer's
-// import line, in the library's name and with its own line number. A fault
-// two levels down carries one such prefix per level, outermost first.
-const IN_LIBRARY = /^"([^"]+)" line \d+: /;
-
-/** The libraries a diagnostic's message passes through, outermost first. */
-function librariesInMessage(message: string): string[] {
-  const chain: string[] = [];
-  for (let rest = message; ; ) {
-    const match = IN_LIBRARY.exec(rest);
-    if (match === null || match[1] === undefined) return chain;
-    chain.push(match[1]);
-    rest = rest.slice(match[0].length);
-  }
-}
-
 /**
  * A diagnostic from inside a library the person may use but not read says so
  * and shows nothing of the library: not its line number, and not the text the
@@ -257,17 +242,11 @@ export async function hideUnreadableLibraries<D extends { message: string }>(
 // then the library's own words.
 const RUN_CHECK_LINE = /^(\s*\S+ \(line \d+\): )"([^"]+)" line \d+: .*$/;
 
-/**
- * A run's failure as it is recorded. The record is read by everyone who may
- * read the importer, whether or not they may read the library the fault is in,
- * and a record cannot know who will read it: so a fault the check found inside
- * a library names the library and nothing of its lines. The library's readers
- * see the fault by checking it.
- */
+/** A run's failure as it is recorded; see `withoutLibraryFaults`. */
 export function withoutLibraryLines(message: string): string {
   return message
     .split('\n')
-    .map((line) => line.replace(RUN_CHECK_LINE, (_whole, head: string, library: string) => `${head}The library "${library}" has a fault. Open the library to see it.`))
+    .map((line) => line.replace(RUN_CHECK_LINE, (_whole, head: string, library: string) => `${head}${libraryFaultRecord(library)}`))
     .join('\n');
 }
 

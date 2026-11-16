@@ -42,6 +42,7 @@ import { importsAcrossVersions } from './imports_across_versions';
 import { editorPinOf } from './language_service';
 import { stepTimer, type StepTimer } from './timing';
 import { hideUnreadableLibraries } from './save_access';
+import { withoutLibraryFaults } from './library_faults';
 import { dedupeDiagnostics, toAuthoringDiagnostic } from './authoring_diagnostic';
 
 export { toAuthoringDiagnostic };
@@ -285,7 +286,8 @@ export function assessMovementValidity(input: {
   gaps: CatalogGap[];
 }): MovementValidityAssessment {
   const errors = input.diagnostics.filter((d) => d.severity === 'error');
-  if (errors.length > 0) return { status: 'invalid', reason: { diagnostics: errors } };
+  // The reason is stored, and read by whoever may read the file: it never holds a library's lines.
+  if (errors.length > 0) return { status: 'invalid', reason: { diagnostics: withoutLibraryFaults(errors) } };
   if (input.gaps.length > 0) return { status: 'unverified', reason: { gaps: input.gaps } };
   return { status: 'valid', reason: null };
 }

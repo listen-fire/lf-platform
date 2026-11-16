@@ -28,6 +28,7 @@ import type { UserId } from '../../../generated/kysely/core/User';
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
 import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
 import type { AuthoringDiagnostic } from './authoring';
+import { withoutLibraryFaults } from './library_faults';
 
 import { getAutomationsQb } from '../../../lib/kysely';
 import { parseRunMode, type TriggerRunMode } from '../triggers/run_mode';
@@ -367,7 +368,7 @@ export async function recordUpgradeCheck(input: {
     .set({
       // A JS array would reach Postgres as an ARRAY literal, not JSON.
       upgrade_diagnostics:
-        input.diagnostics.length > 0 ? JSON.stringify(input.diagnostics) : null,
+        input.diagnostics.length > 0 ? JSON.stringify(withoutLibraryFaults(input.diagnostics)) : null,
       upgrade_checked_against: input.checkedAgainst,
       updated_at: new Date(),
     })

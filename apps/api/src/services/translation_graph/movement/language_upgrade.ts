@@ -87,7 +87,8 @@ import { movementCatalogForTeam, type ImportedFile } from './catalog';
 import type { CatalogAudience } from './audience';
 import type { Principal } from 'principal';
 import { accessTo } from '../../access/decide';
-import { connectionsNamed, connectionsRefusal, librariesNamed, librariesRefusal, unusableConnections, unusableLibraries } from './save_access';
+import { connectionsNamed, connectionsRefusal, hideUnreadableLibraries, librariesNamed, librariesRefusal, unusableConnections, unusableLibraries } from './save_access';
+import { withoutLibraryFaults } from './library_faults';
 
 import { getAutomationsQb } from '../../../lib/kysely';
 import { listenPauses } from '../../inbound/listen_pause';
@@ -910,6 +911,15 @@ export function liveValidation(teamFacts?: (teamId: string) => Promise<TeamFacts
 
 export const validateUnderLiveCatalog: ValidateUnder = liveValidation();
 
+/** A validation whose diagnostics reach people in no way of their own (system
+ *  events, the stored report), so they never carry a library's lines. */
+function withoutLibraryFaultsIn(validate: ValidateUnder): ValidateUnder {
+  return async (input) => {
+    const validation = await validate(input);
+    return { ...validation, diagnostics: withoutLibraryFaults(validation.diagnostics) };
+  };
+}
+
 export function liveDeployCheckDeps(release: DeployCheckRelease): DeployCheckDeps {
   return {
     release,
@@ -926,7 +936,7 @@ export function liveDeployCheckDeps(release: DeployCheckRelease): DeployCheckDep
     runsWaitingOnKeys,
     // One read of each team's facts for the whole sweep, however many of its
     // automations a carried version checks.
-    validate: liveValidation(teamFactsOncePerTeam()),
+    validate: withoutLibraryFaultsIn(liveValidation(teamFactsOncePerTeam())),
     sourceHash: movementSourceHash,
     recordValidity: async ({ movement, validation, checkedAgainst }) => {
       const assessment = assessMovementValidity({
@@ -1186,6 +1196,7 @@ export function upgradeChanges(input: {
 interface CheckedMember {
   movement: MovementRow;
   rewrite: UpgradeRewrite;
+  /** What holds it, as the upgrading person may be shown it. */
   diagnostics: AuthoringDiagnostic[];
   held: boolean;
   unverified: boolean;
@@ -1288,9 +1299,12 @@ export async function upgradeMovement(input: {
   for (const member of group) {
     const rewrite = await rewriteForUpgrade({ movement: member, to, validate, all, movingWith: new Map(movingWith) });
     movingWith.set(member.name, { source: rewrite.source, languageVersion: to });
-    const diagnostics = blockingDiagnostics(rewrite.validation.diagnostics);
-    await recordUpgradeCheck({ id: member.id, diagnostics, checkedAgainst: to });
-    const held = holdsThePin(diagnostics, all).length > 0;
+    const blocking = blockingDiagnostics(rewrite.validation.diagnostics);
+    await recordUpgradeCheck({ id: member.id, diagnostics: blocking, checkedAgainst: to });
+    const held = holdsThePin(blocking, all).length > 0;
+    // The upgrade validates as the run does, so the library lines are in hand;
+    // the person is shown what they may read. With no person, nothing is hidden.
+    const diagnostics = by === undefined ? blocking : await hideUnreadableLibraries(blocking, { teamId: input.teamId, audience: { for: by } });
     checked.push({ movement: member, rewrite, diagnostics, held, unverified: !held && rewrite.validation.gaps.length > 0 });
   }
 

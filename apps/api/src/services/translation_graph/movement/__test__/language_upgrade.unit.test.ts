@@ -56,6 +56,7 @@ jest.mock('../save_access', () => ({
   connectionsRefusal: (unusable: { file: string }[]) => ({ message: `names connections you may not use (in ${unusable.map((u) => u.file).join(', ')})` }),
   librariesNamed: jest.fn(async () => []),
   unusableLibraries: jest.fn(async () => []),
+  hideUnreadableLibraries: jest.fn(async (diagnostics: unknown[]) => diagnostics),
   librariesRefusal: (unusable: { name: string }[]) => ({ message: `imports libraries you may not use (${unusable.map((u) => u.name).join(', ')})` }),
 }));
 
