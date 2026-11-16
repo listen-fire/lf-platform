@@ -340,6 +340,13 @@ export function MovementActivity({ movementId }: { movementId: string }) {
   );
 }
 
+const WHY_VERDICT = {
+  fires: "it would fire.",
+  does_not_fire: "it does not fire.",
+  cannot_tell: "it cannot be told.",
+  not_heard: "it does not listen for this event.",
+} as const;
+
 /** How an arrival reached a listen, in the reader's terms. */
 const ARRIVAL_LABEL: Record<
   MovementEvent["status"],
@@ -388,6 +395,13 @@ function EventsReceived({
       void utils.views.movement.runs.invalidate({ movementId });
     },
   });
+
+  // The event whose "why" is open; the server judges it afresh each time it is asked.
+  const [why, setWhy] = useState<{ deliveryId: string; arrivalIndex: number } | null>(null);
+  const explained = trpc.views.triggers.explainArrival.useQuery(
+    why ?? { deliveryId: "", arrivalIndex: 0 },
+    { enabled: why !== null, cacheTime: 0, staleTime: 0, refetchOnWindowFocus: false },
+  );
 
   const events = useMemo(
     () => (data ?? []).filter((evt) => lane === null || evt.lane === lane),
@@ -457,6 +471,17 @@ function EventsReceived({
                       title="Show the request this delivery came as. Your read is recorded."
                     >
                       Show request
+                    </button>
+                  )}
+                  {deliveryId !== null && evt.arrivalIndex !== null && (
+                    <button
+                      type="button"
+                      onClick={() => setWhy({ deliveryId, arrivalIndex: evt.arrivalIndex ?? 0 })}
+                      className="shrink-0 rounded-lg border border-gray-200 px-2.5 py-1 text-[12px] font-medium text-gray-600 transition hover:bg-gray-50"
+                      data-testid={`why-event-${evt.id}`}
+                      title="Judge this event again against the listens on its connection and say what stopped each."
+                    >
+                      Why didn&apos;t this fire?
                     </button>
                   )}
                   {deliveryId !== null && evt.arrivalIndex !== null && (
@@ -538,6 +563,55 @@ function EventsReceived({
               data-testid="replay-outcome"
             >
               {replay.data.lines.join(" ")}
+            </div>
+          )}
+          {why !== null && (
+            <div className="border-t border-gray-100 px-4 py-3" data-testid="why-panel">
+              {explained.isLoading && <p className="text-[12px] text-gray-500">Judging it again…</p>}
+              {explained.error && (
+                <p className="text-[12px] text-red-600" data-testid="why-error">
+                  {explained.error.message}
+                </p>
+              )}
+              {explained.data?.ok === false && (
+                <p className="text-[12px] text-red-600" data-testid="why-refused">
+                  {explained.data.errors.join(" ")}
+                </p>
+              )}
+              {explained.data?.ok === true && (
+                <>
+                  <h3 className="mb-2 text-[12px] font-semibold text-gray-700">
+                    Why didn&apos;t this fire?
+                  </h3>
+                  {explained.data.listens.length === 0 ? (
+                    <p className="text-[12px] text-gray-500" data-testid="why-none">
+                      No listen you can read hears this event.
+                    </p>
+                  ) : (
+                    <ul className="space-y-2">
+                      {explained.data.listens.map((entry) => (
+                        <li key={entry.listen} className="text-[12px] text-gray-700" data-testid={`why-listen-${entry.listen}`}>
+                          <span className="font-medium">{entry.automationName}</span>
+                          {": "}
+                          {WHY_VERDICT[entry.verdict]}
+                          {entry.firstFailed !== undefined && (
+                            <>
+                              {" — the first term that failed: "}
+                              <code className="font-mono text-[11px]">{entry.firstFailed}</code>
+                            </>
+                          )}
+                          {entry.reason !== undefined && <span className="text-gray-500">{` (${entry.reason})`}</span>}
+                          {entry.hostAnswers.used && (
+                            <span className="block text-[11px] text-gray-400" data-testid="why-as-of-now">
+                              Asked now ({entry.hostAnswers.asOf}): {entry.hostAnswers.note}.
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
             </div>
           )}
           {runWith.data?.ok === false && (

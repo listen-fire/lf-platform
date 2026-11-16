@@ -252,7 +252,7 @@ export interface RunWithEventStarted {
 }
 
 /** The module's arrivals in the order the delivery's ledger names them (the order an event's index counts in). */
-function inBroughtOrder(arrivals: readonly Arrival[], brought: readonly string[] | undefined): Arrival[] {
+export function inBroughtOrder(arrivals: readonly Arrival[], brought: readonly string[] | undefined): Arrival[] {
   if (brought === undefined) return [...arrivals];
   return brought.flatMap((key) => arrivals.filter((arrival) => !('gone' in arrival) && arrivalReceiptKey(arrival) === key));
 }

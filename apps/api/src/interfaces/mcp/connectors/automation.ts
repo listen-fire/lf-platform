@@ -682,6 +682,18 @@ function automationConnectorOptions(): McpRouterOptions {
         title: 'Replay a delivery through a listener',
         endpoint: { method: 'POST', path: '/v1/automation/automations/replay-delivery' },
       },
+      explainArrival: {
+        description:
+          "Say why a stored event did or did not fire the listeners on its connection: it is judged now against each listener of an automation you can read, and for each says whether it would fire, and the first term of its filter that failed (a platform function is named by its catalog key). Only listeners of automations you can read are shown. A platform function the filter calls is asked now, so its answer is as of this question and may differ from when the event arrived; the answer says so. Nothing is kept or run. Pass the `deliveryId` and `arrivalIndex` listArrivals shows for the event.",
+        annotations: { readOnlyHint: true },
+        inputSchema: {
+          deliveryId: z.string().describe('The delivery, as listArrivals names it (`deliveryId`).'),
+          arrivalIndex: z.number().int().min(0).describe('Which event of that delivery, as listArrivals names it (`arrivalIndex`).'),
+          team: z.string().optional().describe('Team id (see instructions); omit to search across your teams.'),
+        },
+        title: "Why didn't this fire?",
+        endpoint: { method: 'POST', path: '/v1/automation/automations/explain-arrival' },
+      },
       runWithEvent: {
         description:
           "Start an automation with a stored event's data, without reading its listeners' filters — as runAutomation skips them. Each listener of the automation that hears the event (its system and connection) starts one run; a listener that ran the event before runs it again. Needs write on the automation (anyone who may write it could change the filter anyway). Pass the automation, and the `deliveryId` and `arrivalIndex` listArrivals shows for the event. Returns { runIds, movementName, hint }: the runs are queued, so poll checkRun with each runId.",

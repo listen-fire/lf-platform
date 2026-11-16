@@ -150,6 +150,40 @@ export interface TeamEngineSwitch {
     notes: string[];
 }
 
+/** What the judge makes of the event for one listen, in words a person reads. */
+export type ExplainedVerdict = 'fires' | 'does_not_fire' | 'cannot_tell' | 'not_heard';
+export interface ExplainedListen {
+    automationId: string;
+    automationName: string;
+    /** The listen, as listArrivals names it. */
+    listen: string;
+    verdict: ExplainedVerdict;
+    /** The first term of the filter that failed, as the filter is normalised from the program (a host function by its catalog key). */
+    firstFailed?: string;
+    /** Why, when the term alone does not say. */
+    reason?: string;
+    /** Whether the host was asked to judge it; the answers are as of the question. */
+    hostAnswers: {
+        used: false;
+    } | {
+        used: true;
+        asOf: string;
+        note: string;
+    };
+}
+export interface ExplainedArrival {
+    ok: true;
+    deliveryId: string;
+    arrivalIndex: number;
+    /** The edge the event arrived on. */
+    edge: string;
+    listens: ExplainedListen[];
+}
+export type ExplainArrivalResult = ExplainedArrival | {
+    ok: false;
+    errors: string[];
+};
+
 export type ShownKept = {
     kind: 'request';
     method: string;
@@ -13227,6 +13261,34 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
             }, ShownRequest>;
+            explainArrival: _trpc_server.BuildProcedure<"query", {
+                _config: _trpc_server.RootConfig<{
+                    ctx: {
+                        authorise: () => Promise<void>;
+                    };
+                    meta: object;
+                    errorShape: {
+                        message: string;
+                        code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
+                        data: _trpc_server_dist_error_formatter.DefaultErrorData;
+                    };
+                    transformer: _trpc_server.DefaultDataTransformer;
+                }>;
+                _meta: object;
+                _ctx_out: {
+                    authorise: () => Promise<void>;
+                };
+                _input_in: {
+                    deliveryId: string;
+                    arrivalIndex: number;
+                };
+                _input_out: {
+                    deliveryId: string;
+                    arrivalIndex: number;
+                };
+                _output_in: typeof _trpc_server.unsetMarker;
+                _output_out: typeof _trpc_server.unsetMarker;
+            }, ExplainArrivalResult>;
         }>;
         teamEngine: _trpc_server.CreateRouterInner<_trpc_server.RootConfig<{
             ctx: {

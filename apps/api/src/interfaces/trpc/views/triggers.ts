@@ -38,6 +38,8 @@ import {
   type ShownRequest,
 } from '../../../services/inbound/show_request';
 import { resumeListen } from '../../../services/inbound/listen_pause';
+import { explainDeliveryArrival, type ExplainArrivalResult } from '../../../services/inbound/explain_arrival';
+import { noSuchEvent } from '../../../services/translation_graph/movement/run_now';
 import { mq } from '../../../lib/message_queue';
 import { trpc } from '../trpc';
 import { getAutomationsQb, getKnowledgeQb } from '../../../lib/kysely';
@@ -951,6 +953,19 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
         if (await deliveryUnseen({ teamId: user.teamId, deliveryId: input.deliveryId })) return noSuchDelivery(input.deliveryId);
         return showDeliveryRequest({ teamId: user.teamId as TeamId, deliveryId: input.deliveryId, reader });
       }),
+
+    /**
+     * "Why didn't this fire?": one event of a kept delivery judged now against
+     * each listen on its connection in an automation the caller may read.
+     * Writes nothing. A delivery the caller may not see answers as a missing one.
+     */
+    explainArrival: userProcedure
+      .input(z.object({ deliveryId: z.string().min(1), arrivalIndex: z.number().int().min(0) }))
+      .query(async ({ input }): Promise<ExplainArrivalResult> => {
+        const { user } = currentContext();
+        if (await deliveryUnseen({ teamId: user.teamId, deliveryId: input.deliveryId })) return noSuchEvent(input.deliveryId);
+        return explainDeliveryArrival({ teamId: user.teamId, deliveryId: input.deliveryId, arrivalIndex: input.arrivalIndex });
+      }),
   });
 };
 
@@ -1148,6 +1163,7 @@ decidesEach('triggers', {
   submitWebEvent: WRITES,
   replayDelivery: WRITES,
   showDeliveryRequest: USE_CONNECTION,
+  explainArrival: USE_CONNECTION,
 });
 
 export { triggersRouter };

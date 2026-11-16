@@ -509,6 +509,16 @@ jest.mock('../../services/inbound/delivery_origin', () => ({
     asked.deliveryId === mockSeeded.deliveryId ? { adapterType: 'attio', credentialsId: mockConnection.connectionId } : null,
 }));
 
+jest.mock('../../services/inbound/explain_arrival', () => ({
+  explainDeliveryArrival: async (asked: { deliveryId: string; arrivalIndex: number }) => ({
+    ok: true,
+    deliveryId: asked.deliveryId,
+    arrivalIndex: asked.arrivalIndex,
+    edge: 'Deals',
+    listens: [],
+  }),
+}));
+
 jest.mock('../../services/inbound/show_request', () => {
   const actual = jest.requireActual('../../services/inbound/show_request');
   return {
@@ -1058,6 +1068,7 @@ const REST_CONNECTION_CALLS: Record<string, ConnectionCall<RestCall>> = {
     ask: (c) => ({ body: { system: 'google_sheets', connection: c.connectionName } }),
     effect: 'write:connect_token',
   },
+  'POST /v1/automation/automations/explain-arrival': { ask: (c) => ({ body: { deliveryId: c.deliveryId, arrivalIndex: 0 } }) },
   'POST /v1/automation/access': {
     ask: (c) => ({ body: { connection: c.connectionName, verb: 'use', grantees: [{ kind: 'team' }] } }),
     effect: 'write:access_statement',
@@ -1105,6 +1116,7 @@ const TRPC_CONNECTION_CALLS: Record<string, ConnectionCall<unknown>> = {
   'views.webhookSubscriptions.create': { ask: (c) => ({ credentialsId: c.connectionId, provider: 'attio' }), effect: 'registerSubscription' },
   'views.webhookSubscriptions.delete': { ask: (c) => ({ id: c.subscriptionId }), effect: 'write:webhook_subscription' },
   'views.triggers.showDeliveryRequest': { ask: (c) => ({ deliveryId: c.deliveryId }) },
+  'views.triggers.explainArrival': { ask: (c) => ({ deliveryId: c.deliveryId, arrivalIndex: 0 }) },
   'views.access.get': { ask: (c) => ({ thing: 'connection', id: c.connectionId }) },
   'views.access.set': {
     ask: (c) => ({ thing: 'connection', id: c.connectionId, verb: 'use', grantees: [{ kind: 'team' }] }),

@@ -140,6 +140,7 @@ import {
   type Decision,
 } from '../../access_route';
 import { deliveryUnseen } from '../../delivery_access';
+import { explainDeliveryArrival } from '../../../services/inbound/explain_arrival';
 import { Whose } from '../../../services/access/whose';
 import { automationAccess, connectionAccess, type ConnectionAccess } from '../../../services/access/listing';
 import { StatementRefusedError, adminOf, administered, maySeeStatement, setStatement } from '../../../services/access/decide';
@@ -2086,6 +2087,32 @@ const runWithEventHandler: RequestHandler = jsonHandler(runWithEventSchema, 'bod
   };
 });
 
+const explainArrivalSchema = z.object({
+  deliveryId: z.string(),
+  arrivalIndex: z.number().int().min(0),
+  team: z.string().optional(),
+});
+
+// "Why didn't this fire?": a stored event judged now against the listens on its
+// connection in automations the caller may read. Needs use of the connection
+// the delivery came for; writes nothing.
+const explainArrivalHandler: RequestHandler = jsonHandler(explainArrivalSchema, 'body', async (input) => {
+  const teamId = await resolveToolTeam(input.team);
+  if (await deliveryUnseen({ teamId, deliveryId: input.deliveryId })) {
+    const { errors } = noSuchEvent(input.deliveryId);
+    return { error: errors.join('; ') };
+  }
+  const result = await explainDeliveryArrival({ teamId, deliveryId: input.deliveryId, arrivalIndex: input.arrivalIndex });
+  if (!result.ok) return { error: result.errors.join('; ') };
+  return {
+    deliveryId: result.deliveryId,
+    arrivalIndex: result.arrivalIndex,
+    edge: result.edge,
+    listens: result.listens,
+    hint: 'Only listeners of automations you can read are shown. A host function is asked now, so its answer is as of this question.',
+  };
+});
+
 // A listen the loop breaker or the loop guard paused runs nothing until a
 // person resumes it (ruling 2). listAutomations and getAutomation show it on
 // the listener (`paused`); this resumes it, by the listener's trigger id.
@@ -2176,6 +2203,7 @@ function mountAutomationToolRoutes(router: ReturnType<typeof Router>): void {
   route.get('/automations/:idOrName/arrivals', READS, listArrivalsHandler);
   route.post('/automations/replay-delivery', WRITES, replayDeliveryHandler);
   route.post('/automations/run-with-event', WRITES, runWithEventHandler);
+  route.post('/automations/explain-arrival', USE_CONNECTION, explainArrivalHandler);
   route.post('/automations/resume-listen', WRITES, resumeListenHandler);
 }
 
@@ -2297,6 +2325,7 @@ function registerAutomationToolRoutes(): void {
   reg('POST', '/automations/resume-run', 'Resume a run that paused because it reached its cost limit (checkRun shows it as status "parked" with `paused` set). Every part of the run that stopped carries on from where it stopped, and its usage resets, so the limit applies afresh. Body: { runId, team? }. Also the top-level "resumeRun" tool.', { inputSchema: resumeRunSchema, latency: 'fast' });
   reg('GET', '/automations/:idOrName/arrivals', 'List what reached an automation\'s listens, newest first: each run an arrival started and each arrival a listen could not judge (status `not_judged`, with the reason and its attempt; `waiting_for_host` while its listen waits for a host function, which it retries). Each names its `listen` and `deliveryId`, which replayDelivery takes, and, when known, its `arrivalIndex`, which runWithEvent takes. Query: ?team=. Also the top-level "listArrivals" tool.', { readOnly: true, latency: 'fast' });
   reg('POST', '/automations/replay-delivery', 'Put one kept delivery through one listen again: the way out of an arrival the listen could not judge once the system it needed answers again. Only the arrivals that delivery brought are judged, by that listen alone. A listen that ran the arrival before runs nothing unless `force` is true. Needs write on the automation the listen belongs to; no other listen reruns. Body: { listen, deliveryId, force?, team? }. Returns { outcome, runIds, attempt, stillUndecided, lines }; the runs are queued, so poll checkRun. Also the top-level "replayDelivery" tool.', { inputSchema: replayDeliverySchema, latency: 'fast' });
+  reg('POST', '/automations/explain-arrival', 'Say why a stored event did or did not fire the listens on its connection: the event is judged now against each listen of an automation you can read, naming the first term of the filter that failed. Needs use of the connection the delivery came for. A host function the filter calls is asked now, so its answer is as of this question, not as of the event. Nothing is kept. Body: { deliveryId, arrivalIndex, team? } (as listArrivals names them). Returns { edge, listens: [{ automationName, listen, verdict, firstFailed, reason, hostAnswers }] }. Also the top-level "explainArrival" tool.', { inputSchema: explainArrivalSchema, readOnly: true, latency: 'fast' });
   reg('POST', '/automations/run-with-event', 'Start an automation with a stored event\'s data, skipping its listens\' filters, as runAutomation skips them: each listen of the automation that hears that event (its module, its connection) starts one run. Needs write on the automation. Body: { automation, deliveryId, arrivalIndex, team? } (`deliveryId` and `arrivalIndex` as listArrivals names them). Returns { runIds, movementName }; the runs are queued, so poll checkRun. Also the top-level "runWithEvent" tool.', { inputSchema: runWithEventSchema, latency: 'fast' });
   reg('POST', '/automations/resume-listen', 'Resume a listener the loop breaker or the loop guard paused: listAutomations and getAutomation show such a listener with `paused` ({ reason, held }). It runs what arrives from now on; the arrivals it held do not run (replayDelivery puts one through again). Body: { listen, team? } (`listen`: the listener\'s triggerId). Returns { resumed, held }. Also the top-level "resumeListen" tool.', { inputSchema: resumeListenSchema, latency: 'fast' });
   reg('POST', '/automations/cancel-run', 'Stop a run by id — one that\'s executing or one that\'s paused waiting on something. Everything the run already did stays done; it just won\'t do anything more. An executing run stops at its next safe point (usually within seconds). Body: { runId, team? }. Also the top-level "cancelRun" tool.', { inputSchema: cancelRunSchema, latency: 'fast' });
