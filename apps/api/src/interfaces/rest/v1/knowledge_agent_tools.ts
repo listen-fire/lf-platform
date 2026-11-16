@@ -141,6 +141,7 @@ import {
 } from '../../access_route';
 import { deliveryUnseen } from '../../delivery_access';
 import { explainDeliveryArrival } from '../../../services/inbound/explain_arrival';
+import { RECENT_DELIVERIES, recentDeliveriesOf } from '../../../services/inbound/connection_deliveries';
 import { Whose } from '../../../services/access/whose';
 import { automationAccess, connectionAccess, type ConnectionAccess } from '../../../services/access/listing';
 import { StatementRefusedError, adminOf, administered, maySeeStatement, setStatement } from '../../../services/access/decide';
@@ -2087,6 +2088,27 @@ const runWithEventHandler: RequestHandler = jsonHandler(runWithEventSchema, 'bod
   };
 });
 
+const listDeliveriesSchema = z.object({
+  connection: z.string(),
+  limit: z.number().int().min(1).max(100).optional(),
+  team: z.string().optional(),
+});
+
+// A connection's recent deliveries, so an event that set nothing off can be
+// found and asked about. Needs use of the connection; a connection the caller
+// may not use answers as one that does not exist.
+const listDeliveriesHandler: RequestHandler = jsonHandler(listDeliveriesSchema, 'body', async (input) => {
+  const teamId = await resolveToolTeam(input.team);
+  const connection = await usableConnectionNamed({ idOrName: input.connection, team: teamId });
+  if (connection === null) return { error: `No connection '${input.connection}' in this team.` };
+  const deliveries = await recentDeliveriesOf({ teamId: teamId as TeamId, connectionId: connection.id, limit: input.limit ?? RECENT_DELIVERIES });
+  return {
+    connection: connection.name,
+    deliveries,
+    hint: 'Pass a deliveryId, and an arrivalIndex below its eventCount, to explainArrival to ask why it did not fire, or to runWithEvent with one of its `runnable` automations. Only listens of automations you can read are named in `fired`.',
+  };
+});
+
 const explainArrivalSchema = z.object({
   deliveryId: z.string(),
   arrivalIndex: z.number().int().min(0),
@@ -2174,6 +2196,7 @@ function mountAutomationToolRoutes(router: ReturnType<typeof Router>): void {
   route.post('/connections/describe', USE_CONNECTION, describeInstanceHandler);
   route.post('/connections/connect', USE_CONNECTION, connectCredentialHandler);
   route.post('/connections/grant-access', USE_CONNECTION, grantAccessHandler);
+  route.post('/connections/deliveries', USE_CONNECTION, listDeliveriesHandler);
   route.post('/access', CHANGE_STATEMENT, setAccessHandler);
 
   // whatsapp number linking (verification code loop)
@@ -2305,6 +2328,7 @@ function registerAutomationToolRoutes(): void {
   reg('POST', '/connections/describe', 'The live schema of one (system, connection) at one position. Body: { system, connection?, types?, position?, narrow?, detail? }. By default answers compact markdown in getStarted\'s notation (the node\'s fields, its edges with their targets\' fields one level deep; at the root, how to construct and listen); `detail: "full"` answers the JSON described below. Call before authoring an automation against a system; every call re-reads the live schema, so call again after adding a field in the external workspace. At the root it also returns `access`, who may use the connection, in the shape setAccess takes. Returns the system\'s description + triggerExpectation, plus an identity note (who a movement runs as, and whose activity triggers a listener) and a capability note (what it can read/write), even when no connection exists yet. A type listing `members` is POLYMORPHIC: it shows only what all its members share (often nothing), and you reach one member\'s real fields and edges by describing again with `narrow` — see `narrowBy` for the fields to test and `narrowingHint` for a worked example.', { inputSchema: describeInstanceSchema, readOnly: true, latency: 'medium' });
   reg('POST', '/connections/connect', 'AUTHOR-TIME: if a system the automation needs isn\'t connected yet, mint a single-use link for the user to open in their browser — no popup needed. Works for OAuth systems (the link opens a browser sign-in), API-key systems (the link opens a form to paste/replace the key), intrinsic systems (one-click confirm), and handshake systems (Telegram — the link opens Telegram with the Listen-Fire bot; the user presses Start there to finish). Body: { system, connection?, use? } — `use` says who may use the connection the link creates (ask the person you work for, never choose), and is required unless the link only reuses the team\'s Telegram connection. Returns a link to send the user, the connect kind ("oauth" | "key-entry" | "intrinsic" | "handshake"), the name the connection will be stored under, and when the link expires. Hand the url to the user; after they connect, poll listConnections — the connection shows up in the results. Also the top-level "connectSystem" tool.', { inputSchema: connectCredentialSchema, latency: 'fast' });
   reg('POST', '/connections/grant-access', 'AUTHOR-TIME: some systems need access granted to specific items inside an already-connected account (Google Sheets: the Drive picker — under drive.file, picking is the only way to reach an existing file). Mint a single-use link where the user picks the item(s) to grant. Body: { system, connection? }. Returns { url, connection, expiresAt }. Systems without a grant flow return a clear error. Also the top-level "grantAccess" tool.', { inputSchema: grantAccessSchema, latency: 'fast' });
+  reg('POST', '/connections/deliveries', 'A connection\'s recent deliveries, newest first, including the events that set nothing off (the activity of an automation lists only what reached it). Needs use of the connection. Body: { connection, limit?, team? }. Returns { connection, deliveries: [{ deliveryId, receivedAt, eventCount, fired: [{ automationName, listen }], runnable: [{ automationId, automationName }] }] }: `fired` names the listens it set off, of automations you can read; `runnable` the automations you may write that listen there. Ask explainArrival why one did not fire, or runWithEvent to run one of them with it. Also the top-level "listDeliveries" tool.', { inputSchema: listDeliveriesSchema, readOnly: true, latency: 'fast' });
   reg('POST', '/access', SET_ACCESS_DESCRIPTION, { inputSchema: setAccessSchema, latency: 'fast' });
 
   // automations

@@ -3398,7 +3398,7 @@ packages:
       '@listen-fire/movement-lang': '>=0.15.0 <1.0.0'
 
   '@listen-fire/handbook@file:../lf-dev-tarballs/0.16.0/listen-fire-handbook-0.16.0.tgz':
-    resolution: {integrity: sha512-uJX7a5y5Sh7QREhm9Nk2xphLAiHPZ8U8K9m7zLVsLHnEcj7nPUPKBRckvKwhK/gBKjlKuYFY6nHMn71tmOiTxA==, tarball: file:../lf-dev-tarballs/0.16.0/listen-fire-handbook-0.16.0.tgz}
+    resolution: {integrity: sha512-btFviTbOtkleiWnlfjaYpJDgFosbeKwsrxGCLRRhhKJRUcpxyhkUH5GVT9lSqAurfJ0BxrFkXvCzDYFxW0D60w==, tarball: file:../lf-dev-tarballs/0.16.0/listen-fire-handbook-0.16.0.tgz}
     version: 0.16.0
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:

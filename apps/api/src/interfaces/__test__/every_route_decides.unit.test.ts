@@ -509,6 +509,15 @@ jest.mock('../../services/inbound/delivery_origin', () => ({
     asked.deliveryId === mockSeeded.deliveryId ? { adapterType: 'attio', credentialsId: mockConnection.connectionId } : null,
 }));
 
+// A connection's deliveries, as the listing names them; the guard in front of it is the route's.
+jest.mock('../../services/inbound/connection_deliveries', () => ({
+  RECENT_DELIVERIES: 20,
+  recentDeliveriesOf: async (asked: { connectionId: string }) =>
+    asked.connectionId === mockConnection.connectionId
+      ? [{ deliveryId: mockSeeded.deliveryId, receivedAt: '1970-01-01T00:00:00.000Z', eventCount: 1, fired: [], runnable: [] }]
+      : [],
+}));
+
 jest.mock('../../services/inbound/explain_arrival', () => ({
   explainDeliveryArrival: async (asked: { deliveryId: string; arrivalIndex: number }) => ({
     ok: true,
@@ -1069,6 +1078,7 @@ const REST_CONNECTION_CALLS: Record<string, ConnectionCall<RestCall>> = {
     effect: 'write:connect_token',
   },
   'POST /v1/automation/automations/explain-arrival': { ask: (c) => ({ body: { deliveryId: c.deliveryId, arrivalIndex: 0 } }) },
+  'POST /v1/automation/connections/deliveries': { ask: (c) => ({ body: { connection: c.connectionName } }) },
   'POST /v1/automation/access': {
     ask: (c) => ({ body: { connection: c.connectionName, verb: 'use', grantees: [{ kind: 'team' }] } }),
     effect: 'write:access_statement',
@@ -1078,6 +1088,7 @@ const REST_CONNECTION_CALLS: Record<string, ConnectionCall<RestCall>> = {
 const TRPC_CONNECTION_CALLS: Record<string, ConnectionCall<unknown>> = {
   'views.connections.getAll': { ask: () => undefined, list: true },
   'views.connections.credentialDependents': { ask: (c) => ({ id: c.connectionId }) },
+  'views.connections.deliveries': { ask: (c) => ({ id: c.connectionId }) },
   // One shared Telegram connection per team: a hidden one is refused, and no second is made.
   'views.connections.connectTelegramTeam': { ask: () => undefined, refusal: /"reason":"not_usable"/ },
   'views.credentials.getCredentials': { ask: () => undefined, list: true },

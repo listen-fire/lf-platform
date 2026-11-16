@@ -148,4 +148,10 @@ describe('access statements — one table, one decision', () => {
     const lists = await StatementStore.listsNaming({ teamId, userId: bob });
     expect(lists).toEqual([{ target: finance, verb: 'use' }]);
   });
+
+  it('answers no memberships, not a query error, when none of the teams has a standard id', async () => {
+    const legacyDevTeam = '11111111-2222-3333-4444-555555555555';
+    await expect(StatementStore.membershipsOf(alice, [legacyDevTeam])).resolves.toEqual(new Map());
+    await expect(StatementStore.membershipsOf(alice, [legacyDevTeam, teamId])).resolves.toEqual(new Map([[teamId, 'write']]));
+  });
 });

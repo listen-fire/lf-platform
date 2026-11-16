@@ -77,7 +77,7 @@ const call = (method: string, params: Record<string, unknown> = {}, settings: Re
   post({ protocolVersion: '2', method, cacheScopeId: '<slot>', params, settings });
 
 describe('the store slot route', () => {
-  it('answers its manifest before any open: the store slot, needing nothing of a 2.x host, and its 75 methods', async () => {
+  it('answers its manifest before any open: the store slot, needing nothing of a 2.x host, and its 76 methods', async () => {
     const res = await call('manifest');
 
     expect(res.status).toBe(200);
@@ -85,7 +85,7 @@ describe('the store slot route', () => {
       ok: true,
       result: { protocolVersion: 2, protocolMinor: 0, name: 'lf-platform-store', kind: 'core', slot: 'store', methods: [...LF_STORE_METHODS] },
     });
-    expect(LF_STORE_METHODS).toHaveLength(75);
+    expect(LF_STORE_METHODS).toHaveLength(76);
   });
 
   it('refuses an unknown method, a lost protocol version, and a body that is not the envelope', async () => {

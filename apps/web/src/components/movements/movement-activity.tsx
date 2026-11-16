@@ -28,6 +28,7 @@ import { laneShortForm } from "@/lib/trigger-name";
 import { formatRunCostUsd } from "@/lib/run-cost";
 
 import { replayForces } from "./arrival-replay";
+import { WhyPanel, type AskedEvent } from "./why-panel";
 
 type MovementRun = RouterOutputs["views"]["movement"]["runs"][number];
 type MovementEvent = RouterOutputs["views"]["movement"]["events"][number];
@@ -340,13 +341,6 @@ export function MovementActivity({ movementId }: { movementId: string }) {
   );
 }
 
-const WHY_VERDICT = {
-  fires: "it would fire.",
-  does_not_fire: "it does not fire.",
-  cannot_tell: "it cannot be told.",
-  not_heard: "it does not listen for this event.",
-} as const;
-
 /** How an arrival reached a listen, in the reader's terms. */
 const ARRIVAL_LABEL: Record<
   MovementEvent["status"],
@@ -396,12 +390,8 @@ function EventsReceived({
     },
   });
 
-  // The event whose "why" is open; the server judges it afresh each time it is asked.
-  const [why, setWhy] = useState<{ deliveryId: string; arrivalIndex: number } | null>(null);
-  const explained = trpc.views.triggers.explainArrival.useQuery(
-    why ?? { deliveryId: "", arrivalIndex: 0 },
-    { enabled: why !== null, cacheTime: 0, staleTime: 0, refetchOnWindowFocus: false },
-  );
+  // The event whose "why" is open.
+  const [why, setWhy] = useState<AskedEvent | null>(null);
 
   const events = useMemo(
     () => (data ?? []).filter((evt) => lane === null || evt.lane === lane),
@@ -565,55 +555,7 @@ function EventsReceived({
               {replay.data.lines.join(" ")}
             </div>
           )}
-          {why !== null && (
-            <div className="border-t border-gray-100 px-4 py-3" data-testid="why-panel">
-              {explained.isLoading && <p className="text-[12px] text-gray-500">Judging it again…</p>}
-              {explained.error && (
-                <p className="text-[12px] text-red-600" data-testid="why-error">
-                  {explained.error.message}
-                </p>
-              )}
-              {explained.data?.ok === false && (
-                <p className="text-[12px] text-red-600" data-testid="why-refused">
-                  {explained.data.errors.join(" ")}
-                </p>
-              )}
-              {explained.data?.ok === true && (
-                <>
-                  <h3 className="mb-2 text-[12px] font-semibold text-gray-700">
-                    Why didn&apos;t this fire?
-                  </h3>
-                  {explained.data.listens.length === 0 ? (
-                    <p className="text-[12px] text-gray-500" data-testid="why-none">
-                      No listen you can read hears this event.
-                    </p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {explained.data.listens.map((entry) => (
-                        <li key={entry.listen} className="text-[12px] text-gray-700" data-testid={`why-listen-${entry.listen}`}>
-                          <span className="font-medium">{entry.automationName}</span>
-                          {": "}
-                          {WHY_VERDICT[entry.verdict]}
-                          {entry.firstFailed !== undefined && (
-                            <>
-                              {" — the first term that failed: "}
-                              <code className="font-mono text-[11px]">{entry.firstFailed}</code>
-                            </>
-                          )}
-                          {entry.reason !== undefined && <span className="text-gray-500">{` (${entry.reason})`}</span>}
-                          {entry.hostAnswers.used && (
-                            <span className="block text-[11px] text-gray-400" data-testid="why-as-of-now">
-                              Asked now ({entry.hostAnswers.asOf}): {entry.hostAnswers.note}.
-                            </span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </>
-              )}
-            </div>
-          )}
+          {why !== null && <WhyPanel key={`${why.deliveryId}:${why.arrivalIndex}`} event={why} />}
           {runWith.data?.ok === false && (
             <div
               className="border-t border-gray-100 px-4 py-2 text-[12px] text-red-600"

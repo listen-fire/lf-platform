@@ -154,6 +154,8 @@ model ArrivalUnjudged {
   notedAt    DateTime @map("noted_at") @db.Timestamptz(6)
   adapter    String?
   landing    Json?
+  waiting    Boolean  @default(false)
+  keptOrder  BigInt   @default(autoincrement()) @map("kept_order")
 
   @@id([teamId, pipeline, arrival, attempt])
   @@index([teamId, notedAt, pipeline, arrival, attempt], map: "arrival_unjudged_at_idx")
@@ -252,6 +254,7 @@ model Delivery {
   eventCount     Int       @map("event_count")
   request        Json?
   judgedAt       DateTime? @map("judged_at") @db.Timestamptz(6)
+  credentialsId  String?   @map("credentials_id") @db.Uuid
 
   @@index([teamId, receivedAt], map: "delivery_received_idx")
   @@map("delivery")
@@ -326,6 +329,7 @@ model ExternalServiceCredentials {
   wireBinding          String?                          @map("wire_binding")
   connectTokens        ConnectToken[]
   googleGrantedItems   GoogleGrantedItem[]
+  libraryStandings     LibraryStanding[]
   remoteAdapters       RemoteAdapter[]
   triggers             Trigger[]
   webhookSubscriptions AutomationsWebhookSubscription[]
@@ -429,6 +433,21 @@ model LfSecretsLease {
   @@schema("automations")
 }
 
+model LibraryStanding {
+  id                         String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teamId                     String                      @map("team_id") @db.Uuid
+  movementId                 String                      @unique @map("movement_id") @db.Uuid
+  lostConnectionId           String?                     @map("lost_connection_id") @db.Uuid
+  unresolvedName             String?                     @map("unresolved_name")
+  checkedAt                  DateTime                    @default(now()) @map("checked_at") @db.Timestamptz(6)
+  externalServiceCredentials ExternalServiceCredentials? @relation(fields: [lostConnectionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  movement                   Movement                    @relation(fields: [movementId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([teamId], map: "library_standing_team_idx")
+  @@map("library_standing")
+  @@schema("automations")
+}
+
 model ListenState {
   teamId     String    @map("team_id") @db.Uuid
   pipeline   String
@@ -474,6 +493,7 @@ model Movement {
   languageVersion                                          String               @default("1") @map("language_version")
   upgradeDiagnostics                                       Json?                @map("upgrade_diagnostics")
   upgradeCheckedAgainst                                    String?              @map("upgrade_checked_against")
+  libraryStanding                                          LibraryStanding?
   movementVersionMovementCurrentVersionIdTomovementVersion MovementVersion?     @relation("movement_current_version_idTomovement_version", fields: [currentVersionId], references: [id])
   triggerMovementTriggerIdTotrigger                        Trigger?             @relation("movement_trigger_idTotrigger", fields: [triggerId], references: [id])
   movementIssues                                           MovementIssue[]

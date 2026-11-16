@@ -1886,6 +1886,26 @@ export type ConnectKind = 'oauth' | 'key-entry' | 'intrinsic' | 'handshake' | 'i
  */
 export type ConnectMethod = Exclude<ConnectKind, 'item-picker'> | 'app-only';
 
+export interface FiredListen {
+    automationId: string;
+    automationName: string;
+    /** The listen, as listArrivals names it. */
+    listen: string;
+}
+export interface ConnectionDelivery {
+    deliveryId: string;
+    receivedAt: string;
+    /** The events it brought, each judged again by its place (`arrivalIndex`); null when the kept request does not say. */
+    eventCount: number | null;
+    /** The listens it set off when it arrived, of automations the caller may read. */
+    fired: FiredListen[];
+    /** The automations the caller may write that listen on its module and connection: each may be run with one of its events. */
+    runnable: Array<{
+        automationId: string;
+        automationName: string;
+    }>;
+}
+
 export type ConnectionsIntegration = {
     locked: false;
     id: string;
@@ -3941,6 +3961,32 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
             }, ConnectionsPayload>;
+            deliveries: _trpc_server.BuildProcedure<"query", {
+                _config: _trpc_server.RootConfig<{
+                    ctx: {
+                        authorise: () => Promise<void>;
+                    };
+                    meta: object;
+                    errorShape: {
+                        message: string;
+                        code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
+                        data: _trpc_server_dist_error_formatter.DefaultErrorData;
+                    };
+                    transformer: _trpc_server.DefaultDataTransformer;
+                }>;
+                _meta: object;
+                _ctx_out: {
+                    authorise: () => Promise<void>;
+                };
+                _input_in: {
+                    id: string;
+                };
+                _input_out: {
+                    id: string;
+                };
+                _output_in: typeof _trpc_server.unsetMarker;
+                _output_out: typeof _trpc_server.unsetMarker;
+            }, ConnectionDelivery[]>;
             credentialDependents: _trpc_server.BuildProcedure<"query", {
                 _config: _trpc_server.RootConfig<{
                     ctx: {

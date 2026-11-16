@@ -226,12 +226,13 @@ function accessOf(value: string): Access {
 
 /** This user's access on each of these teams they are a member of. */
 async function membershipsOf(userId: string, teamIds: readonly string[]): Promise<Map<string, Access>> {
-  if (teamIds.length === 0 || !isUuid(userId)) return new Map();
+  const teams = teamIds.filter(isUuid);
+  if (teams.length === 0 || !isUuid(userId)) return new Map();
   const rows = await getCoreQb(['team_membership'])
     .selectFrom('team_membership')
     .select(['team_id', 'access'])
     .where('user_id', '=', userId as UserId)
-    .where('team_id', 'in', teamIds.filter(isUuid).map((id) => id as TeamId))
+    .where('team_id', 'in', teams.map((id) => id as TeamId))
     .execute();
   return new Map(rows.map((r) => [String(r.team_id), accessOf(r.access)]));
 }

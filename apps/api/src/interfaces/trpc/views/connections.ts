@@ -52,6 +52,7 @@ import {
 import { USE_CONNECTION, connectionUnseen, decidesEach, readableAmong, seenAmong } from '../../access_route';
 import { seenOnlyBy } from '../../../services/access/decide';
 import { librariesSharingConnections } from '../../../services/access/library_sharing';
+import { recentDeliveriesOf, type ConnectionDelivery } from '../../../services/inbound/connection_deliveries';
 import { GranteesInput } from '../../../services/access/stated_input';
 import { useForNewConnection } from './connection_creation';
 
@@ -437,6 +438,27 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
     }),
 
     /**
+     * The connection's recent deliveries, so an event that set nothing off can
+     * be found and asked "why didn't this fire?". A connection the caller may
+     * not use answers as one that does not exist.
+     */
+    deliveries: userProcedure
+      .input(z.object({ id: z.string() }))
+      .query(async ({ input }): Promise<ConnectionDelivery[]> => {
+        const teamId = currentContext().user.teamId as TeamId;
+        const owned = await getAutomationsQb(['external_service_credentials'])
+          .selectFrom('external_service_credentials')
+          .where((eb) => eb(eb.cast<string>('id', 'text'), '=', input.id))
+          .where('team_id', '=', teamId)
+          .select(['id'])
+          .executeTakeFirst();
+        if (owned === undefined || (await connectionUnseen(input.id))) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: `No connection ${input.id}.` });
+        }
+        return recentDeliveriesOf({ teamId, connectionId: owned.id });
+      }),
+
+    /**
      * What deleting this credential would affect — the read-only payload
      * behind the delete-confirmation dialog (see
      * `CredentialDependentsPayload` for the honest enumeration). The
@@ -609,6 +631,7 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
 decidesEach('connections', {
   getAll: USE_CONNECTION,
   credentialDependents: USE_CONNECTION,
+  deliveries: USE_CONNECTION,
   connectTelegram: { exempt: "links the caller's own Telegram account, no connection" },
   connectTelegramTeam: USE_CONNECTION,
 });

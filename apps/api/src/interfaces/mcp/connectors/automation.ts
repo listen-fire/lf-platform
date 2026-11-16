@@ -682,6 +682,18 @@ function automationConnectorOptions(): McpRouterOptions {
         title: 'Replay a delivery through a listener',
         endpoint: { method: 'POST', path: '/v1/automation/automations/replay-delivery' },
       },
+      listDeliveries: {
+        description:
+          "A connection's recent deliveries, newest first, including events that set nothing off — an automation's activity (listArrivals) lists only what reached it, so this is where to find the event someone says should have fired. Needs use of the connection. Each delivery says when it came, how many events it brought (`eventCount`), which listeners it set off (`fired`, only those of automations you can read) and which listening automations you may run with it (`runnable`). Ask explainArrival with its `deliveryId` and an `arrivalIndex` below `eventCount` why it did not fire; runWithEvent runs one of the `runnable` automations with it.",
+        annotations: { readOnlyHint: true },
+        inputSchema: {
+          connection: z.string().describe('The connection, by its name or id (from listConnections).'),
+          limit: z.number().int().min(1).max(100).optional().describe('How many deliveries, newest first (default 20).'),
+          team: z.string().optional().describe('Team id (see instructions); omit for your default team.'),
+        },
+        title: "A connection's recent deliveries",
+        endpoint: { method: 'POST', path: '/v1/automation/connections/deliveries' },
+      },
       explainArrival: {
         description:
           "Say why a stored event did or did not fire the listeners on its connection: it is judged now against each listener of an automation you can read, and for each says whether it would fire, and the first term of its filter that failed (a platform function is named by its catalog key). Only listeners of automations you can read are shown. A platform function the filter calls is asked now, so its answer is as of this question and may differ from when the event arrived; the answer says so. Nothing is kept or run. Pass the `deliveryId` and `arrivalIndex` listArrivals shows for the event.",

@@ -34,6 +34,7 @@ import {
   IntegrationModal,
 } from "@/components/integrations/integration-modal";
 import { CodeSnippet } from "@/components/code-snippet";
+import { ConnectionDeliveries } from "@/components/integrations/connection-deliveries";
 import { ServiceIcon } from "@/components/service-icon";
 import { Modal } from "@/components/ontology/modal";
 import { AccessPanel } from "@/components/access/access-panel";
@@ -124,6 +125,8 @@ export default function ConnectionsPage() {
     id: string;
     name: string;
   } | null>(null);
+  // The account whose recent deliveries are open.
+  const [deliveriesOf, setDeliveriesOf] = useState<string | null>(null);
 
   const integrations = data?.integrations ?? [];
   const sourceChannels = data?.sourceChannels ?? [];
@@ -183,74 +186,89 @@ export default function ConnectionsPage() {
                     </button>
                   </ListRow>
                 ) : (
-                  <ListRow key={integration.id} className="group">
-                    <ServiceIcon
-                      type={integration.type}
-                      className="h-4 w-4 shrink-0 text-gray-400 opacity-45"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="truncate text-[13px] font-medium text-gray-900">
-                          {integration.name}
-                        </span>
-                        <Badge tone="gray">
-                          {TYPE_LABELS[integration.type] ?? integration.type}
-                        </Badge>
-                        {integration.onlyYou && (
-                          <Badge tone="amber" testId="connection-only-you">
-                            {ONLY_YOU}
+                  <div key={integration.id}>
+                    <ListRow className="group">
+                      <ServiceIcon
+                        type={integration.type}
+                        className="h-4 w-4 shrink-0 text-gray-400 opacity-45"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate text-[13px] font-medium text-gray-900">
+                            {integration.name}
+                          </span>
+                          <Badge tone="gray">
+                            {TYPE_LABELS[integration.type] ?? integration.type}
                           </Badge>
+                          {integration.onlyYou && (
+                            <Badge tone="amber" testId="connection-only-you">
+                              {ONLY_YOU}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="mt-0.5 text-[12px] text-gray-400">
+                          {automationCountLabel(integration.automationCount)}
+                        </div>
+                        {integration.sharedThrough.length > 0 && (
+                          <div className="mt-0.5 text-[12px] text-gray-400" data-testid={`connection-shared-through-${integration.name}`}>
+                            Shared through these libraries: {integration.sharedThrough.join(", ")}
+                          </div>
+                        )}
+                        {integration.connectLines.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                            {integration.connectLines.map((line) => (
+                              <CodeSnippet key={line} code={line} />
+                            ))}
+                          </div>
                         )}
                       </div>
-                      <div className="mt-0.5 text-[12px] text-gray-400">
-                        {automationCountLabel(integration.automationCount)}
-                      </div>
-                      {integration.sharedThrough.length > 0 && (
-                        <div className="mt-0.5 text-[12px] text-gray-400" data-testid={`connection-shared-through-${integration.name}`}>
-                          Shared through these libraries: {integration.sharedThrough.join(", ")}
-                        </div>
-                      )}
-                      {integration.connectLines.length > 0 && (
-                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                          {integration.connectLines.map((line) => (
-                            <CodeSnippet key={line} code={line} />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    {/* Hover-revealed on pointer devices; always visible on
-                        touch, where there is no hover to reveal them. */}
-                    <div className="flex shrink-0 items-center gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
-                      <button
-                        onClick={() => setAccessTarget(integration)}
-                        title="Who may use this account"
-                        data-testid={`connection-access-${integration.name}`}
-                        className="cursor-pointer rounded-md px-2 py-1 text-[12px] font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-800"
-                      >
-                        Access
-                      </button>
-                      {CONNECTABLE_CREDENTIAL_TYPES.has(integration.type) && (
+                      {/* Hover-revealed on pointer devices; always visible on
+                          touch, where there is no hover to reveal them. */}
+                      <div className="flex shrink-0 items-center gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
                         <button
-                          onClick={() => setReconnectTarget(integration)}
-                          title="Sign in to this account again — fixes expired or revoked access"
+                          onClick={() => setDeliveriesOf(deliveriesOf === integration.id ? null : integration.id)}
+                          title="What arrived for this account lately, and what it set off"
+                          data-testid={`connection-deliveries-toggle-${integration.name}`}
                           className="cursor-pointer rounded-md px-2 py-1 text-[12px] font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-800"
                         >
-                          Reconnect
+                          Recent events
                         </button>
-                      )}
-                      <button
-                        onClick={() => setDeleteTarget(integration)}
-                        title="Remove this account"
-                        className="cursor-pointer rounded-md px-2 py-1 text-[12px] font-medium text-gray-500 hover:bg-red-50 hover:text-red-600"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                    <ReadWriteBadges
-                      reads={integration.reads}
-                      writes={integration.writes}
-                    />
-                  </ListRow>
+                        <button
+                          onClick={() => setAccessTarget(integration)}
+                          title="Who may use this account"
+                          data-testid={`connection-access-${integration.name}`}
+                          className="cursor-pointer rounded-md px-2 py-1 text-[12px] font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                        >
+                          Access
+                        </button>
+                        {CONNECTABLE_CREDENTIAL_TYPES.has(integration.type) && (
+                          <button
+                            onClick={() => setReconnectTarget(integration)}
+                            title="Sign in to this account again — fixes expired or revoked access"
+                            className="cursor-pointer rounded-md px-2 py-1 text-[12px] font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+                          >
+                            Reconnect
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setDeleteTarget(integration)}
+                          title="Remove this account"
+                          className="cursor-pointer rounded-md px-2 py-1 text-[12px] font-medium text-gray-500 hover:bg-red-50 hover:text-red-600"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                      <ReadWriteBadges
+                        reads={integration.reads}
+                        writes={integration.writes}
+                      />
+                    </ListRow>
+                    {deliveriesOf === integration.id && (
+                      <div className="px-4 pb-3">
+                        <ConnectionDeliveries connectionId={integration.id} name={integration.name} />
+                      </div>
+                    )}
+                  </div>
                 ))}
               </CardList>
             )}

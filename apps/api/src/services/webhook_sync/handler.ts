@@ -33,13 +33,11 @@ import {
   hasBridgedLinkedObjects,
   type LinkedObjectRefresh,
 } from './linked_object_refresh';
-import { hasAdapter, resolveAdapterSlug } from '../translation_graph/adapters/registry';
 import { resolveAdapter } from '../translation_graph/adapters/resolve';
 import { isTestHarnessTeam } from '../../lib/recording';
 import { CHECKED_BY_MODULE, receiveDelivery } from 'movement-engine/public/inbound';
-import { webhookProviderKey } from './urls';
-import { listRemoteAdapters, parseStoredManifest } from '../translation_graph/adapters/remote/store';
-import { mayBeRemoteSlug } from '../translation_graph/adapters/remote/slugs';
+import { parseStoredManifest } from '../translation_graph/adapters/remote/store';
+import { builtInAdapterOfProvider, remoteInstallOfProvider } from './provider_adapter';
 import { LEGACY_INTERCEPTS, builtInVerifierFor } from '../inbound/legacy_signature_headers';
 import { builtinModuleInboundVerifier, builtinModuleRequestKeeping } from '../translation_graph/adapters/builtin_modules';
 import { capturedRequest, type RequestKeeping } from '../inbound/captured_request';
@@ -135,11 +133,8 @@ function builtInSource(subscription: InboundSubscription, keepFirst?: KeepFirst)
     secret: signingSecretFor(subscription),
     async open() {
       const credentialsId = requireSubscriptionCredentials(subscription);
-      // Provider keys are trigger-kind aliases (every provider key appears in its
-      // adapter's manifest `triggerKinds`), so the registry's own alias map is the
-      // resolver — NOT a naming convention (INBOUND_WHATSAPP is no slug).
-      const adapterType = resolveAdapterSlug(subscription.providerKey);
-      if (!hasAdapter(adapterType)) return null;
+      const adapterType = builtInAdapterOfProvider(subscription.providerKey);
+      if (adapterType === null) return null;
       const checkedByModule = 'checkedBy' in verifier;
       const { intercept } = builtInIntercept({ adapterType, subscription, credentialsId });
       // A delivery the door's own handling ends is never kept: a button tap
@@ -208,19 +203,12 @@ function builtInIntercept(input: {
 
 /**
  * A subscription a team's remote install provisioned, recognised by its
- * provider key being the one that install mints (`webhookProviderKey`). An
- * install whose slug a built-in answers to is never recognised (the shared
- * rule in `remote/slugs`): the built-in wins, as it does at resolution. It
+ * provider key being the one that install mints (`remoteInstallOfProvider`). It
  * signs in the protocol's own header, and only that header. The row carries no
  * credential of its own; the install's credential is the channel's.
  */
 async function remoteSource(subscription: InboundSubscription, keepFirst?: KeepFirst): Promise<InboundSource | null> {
-  const installs = await listRemoteAdapters({ teamId: subscription.teamId as TeamId });
-  const install = installs.find(
-    (row) =>
-      mayBeRemoteSlug(row.adapter_type) &&
-      webhookProviderKey({ adapterType: row.adapter_type }) === subscription.providerKey,
-  );
+  const install = await remoteInstallOfProvider({ teamId: subscription.teamId as TeamId, providerKey: subscription.providerKey });
   if (!install) return null;
   const credentialsId = install.credentials_id;
   if (credentialsId === null) {
