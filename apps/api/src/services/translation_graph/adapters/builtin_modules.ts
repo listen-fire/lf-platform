@@ -78,6 +78,7 @@ import {
   pluginProgramName,
 } from 'movement-engine/public/plugins';
 import { findPlugin, pluginKey } from 'movement-lang';
+import { IS_MEMBER, TEAM_PLUGINS_PACKAGE, USER_FOR } from '@lf-platform/team/plugins';
 
 import { injectFakeBaseUrl, isTestHarnessTeam } from '../../../lib/recording';
 import { getAutomationsQb } from '../../../lib/kysely';
@@ -195,6 +196,23 @@ const PDF_MODULE_LINE: BuiltinModuleLine = {
       pdfModule = loaded;
     }
     return pdfModule;
+  },
+};
+
+let teamModule: PluginModuleDefinition | undefined;
+
+/** `@lf-platform/team`, the team's own host functions over the platform's
+ *  membership records. Loaded once, on the first call (or the first catalog). */
+const TEAM_MODULE_LINE: BuiltinModuleLine = {
+  kind: 'plugin',
+  line: 'module',
+  load: () => {
+    if (teamModule === undefined) {
+      const { teamModuleWith }: typeof import('@lf-platform/team') = require('@lf-platform/team');
+      const { platformTeamRecords }: typeof import('./team/members') = require('./team/members');
+      teamModule = teamModuleWith(platformTeamRecords);
+    }
+    return teamModule;
   },
 };
 
@@ -526,6 +544,10 @@ export const BUILTIN_MODULES: BuiltinModuleTable = {
   ...Object.fromEntries(WEB_MODULE_PLUGINS.map((d) => [webPluginKey(d.signature.name), WEB_MODULE_LINE])),
   // Not a legacy plugin: `@lf/pdf` has only a module line (`pdf.render(text)`).
   [pluginKey(PDF_PLUGINS_PACKAGE, 'render')]: PDF_MODULE_LINE,
+  // Platform-supplied: the team's host functions, one line each so one can be
+  // rolled back while the other stays.
+  [pluginKey(TEAM_PLUGINS_PACKAGE, pluginProgramName(IS_MEMBER.signature.name))]: TEAM_MODULE_LINE,
+  [pluginKey(TEAM_PLUGINS_PACKAGE, pluginProgramName(USER_FOR.signature.name))]: TEAM_MODULE_LINE,
 };
 
 type AdapterModuleLine = Extract<BuiltinModuleLine, { kind: 'adapter'; line: 'module' }>;

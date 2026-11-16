@@ -88,8 +88,8 @@ afterEach(() => {
 });
 
 describe('the automations registry', () => {
-  it('runs one drain worker on every instance: no unit lock, each run under its own lease', () => {
-    expect(automationsWorkers.workers.map((each) => each.id)).toEqual(['automations.drain']);
+  it('runs its workers on every instance: no unit lock, each run under its own lease', () => {
+    expect(automationsWorkers.workers.map((each) => each.id)).toEqual(['automations.drain', 'automations.team-answers']);
     expect(automationsWorkers.lock).toBe(false);
   });
 

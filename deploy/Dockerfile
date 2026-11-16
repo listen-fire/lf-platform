@@ -62,6 +62,7 @@ COPY packages/transcription-providers/package.json packages/transcription-provid
 COPY modules/ask/package.json modules/ask/
 COPY modules/kg/package.json modules/kg/
 COPY modules/system/package.json modules/system/
+COPY modules/team/package.json modules/team/
 COPY modules/native-valuations/package.json modules/native-valuations/
 COPY packages/legacy-lang/package.json packages/legacy-lang/
 COPY packages/language-versions/package.json packages/language-versions/

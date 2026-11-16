@@ -1621,7 +1621,7 @@ export async function movementCatalogSnapshotForTeam(
 
   const { credentials } = credentialsOf(credentialsByName);
 
-  const plugins = snapshotPluginSpecs(platformPluginSpecs(platformModules()));
+  const plugins = snapshotPluginSpecs(platformPluginSpecs(platformModules()), { languageVersion: options.languageVersion });
 
   // Saved movement files — the import-path namespace. Carrying the
   // sources keeps the editor full-fidelity offline: imports resolve,

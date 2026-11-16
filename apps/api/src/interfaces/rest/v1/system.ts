@@ -16,6 +16,7 @@ import { LF_STORE_MANIFEST, answerFor as storeAnswerFor } from '../../../service
 import { LF_MOVEMENTS_MANIFEST, answerFor as movementsAnswerFor } from '../../../services/lf_movements/answer';
 import { slotHandler } from './slots';
 import { systemAdapterHandler } from './system_adapter';
+import { teamPluginHandler } from './team_plugin';
 import {
   requireSystemAction,
   requireSystemCaller,
@@ -141,6 +142,10 @@ const movementsSlotHandler = slotHandler(LF_MOVEMENTS_MANIFEST, () => movementsA
  *  tenant of the key's owner. */
 const systemAdapterRouteHandler = systemAdapterHandler(() => actingTeamId());
 
+/** `@lf-platform/team`, the team's host functions, served to lf (./team_plugin.ts)
+ *  over the team's members, in the tenant of the key's owner. */
+const teamPluginRouteHandler = teamPluginHandler(() => actingTeamId());
+
 const systemRouter: ReturnType<typeof Router> = Router();
 
 // Who may call these routes is the system caller verifiers' question
@@ -160,6 +165,7 @@ if (mounts('automations')) {
   systemRouter.post('/slots/store', tenant, requireSystemAction('store_slot'), route(storeSlotHandler));
   systemRouter.post('/slots/movements', tenant, requireSystemAction('movements_slot'), route(movementsSlotHandler));
   systemRouter.post('/adapters/system', tenant, requireSystemAction('system_adapter'), route(systemAdapterRouteHandler));
+  systemRouter.post('/plugins/team', tenant, requireSystemAction('team_plugin'), route(teamPluginRouteHandler));
 }
 
 export { systemRouter };

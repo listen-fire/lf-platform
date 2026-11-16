@@ -1,0 +1,30 @@
+{
+  "name": "@lf-platform/team",
+  "private": true,
+  "license": "Apache-2.0",
+  "version": "0.16.0",
+  "description": "The team's own host functions (isMember, userFor) as a plugin module the movement language imports like any plugin. Platform-supplied: the platform hosts it in process over its own membership records and serves it to a cloud lf at a route of its own; it is never published.",
+  "engines": {
+    "node": "22.23.4"
+  },
+  "scripts": {
+    "code:type-check": "tsc --pretty --noEmit",
+    "test": "jest --config jest.config.cjs"
+  },
+  "main": "index.ts",
+  "types": "index.ts",
+  "type": "commonjs",
+  "dependencies": {
+    "@listen-fire/engine": "file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz",
+    "@listen-fire/engine-contracts": "file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz",
+    "@listen-fire/module-kit": "file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz",
+    "@listen-fire/movement-lang": "file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz"
+  },
+  "devDependencies": {
+    "@types/jest": "29.5.14",
+    "@types/node": "20.16.5",
+    "module-kit": "file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz",
+    "movement-engine": "catalog:",
+    "typescript": "5.5.4"
+  }
+}

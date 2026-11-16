@@ -40,6 +40,7 @@ import { registerSlackEventWork } from '../services/webhook_sync/slack_events';
 import { registerSlackResponseWork } from '../services/webhook_sync/slack_response_url';
 import { registerWhatsappMessageWork } from '../services/whatsapp/inbound_message';
 import { registerListenResolveWork } from '../services/inbound/listen_resolve';
+import { startTeamAnswerFeed } from '../services/inbound/platform_plugin_answers';
 import { registerKnowledgeChangeWork } from '../services/webhook_sync/knowledge_changes';
 import { mutationDelivery } from '../services/knowledge/mutation_outbox/delivery_mode';
 import { ensureAutomationsPeriodicWork, registerCoreWork } from '../services/work/register';
@@ -50,6 +51,7 @@ const DRAIN_MODE_VAR = 'AUTOMATIONS_DRAIN_MODE';
 const TICK_URLS_VAR = 'AUTOMATIONS_TICK_URLS';
 const TICK_KEY_VAR = 'AUTOMATIONS_TICK_KEY';
 const DRAIN_WORKER_ID = 'automations.drain';
+const TEAM_ANSWERS_WORKER_ID = 'automations.team-answers';
 const DRAIN_EVERY_MS = 1_000;
 
 /** `loop`: this process drains on a timer. `external`: something outside the
@@ -213,7 +215,12 @@ async function registerAutomationsWork(): Promise<void> {
 
 const automationsWorkers: WorkerRegistry = {
   unit: 'automations',
-  workers: [{ id: DRAIN_WORKER_ID, start: () => startDrain(process.env) }],
+  workers: [
+    { id: DRAIN_WORKER_ID, start: () => startDrain(process.env) },
+    // Hears who joined or left a team on any instance, so a kept host-function
+    // answer and a library's standing follow it.
+    { id: TEAM_ANSWERS_WORKER_ID, start: () => startTeamAnswerFeed() },
+  ],
   wire: registerAutomationsWork,
   lock: false,
 };

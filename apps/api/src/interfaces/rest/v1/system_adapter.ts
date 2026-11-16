@@ -33,7 +33,7 @@ function isMethodName(method: string): method is MethodName {
  *  interpreted: not an envelope is HTTP 400; another protocol version, an
  *  unknown method or params that do not fit the method answer in the
  *  envelope, not retryable. */
-function checkedRequest(body: unknown): { ok: true; request: CheckedRequest } | { ok: false; answer: ProtocolAnswer } {
+export function checkedRequest(body: unknown): { ok: true; request: CheckedRequest } | { ok: false; answer: ProtocolAnswer } {
   const parsed = RpcRequest.safeParse(body);
   if (!parsed.success) {
     return { ok: false, answer: { status: 400, body: errorEnvelope('bad_request', 'Malformed request: not a protocol 2 envelope', false) } };

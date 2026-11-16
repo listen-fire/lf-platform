@@ -177,6 +177,9 @@ importers:
       '@google/genai':
         specifier: ^2.24.0
         version: 2.24.0(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7))
+      '@lf-platform/team':
+        specifier: workspace:*
+        version: link:../../modules/team
       '@listen-fire/affinity':
         specifier: 0.14.2
         version: 0.14.2(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
@@ -1004,6 +1007,37 @@ importers:
         version: 5.5.4
 
   modules/system:
+    dependencies:
+      '@listen-fire/engine':
+        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
+        version: file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
+      '@listen-fire/engine-contracts':
+        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
+        version: file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
+      '@listen-fire/module-kit':
+        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz
+        version: file:../lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+      '@listen-fire/movement-lang':
+        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
+        version: file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
+    devDependencies:
+      '@types/jest':
+        specifier: 29.5.14
+        version: 29.5.14
+      '@types/node':
+        specifier: 20.16.5
+        version: 20.16.5
+      module-kit:
+        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz
+        version: '@listen-fire/module-kit@file:../lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)'
+      movement-engine:
+        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
+        version: '@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz'
+      typescript:
+        specifier: 5.5.4
+        version: 5.5.4
+
+  modules/team:
     dependencies:
       '@listen-fire/engine':
         specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz

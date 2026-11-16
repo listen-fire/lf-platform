@@ -651,6 +651,89 @@
       "description": "Draw plain text as a PDF file. A character the default writer has no glyph for prints as \"?\", with a warning on the run.",
       "package": "@lf/pdf",
       "name": "render"
+    },
+    "@lf-platform/team/is_member": {
+      "args": [
+        "claim"
+      ],
+      "priced": false,
+      "argTypes": {
+        "claim": {
+          "kind": "union",
+          "of": [
+            {
+              "kind": "branded",
+              "of": "text",
+              "brands": [
+                "claim:email/address"
+              ]
+            },
+            {
+              "kind": "branded",
+              "of": "text",
+              "brands": [
+                "claim:phone/e164"
+              ]
+            }
+          ]
+        }
+      },
+      "requiredArgs": [
+        "claim"
+      ],
+      "effects": {},
+      "output": {
+        "kind": "value",
+        "type": "boolean"
+      },
+      "pure": true,
+      "maxAgeSeconds": 300,
+      "description": "Whether the email address or phone number belongs to a member of the team.",
+      "package": "@lf-platform/team",
+      "name": "is_member"
+    },
+    "@lf-platform/team/user_for": {
+      "args": [
+        "claim"
+      ],
+      "priced": false,
+      "argTypes": {
+        "claim": {
+          "kind": "union",
+          "of": [
+            {
+              "kind": "branded",
+              "of": "text",
+              "brands": [
+                "claim:email/address"
+              ]
+            },
+            {
+              "kind": "branded",
+              "of": "text",
+              "brands": [
+                "claim:phone/e164"
+              ]
+            }
+          ]
+        }
+      },
+      "requiredArgs": [
+        "claim"
+      ],
+      "effects": {},
+      "output": {
+        "kind": "value",
+        "type": {
+          "kind": "maybeAbsent",
+          "of": "json"
+        }
+      },
+      "pure": true,
+      "maxAgeSeconds": 300,
+      "description": "The team member the email address or phone number belongs to, or nothing for someone who is not a member: a record with Id, Email, Name and Level (read, write or admin).",
+      "package": "@lf-platform/team",
+      "name": "user_for"
     }
   },
   "liveCatalog": {

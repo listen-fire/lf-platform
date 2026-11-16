@@ -10,9 +10,11 @@
 // plugin spec with a field it does not know.
 
 import { LANGUAGE_VERSION, findPlugin, pluginKey, type LanguageVersion, type PluginSpec } from 'movement-lang';
+import { isCurrent } from '@listen-fire/language-versions';
 import { isLegacyLanguageVersion, type EarlierOutput, type LegacyPluginSpec } from 'legacy-lang';
 import { bundledPluginSpecs, pluginProgramName } from 'movement-engine/public/plugins';
 import { pluginSpecsOf } from 'engine-contracts/plugin_spec';
+
 import type { PluginModuleDefinition } from 'module-kit';
 
 /** Keyed as the catalog keys a plugin (`@lf/web/vc_url_retrieval`). */
@@ -66,14 +68,23 @@ export function platformPluginSpecNamed(name: string, options: PlatformPluginMod
   return hit !== undefined && 'found' in hit ? hit.found.spec : undefined;
 }
 
+/** A host function: pure, so a listen's filter may call it. Only the current
+ *  release's checker knows the fields that say so (and the brands its
+ *  parameters carry), and it refuses a plugin spec with a field it does not
+ *  know; an older release neither checks nor runs such a call. */
+function isHostFunction(spec: PluginSpec): boolean {
+  return spec.pure !== undefined || spec.maxAgeSeconds !== undefined;
+}
+
 /** `plugins` as a snapshot built for `languageVersion` carries them (by
- *  default the installed release, which carries none). */
+ *  default the installed release, which carries none of the older outputs and
+ *  all of the host functions; an older release carries no host function). */
 export function snapshotPluginSpecs(
   plugins: Readonly<Record<string, LegacyPluginSpec>>,
   options: { languageVersion?: LanguageVersion } = {},
 ): Record<string, PluginSpec> {
-  if (isLegacyLanguageVersion(options.languageVersion ?? LANGUAGE_VERSION)) return { ...plugins };
-  return Object.fromEntries(
-    Object.entries(plugins).map(([key, { earlierOutputs: _dropped, ...spec }]) => [key, spec]),
-  );
+  const pin = options.languageVersion ?? LANGUAGE_VERSION;
+  const known = isCurrent(pin) ? plugins : Object.fromEntries(Object.entries(plugins).filter(([, spec]) => !isHostFunction(spec)));
+  if (isLegacyLanguageVersion(pin)) return { ...known };
+  return Object.fromEntries(Object.entries(known).map(([key, { earlierOutputs: _dropped, ...spec }]) => [key, spec]));
 }

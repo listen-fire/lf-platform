@@ -4369,6 +4369,30 @@ CREATE UNIQUE INDEX phone_number_word_identifier_key ON automations.phone_number
 
 CREATE TRIGGER user_phone_number_audit AFTER INSERT OR DELETE OR UPDATE ON automations.phone_number FOR EACH ROW EXECUTE FUNCTION automations.audit();
 
+-- A host function answers from who is on a team and a host keeps its answers:
+-- whatever changes who a claim names says so on one channel (`lf_team_answers`),
+-- naming a team (`team:<id>`) or a user (`user:<id>`, resolved to their teams by
+-- the listener). The functions only notify.
+CREATE FUNCTION automations.team_answers_notify() RETURNS pg_catalog.trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF TG_OP <> 'INSERT' AND OLD.user_id IS NOT NULL THEN
+    PERFORM pg_notify('lf_team_answers', 'user:' || OLD.user_id::text);
+  END IF;
+  IF TG_OP <> 'DELETE' AND NEW.user_id IS NOT NULL THEN
+    PERFORM pg_notify('lf_team_answers', 'user:' || NEW.user_id::text);
+  END IF;
+  RETURN NULL;
+END;
+$$;
+
+CREATE TRIGGER phone_number_team_answers_insert AFTER INSERT ON automations.phone_number FOR EACH ROW EXECUTE FUNCTION automations.team_answers_notify();
+
+CREATE TRIGGER phone_number_team_answers_delete AFTER DELETE ON automations.phone_number FOR EACH ROW EXECUTE FUNCTION automations.team_answers_notify();
+
+CREATE TRIGGER phone_number_team_answers_update AFTER UPDATE ON automations.phone_number FOR EACH ROW WHEN (((old.user_id IS DISTINCT FROM new.user_id) OR (old.phone_number IS DISTINCT FROM new.phone_number) OR ((old.verified_at IS NULL) <> (new.verified_at IS NULL)))) EXECUTE FUNCTION automations.team_answers_notify();
+
 
 -- ### Phone Verification ---------------------------------------------
 -- Short-lived WhatsApp OTP codes: a logged-in user proves a number is theirs
@@ -5892,6 +5916,24 @@ BEGIN
 END;
 $$;
 
+-- A host function answers from who is on a team and a host keeps its answers:
+-- whatever changes who a claim names says so on one channel (`lf_team_answers`),
+-- naming a team (`team:<id>`) or a user (`user:<id>`, resolved to their teams by
+-- the listener). The functions only notify.
+CREATE FUNCTION core.team_answers_notify() RETURNS pg_catalog.trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  IF TG_OP <> 'INSERT' THEN
+    PERFORM pg_notify('lf_team_answers', TG_ARGV[0] || ':' || (to_jsonb(OLD) ->> TG_ARGV[1]));
+  END IF;
+  IF TG_OP <> 'DELETE' THEN
+    PERFORM pg_notify('lf_team_answers', TG_ARGV[0] || ':' || (to_jsonb(NEW) ->> TG_ARGV[1]));
+  END IF;
+  RETURN NULL;
+END;
+$$;
+
 
 -- ### Team ------------------------------------------------------
 
@@ -6003,6 +6045,8 @@ CREATE UNIQUE INDEX user_invitation_code_key ON core."user" USING btree (invitat
 
 CREATE TRIGGER user_audit AFTER INSERT OR DELETE OR UPDATE ON core."user" FOR EACH ROW EXECUTE FUNCTION core.audit();
 
+CREATE TRIGGER user_team_answers_update AFTER UPDATE ON core."user" FOR EACH ROW WHEN (((old.granted_access_at IS NULL) <> (new.granted_access_at IS NULL) OR (old.username IS DISTINCT FROM new.username) OR (old.name IS DISTINCT FROM new.name))) EXECUTE FUNCTION core.team_answers_notify('user', 'id');
+
 -- ### User Email ----------------------------------------------------
 
 CREATE TABLE core.user_email (
@@ -6031,6 +6075,12 @@ CREATE UNIQUE INDEX user_email_email_unique_primary_for_user ON core.user_email 
 CREATE INDEX user_email_user_id_idx ON core.user_email USING btree (user_id);
 
 CREATE TRIGGER user_email_audit AFTER INSERT OR DELETE OR UPDATE ON core.user_email FOR EACH ROW EXECUTE FUNCTION core.audit();
+
+CREATE TRIGGER user_email_team_answers_insert AFTER INSERT ON core.user_email FOR EACH ROW EXECUTE FUNCTION core.team_answers_notify('user', 'user_id');
+
+CREATE TRIGGER user_email_team_answers_delete AFTER DELETE ON core.user_email FOR EACH ROW EXECUTE FUNCTION core.team_answers_notify('user', 'user_id');
+
+CREATE TRIGGER user_email_team_answers_update AFTER UPDATE ON core.user_email FOR EACH ROW WHEN (((old.email IS DISTINCT FROM new.email) OR (old.user_id IS DISTINCT FROM new.user_id) OR (old.is_primary IS DISTINCT FROM new.is_primary) OR (old.is_service_email IS DISTINCT FROM new.is_service_email) OR (old.accepts_plus_addressing IS DISTINCT FROM new.accepts_plus_addressing))) EXECUTE FUNCTION core.team_answers_notify('user', 'user_id');
 
 
 -- ### Magic Link Token ------------------------------------------------------
@@ -6096,6 +6146,12 @@ CREATE UNIQUE INDEX team_membership_user_id_team_id_key ON core.team_membership 
 CREATE INDEX team_membership_team_id_idx ON core.team_membership USING btree (team_id);
 
 CREATE TRIGGER team_membership_audit AFTER INSERT OR DELETE OR UPDATE ON core.team_membership FOR EACH ROW EXECUTE FUNCTION core.audit();
+
+CREATE TRIGGER team_membership_team_answers_insert AFTER INSERT ON core.team_membership FOR EACH ROW EXECUTE FUNCTION core.team_answers_notify('team', 'team_id');
+
+CREATE TRIGGER team_membership_team_answers_delete AFTER DELETE ON core.team_membership FOR EACH ROW EXECUTE FUNCTION core.team_answers_notify('team', 'team_id');
+
+CREATE TRIGGER team_membership_team_answers_update AFTER UPDATE ON core.team_membership FOR EACH ROW WHEN (((old.access IS DISTINCT FROM new.access) OR (old.user_id IS DISTINCT FROM new.user_id) OR (old.team_id IS DISTINCT FROM new.team_id))) EXECUTE FUNCTION core.team_answers_notify('team', 'team_id');
 
 
 
