@@ -13,7 +13,8 @@ import type { DeliveryRowStore, KeepDelivery, NewWorkRow, WaitWake } from 'movem
 
 import { DOOR_WAIT_MS, doorsLockPool } from '../../lib/kysely';
 import { isWorkKind } from '../work/kinds';
-import { DoorsTryAgain, heldDoors, underDoorsHold, type DoorsHold, type LockConnection } from './doors_hold';
+import { inOneTransaction } from '../context/one_transaction';
+import { DoorsTryAgain, heldDoors, stillHoldingDoors, underDoorsHold, type DoorsHold, type LockConnection } from './doors_hold';
 import {
   announceQueued,
   inStoreTransaction,
@@ -132,6 +133,21 @@ async function boundingLockWaits<T>(exec: Exec, wait: { what: string; ms: number
 /** One keep's write. A door that times out here fails with nothing kept. */
 function inKeepTransaction<T>(body: (trx: StoreDb) => Promise<T>): Promise<T> {
   return inStoreTransaction((trx) => boundingLockWaits(trx, { what: 'a keep', ms: KEEP_ROW_WAIT_MS }, () => body(trx)));
+}
+
+/** `body`, done under the team's doors, in one context transaction (the
+ *  caller's open one, as an upgrade's, else its own) whose waits for a lock end
+ *  as a keep's do: stuck behind a row lock, it would hold the doors, and every
+ *  door of the team queued behind an upgrade waiting for them. It fails with
+ *  `DoorsTryAgain`, as a keep does, and with its own transaction it commits
+ *  nothing once the doors' lock is lost (`stillHoldingDoors`). `what` names it
+ *  in that failure. */
+export function boundedUnderDoors<T>(what: string, body: () => Promise<T>): Promise<T> {
+  return inOneTransaction(async () => {
+    const answer = await boundingLockWaits(storeDb(), { what, ms: KEEP_ROW_WAIT_MS }, body);
+    stillHoldingDoors();
+    return answer;
+  });
 }
 
 /** `body` with the team's doors held shared: for a door that reads a delivery's

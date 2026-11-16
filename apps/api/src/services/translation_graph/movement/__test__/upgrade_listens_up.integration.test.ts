@@ -6,9 +6,12 @@
 
 import { randomUUID } from 'node:crypto';
 
+import { Client } from 'pg';
+
 import type { Arrival } from 'engine-contracts';
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { MovementId } from '../../../../generated/kysely/automations/Movement';
+import type { WebhookSubscriptionId } from '../../../../generated/kysely/automations/WebhookSubscription';
 import type { AdapterManifest } from 'movement-engine/public/adapter';
 
 const VENDOR = 'acme_vendor';
@@ -68,6 +71,7 @@ jest.mock('../../../inbound/listen_resolve', () => {
 });
 
 import { getAutomationsQb, getCoreQb } from '../../../../lib/kysely';
+import { getDatabaseUrl } from '../../../../prisma';
 import { cleanupTeam } from '../../../../test/harness/cleanup';
 import { insertTestListen } from '../../../../test/harness/listens';
 import { deliverArrivals } from '../../../inbound/listen_door';
@@ -405,6 +409,63 @@ describe('an upgraded automation whose listens could not be brought up', () => {
 
     expect(await pass(11)).toEqual(expect.objectContaining({ failed: 0, deferred: 1 }));
     expect(await issues(id)).toEqual([expect.objectContaining({ state: 'open', failure_class: 'MOV_LISTENS_NOT_UP' })]);
+  });
+
+  it("a listen upgraded off 0.12 is marked as from 0.12, and the 0.12 webhook stays until the listen's own subscription is up", async () => {
+    credential.usable = true;
+    vendor.removeEventSubscription.mockClear();
+    const id = await seedShipped('stamp');
+    const webhook = randomUUID();
+    await getAutomationsQb(['webhook_subscription'])
+      .insertInto('webhook_subscription')
+      .values({
+        id: webhook as WebhookSubscriptionId,
+        team_id: teamId,
+        provider: 'ACME_VENDOR',
+        webhook_secret: 'old',
+        external_webhook_id: 'ext-0-12',
+        subscriptions: JSON.stringify([{ event_type: 'thing.created' }]),
+        status: 'active',
+        provisioned_by: MOVEMENT_LISTEN_PROVISIONER,
+      })
+      .execute();
+    const live = async () =>
+      (await getAutomationsQb(['webhook_subscription']).selectFrom('webhook_subscription').where('team_id', '=', teamId).where('deleted_at', 'is', null).select('id').execute()).map((row) => row.id);
+
+    vendor.ensureEventSubscription.mockRejectedValueOnce(new Error('the source refused'));
+    expect((await upgradeMovement({ teamId, id, acknowledge: true, validate: clean })).status).toBe('upgraded');
+    const [trigger] = await getAutomationsQb(['trigger']).selectFrom('trigger').where('movement_id', '=', id as MovementId).select('config').execute();
+    expect(trigger?.config).toEqual(expect.objectContaining({ listen: expect.objectContaining({ carriedFrom: expect.objectContaining({ from012: true }) }) }));
+
+    // Its own subscription refused: the 0.12 webhook is all it hears through.
+    await pass(1);
+    expect(vendor.removeEventSubscription).not.toHaveBeenCalled();
+    expect(await live()).toContain(webhook);
+
+    // Its own subscription up: the 0.12 webhook goes.
+    expect((await pass(30)).failed).toBe(0);
+    expect(vendor.removeEventSubscription).toHaveBeenCalledWith(expect.objectContaining({ callbackUrl: expect.stringContaining(webhook), externalId: 'ext-0-12' }));
+    expect(await live()).not.toContain(webhook);
+    expect(await subscriptions()).toEqual([expect.objectContaining({ status: 'active' })]);
+  });
+
+  it("a sync that cannot have the team's doors defers the row, and raises no issue however long it has been asked for", async () => {
+    credential.usable = true;
+    const id = await seedShipped('stamp');
+    await upgradeMovement({ teamId, id, acknowledge: true, validate: clean });
+
+    const upgrade = new Client({ connectionString: getDatabaseUrl(false).url });
+    await upgrade.connect();
+    try {
+      await upgrade.query('begin');
+      await upgrade.query('select pg_advisory_xact_lock(hashtextextended($1::text, 0))', [`doors:${teamId}`]);
+      expect(await pass(11)).toEqual(expect.objectContaining({ failed: 0, deferred: 1 }));
+    } finally {
+      await upgrade.query('rollback').catch(() => undefined);
+      await upgrade.end();
+    }
+    expect(await issues(id)).toEqual([]);
+    expect(await workRows(id)).toHaveLength(1);
   });
 
   it('two groups that share a member each keep their own row and member list, and the same group asked twice keeps one', async () => {

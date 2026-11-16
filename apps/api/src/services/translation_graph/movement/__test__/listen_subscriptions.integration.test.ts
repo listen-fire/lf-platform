@@ -10,6 +10,7 @@ import { LANGUAGE_VERSION } from 'movement-lang';
 import { randomUUID } from 'node:crypto';
 
 import { sql } from 'kysely';
+import { Client } from 'pg';
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { MovementId } from '../../../../generated/kysely/automations/Movement';
@@ -51,6 +52,7 @@ jest.mock('../../adapters/resolve', () => {
 });
 
 import { getAutomationsQb, getCoreQb } from '../../../../lib/kysely';
+import { getDatabaseUrl } from '../../../../prisma';
 import { cleanupTeam } from '../../../../test/harness/cleanup';
 import { insertTestListen, takenEquals } from '../../../../test/harness/listens';
 import { listensOfSubscription, MOVEMENT_LISTEN_PROVISIONER, retryListenSubscriptions, syncListenSubscriptions } from '../listen_subscriptions';
@@ -268,5 +270,78 @@ describe('subscriptions per listenable edge', () => {
     await retryListenSubscriptions();
 
     expect((await liveRows()).find((row) => row.id === pending!.id)).toMatchObject({ status: 'active', webhook_secret: 'vendor-secret' });
+  });
+});
+
+describe('a sync that stops partway', () => {
+  // Starts from a team with no listens and no live subscription: a remote's is asked again on every sync.
+  beforeAll(async () => {
+    await getAutomationsQb(['trigger']).deleteFrom('trigger').where('team_id', '=', teamId).execute();
+    await syncListenSubscriptions({ teamId });
+  });
+
+  const rowState = (id: string) =>
+    getAutomationsQb(['webhook_subscription']).selectFrom('webhook_subscription').where('id', '=', id as WebhookSubscriptionId).select(['status', 'deleted_at']).executeTakeFirstOrThrow();
+
+  it('leaves a subscription it stopped removing at the source retiring, read by no listen, and the next sync removes it', async () => {
+    const listen = await insertTestListen({ teamId, movementId, adapterType: VENDOR, edge: 'Things', delivery: 'connection', taken: takenEquals('status', 'crash'), movement: 'crash' });
+    await syncListenSubscriptions({ teamId });
+    const row = await rowTaking('crash');
+    expect(row).toEqual(expect.objectContaining({ status: 'active' }));
+
+    await getAutomationsQb(['trigger']).deleteFrom('trigger').where('id', '=', listen).execute();
+    // Stopped between retiring the row and removing it at the source.
+    vendor.removeEventSubscription.mockRejectedValueOnce(new Error('the process stopped here'));
+    await syncListenSubscriptions({ teamId });
+    expect((await liveRows()).map(({ id }) => id)).not.toContain(row!.id);
+    expect(await rowState(row!.id)).toEqual({ status: 'retiring', deleted_at: expect.any(Date) });
+
+    jest.clearAllMocks();
+    await syncListenSubscriptions({ teamId });
+    expect(vendor.removeEventSubscription).toHaveBeenCalledWith(expect.objectContaining({ edge: 'Things', filter: takenEquals('status', 'crash'), callbackUrl: expect.stringContaining(row!.id) }));
+    expect(await rowState(row!.id)).toEqual({ status: 'disabled', deleted_at: expect.any(Date) });
+
+    jest.clearAllMocks();
+    await syncListenSubscriptions({ teamId });
+    expect(vendor.removeEventSubscription).not.toHaveBeenCalled();
+  });
+
+  it("stops, asking no provider anything more and writing nothing more, once the connection holding the team's sync lock is gone", async () => {
+    await insertTestListen({ teamId, movementId, adapterType: VENDOR, edge: 'Things', delivery: 'connection', taken: takenEquals('status', 'first'), movement: 'first' });
+    await insertTestListen({ teamId, movementId, adapterType: VENDOR, edge: 'Things', delivery: 'connection', taken: takenEquals('status', 'second'), movement: 'second' });
+    const admin = new Client({ connectionString: getDatabaseUrl(false).url });
+    await admin.connect();
+    try {
+      vendor.ensureEventSubscription.mockImplementationOnce(async () => {
+        await admin.query("select pg_terminate_backend(pid) from pg_stat_activity where application_name = 'lf-subscription-sync-lock' and datname = current_database()");
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        return { externalId: 'ext-first', secret: 'vendor-secret' };
+      });
+      await expect(syncListenSubscriptions({ teamId })).rejects.toMatchObject({ name: 'SyncLockLost' });
+    } finally {
+      await admin.end();
+    }
+    expect(vendor.ensureEventSubscription).toHaveBeenCalledTimes(1);
+    expect(vendor.removeEventSubscription).not.toHaveBeenCalled();
+    // What the provider answered the one call made is kept; the other is left for the next sync.
+    const kept = (await liveRows()).filter((row) => JSON.stringify(row.subscriptions).match(/"value":"(first|second)"/));
+    expect(kept).toEqual([expect.objectContaining({ status: 'active', external_webhook_id: 'ext-first' })]);
+
+    await syncListenSubscriptions({ teamId });
+    expect(await rowTaking('first')).toEqual(expect.objectContaining({ status: 'active' }));
+    expect(await rowTaking('second')).toEqual(expect.objectContaining({ status: 'active' }));
+  });
+
+  it('a sync told not to wait for its turn is refused at once while another sync of the team runs', async () => {
+    const other = new Client({ connectionString: getDatabaseUrl(false).url });
+    await other.connect();
+    try {
+      await other.query('select pg_advisory_lock(hashtextextended($1::text, 0))', [`listen-subscriptions:${teamId}`]);
+      const asked = Date.now();
+      await expect(syncListenSubscriptions({ teamId, waitForTurn: false })).rejects.toMatchObject({ name: 'TeamSyncBusy' });
+      expect(Date.now() - asked).toBeLessThan(5_000);
+    } finally {
+      await other.end();
+    }
   });
 });

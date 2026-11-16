@@ -152,8 +152,10 @@ async function runBringUp(payload: unknown, ctx: WorkContext): Promise<void> {
       brought = await bringUp({ teamId: teamId as TeamId, movementIds, requestedAt });
     } catch (error) {
       // The retry the drain gives a thrown row is the same one; only saying so
-      // is added. Saying so must not hide the error it is about.
-      if (longEnough) {
+      // is added. Saying so must not hide the error it is about. A deferral (a
+      // sync of the team running, its doors held by an upgrade) is no error:
+      // nothing is wrong with these listens, so no issue says there is.
+      if (longEnough && !(error instanceof WorkDeferred)) {
         await raiseForError({ teamId: teamId as TeamId, movementIds, error }).catch((raising: unknown) =>
           logger.error('[ListensUp] the issue for a failed bring up could not be raised', { teamId, error: raising instanceof Error ? raising.message : String(raising) }),
         );

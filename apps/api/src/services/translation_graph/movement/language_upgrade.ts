@@ -1067,7 +1067,7 @@ export const advanceLive: Advance = async ({ movement, to, source, movingWith })
       id: movement.id,
       source,
       audience: UPGRADE_AUDIENCE,
-      languageUpgrade: { to, movedAt },
+      languageUpgrade: { to, from: movement.languageVersion, movedAt },
       inTransaction: { teamCatalog },
     });
     if (saved.ok) {

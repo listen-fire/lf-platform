@@ -515,10 +515,10 @@ async function reconcileDerivedTriggers(input: {
   /** A language upgrade: it never changes whether anything is live, so every
    *  pause outlasts it, even where the new plan cannot be matched to its row. */
   keepPauses?: boolean;
-  /** A language upgrade off a carried version, at the instant its move is on
-   *  the far side of: each polled listen's place moves with it
+  /** A language upgrade, at the instant its move is on the far side of, from
+   *  the version its listens move off: each polled listen's place moves with it
    *  (./carried_cursors.ts). */
-  carrying?: { movedAt: Date };
+  carrying?: { movedAt: Date; from: LanguageVersion };
 }): Promise<{ listeners: ProvisionedListener[]; reconciles: Set<WorkKind>; leftPaused: string[]; placesNotCarried: string[] }> {
   const qb = getAutomationsQb(['trigger']);
   // Read before the rows are touched, while its version still reads them.
@@ -653,7 +653,7 @@ async function reconcileDerivedTriggers(input: {
     const broughtPlace = heardAnything(places);
     const desired: DesiredListener =
       input.carrying !== undefined && (broughtPlace || pushedListen(config))
-        ? { ...input.desired[i], config: carriedConfig(config, { movedAt: input.carrying.movedAt, broughtPlace }) }
+        ? { ...input.desired[i], config: carriedConfig(config, { movedAt: input.carrying.movedAt, from: input.carrying.from, broughtPlace }) }
         : { ...input.desired[i], config };
     if (heardAnything(places)) carriedPlaces.push({ triggerId: rowId, credentialsId: desired.credentialsId, config: desired.config, places, what });
     const name = desired.alias ?? `movement/${input.movementRow.name}/${desired.movementName}`;
@@ -920,8 +920,8 @@ async function provisionListeners(input: {
   providersLater?: boolean;
   /** A language upgrade: see `reconcileDerivedTriggers`. */
   keepPauses?: boolean;
-  /** A language upgrade off a carried version: see `reconcileDerivedTriggers`. */
-  carrying?: { movedAt: Date };
+  /** A language upgrade: see `reconcileDerivedTriggers`. */
+  carrying?: { movedAt: Date; from: LanguageVersion };
 }): Promise<ProvisionMovementResult> {
   const { catalog } = input;
   const within = <T>(name: string, run: () => Promise<T>): Promise<T> =>
@@ -1078,6 +1078,8 @@ export interface SaveMovementInput {
    *  ordinary save never moves the pin. */
   languageUpgrade?: {
     to: LanguageVersion;
+    /** The pin it moves off. */
+    from: LanguageVersion;
     /** The instant the upgrade's move is on the far side of (`holdDoorsAlone`). */
     movedAt: Date;
   };
@@ -1641,7 +1643,7 @@ async function runSave(
       catalog,
       timer,
       ...(input.inTransaction !== undefined ? { providersLater: true } : {}),
-      ...(input.languageUpgrade !== undefined ? { keepPauses: true, carrying: { movedAt: input.languageUpgrade.movedAt } } : {}),
+      ...(input.languageUpgrade !== undefined ? { keepPauses: true, carrying: { movedAt: input.languageUpgrade.movedAt, from: input.languageUpgrade.from } } : {}),
       // A consented non-valid save ships: derive its declared listens despite
       // check errors so it genuinely fires-and-fails (decision 3b).
       ...(consented ? { provisionDespiteErrors: true } : {}),

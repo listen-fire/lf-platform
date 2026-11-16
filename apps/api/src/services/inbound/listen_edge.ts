@@ -59,7 +59,8 @@ export function unnarrowed(key: Pick<ListenEdgeKey, 'taken' | 'scope'>, delivery
  *  sharing a poll. The platform keeps it, not the version, so it is read off a
  *  row whichever version plans it: the keys of a listen that polls alone name
  *  it (`alone`) whether its version is current or carried. `from012`: whether
- *  its place came from 0.12, by that move or an earlier one (`placeFrom012`). */
+ *  that move was off 0.12 or a legacy id before it, read off the pin it moved
+ *  from (movement/carried_cursors.ts, `carriedConfig`; `placeFrom012`). */
 export const carriedFromSchema = z.object({ at: z.string(), pollsAlone: z.boolean().optional(), from012: z.boolean().optional() });
 
 /** Whether a listen's place came from 0.12, so a webhook a 0.12 settings listen

@@ -10,11 +10,15 @@
 // forgotten, so the platform's first poll does not replay what lf handled.
 //
 // The sync runs on every call, a repeat of the current engine included, so
-// pressing the switch again retries a deregistration a vendor refused.
+// pressing the switch again retries a deregistration a vendor refused. A person
+// waits on the switch, so it does not wait for another sync of the team (one
+// stuck at a vendor holds its turn up to a minute): it answers at once that the
+// registrations were not brought in line, and pressing it again does that.
 
 import type { TeamId } from '../../generated/kysely/core/Team';
 
 import { syncListenSubscriptions } from '../translation_graph/movement/listen_subscriptions';
+import { WorkDeferred } from '../work/deferred';
 import { forgetPollProgress } from '../poll_source/worker';
 import { writeTeamEngine, type TeamEngine } from './team_engine';
 
@@ -34,6 +38,15 @@ export async function switchTeamEngine(
   const { previous } = await writeTeamEngine(teamId, change);
   const team = teamId as TeamId;
   if (previous === 'lf' && change.engine === 'platform') await forgetPollProgress(team);
-  const { notes } = await syncListenSubscriptions({ teamId: team });
-  return { engine: change.engine, changed: previous !== change.engine, notes };
+  return { engine: change.engine, changed: previous !== change.engine, notes: await registrationsFollow(team) };
+}
+
+/** The team's registrations brought in line with its engine, as notes. */
+async function registrationsFollow(teamId: TeamId): Promise<string[]> {
+  try {
+    return (await syncListenSubscriptions({ teamId, waitForTurn: false })).notes;
+  } catch (error) {
+    if (!(error instanceof WorkDeferred)) throw error;
+    return [`the vendor registrations were not brought in line with the engine (${error.message}): switch again to retry`];
+  }
 }

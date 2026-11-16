@@ -8,6 +8,8 @@
 import { LANGUAGE_VERSION } from 'movement-lang';
 import { randomUUID } from 'node:crypto';
 
+import { Client } from 'pg';
+
 import type { Arrival } from 'engine-contracts';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
@@ -45,6 +47,7 @@ jest.mock('../../poll_source/edge_poller', () => ({
 }));
 
 import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
+import { getDatabaseUrl } from '../../../prisma';
 import { cleanupTeam } from '../../../test/harness/cleanup';
 import { insertTestListen } from '../../../test/harness/listens';
 import { testWorkContext } from '../../../test/harness/work';
@@ -146,5 +149,27 @@ describe("a switch moves the team's vendor registrations with it", () => {
     await pollNow();
     expect(polled).toHaveBeenCalledTimes(1);
     expect(polled.mock.calls[0]![0].cursor).toBeUndefined();
+  });
+});
+
+describe('a switch while another sync of the team runs', () => {
+  it('answers at once that the registrations were not brought in line, and a switch again does it', async () => {
+    const other = new Client({ connectionString: getDatabaseUrl(false).url });
+    await other.connect();
+    try {
+      await other.query('select pg_advisory_lock(hashtextextended($1::text, 0))', [`listen-subscriptions:${teamId}`]);
+      jest.clearAllMocks();
+      const asked = Date.now();
+      const { notes } = await switchTeamEngine(teamId, { engine: 'lf', changedBy: null });
+      expect(Date.now() - asked).toBeLessThan(5_000);
+      expect(notes).toEqual([expect.stringContaining('switch again')]);
+      expect(vendor.removeEventSubscription).not.toHaveBeenCalled();
+    } finally {
+      await other.end();
+    }
+    forgetLfEngineTeams();
+    expect(await switchTeamEngine(teamId, { engine: 'lf', changedBy: null })).toEqual({ engine: 'lf', changed: false, notes: [] });
+    expect(vendor.removeEventSubscription).toHaveBeenCalledTimes(1);
+    expect(await liveSubscriptions()).toEqual([]);
   });
 });
