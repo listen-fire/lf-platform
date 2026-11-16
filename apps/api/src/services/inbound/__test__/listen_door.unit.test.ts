@@ -310,6 +310,20 @@ describe('a filter that asks the team`s functions', () => {
     expect(waiting).not.toHaveBeenCalled();
   });
 
+  it('a host answer that holds no value refuses that function: the arrival is undecided, and the rest of the delivery is judged', async () => {
+    const answers = jest.fn(async (_team: TeamId, questions: PluginQuestion[]): Promise<PluginAnswers> =>
+      questions.map((question) => (question.args[0] === 'ada@acme.com' ? { ...question, value: undefined } : { ...question, value: true })),
+    );
+    const host: JudgeHost = { answers, waiting: async () => new Set() };
+
+    const judged = await judgeArrivals({ ...ask(insider()), arrivals: [message('m1', 'ada@acme.com'), message('m2', 'bo@acme.com')], host });
+
+    expect(judged.unjudged.map((u) => [u.arrival.identity, u.fact.reason, u.fact.waiting])).toEqual([
+      ['m1', `${IS_MEMBER}, which this listen's filter calls, answered no value`, false],
+    ]);
+    expect(judged.minted.map((run) => run.arrival.identity)).toEqual(['m2']);
+  });
+
   it('asks at most once per host call its filter holds, and judges once more', async () => {
     // A host that answers another question than it was asked: the judge asks again.
     const answers = jest.fn(async (_team: TeamId, questions: PluginQuestion[]): Promise<PluginAnswers> =>

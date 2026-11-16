@@ -7,7 +7,9 @@
 // - Each arrival is read again from its kept delivery, as a replay reads it,
 //   and judged as it stands. A run it fires is queued as a replay's is (a
 //   replay delivery of its own), under the arrival's own receipt, so a run
-//   that already ran it, or a retry taken twice, runs nothing more.
+//   that already ran it, or a retry taken twice, runs nothing more. Once it
+//   is judged, to run or not, its facts are forgotten: the team sees its run,
+//   or nothing.
 // - One its host still cannot answer ends the listen's turn: the row is due
 //   again a retry interval on, and no new attempt is noted, so `@lf/system`
 //   reports each arrival once, not once per retry.
@@ -27,8 +29,9 @@ import type { TriggerId } from '../../generated/kysely/automations/Trigger';
 import type { WorkHandler } from '../work/kinds';
 import type { UnjudgedArrival } from '../lf_store/records_door';
 
+import { SECOND } from '../../constants';
 import { getAutomationsQb } from '../../lib/kysely';
-import { keepUnjudgedIn, stopWaiting, waitingLine } from '../lf_store/records_door';
+import { forgetJudged, keepUnjudgedIn, stopWaiting, waitingLine } from '../lf_store/records_door';
 import { inTransaction } from '../lf_store/scope';
 import { enqueueWork } from '../work/store';
 import { notifyWork, registerWorkHandler } from '../work/drain';
@@ -50,8 +53,16 @@ import { adapterTypeOf, deliveryOf, keptArrivalsFor, nextAttemptFor, ranBefore }
 export type RetryOutcome =
   /** Its host still cannot answer the arrival at its head: due again. */
   | { kind: 'still_waiting'; arrival: string }
+  /** The turn judged all it may: the rest is the next turn's, due now. */
+  | { kind: 'more' }
   /** It waits on nothing. */
   | { kind: 'done' };
+
+/** How much one turn judges, so a long line never outlasts the row's lease
+ *  (a minute, kept alive by its heartbeat): a hundred arrivals, or half a
+ *  minute, whichever comes first. The next turn goes on from the head. */
+export const RETRY_TURN_ARRIVALS = 100;
+export const RETRY_TURN_MS = 30 * SECOND;
 
 /** How one arrival of the line came out. */
 type Step = 'settled' | 'still_waiting';
@@ -82,8 +93,9 @@ async function letGo(input: Retrying, reason: string): Promise<Step> {
   return 'settled';
 }
 
+/** The arrival judged, to run or not: nothing of its wait is kept. */
 async function settle(input: Retrying): Promise<Step> {
-  await stopWaiting(getAutomationsQb(['arrival_unjudged']), { tenant: input.teamId }, { pipeline: input.listen.pipeline, arrivals: [input.fact.arrival] });
+  await forgetJudged(getAutomationsQb(['arrival_unjudged']), { tenant: input.teamId }, { pipeline: input.listen.pipeline, arrivals: [input.fact.arrival] });
   return 'settled';
 }
 
@@ -154,8 +166,19 @@ async function retryOne(input: Retrying): Promise<Step> {
  * still cannot answer the arrival at its head. Arrivals that join the line
  * meanwhile are judged in the same turn.
  */
-export async function retryWaitingLine(input: { teamId: TeamId; triggerId: TriggerId; pipeline: string; now?: Date; host?: JudgeHost }): Promise<RetryOutcome> {
+export async function retryWaitingLine(input: {
+  teamId: TeamId;
+  triggerId: TriggerId;
+  pipeline: string;
+  now?: Date;
+  host?: JudgeHost;
+  /** At most this many arrivals this turn (`RETRY_TURN_ARRIVALS`). */
+  turnArrivals?: number;
+}): Promise<RetryOutcome> {
   const { teamId, pipeline } = input;
+  const startedMs = Date.now();
+  const turnArrivals = input.turnArrivals ?? RETRY_TURN_ARRIVALS;
+  let judged = 0;
   const scope = { tenant: teamId };
   const listen = await savedListenOf(input.triggerId);
   const adapterType = listen === null ? null : await adapterTypeOf(input.triggerId);
@@ -166,6 +189,8 @@ export async function retryWaitingLine(input: { teamId: TeamId; triggerId: Trigg
   }
   for (let line = await waitingLine(scope, pipeline); line.length > 0; line = await waitingLine(scope, pipeline)) {
     for (const fact of line) {
+      if (judged >= turnArrivals || Date.now() - startedMs >= RETRY_TURN_MS) return { kind: 'more' };
+      judged += 1;
       const now = input.now ?? new Date();
       const step = await retryOne({ teamId, listen, adapterType, fact, now, ...(input.host !== undefined ? { host: input.host } : {}) });
       if (step === 'still_waiting') return { kind: 'still_waiting', arrival: fact.arrival };
@@ -175,17 +200,20 @@ export async function retryWaitingLine(input: { teamId: TeamId; triggerId: Trigg
 }
 
 async function runRetryRow(payload: unknown): Promise<void> {
-  const row = retryRowSchema.parse(payload);
-  const { teamId } = row;
-  // The row's listen as the branded id the door carries (its boundary).
-  const triggerId = row.triggerId as TriggerId;
-  const outcome = await retryWaitingLine({ teamId, triggerId, pipeline: row.pipeline });
+  const { teamId, triggerId, pipeline } = retryRowSchema.parse(payload);
+  const outcome = await retryWaitingLine({ teamId, triggerId, pipeline });
   switch (outcome.kind) {
     case 'done':
       return;
+    case 'more': {
+      // Re-armed due now, under its lease: the next turn goes on.
+      const again = retryRowOf({ teamId, listen: { triggerId, pipeline }, now: new Date() });
+      await enqueueWork({ kind: RETRY_UNJUDGED_WORK_KIND, key: again.key, payload: again.payload, teamId, dueAt: new Date() });
+      return;
+    }
     case 'still_waiting': {
       // Re-armed under its lease, the row is kept when this run completes.
-      const again = retryRowOf({ teamId, listen: { triggerId, pipeline: row.pipeline }, now: new Date() });
+      const again = retryRowOf({ teamId, listen: { triggerId, pipeline }, now: new Date() });
       await enqueueWork({ kind: RETRY_UNJUDGED_WORK_KIND, key: again.key, payload: again.payload, teamId, dueAt: new Date(Date.now() + RETRY_UNJUDGED_EVERY_MS) });
       return;
     }

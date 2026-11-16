@@ -80,6 +80,7 @@ export const LF_STORE_METHODS = [
   'releases.list',
   'unjudged.note',
   'unjudged.list',
+  'unjudged.judged',
 ] as const;
 
 export type LfStoreMethod = (typeof LF_STORE_METHODS)[number];

@@ -56,7 +56,10 @@ describe('the team plugin served to lf', () => {
     const stranger = await post(envelope('invokePlugin', { name: 'is_member', config: { claim: 'nobody@acme.test' }, extractedContext: {} }));
     expect(stranger.body).toEqual({ ok: true, result: { data: { value: false } } });
     const user = await post(envelope('invokePlugin', { name: 'user-for', config: { claim: email }, extractedContext: {} }));
-    expect(user.body.result.data.value).toMatchObject({ Email: email, Level: 'admin' });
+    expect(user.body.result.data).toMatchObject({ Email: email, Level: 'admin' });
+    // No user is an answer with no `data`: `data: {}` would be a record.
+    const nobody = await post(envelope('invokePlugin', { name: 'user-for', config: { claim: 'nobody@acme.test' }, extractedContext: {} }));
+    expect(nobody.body).toEqual({ ok: true, result: {} });
   });
 
   it('refuses a method a plugin module does not have', async () => {

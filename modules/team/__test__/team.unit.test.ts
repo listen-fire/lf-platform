@@ -2,7 +2,7 @@
 // member (if any) the platform's records name, and the declarations a checker
 // and a host cache read.
 
-import { pluginsInProcess, noCredential, refusingFiles, refusingKv, type ModuleHost } from 'module-kit';
+import { AdapterBadRequestError, pluginsInProcess, noCredential, refusingFiles, refusingKv, type ModuleHost } from 'module-kit';
 import { pluginSpecsOf } from '@listen-fire/engine-contracts/plugin_spec';
 
 import { TEAM_MAX_AGE_SECONDS, teamModuleWith, type TeamMember, type TeamRecords } from '../index';
@@ -75,17 +75,39 @@ describe('@lf-platform/team', () => {
     expect(forRecords.asked).toEqual(['phone:+447700900123', 'phone:+447700900124']);
   });
 
-  it('answers userFor with the member, or nothing', async () => {
+  it('answers userFor with the member as a record, or with no data at all for nobody', async () => {
     const module = loaded(records());
     expect(await call(module, 'user-for', 'ada@example.com')).toEqual({
-      data: { value: { Id: 'user-ada', Email: 'ada@example.com', Name: 'Ada', Level: 'admin' } },
+      data: { Id: 'user-ada', Email: 'ada@example.com', Name: 'Ada', Level: 'admin' },
     });
-    expect(await call(module, 'user-for', 'bob@example.com')).toEqual({ data: { value: null } });
+    // `data: {}` would be a record of absent fields, not none.
+    expect(await call(module, 'user-for', 'bob@example.com')).toEqual({});
   });
 
-  it('refuses a claim that is not text, and a plugin it does not have', async () => {
+  it('declares userFor a record that may be none, its Level one of the three levels', () => {
+    const specs = pluginSpecsOf(teamModuleWith(() => records()).plugins);
+    expect(specs.user_for?.output).toEqual({
+      kind: 'record',
+      maybeAbsent: true,
+      fields: {
+        Id: 'text',
+        Email: { kind: 'branded', of: 'text', brands: ['claim:email/address'] },
+        Name: 'text',
+        Level: { kind: 'enum', options: ['read', 'write', 'admin'] },
+      },
+    });
+  });
+
+  it('refuses a claim that is not text, and a plugin it does not have, as bad requests', async () => {
     const module = loaded(records());
-    await expect(call(module, 'is-member', 42)).rejects.toThrow('a claim is text');
-    await expect(call(module, 'nobody', 'ada@example.com')).rejects.toThrow('has no plugin "nobody"');
+    await expect(call(module, 'is-member', 42)).rejects.toThrow(new AdapterBadRequestError('@lf-platform/team: a claim is text'));
+    await expect(call(module, 'nobody', 'ada@example.com')).rejects.toBeInstanceOf(AdapterBadRequestError);
+  });
+
+  it('lets a failure of its records through as it is, which is no refusal of its own', async () => {
+    const module = loaded(records({ memberByEmail: async () => Promise.reject(new Error('connection terminated')) }));
+    const failed = call(module, 'is-member', 'ada@example.com');
+    await expect(failed).rejects.toThrow('connection terminated');
+    await expect(failed).rejects.not.toBeInstanceOf(AdapterBadRequestError);
   });
 });

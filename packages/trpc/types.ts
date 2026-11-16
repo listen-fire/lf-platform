@@ -753,8 +753,10 @@ export type OpsEventId = string & {
     __brand: 'public.ops_event';
 };
 
-/** How an arrival reached one of a movement's listens: a run it started, or
- *  an `Arrival Not Judged` fact (the listen could not tell). */
+/** How an arrival reached one of a movement's listens: a run it started, an
+ *  `Arrival Not Judged` fact (the listen could not tell), or one the listen
+ *  waits on (its host function could not be reached, or an earlier arrival
+ *  waits), which its retry judges again. */
 export type MovementEventStatus = 'ran' | 'run_failed' | 'not_judged' | 'waiting_for_host';
 export type MovementEventItem = {
     id: string;
@@ -4944,6 +4946,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         typeId: string;
                     } | undefined;
                     mayBeAbsent?: boolean | undefined;
+                    brands?: string[] | undefined;
                     changedIn?: {
                         release: string;
                         note: string;
@@ -5035,6 +5038,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                             typeId: string;
                         } | undefined;
                         mayBeAbsent?: boolean | undefined;
+                        brands?: string[] | undefined;
                         changedIn?: {
                             release: string;
                             note: string;
@@ -12085,6 +12089,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                             fedByExtraction?: true | undefined;
                             output?: Record<string, unknown> | undefined;
                             description?: string | undefined;
+                            pure?: boolean | undefined;
+                            maxAgeSeconds?: number | undefined;
                         };
                     }[];
                 } | undefined;
@@ -12140,6 +12146,11 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         alsoArrivesOn?: string[][] | undefined;
                     }> | undefined;
                 } | undefined;
+                listensLimitedBefore?: string | undefined;
+                retiredSettings?: {
+                    name: string;
+                    instead: string;
+                }[] | undefined;
                 displayName?: string | undefined;
                 description?: string | undefined;
                 handbookSection?: {
@@ -12283,6 +12294,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                                 fedByExtraction?: true | undefined;
                                 output?: Record<string, unknown> | undefined;
                                 description?: string | undefined;
+                                pure?: boolean | undefined;
+                                maxAgeSeconds?: number | undefined;
                             };
                         }[];
                     } | undefined;
@@ -12338,6 +12351,11 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                             alsoArrivesOn?: string[][] | undefined;
                         }> | undefined;
                     } | undefined;
+                    listensLimitedBefore?: string | undefined;
+                    retiredSettings?: {
+                        name: string;
+                        instead: string;
+                    }[] | undefined;
                     displayName?: string | undefined;
                     description?: string | undefined;
                     handbookSection?: {
@@ -12472,6 +12490,8 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                                 fedByExtraction?: true | undefined;
                                 output?: Record<string, unknown> | undefined;
                                 description?: string | undefined;
+                                pure?: boolean | undefined;
+                                maxAgeSeconds?: number | undefined;
                             };
                         }[];
                     } | undefined;
@@ -12527,6 +12547,11 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                             alsoArrivesOn?: string[][] | undefined;
                         }> | undefined;
                     } | undefined;
+                    listensLimitedBefore?: string | undefined;
+                    retiredSettings?: {
+                        name: string;
+                        instead: string;
+                    }[] | undefined;
                     displayName?: string | undefined;
                     description?: string | undefined;
                     handbookSection?: {

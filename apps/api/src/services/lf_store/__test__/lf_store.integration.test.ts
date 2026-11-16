@@ -342,7 +342,7 @@ describe('the lf store module', () => {
     expect(await lf('work.claimDue', { limit: 10, leaseMs: 60_000 })).toEqual([expect.objectContaining({ key, attempts: 1 })]);
 
     await expect(lf('work.claimDue', { limit: 10, leaseMs: 60_000, kinds: ['dispatch_event'] })).rejects.toThrow(
-      'not a work kind: dispatch_event (the kinds: resume_timer, wake_await, fire_event, poll_edge, resolve_listen, refresh_subscription, settle_race)',
+      'not a work kind: dispatch_event (the kinds: resume_timer, wake_await, fire_event, poll_edge, resolve_listen, refresh_subscription, settle_race, judge_waiting)',
     );
     await expect(lf('work.enqueue', { kind: 'dispatch_event', key: 'k', payload: {} })).rejects.toThrow('not a work kind: dispatch_event');
   });
@@ -458,7 +458,7 @@ describe('the lf store module', () => {
     expect(fire.payload).toEqual({ deliveryId: kept.id, arrivalMark: answer.arrivalMark });
     expect(await lf('inbound.delivery', { id: kept.id })).toMatchObject({ source: 'poll', request });
     expect(await lf('unjudged.list', { limit: 10 })).toEqual([
-      { ...unjudged, deliveryId: null, adapter: null, recordId: null, landing: null, cause: null, attempt: 0, at: expect.any(String) },
+      { ...unjudged, deliveryId: null, adapter: null, recordId: null, landing: null, cause: null, attempt: 0, waiting: false, at: expect.any(String) },
     ]);
     const waitRows = await sql<{ fire_key: string }>`select fire_key from automations.wait_row where run_id = ${runId}::uuid`.execute(getAutomationsQb(['work']));
     expect(waitRows.rows).toEqual([{ fire_key: `lf:${teamA}:${fireKey}` }]);
@@ -550,13 +550,56 @@ describe('the lf store module', () => {
     expect(await note('2026-11-01T10:00:02.000Z', 1, '2026-10-01T00:00:00.000Z')).toBe(true);
     expect(await lf('unjudged.list', { limit: 10, pipeline: 'listen:other' })).toEqual([]);
     const [first] = (await lf('unjudged.list', { limit: 1 })) as { at: string; attempt: number }[];
-    expect(first).toEqual({ ...fact, at: '2026-11-01T10:00:00.000Z', attempt: 0 });
+    expect(first).toEqual({ ...fact, at: '2026-11-01T10:00:00.000Z', attempt: 0, waiting: false });
     expect(await lf('unjudged.list', { after: { at: first?.at, pipeline: fact.pipeline, arrival: fact.arrival }, limit: 10 })).toEqual([
-      { ...fact, at: '2026-11-01T10:00:02.000Z', attempt: 1 },
+      { ...fact, at: '2026-11-01T10:00:02.000Z', attempt: 1, waiting: false },
     ]);
     // Facts found before `forgetBefore` go in the same write.
     expect(await note('2026-11-02T10:00:00.000Z', 2, '2026-11-01T10:00:01.000Z')).toBe(true);
     expect(((await lf('unjudged.list', { limit: 10 })) as { attempt: number }[]).map((f) => f.attempt)).toEqual([1, 2]);
+  });
+
+  // listen-fire 0.16: a listen whose filter calls a pure plugin keeps the
+  // arrivals it waits on, in the order they came, until it judges them.
+  it('keeps what a listen waits on in the order it was kept, lists only the waiting, and forgets the wait once judged', async () => {
+    const lf = store(teamA);
+    const at = '2026-11-13T10:00:00.000Z';
+    const fact = (arrival: string, waiting?: boolean) => ({
+      pipeline: 'listen:f:m', arrival, file: 'f', movement: 'm', deliveryId: null, edge: 'Messages', adapter: 'slack', recordId: null, landing: null,
+      reason: 'waiting behind an earlier arrival', cause: null, at, ...(waiting !== undefined ? { waiting } : {}),
+    });
+    // One delivery's facts share an instant: m10 came before m9, which its
+    // receipt key as text does not say.
+    const answer = (await lf('inbound.keepDelivery', {
+      subscriptionId: 'slack',
+      delivery: delivery(null),
+      work: [],
+      unjudged: [fact('m10', true), fact('m9', true), fact('m11')],
+    })) as { kept: boolean };
+    expect(answer.kept).toBe(true);
+    const arrivals = async (params: Record<string, unknown>) => ((await lf('unjudged.list', { limit: 10, ...params })) as { arrival: string; waiting: boolean }[]).map((f) => [f.arrival, f.waiting]);
+    expect(await arrivals({})).toEqual([['m10', true], ['m9', true], ['m11', false]]);
+    expect(await arrivals({ waiting: true })).toEqual([['m10', true], ['m9', true]]);
+    // Paging after one of them reads on in that order.
+    expect(await arrivals({ after: { at, pipeline: 'listen:f:m', arrival: 'm10', attempt: 0 } })).toEqual([['m9', true], ['m11', false]]);
+    // A fact no longer kept pages from its instant on.
+    expect(await arrivals({ after: { at, pipeline: 'listen:f:m', arrival: 'gone', attempt: 0 } })).toEqual([['m10', true], ['m9', true], ['m11', false]]);
+
+    expect(await lf('unjudged.judged', { pipeline: 'listen:f:m', arrival: 'm10' })).toBeNull();
+    expect(await arrivals({})).toEqual([['m10', false], ['m9', true], ['m11', false]]);
+    expect(await arrivals({ waiting: true })).toEqual([['m9', true]]);
+    // Another tenant's listen of the same name waits on nothing of it.
+    expect(await store(teamB)('unjudged.list', { limit: 10 })).toEqual([]);
+    // `unjudged.note` keeps `waiting` as given.
+    expect(await lf('unjudged.note', { ...fact('m12', true), forgetBefore: '2026-10-01T00:00:00.000Z' })).toBe(true);
+    expect(await arrivals({ waiting: true })).toEqual([['m9', true], ['m12', true]]);
+  });
+
+  it('claims a listen\'s judge_waiting row', async () => {
+    const lf = store(teamA);
+    await lf('work.enqueue', { kind: 'judge_waiting', key: 'judge_waiting:listen:f:m', payload: { pipeline: 'listen:f:m' }, dueAt: past(1_000), teamId: null });
+    const claimed = (await lf('work.claimDue', { limit: 10, leaseMs: 60_000, kinds: ['judge_waiting'] })) as { kind: string; payload: unknown }[];
+    expect(claimed.map(({ kind, payload }) => ({ kind, payload }))).toEqual([{ kind: 'judge_waiting', payload: { pipeline: 'listen:f:m' } }]);
   });
 
   it('answers store.open with the tenant, and refuses an unknown method and a bad param', async () => {

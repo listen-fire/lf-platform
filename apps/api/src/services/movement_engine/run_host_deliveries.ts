@@ -13,7 +13,7 @@ import type { DeliveryRowStore, KeepDelivery, NewWorkRow, WaitWake } from 'movem
 
 import { DOOR_WAIT_MS, doorsLockPool } from '../../lib/kysely';
 import { isWorkKind } from '../work/kinds';
-import { DoorsTryAgain, underDoorsHold, type DoorsHold } from './doors_hold';
+import { DoorsTryAgain, heldDoors, underDoorsHold, type DoorsHold, type LockConnection } from './doors_hold';
 import {
   announceQueued,
   inStoreTransaction,
@@ -150,17 +150,68 @@ export async function withDoorsHeld<T>(teamId: string, body: () => Promise<T>): 
     await sql`select pg_advisory_xact_lock_shared(hashtextextended(${doorsLockName(teamId)}::text, 0))`.execute(open);
     return body();
   }
+  return onLockConnection(
+    {
+      teamId,
+      held: "the team's doors",
+      take: (lock) => lock.query('select pg_advisory_xact_lock_shared(hashtextextended($1::text, 0))', [doorsLockName(teamId)]).then(() => undefined),
+    },
+    body,
+  );
+}
+
+/** What a listen whose filter asks its host is judged under: one delivery at
+ *  a time reads what it waits on and keeps what it could not judge, so a
+ *  second can never read an empty line before the first keeps its arrival
+ *  waiting, and run ahead of it. */
+function judgingLockName(teamId: string, pipeline: string) {
+  return `judging:${teamId}:${pipeline}`;
+}
+
+/** `body` with each of `pipelines` judged by this door alone (in one order,
+ *  so two doors never wait on each other). Under a door that holds the team's
+ *  doors, the locks join that hold's connection, as a door holds one at most;
+ *  inside a transaction, they join it; else they are held on a connection of
+ *  their own, as the doors are. A door that cannot have them soon fails with
+ *  nothing kept (`DoorsTryAgain`), and its provider retries. */
+export async function withListensJudgedAlone<T>(teamId: string, pipelines: readonly string[], body: () => Promise<T>): Promise<T> {
+  const names = [...new Set(pipelines)].sort().map((pipeline) => judgingLockName(teamId, pipeline));
+  if (names.length === 0) return body();
+  const open = storeDb();
+  if (open.isTransaction) {
+    for (const name of names) await sql`select pg_advisory_xact_lock(hashtextextended(${name}::text, 0))`.execute(open);
+    return body();
+  }
+  const take = async (lock: LockConnection) => {
+    for (const name of names) await lock.query('select pg_advisory_xact_lock(hashtextextended($1::text, 0))', [name]);
+  };
+  const doors = heldDoors();
+  if (doors?.lock !== undefined) {
+    try {
+      await take(doors.lock);
+    } catch (cause) {
+      throw new DoorsTryAgain(`a door could not judge its listens alone within ${DOOR_WAIT_MS} ms`, { cause });
+    }
+    return body();
+  }
+  return onLockConnection({ teamId, held: 'its listens to judge alone', take }, body);
+}
+
+/** `body` with what `take` locks held on a connection of the lock pool, for
+ *  the length of `body`, as `withDoorsHeld` says. */
+async function onLockConnection<T>(input: { teamId: string; held: string; take: (lock: LockConnection) => Promise<void> }, body: () => Promise<T>): Promise<T> {
+  const { teamId, held } = input;
   const asked = Date.now();
   const lock = await doorsLockPool.connect().catch((cause: unknown) => {
-    throw new DoorsTryAgain(`a door waited ${DOOR_WAIT_MS} ms for a connection to hold the team's doors`, { cause });
+    throw new DoorsTryAgain(`a door waited ${DOOR_WAIT_MS} ms for a connection to hold ${held}`, { cause });
   });
-  const hold: DoorsHold = { lost: false };
+  const hold: DoorsHold = { lost: false, lock };
   // Checked out, the pool does not hear this connection, and an unheard `error`
   // ends the process. A connection that failed keeps this listener as it is
   // destroyed: ending a dead socket can raise another.
   const heard = (error: Error) => {
     hold.lost = true;
-    logger.warn("[doors] the connection holding a team's doors failed during a door", { teamId, cause: error.message });
+    logger.warn(`[doors] the connection holding ${held} failed during a door`, { teamId, cause: error.message });
   };
   lock.on('error', heard);
   let healthy = false;
@@ -169,21 +220,21 @@ export async function withDoorsHeld<T>(teamId: string, body: () => Promise<T>): 
       await lock.query('begin');
       const left = Math.max(1, DOOR_WAIT_MS - (Date.now() - asked));
       await lock.query("select set_config('lock_timeout', $1, true)", [`${left}ms`]);
-      await lock.query('select pg_advisory_xact_lock_shared(hashtextextended($1::text, 0))', [doorsLockName(teamId)]);
+      await input.take(lock);
     } catch (cause) {
-      throw new DoorsTryAgain(`a door could not hold the team's doors within ${DOOR_WAIT_MS} ms`, { cause });
+      throw new DoorsTryAgain(`a door could not hold ${held} within ${DOOR_WAIT_MS} ms`, { cause });
     }
     let answer: T;
     try {
       answer = await underDoorsHold(hold, body);
     } catch (error) {
-      if (hold.lost && !(error instanceof DoorsTryAgain)) throw new DoorsTryAgain("the connection holding the team's doors was lost during this door", { cause: error });
+      if (hold.lost && !(error instanceof DoorsTryAgain)) throw new DoorsTryAgain(`the connection holding ${held} was lost during this door`, { cause: error });
       throw error;
     }
     try {
       await lock.query('commit');
     } catch (cause) {
-      throw new DoorsTryAgain("the connection holding the team's doors was lost during this door", { cause });
+      throw new DoorsTryAgain(`the connection holding ${held} was lost during this door`, { cause });
     }
     healthy = true;
     return answer;

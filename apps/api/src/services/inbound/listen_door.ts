@@ -64,17 +64,17 @@ import type { UnjudgedArrival } from '../lf_store/records_door';
 import type { CoreWorkKind } from '../work/kinds';
 import type { Resolution } from '../lf_store/listens';
 
-import { SECOND } from '../../constants';
 import { getAutomationsQb } from '../../lib/kysely';
 import { teamIdSchema } from '../../lib/team_id';
+import { triggerIdSchema } from '../../lib/trigger_id';
 import { waitingListens } from '../lf_store/records_door';
 import { getAdapterManifest } from '../translation_graph/adapters/registry';
 import { resolveAdapter } from '../translation_graph/adapters/resolve';
-import { deliveryRowStore } from '../movement_engine/run_host_deliveries';
+import { deliveryRowStore, withListensJudgedAlone } from '../movement_engine/run_host_deliveries';
 import { chainBefore, loopSettings } from './loop_breaker';
 import { armResolveForArrivals, withWatching, withWatchingOne } from './listen_resolve';
 import { platformHostAnswers } from './platform_plugin_answers';
-import { HostFunctionRefused } from './plugin_answers';
+import { HostFunctionRefused, RETRY_UNJUDGED_EVERY_MS } from './plugin_answers';
 
 // ── A saved listen, as its trigger row keeps it ─────────────────────────────
 
@@ -242,8 +242,7 @@ export const platformJudgeHost: JudgeHost = {
 /** The reason an arrival is kept while an earlier one of its listen waits. */
 export const WAITING_BEHIND = 'waiting behind an earlier arrival';
 
-/** How often a listen's retry judges again what it waits on. */
-export const RETRY_UNJUDGED_EVERY_MS = 30 * SECOND;
+export { RETRY_UNJUDGED_EVERY_MS };
 
 /** What a vouched arrival is to a listen: it fires when it came on the listen's module and last edge, whatever its filter says. */
 function vouchedVerdict(listen: SavedListen, arrival: Exclude<Arrival, { gone: true }>, adapterType: string): Verdict | null {
@@ -296,12 +295,18 @@ async function judgedAsking(input: {
   let judgement: Judgement | null = input.asked;
   for (let judgements = 1; judgement !== null && 'asks' in judgement; judgements++) {
     if (judgements >= bound) return { undecided: `its filter still asks its host after ${judgements} judgements, more than the ${bound - 1} host calls it holds` };
+    let answered: PluginAnswers;
     try {
-      answers.push(...(await input.host.answers(input.teamId, judgement.asks)));
+      answered = await input.host.answers(input.teamId, judgement.asks);
     } catch (error) {
       if (error instanceof HostFunctionRefused) return { undecided: `${error.plugin}, which this listen's filter calls, answered an error (${error.message})` };
-      answers.push(...judgement.asks.map((question) => ({ ...question, unreachable: messageOf(error) })));
+      answered = judgement.asks.map((question) => ({ ...question, unreachable: messageOf(error) }));
     }
+    // An answer that holds no value is no answer: judged by, it would refuse
+    // the whole delivery, so it leaves this one arrival undecided instead.
+    const empty = answered.find((answer) => !('unreachable' in answer) && answer.value === undefined);
+    if (empty !== undefined) return { undecided: `${empty.plugin}, which this listen's filter calls, answered no value` };
+    answers.push(...answered);
     judgement = input.judge(answers);
   }
   return judgement;
@@ -553,7 +558,7 @@ export function fireKeyOf(runId: string): string {
 }
 
 /** A `retry_unjudged` row's payload: the listen whose waiting arrivals it judges again. */
-export const retryRowSchema = z.object({ teamId: teamIdSchema, triggerId: z.string(), pipeline: z.string() });
+export const retryRowSchema = z.object({ teamId: teamIdSchema, triggerId: triggerIdSchema, pipeline: z.string() });
 export type RetryRow = z.infer<typeof retryRowSchema>;
 
 export const RETRY_UNJUDGED_WORK_KIND = 'retry_unjudged' satisfies CoreWorkKind;
@@ -762,20 +767,25 @@ export async function deliverArrivals(input: {
   const all = input.listens ?? (await savedListens({ teamId: input.teamId, adapterType: input.delivered.adapterType }));
   const { keptAt } = input;
   const listens = keptAt === undefined ? all : all.filter((listen) => listen.carriedFrom === undefined || Date.parse(listen.carriedFrom.at) <= keptAt.getTime());
-  const judged = await judgeArrivals({ listens, delivery: input.delivered, arrivals: input.arrivals, now, ...(input.host !== undefined ? { host: input.host } : {}) });
-  const result = await keepJudgedDelivery({
-    teamId: input.teamId,
-    subscriptionId: input.subscriptionId,
-    adapterType: input.delivered.adapterType,
-    externalId: input.externalId,
-    source: input.source,
-    arrivals: input.arrivals,
-    judged,
-    ...('checkpoint' in input ? { checkpoint: input.checkpoint } : {}),
-    ...(input.request !== undefined ? { request: input.request } : {}),
-    ...(input.rawKeptId !== undefined ? { rawKeptId: input.rawKeptId } : {}),
-    credentialsId: input.delivered.credentialsId,
-    now,
+  // What a listen that asks its host waits on is read, and what it could not
+  // judge is kept, by one delivery at a time.
+  const lined = listens.filter((listen) => asksItsHost(listen.plan)).map((listen) => listen.pipeline);
+  const result = await withListensJudgedAlone(input.teamId, lined, async () => {
+    const judged = await judgeArrivals({ listens, delivery: input.delivered, arrivals: input.arrivals, now, ...(input.host !== undefined ? { host: input.host } : {}) });
+    return keepJudgedDelivery({
+      teamId: input.teamId,
+      subscriptionId: input.subscriptionId,
+      adapterType: input.delivered.adapterType,
+      externalId: input.externalId,
+      source: input.source,
+      arrivals: input.arrivals,
+      judged,
+      ...('checkpoint' in input ? { checkpoint: input.checkpoint } : {}),
+      ...(input.request !== undefined ? { request: input.request } : {}),
+      ...(input.rawKeptId !== undefined ? { rawKeptId: input.rawKeptId } : {}),
+      credentialsId: input.delivered.credentialsId,
+      now,
+    });
   });
   // A module that pushes its members' changes reports them as arrivals on the
   // members' own edge (Airtable's `Tables`): a listen the host lists those for

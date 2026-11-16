@@ -81,52 +81,79 @@ export function noteUnjudged(scope: LfTenant, input: UnjudgedArrival & { forgetB
   });
 }
 
-/** The facts kept after the one `after` names, only the listen `pipeline`'s
- *  when it names one, oldest first (ties by pipeline, arrival, attempt). */
+interface UnjudgedRow {
+  pipeline: string;
+  arrival: string;
+  file: string;
+  movement: string;
+  delivery_id: string | null;
+  edge: string;
+  adapter: string | null;
+  record_id: string | null;
+  landing: unknown;
+  reason: string;
+  cause: string | null;
+  at: string;
+  attempt: number;
+  waiting: boolean;
+}
+
+const UNJUDGED_COLUMNS = (alias: string) =>
+  sql.raw(
+    ['pipeline', 'arrival', 'file', 'movement', 'delivery_id', 'edge', 'adapter', 'record_id', 'landing', 'reason', 'cause', 'attempt', 'waiting']
+      .map((column) => `${alias}.${column}`)
+      .join(', '),
+  );
+
+function unjudgedOf(row: UnjudgedRow): UnjudgedArrival {
+  return {
+    pipeline: row.pipeline,
+    arrival: row.arrival,
+    file: row.file,
+    movement: row.movement,
+    deliveryId: row.delivery_id,
+    edge: row.edge,
+    adapter: row.adapter,
+    recordId: row.record_id,
+    landing: row.landing ?? null,
+    reason: row.reason,
+    cause: row.cause,
+    at: row.at,
+    attempt: row.attempt,
+    waiting: row.waiting,
+  };
+}
+
+/** The facts kept after the one `after` names (one no longer kept: from its
+ *  `at` on), only the listen `pipeline`'s when it names one, only those that
+ *  wait when `waiting` is, oldest first; those found at one instant in the
+ *  order they were kept, which for arrivals held behind another is the order
+ *  they came (their receipt keys as text are not: `m10` before `m9`). */
 export async function unjudged(
   scope: LfTenant,
-  input: { after: { at: string; pipeline: string; arrival: string; attempt: number } | null; pipeline: string | null; limit: number },
+  input: {
+    after: { at: string; pipeline: string; arrival: string; attempt: number } | null;
+    pipeline: string | null;
+    waiting?: boolean;
+    limit: number;
+  },
 ): Promise<UnjudgedArrival[]> {
-  const columns = sql`
-    select u.pipeline, u.arrival, u.file, u.movement, u.delivery_id, u.edge, u.adapter, u.record_id, u.landing, u.reason, u.cause, ${iso('u.noted_at')} as at, u.attempt
-    from automations.arrival_unjudged u
-    where u.team_id = ${scope.tenant}::uuid and (${input.pipeline}::text is null or u.pipeline = ${input.pipeline}::text)`;
-  const order = sql`order by u.noted_at, u.pipeline, u.arrival, u.attempt limit ${input.limit}::int8`;
   const { after } = input;
-  const { rows } = await sql<{
-    pipeline: string;
-    arrival: string;
-    file: string;
-    movement: string;
-    delivery_id: string | null;
-    edge: string;
-    adapter: string | null;
-    record_id: string | null;
-    landing: unknown;
-    reason: string;
-    cause: string | null;
-    at: string;
-    attempt: number;
-  }>`${columns} ${
-    after === null
-      ? sql``
-      : sql`and (u.noted_at, u.pipeline, u.arrival, u.attempt) > (${after.at}::timestamptz, ${after.pipeline}::text, ${after.arrival}::text, ${after.attempt}::int4)`
-  } ${order}`.execute(pool());
-  return rows.map((r) => ({
-    pipeline: r.pipeline,
-    arrival: r.arrival,
-    file: r.file,
-    movement: r.movement,
-    deliveryId: r.delivery_id,
-    edge: r.edge,
-    adapter: r.adapter,
-    recordId: r.record_id,
-    landing: r.landing ?? null,
-    reason: r.reason,
-    cause: r.cause,
-    at: r.at,
-    attempt: r.attempt,
-  }));
+  const { rows } = await sql<UnjudgedRow>`
+    select ${UNJUDGED_COLUMNS('u')}, ${iso('u.noted_at')} as at
+    from automations.arrival_unjudged u
+    where u.team_id = ${scope.tenant}::uuid and (${input.pipeline}::text is null or u.pipeline = ${input.pipeline}::text)
+      and (not ${input.waiting === true}::bool or u.waiting)
+      ${
+        after === null
+          ? sql``
+          : sql`and (u.noted_at, u.kept_order) > (${after.at}::timestamptz, coalesce((
+              select a.kept_order from automations.arrival_unjudged a
+              where a.team_id = ${scope.tenant}::uuid and a.pipeline = ${after.pipeline}::text and a.arrival = ${after.arrival}::text and a.attempt = ${after.attempt}::int4
+                and a.noted_at = ${after.at}::timestamptz), 0))`
+      }
+    order by u.noted_at, u.kept_order limit ${input.limit}::int8`.execute(pool());
+  return rows.map(unjudgedOf);
 }
 
 // ── What a listen waits on ──────────────────────────────────────────────────
@@ -143,22 +170,8 @@ export async function waitingListens(scope: LfTenant, pipelines: readonly string
 /** What the listen `pipeline` waits on, oldest first: each arrival once, by
  *  the first fact that waits on it, in the order the facts were kept. */
 export async function waitingLine(scope: LfTenant, pipeline: string): Promise<UnjudgedArrival[]> {
-  const { rows } = await sql<{
-    pipeline: string;
-    arrival: string;
-    file: string;
-    movement: string;
-    delivery_id: string | null;
-    edge: string;
-    adapter: string | null;
-    record_id: string | null;
-    landing: unknown;
-    reason: string;
-    cause: string | null;
-    at: string;
-    attempt: number;
-  }>`
-    select f.pipeline, f.arrival, f.file, f.movement, f.delivery_id, f.edge, f.adapter, f.record_id, f.landing, f.reason, f.cause, ${iso('f.noted_at')} as at, f.attempt
+  const { rows } = await sql<UnjudgedRow>`
+    select ${UNJUDGED_COLUMNS('f')}, ${iso('f.noted_at')} as at
     from (
       select distinct on (u.arrival) u.*
       from automations.arrival_unjudged u
@@ -166,22 +179,7 @@ export async function waitingLine(scope: LfTenant, pipeline: string): Promise<Un
       order by u.arrival, u.noted_at, u.kept_order
     ) f
     order by f.noted_at, f.kept_order`.execute(pool());
-  return rows.map((r) => ({
-    pipeline: r.pipeline,
-    arrival: r.arrival,
-    file: r.file,
-    movement: r.movement,
-    deliveryId: r.delivery_id,
-    edge: r.edge,
-    adapter: r.adapter,
-    recordId: r.record_id,
-    landing: r.landing ?? null,
-    reason: r.reason,
-    cause: r.cause,
-    at: r.at,
-    attempt: r.attempt,
-    waiting: true,
-  }));
+  return rows.map(unjudgedOf);
 }
 
 /** The listen `pipeline` no longer waits on `arrivals` (each judged, or let
@@ -193,4 +191,25 @@ export async function stopWaiting(exec: Exec, scope: LfTenant, input: { pipeline
     update automations.arrival_unjudged set waiting = false
     where team_id = ${scope.tenant}::uuid and pipeline = ${input.pipeline}::text and waiting
       and (${arrivals === undefined}::bool or arrival = any(${arrivals === undefined ? [] : [...arrivals]}::text[]))`.execute(exec);
+}
+
+/** `unjudged.judged`: the listen `pipeline` judged `arrival` since, so none of
+ *  its facts waits any more (each is kept, not waiting). */
+export async function judgedUnjudged(scope: LfTenant, input: { pipeline: string; arrival: string }): Promise<null> {
+  await stopWaiting(pool(), scope, { pipeline: input.pipeline, arrivals: [input.arrival] });
+  return null;
+}
+
+/** The listen `pipeline` judged `arrivals` it waited on, each to run or not:
+ *  their facts are forgotten, so what the team sees of each is its run, or
+ *  nothing, never a judgement it no longer stands by. An arrival it never
+ *  waited on keeps its facts (a replay's history). */
+export async function forgetJudged(exec: Exec, scope: LfTenant, input: { pipeline: string; arrivals: readonly string[] }): Promise<void> {
+  if (input.arrivals.length === 0) return;
+  await sql`
+    delete from automations.arrival_unjudged u
+    where u.team_id = ${scope.tenant}::uuid and u.pipeline = ${input.pipeline}::text and u.arrival = any(${[...input.arrivals]}::text[])
+      and exists (
+        select 1 from automations.arrival_unjudged w
+        where w.team_id = u.team_id and w.pipeline = u.pipeline and w.arrival = u.arrival and w.waiting)`.execute(exec);
 }

@@ -19,16 +19,28 @@ export class DoorsTryAgain extends WorkDeferred {
   }
 }
 
+/** The connection a door holds its locks on. */
+export interface LockConnection {
+  query(text: string, values?: unknown[]): Promise<unknown>;
+}
+
 /** The door a write is made under. `lost`: its lock's connection has gone, and the
- *  lock with it, so an upgrade may already be moving. */
+ *  lock with it, so an upgrade may already be moving. `lock`: that connection,
+ *  where the door takes any other lock it holds to its end. */
 export interface DoorsHold {
   lost: boolean;
+  lock?: LockConnection;
 }
 
 const doorsHold = new AsyncLocalStorage<DoorsHold>();
 
 export function underDoorsHold<T>(hold: DoorsHold, body: () => Promise<T>): Promise<T> {
   return doorsHold.run(hold, body);
+}
+
+/** The hold of the door this runs under, if any. */
+export function heldDoors(): DoorsHold | undefined {
+  return doorsHold.getStore();
 }
 
 /** Before a door's write commits: a door never goes on without its lock. */

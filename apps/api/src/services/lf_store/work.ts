@@ -22,6 +22,7 @@ export const LF_WORK_KINDS = [
   'resolve_listen',
   'refresh_subscription',
   'settle_race',
+  'judge_waiting',
 ] as const;
 
 function isLfWorkKind(kind: string): boolean {

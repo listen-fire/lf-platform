@@ -636,8 +636,8 @@ function roundTrip(
 /** Methods the manifest declares that no program here reaches: those only a
  *  program of versions 1 to 4 reached (`write … bind`, the extraction
  *  keyword's minted ids), which this platform no longer runs; and the kept
- *  answer of a pure plugin, which this platform's host does not offer yet, so
- *  the engine invokes the plugin instead. */
+ *  answer of a pure plugin, which only a wait's WHERE calling one reaches
+ *  (wait_answers.unit.test.ts). */
 const REACHED_BY_NO_PROGRAM = (method: string): boolean =>
   method.startsWith('park.bindings.') || method === 'ids.mint' || method === 'llm.transforms.answer';
 

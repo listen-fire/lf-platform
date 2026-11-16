@@ -104,6 +104,8 @@ const UnjudgedParams = z.object({
   cause: optStr,
   at: str,
   attempt: count.nullish().transform((v) => v ?? 0),
+  // Absent: it waits on nothing.
+  waiting: flag,
 });
 
 const DeliveryParams = z.object({
@@ -325,10 +327,12 @@ const HANDLERS: { readonly [M in LfStoreMethod]: Handler } = {
     z.object({
       after: after(z.object({ at: str, pipeline: str, arrival: str, attempt: count.nullish().transform((v) => v ?? 0) })),
       pipeline: optStr,
+      waiting: flag,
       limit: int,
     }),
     door.unjudged,
   ),
+  'unjudged.judged': handler(z.object({ pipeline: str, arrival: str }), door.judgedUnjudged),
 };
 
 /** Whether a method has a handler: the unit test's check over the list. */

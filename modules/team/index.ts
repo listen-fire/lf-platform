@@ -6,7 +6,7 @@
 // and serves it to a cloud lf at a route of its own. It is never published.
 
 import { pluginProgramName } from '@listen-fire/engine-contracts/plugin_spec';
-import { defineModule, type ModuleContext, type PluginInvocation, type PluginModuleDefinition } from 'module-kit';
+import { AdapterBadRequestError, defineModule, type ModuleContext, type PluginInvocation, type PluginModuleDefinition } from 'module-kit';
 
 import { IS_MEMBER, TEAM_PLUGINS_PACKAGE, USER_FOR } from './plugins';
 import type { TeamMember, TeamRecords } from './records';
@@ -14,7 +14,9 @@ import type { TeamMember, TeamRecords } from './records';
 /** The member a claim names. The claim carries no brand at runtime, so its
  *  kind is read off its shape: an address has an `@`, a number does not. */
 async function memberOf(records: TeamRecords, claim: unknown): Promise<TeamMember | null> {
-  if (typeof claim !== 'string') throw new Error('@lf-platform/team: a claim is text');
+  // A refusal of its own: the same question is refused every time. Anything
+  // else thrown (its records failing) may answer next time.
+  if (typeof claim !== 'string') throw new AdapterBadRequestError('@lf-platform/team: a claim is text');
   const text = claim.trim();
   return text.includes('@') ? records.memberByEmail(text.toLowerCase()) : records.memberByPhone(text);
 }
@@ -38,12 +40,11 @@ export function teamModuleWith(recordsOf: (ctx: ModuleContext) => TeamRecords): 
               return { data: { value: (await memberOf(records, claimOf(input))) !== null } };
             case pluginProgramName(USER_FOR.signature.name): {
               const member = await memberOf(records, claimOf(input));
-              return {
-                data: { value: member === null ? null : { Id: member.id, Email: member.email, Name: member.name, Level: member.level } },
-              };
+              // None is an answer with no `data`: `data: {}` would be a record.
+              return member === null ? {} : { data: { Id: member.id, Email: member.email, Name: member.name, Level: member.level } };
             }
             default:
-              throw new Error(`@lf-platform/team has no plugin "${input.name}"`);
+              throw new AdapterBadRequestError(`@lf-platform/team has no plugin "${input.name}"`);
           }
         },
       };

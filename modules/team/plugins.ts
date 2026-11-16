@@ -51,17 +51,16 @@ export const USER_FOR: PluginDeclaration = {
     dataDependency: 'none',
     additions: {},
     effects: {},
+    // A record, or none for someone who is not a member: a program reads a
+    // field off it with `?.` (`team.userFor(m.`User Email`)?.Level`).
     output: {
-      kind: 'value',
+      kind: 'record',
       optional: true,
-      type: {
-        kind: 'record',
-        fields: {
-          Id: { kind: 'string' },
-          Email: { kind: 'string' },
-          Name: { kind: 'string' },
-          Level: { kind: 'enum', values: [...TEAM_LEVELS] },
-        },
+      fields: {
+        Id: { type: { kind: 'string' } },
+        Email: { type: { kind: 'branded', of: { kind: 'string' }, brands: [EMAIL_CLAIM] } },
+        Name: { type: { kind: 'string' } },
+        Level: { type: { kind: 'enum', values: [...TEAM_LEVELS] } },
       },
     },
   },

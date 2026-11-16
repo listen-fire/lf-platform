@@ -20,7 +20,9 @@
 // - A listen that still cannot judge it is kept as the next attempt, its
 //   delivery still the one replayed.
 // - It judges each arrival as it stands, never behind another the listen
-//   waits on; one it judges, the listen no longer waits on.
+//   waits on. One it judges, to run or not, the listen no longer waits on,
+//   and nothing of that wait is kept; one it still cannot judge for a reason
+//   no retry answers, it no longer waits on either.
 
 import { sql } from 'kysely';
 import type { Arrival } from 'engine-contracts';
@@ -31,8 +33,8 @@ import type { TriggerId } from '../../generated/kysely/automations/Trigger';
 
 import { getAutomationsQb } from '../../lib/kysely';
 import { resolveAdapter } from '../translation_graph/adapters/resolve';
-import { keepUnjudgedIn, stopWaiting } from '../lf_store/records_door';
-import { inTransaction } from '../lf_store/scope';
+import { forgetJudged, keepUnjudgedIn, stopWaiting } from '../lf_store/records_door';
+import { inTransaction, type Exec } from '../lf_store/scope';
 import { announceQueued, queueRow } from '../movement_engine/run_host_queue';
 import { notifyWork } from '../work/drain';
 import { pollSubscriptionId } from '../poll_source/worker';
@@ -173,10 +175,21 @@ export async function keptArrivalsFor(input: { listen: SavedListen; adapterType:
   return 'refused' in read ? read : { arrivals: read.arrivals, credentialsId: listen.credentialsId };
 }
 
-/** The arrivals of `judged` its listen settled, which it no longer waits on. */
+/** The arrivals of `judged` its listen settled, to run or not. */
 export function settledArrivals(judged: Judged, arrivals: readonly Arrival[]): string[] {
   const unsettled = new Set(judged.unjudged.map((u) => u.fact.arrival));
   return arrivals.flatMap((arrival) => ('gone' in arrival ? [] : [arrivalReceiptKey(arrival)])).filter((key) => !unsettled.has(key));
+}
+
+/** What a replay's judging leaves of the listen's wait, in one write: the
+ *  arrivals it settled forgotten (their facts with them, when it waited on
+ *  them), and each it still cannot judge, for a reason no retry answers, no
+ *  longer waited on. One its host still cannot reach keeps waiting. */
+async function afterReplay(exec: Exec, input: { teamId: TeamId; pipeline: string; judged: Judged; arrivals: readonly Arrival[] }): Promise<void> {
+  const scope = { tenant: input.teamId };
+  await forgetJudged(exec, scope, { pipeline: input.pipeline, arrivals: settledArrivals(input.judged, input.arrivals) });
+  const released = input.judged.unjudged.filter((u) => !u.fact.waiting).map((u) => u.fact.arrival);
+  await stopWaiting(exec, scope, { pipeline: input.pipeline, arrivals: released });
 }
 
 /** What a replay through a listen that is not the team's answers. A route that
@@ -223,7 +236,6 @@ export async function replayThroughListen(input: {
     replaying: true,
     ...(input.host !== undefined ? { host: input.host } : {}),
   });
-  const settled = settledArrivals(judged, arrivals);
   for (const { fact } of judged.unjudged) {
     lines.push(`${named}: the arrival ${fact.arrival} on ${fact.edge} still cannot be judged (${fact.reason}): reported again, attempt ${attempt}`);
   }
@@ -241,14 +253,14 @@ export async function replayThroughListen(input: {
       const facts = await unjudgedFacts({ teamId, undecided: judged.unjudged, deliveryId: row.id, now });
       const queued = await inTransaction(async (trx) => {
         for (const fact of facts) await keepUnjudgedIn(trx, { tenant: teamId }, fact);
-        await stopWaiting(trx, { tenant: teamId }, { pipeline: listen.pipeline, arrivals: settled });
+        await afterReplay(trx, { teamId, pipeline: listen.pipeline, judged, arrivals });
         const rows = [];
         for (const retry of retryRowsFor({ teamId, undecided: judged.unjudged, now })) rows.push(await queueRow(trx, { host: 'platform' }, retry));
         return rows;
       });
       await announceQueued(queued);
     } else {
-      await stopWaiting(getAutomationsQb(['arrival_unjudged']), { tenant: teamId }, { pipeline: listen.pipeline, arrivals: settled });
+      await afterReplay(getAutomationsQb(['arrival_unjudged']), { teamId, pipeline: listen.pipeline, judged, arrivals });
       if (lines.length === 0) lines.push(`${named}: its filter does not take what delivery ${row.id} brought: nothing to run`);
     }
     return { outcome: 'replayed', runIds: [], replayDeliveryId: null, attempt, stillUndecided, lines };
@@ -266,7 +278,7 @@ export async function replayThroughListen(input: {
     ...(force ? { forced: true } : {}),
     now,
   });
-  await stopWaiting(getAutomationsQb(['arrival_unjudged']), { tenant: teamId }, { pipeline: listen.pipeline, arrivals: settled });
+  await afterReplay(getAutomationsQb(['arrival_unjudged']), { teamId, pipeline: listen.pipeline, judged, arrivals });
   notifyWork();
   const runIds = replay.fires.map((fire) => fire.runId);
   lines.push(`${named}: delivery ${row.id} replayed, ${runIds.length === 1 ? 'one run' : `${runIds.length} runs`} queued`);

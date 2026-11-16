@@ -3,8 +3,11 @@
 // nothing that a change could have made stale is kept.
 
 import type { PluginQuestion } from 'engine-contracts';
+import type { PluginSpec } from 'movement-lang';
 
-import { PluginAnswerCache, type PluginAnswer } from '../plugin_answers';
+import { AdapterBadRequestError } from 'module-kit';
+
+import { askPluginModule, HostFunctionRefused, PluginAnswerCache, type PluginAnswer, type PluginResult } from '../plugin_answers';
 
 const MEMBER: PluginQuestion = { plugin: '@lf-platform/team/is_member', args: ['ada@example.com'] };
 const OTHER: PluginQuestion = { plugin: '@lf-platform/team/is_member', args: ['bob@example.com'] };
@@ -229,5 +232,73 @@ describe('the platform answer cache', () => {
       for (let n = 1; n <= 5; n++) await cache.answers('team-1', [claim(n)], host.ask);
       expect(cache.keptCount('team-2')).toBe(1);
     });
+  });
+});
+
+// A host function asked in process: its arguments bound to its parameters, its
+// answer read as a run reads it and held to what it declares.
+describe('asking a plugin module', () => {
+  type Spec = Pick<PluginSpec, 'args' | 'output'>;
+  const IS_MEMBER_SPEC: Spec = { args: ['claim'], output: { kind: 'value', type: 'boolean' } };
+  const USER_FOR_SPEC: Spec = {
+    args: ['claim'],
+    output: {
+      kind: 'record',
+      maybeAbsent: true,
+      fields: { Id: 'text', Email: { kind: 'branded', of: 'text', brands: ['claim:email/address'] }, Name: 'text', Level: { kind: 'enum', options: ['read', 'write', 'admin'] } },
+    },
+  };
+  const ADA = { Id: 'u-1', Email: 'ada@example.com', Name: 'Ada', Level: 'admin' };
+
+  const asking = (spec: Spec, answer: () => Promise<PluginResult>) => {
+    const invoked: unknown[] = [];
+    return {
+      invoked,
+      ask: (args: unknown[]) =>
+        askPluginModule({
+          plugin: '@lf-platform/team/x',
+          args,
+          spec,
+          invoke: async (config) => {
+            invoked.push(config);
+            return answer();
+          },
+        }),
+    };
+  };
+
+  it('binds the arguments to the declared parameters in order, and reads a value', async () => {
+    const module = asking(IS_MEMBER_SPEC, async () => ({ data: { value: true } }));
+    expect(await module.ask(['ada@example.com'])).toEqual({ value: true });
+    expect(module.invoked).toEqual([{ claim: 'ada@example.com' }]);
+  });
+
+  it('reads a record as its data, and none as an answer with no data', async () => {
+    expect(await asking(USER_FOR_SPEC, async () => ({ data: ADA })).ask(['ada@example.com'])).toEqual({ value: ADA });
+    expect(await asking(USER_FOR_SPEC, async () => ({})).ask(['bob@example.com'])).toEqual({ value: null });
+  });
+
+  it.each<[string, Spec, PluginResult]>([
+    ['no value', IS_MEMBER_SPEC, { data: {} }],
+    ['an undefined value', IS_MEMBER_SPEC, { data: { value: undefined } }],
+    ['text for a boolean', IS_MEMBER_SPEC, { data: { value: 'yes' } }],
+    ['a record that is not an object', USER_FOR_SPEC, { data: { value: 'nobody' } as unknown as Record<string, unknown> }],
+    ['an empty record whose fields are required', USER_FOR_SPEC, { data: {} }],
+    ['a level that is none of the levels', USER_FOR_SPEC, { data: { ...ADA, Level: 'owner' } }],
+    ['text without data for a record', USER_FOR_SPEC, { text: 'Ada' }],
+  ])('refuses %s, never judging by it', async (_what, spec, answer) => {
+    await expect(asking(spec, async () => answer).ask(['ada@example.com'])).rejects.toBeInstanceOf(HostFunctionRefused);
+  });
+
+  it('refuses for the module what it refuses itself, and what is not its declared answer', async () => {
+    await expect(asking(IS_MEMBER_SPEC, async () => Promise.reject(new AdapterBadRequestError('a claim is text'))).ask([42])).rejects.toThrow(
+      new HostFunctionRefused('@lf-platform/team/x', 'a claim is text'),
+    );
+    await expect(asking(IS_MEMBER_SPEC, async () => ({ data: { value: true } })).ask(['a', 'b'])).rejects.toBeInstanceOf(HostFunctionRefused);
+  });
+
+  it('reads any other failure as a module out of reach: its arrival waits', async () => {
+    const answer = await asking(IS_MEMBER_SPEC, async () => Promise.reject(new Error('Connection terminated unexpectedly'))).ask(['ada@example.com']);
+    expect(answer).toEqual({ unreachable: expect.stringContaining('Connection terminated unexpectedly') });
   });
 });

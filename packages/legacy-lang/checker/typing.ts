@@ -6258,6 +6258,10 @@ export class ExpressionTyping {
       case 'resource':
       case 'linked_object':
         return undefined;
+      // A field read off a call's answer (`f(x)?.Level`) is 0.16's: no
+      // program of pins 1 to 4 holds one.
+      case 'field':
+        return undefined;
     }
   }
 

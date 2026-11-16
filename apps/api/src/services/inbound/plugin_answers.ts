@@ -9,7 +9,16 @@
 // asked but never kept, so a removed member cannot come back through a
 // question that was already in flight.
 
+import { AdapterBadRequestError, ModuleAnswerInvalid } from 'module-kit';
+
 import type { PluginAnswers, PluginQuestion } from 'engine-contracts';
+import type { PluginOutput, PluginSpec, SchemaFieldType } from 'movement-lang';
+
+import { SECOND } from '../../constants';
+
+/** How often what waits on a host function its host could not reach is
+ *  judged again: a listen's waiting arrivals, and a wait's. */
+export const RETRY_UNJUDGED_EVERY_MS = 30 * SECOND;
 
 /** What one question is answered: the plugin's value, or why it could not be. */
 export type PluginAnswer = { value: unknown } | { unreachable: string };
@@ -157,4 +166,142 @@ export class PluginAnswerCache {
     asked.then(forget, forget);
     return asked;
   }
+}
+
+// ── Asking a plugin's module ────────────────────────────────────────────────
+
+/** What a plugin module answers a call (adapter protocol `invokePlugin`). */
+export interface PluginResult {
+  text?: string;
+  data?: Record<string, unknown>;
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function admitsAbsent(type: SchemaFieldType): boolean {
+  return type === 'absent' || type === 'json' || (typeof type === 'object' && type.kind === 'maybeAbsent');
+}
+
+/** Whether `value` is one of `type`. A brand is the module's word, so a
+ *  branded value is checked as what it narrows; a field read off a record
+ *  holds the record's fields. */
+function fits(value: unknown, type: SchemaFieldType): boolean {
+  if (value === null || value === undefined) return admitsAbsent(type);
+  if (typeof type === 'string') {
+    switch (type) {
+      case 'text':
+      case 'date':
+      case 'datetime':
+        return typeof value === 'string';
+      case 'number':
+        return typeof value === 'number' && Number.isFinite(value);
+      case 'boolean':
+        return typeof value === 'boolean';
+      case 'json':
+        return true;
+      case 'file':
+        return typeof value === 'object';
+      case 'absent':
+      case 'never':
+        return false;
+      default:
+        return neverType(type);
+    }
+  }
+  switch (type.kind) {
+    case 'list':
+      return Array.isArray(value) && value.every((item) => fits(item, type.of));
+    case 'tuple':
+      return Array.isArray(value) && value.length === type.of.length && value.every((item, place) => { const at = type.of[place]; return at === null || at === undefined || fits(item, at); });
+    case 'dict':
+      return typeof value === 'object' && !Array.isArray(value) && Object.values(value).every((item) => fits(item, type.of));
+    case 'enum':
+      return typeof value === 'string' && (type.open !== undefined || type.options.includes(value));
+    case 'owned':
+      return typeof value === 'string';
+    case 'maybeAbsent':
+    case 'branded':
+      return fits(value, type.of);
+    case 'record':
+      return typeof value === 'object' && !Array.isArray(value);
+    default:
+      return neverType(type);
+  }
+}
+
+function neverType(type: never): boolean {
+  throw new Error(`a field type the host does not know: ${JSON.stringify(type)}`);
+}
+
+/** The value in a module's answer, as a run reads it, held to the plugin's
+ *  declared output (`malformed` says how it is not). A value output is
+ *  `data.value`, or the text it answered (first, for a text value). A record
+ *  is `data`'s entries and its text; one that may be none is none when the
+ *  answer has neither (`data: {}` is a record of absent fields). */
+export function declaredValue(answered: PluginResult, output: PluginOutput | undefined): { value: unknown } | { malformed: string } {
+  if (output === undefined) return { malformed: 'it declares no output' };
+  switch (output.kind) {
+    case 'value': {
+      const fromData = answered.data !== undefined && Object.hasOwn(answered.data, 'value') ? answered.data.value : undefined;
+      const fromText = answered.text;
+      const value = output.type === 'text' ? (fromText ?? fromData) : (fromData ?? fromText);
+      if (value === undefined && !admitsAbsent(output.type)) return { malformed: 'it answered no value' };
+      return fits(value, output.type) ? { value: value ?? null } : { malformed: `it answered ${JSON.stringify(value)}, which is not its declared ${JSON.stringify(output.type)}` };
+    }
+    case 'record': {
+      const { data, text } = answered;
+      if (data === undefined || data === null) {
+        if (output.maybeAbsent !== true) return { malformed: 'it answered no record' };
+        if (text !== undefined) return { malformed: 'it answered text without `data`; a record is its `data` object, and none is an answer with neither' };
+        return { value: null };
+      }
+      if (typeof data !== 'object' || Array.isArray(data)) return { malformed: `it answered a \`data\` that is not an object (${JSON.stringify(data)})` };
+      const record: Record<string, unknown> = { ...(text !== undefined ? { text } : {}), ...data };
+      for (const [name, type] of Object.entries(output.fields)) {
+        if (!fits(record[name], type)) return { malformed: `its field ${name} answered ${JSON.stringify(record[name])}, which is not its declared ${JSON.stringify(type)}` };
+      }
+      return { value: record };
+    }
+    case 'records':
+      return { malformed: 'it declares a list of records, which no filter can ask' };
+    default:
+      return neverOutput(output);
+  }
+}
+
+function neverOutput(output: never): { malformed: string } {
+  throw new Error(`a plugin output the host does not know: ${JSON.stringify(output)}`);
+}
+
+/**
+ * One question asked of the module that serves its plugin: its arguments
+ * bound to the plugin's parameters in the order it declares them, as a
+ * program's call binds them, and the value its answer holds read as its
+ * declared output. A refusal the module declares (a bad request), an answer
+ * that is not its declared output, or too many arguments refuse
+ * (`HostFunctionRefused`): asking again would answer the same. Anything else
+ * it throws (its records failing for a moment) leaves it out of reach, so its
+ * arrival waits.
+ */
+export async function askPluginModule(input: {
+  plugin: string;
+  args: readonly unknown[];
+  spec: Pick<PluginSpec, 'args' | 'output'>;
+  invoke: (config: Record<string, unknown>) => Promise<PluginResult>;
+}): Promise<PluginAnswer> {
+  const { plugin, args, spec } = input;
+  if (args.length > spec.args.length) throw new HostFunctionRefused(plugin, `it takes ${spec.args.length} arguments, and was asked with ${args.length}`);
+  const config = Object.fromEntries(args.map((value, place) => [spec.args[place], value]));
+  let answered: PluginResult;
+  try {
+    answered = await input.invoke(config);
+  } catch (error) {
+    if (error instanceof AdapterBadRequestError || error instanceof ModuleAnswerInvalid) throw new HostFunctionRefused(plugin, messageOf(error));
+    return { unreachable: `its module could not answer (${messageOf(error)})` };
+  }
+  const read = declaredValue(answered, spec.output);
+  if ('malformed' in read) throw new HostFunctionRefused(plugin, read.malformed);
+  return read;
 }

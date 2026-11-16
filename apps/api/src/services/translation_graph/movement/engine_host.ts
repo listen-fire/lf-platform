@@ -36,6 +36,9 @@ import {
 import { ledgeredAdapters } from '../../inbound/loop_breaker';
 import { runWriteKeeper } from '../../movement_engine/run_writes';
 import { makeRecorderParks } from '../../movement_engine/park_sink';
+import { runHostAnswers } from '../../movement_engine/host_answers';
+import { hostedRunHost } from '../../movement_engine/run_host';
+import { platformHostAnswers } from '../../inbound/platform_plugin_answers';
 import { postgresRunHostStore } from '../../movement_engine/run_host_store';
 import { parkSources } from 'movement-engine/public/run-host';
 import { notifyWork } from '../../work/drain';
@@ -102,6 +105,17 @@ export function productionEngineHost(input: {
           ...(input.resumedLeaf !== undefined ? { resumed: input.resumedLeaf } : {}),
         })
       : undefined;
+  // A wait's WHERE asks the answers the door asks; one parked while they are
+  // out of reach is woken again on the door's cadence.
+  const answers = runHostAnswers({
+    teamId: input.teamId,
+    ...(input.parksInto !== undefined ? { runId: input.parksInto.triggerRunId } : {}),
+    answers: platformHostAnswers,
+    queue: async (row) => {
+      await hostedRunHost().store.work.enqueue(row);
+      notifyWork();
+    },
+  });
   const usage = usageScope({ teamId: input.teamId, triggerRunId: input.triggerRunId, cancel });
   // Every call names its segment; the team it is for is the segment's.
   const segments = new SegmentDirectory();
@@ -151,14 +165,14 @@ export function productionEngineHost(input: {
     llm: {
       client: billedLlmClient(makeAnthropicLlmClient({ cancel }), usage),
       extractCall: billedExtractCallClient(makeAnthropicExtractCallClient({ cancel }), usage),
-      transforms: billedTransforms(transformInvokerFor(input.teamId), usage),
+      transforms: { ...billedTransforms(transformInvokerFor(input.teamId), usage), answer: answers.answer },
       // The judge is a model call like any other.
       arbitrateEntities: (arbitration) => usage(() => refusingPastBudget(() => meteredArbitration(arbitration))),
     },
     park: {
       ...(parks !== undefined
         ? {
-            sink: parks.sink,
+            sink: answers.noting(parks.sink),
             waits: parks.waits,
             // The library texts its parks pin, once each by their hash.
             sources: parkSources(postgresRunHostStore.sources, input.teamId),

@@ -723,11 +723,27 @@
       ],
       "effects": {},
       "output": {
-        "kind": "value",
-        "type": {
-          "kind": "maybeAbsent",
-          "of": "json"
-        }
+        "kind": "record",
+        "fields": {
+          "Id": "text",
+          "Email": {
+            "kind": "branded",
+            "of": "text",
+            "brands": [
+              "claim:email/address"
+            ]
+          },
+          "Name": "text",
+          "Level": {
+            "kind": "enum",
+            "options": [
+              "read",
+              "write",
+              "admin"
+            ]
+          }
+        },
+        "maybeAbsent": true
       },
       "pure": true,
       "maxAgeSeconds": 300,

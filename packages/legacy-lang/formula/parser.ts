@@ -1892,6 +1892,9 @@ export function inferType(expr: Expression, ctx: PropertyContext): ExprType {
       );
       return { kind: 'many', elementType };
     }
+    // A field read off a call's answer (`f(x)?.Level`) is 0.16's: no
+    // formula of the legacy pins holds one.
+    case 'field': return { kind: 'unknown' };
   }
 }
 

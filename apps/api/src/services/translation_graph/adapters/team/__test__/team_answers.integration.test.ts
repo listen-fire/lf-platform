@@ -50,15 +50,15 @@ async function link(input: { userId: UserId; phone: string; verified?: boolean }
     .execute();
 }
 
-async function invoke(plugin: string, forTeam: TeamId, claim: string): Promise<unknown> {
+async function invoke(plugin: string, forTeam: TeamId, claim: string) {
   const loaded = builtinPluginModule(plugin, { teamId: forTeam });
   if (loaded === undefined) throw new Error(`test: no module serves ${plugin}`);
-  const answered = await loaded.invoke({ name: plugin.split('/').pop() ?? plugin, config: { claim }, extractedContext: {} });
-  return answered.data?.value;
+  return loaded.invoke({ name: plugin.split('/').pop() ?? plugin, config: { claim }, extractedContext: {} });
 }
 
-const isMember = (claim: string, forTeam: TeamId = team) => invoke(IS_MEMBER, forTeam, claim);
-const userFor = (claim: string, forTeam: TeamId = team) => invoke(USER_FOR, forTeam, claim);
+/** isMember's value; userFor's record, or null for none (an answer with no `data`). */
+const isMember = async (claim: string, forTeam: TeamId = team) => (await invoke(IS_MEMBER, forTeam, claim)).data?.value;
+const userFor = async (claim: string, forTeam: TeamId = team) => (await invoke(USER_FOR, forTeam, claim)).data ?? null;
 
 beforeEach(async () => {
   team = await makeTeam('a');
