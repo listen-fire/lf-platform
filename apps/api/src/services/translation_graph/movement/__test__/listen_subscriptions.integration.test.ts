@@ -181,6 +181,55 @@ describe('subscriptions per listenable edge', () => {
     await syncListenSubscriptions({ teamId });
   });
 
+  it('keeps no 0.12 webhook for a per-scope listen upgraded off 0.15 and resolved to no record yet; one whose place came from 0.12 keeps it', async () => {
+    const scoped = await insertTestListen({ teamId, movementId, adapterType: VENDOR, edge: 'Things', delivery: 'scope', movement: 'scoped' });
+    const markedAs = (carriedFrom: Record<string, unknown>) =>
+      getAutomationsQb(['trigger'])
+        .updateTable('trigger')
+        .set({
+          config: sql`jsonb_set(jsonb_set(config, '{listen,delivery}', ${JSON.stringify({ kind: 'scope', scopedBy: 'Bases' })}::text::jsonb), '{listen,carriedFrom}', ${JSON.stringify(carriedFrom)}::text::jsonb)` as never,
+        })
+        .where('id', '=', scoped as never)
+        .execute();
+    const webhook012 = async () => {
+      const id = randomUUID();
+      await getAutomationsQb(['webhook_subscription'])
+        .insertInto('webhook_subscription')
+        .values({
+          id: id as WebhookSubscriptionId,
+          team_id: teamId,
+          provider: 'ACME_VENDOR',
+          webhook_secret: 'old',
+          external_webhook_id: `ext-0-12-${id.slice(0, 4)}`,
+          subscriptions: JSON.stringify([{ event_type: 'thing.created' }]),
+          status: 'active',
+          provisioned_by: MOVEMENT_LISTEN_PROVISIONER,
+        })
+        .execute();
+      return id;
+    };
+
+    // Upgraded off 0.15: it never heard through a 0.12 webhook, so none waits for it.
+    await markedAs({ at: new Date().toISOString(), from012: false });
+    const unneeded = await webhook012();
+    await syncListenSubscriptions({ teamId });
+    expect(vendor.removeEventSubscription).toHaveBeenCalledWith(expect.objectContaining({ callbackUrl: expect.stringContaining(unneeded) }));
+    expect((await liveRows()).map((row) => row.id)).not.toContain(unneeded);
+
+    // Its place came from 0.12: the webhook stays until its own subscription is up.
+    await markedAs({ at: new Date().toISOString(), from012: true });
+    const kept = await webhook012();
+    jest.clearAllMocks();
+    const { notes } = await syncListenSubscriptions({ teamId });
+    expect(notes).toEqual([expect.stringContaining("its 0.12 webhook stays until the upgraded listen's own subscription is up")]);
+    expect(vendor.removeEventSubscription).not.toHaveBeenCalled();
+    expect((await liveRows()).map((row) => row.id)).toContain(kept);
+
+    await getAutomationsQb(['trigger']).deleteFrom('trigger').where('id', '=', scoped as never).execute();
+    await syncListenSubscriptions({ teamId });
+    expect((await liveRows()).map((row) => row.id)).not.toContain(kept);
+  });
+
   it('removes a webhook a 0.12 settings listen registered in its own form, and never renews it', async () => {
     const legacy = randomUUID();
     await getAutomationsQb(['webhook_subscription'])

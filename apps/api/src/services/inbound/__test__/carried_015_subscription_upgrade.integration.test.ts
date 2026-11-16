@@ -242,7 +242,8 @@ describe('a narrowed push listen upgraded off 0.15 by the real upgrade (real Pos
     expect(more).toEqual([]);
     if (listen === undefined) throw new Error('test: the upgraded automation has no listen of this release');
     expect(listenEdgeKeysOf(listen, ['connection']).map(({ digest }) => digest)).toEqual([listenEdgeDigest({ ...keyed.key, version: undefined })]);
-    expect(listen.carriedFrom).toEqual({ at: expect.any(String) });
+    // Its place came from 0.15, not 0.12: no 0.12 webhook is kept for it.
+    expect(listen.carriedFrom).toEqual({ at: expect.any(String), from012: false });
 
     // The upgrade renamed the row as it committed: no sync has run.
     const rows = await subscriptionRows();
@@ -261,6 +262,49 @@ describe('a narrowed push listen upgraded off 0.15 by the real upgrade (real Pos
     expect(await subscriptionRows()).toEqual(rows);
     expect(stand.webhooks).toEqual([]);
     expect(stand.removed).toEqual([]);
+    expect(await firedFor(listen.triggerId)).toEqual(['obj-deals:rec-1:deleted']);
+  });
+
+  it('a sync running while the upgrade commits leaves the upgraded listen hearing its webhook: nothing registered or removed', async () => {
+    const carried = randomUUID() as TriggerId;
+    await getAutomationsQb(['trigger'])
+      .insertInto('trigger')
+      .values({ id: carried, team_id: teamId, name: 'movement/deals_gone/gone', kind: 'attio', config: JSON.stringify(carriedConfig(carried)), movement_id: movementId, credentials_id: attioCredential, fired_movement_name: 'gone' })
+      .execute();
+    const [carriedListen] = await carriedListens({ teamId, kinds: ['attio'] });
+    const [keyed] = carriedListen !== undefined ? carriedEdgeKeysOf(carriedListen, ['connection', 'scope']) : [];
+    if (keyed === undefined) throw new Error('test: the 0.15 listen is not read as carried, with a key');
+    const own = randomUUID();
+    await getAutomationsQb(['webhook_subscription'])
+      .insertInto('webhook_subscription')
+      .values({
+        id: own as WebhookSubscriptionId,
+        team_id: teamId,
+        provider: providerKey,
+        credentials_id: attioCredential,
+        webhook_secret: 'secret-wh-0160',
+        external_webhook_id: 'wh-0160',
+        subscriptions: JSON.stringify({ digest: keyed.digest, edge: 'Changes', filter: keyed.key.taken, version: '0.15' }),
+        status: 'active',
+        provisioned_by: MOVEMENT_LISTEN_PROVISIONER,
+      })
+      .execute();
+
+    const [upgraded] = await Promise.all([upgradeMovement({ teamId, id: movementId, acknowledge: true }), syncListenSubscriptions({ teamId })]);
+    expect(upgraded).toEqual(expect.objectContaining({ status: 'upgraded' }));
+    const [listen] = await savedListens({ teamId, movementId });
+    if (listen === undefined) throw new Error('test: the upgraded automation has no listen of this release');
+
+    // Whichever ran first, the one row is the upgraded listen's, its registration unchanged.
+    const rows = await subscriptionRows();
+    expect(rows.map((row) => row.id)).toEqual([own]);
+    expect(rows[0]).toEqual(expect.objectContaining({ status: 'active', external_webhook_id: 'wh-0160', webhook_secret: 'secret-wh-0160' }));
+    expect(edgeSubscriptionOf(rows[0]!.subscriptions)).toEqual(expect.objectContaining({ digest: listenEdgeDigest({ ...keyed.key, version: undefined }) }));
+    expect(stand.webhooks).toEqual([]);
+    expect(stand.removed).toEqual([]);
+
+    await attioPosts({ subscriptionId: own, secret: 'secret-wh-0160', recordId: 'rec-1' });
+    expect(await readingsOf()).toEqual([]);
     expect(await firedFor(listen.triggerId)).toEqual(['obj-deals:rec-1:deleted']);
   });
 });

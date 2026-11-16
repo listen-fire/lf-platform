@@ -18,6 +18,7 @@
 // owner it names on a note. A remote install is the same service either way.
 
 import { sql } from 'kysely';
+import { z } from 'zod';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
@@ -26,7 +27,7 @@ import { getAutomationsQb } from '../../../lib/kysely';
 import { triggerIdSchema } from '../../../lib/trigger_id';
 import { carriedEdgeKeysOf, carriedListens, type CarriedListen } from '../../inbound/carried_listens';
 import { listenConfigSchema, savedListens, type SavedListen } from '../../inbound/listen_door';
-import { earlierNamesOf, listenEdgeKeysOf, isPushed, namesReadBesides, pollsAloneOf, type ListenEdgeKey, type PlaceNames } from '../../inbound/listen_edge';
+import { carriedFromSchema, earlierNamesOf, listenEdgeKeysOf, isPushed, namesReadBesides, placeFrom012, pollsAloneOf, type ListenEdgeKey, type PlaceNames } from '../../inbound/listen_edge';
 import { pollSubscriptionId, takeOverEarlierPlace } from '../../poll_source/worker';
 
 /** Where one polled key of a carried listen stood. */
@@ -119,16 +120,21 @@ export function predecessorsOf(input: {
   });
 }
 
+const markedSchema = z.object({ listen: z.object({ carriedFrom: carriedFromSchema }) });
+
 /** The new row's config, noting the move. `at` records when it was last
  *  carried, so a row carried from 0.12 and then from 0.15 says the later, and
  *  the door leaves a delivery kept before it to the version that read it then
- *  (inbound/listen_door.ts). `broughtPlace`: it polls alone on the place it
+ *  (inbound/listen_door.ts); `from012` says whether its place came from 0.12
+ *  as its row already did. `broughtPlace`: it polls alone on the place it
  *  brought; otherwise it polls as its row already said. */
 export function carriedConfig(config: Record<string, unknown>, carried: { movedAt: Date; broughtPlace: boolean }): Record<string, unknown> {
   const listen = config['listen'];
   if (typeof listen !== 'object' || listen === null) return config;
   const pollsAlone = carried.broughtPlace || pollsAloneOf(config);
-  return { ...config, listen: { ...listen, carriedFrom: { at: carried.movedAt.toISOString(), ...(pollsAlone ? { pollsAlone: true } : {}) } } };
+  const before = markedSchema.safeParse(config);
+  const from012 = before.success && placeFrom012(before.data.listen.carriedFrom);
+  return { ...config, listen: { ...listen, carriedFrom: { at: carried.movedAt.toISOString(), ...(pollsAlone ? { pollsAlone: true } : {}), from012 } } };
 }
 
 /** Whether a planned row is a listen its module pushes to on some traversal. */

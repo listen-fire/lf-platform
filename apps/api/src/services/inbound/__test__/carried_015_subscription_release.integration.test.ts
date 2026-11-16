@@ -13,11 +13,17 @@
 //     gets one subscription of its own;
 //   - the step run again changes nothing.
 //
+// The release's step runs as it does in production: the deploy check queues it,
+// and the drain runs it through its handler, which tries again while a team
+// cannot be synced and gives up after its attempts.
+//
 // The one network seam is a local stand-in for Attio's API, which 0.15's
 // module reaches through the connection's stored base URL.
 
 import { createServer, type Server } from 'node:http';
 import { randomUUID } from 'node:crypto';
+
+import { Client } from 'pg';
 
 import { LANGUAGE_VERSION } from 'movement-lang';
 import { versionOf, type ListeningLane } from '@listen-fire/language-versions';
@@ -31,6 +37,7 @@ import type { WebhookSubscriptionId } from '../../../generated/kysely/automation
 
 import ExternalServiceType from '../../../generated/kysely/automations/ExternalServiceType';
 import { encryptToken } from '../../../lib/credentials';
+import { getDatabaseUrl } from '../../../prisma';
 import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
 import { cleanupTeam } from '../../../test/harness/cleanup';
 import { takenEquals, testListenConfig } from '../../../test/harness/listens';
@@ -39,13 +46,14 @@ import { drainUntilIdle, inProcessNotifier, resetWorkHandlersForTests, setWorkNo
 import { listWorkByKind, removeWork } from '../../work/store';
 import { getAdapterManifest } from '../../translation_graph/adapters/registry';
 import { builtinModuleRequestKeeping } from '../../translation_graph/adapters/builtin_modules';
+import { liveDeployCheckDeps, runDeployCheck, thisDeployCheckRelease } from '../../translation_graph/movement/language_upgrade';
 import {
   MOVEMENT_LISTEN_PROVISIONER,
+  RELEASE_SYNC_ATTEMPTS,
   edgeSubscriptionOf,
   listensOfSubscription,
-  queueListenSubscriptionSyncAfterRelease,
+  registerListenSubscriptionWork,
   syncListenSubscriptions,
-  syncListenSubscriptionsAfterRelease,
 } from '../../translation_graph/movement/listen_subscriptions';
 import { webhookProviderKey } from '../../webhook_sync/urls';
 import { capturedRequest } from '../captured_request';
@@ -182,6 +190,31 @@ async function postDeleted(subscriptionId: string, recordId: string): Promise<vo
   expect(kept.kind).toBe('read');
 }
 
+/** `body` run while another session holds `rowId` locked, let go a while
+ *  after a session first waits for it: two syncs started together that would
+ *  each rename it have both read it by then, if nothing keeps them apart. */
+async function whileRowHeld(rowId: string, body: () => Promise<unknown>): Promise<void> {
+  const holder = new Client({ connectionString: getDatabaseUrl(false).url });
+  await holder.connect();
+  try {
+    await holder.query('begin');
+    await holder.query('select id from automations.webhook_subscription where id = $1 for update', [rowId]);
+    const running = body();
+    const giveUpAt = Date.now() + 10_000;
+    for (;;) {
+      const { rows } = await holder.query<{ n: number }>("select count(*)::int as n from pg_locks where not granted and pid <> pg_backend_pid()");
+      if ((rows[0]?.n ?? 0) > 0) break;
+      if (Date.now() >= giveUpAt) throw new Error('test: no sync ever waited for the row');
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await holder.query('commit');
+    await running;
+  } finally {
+    await holder.end();
+  }
+}
+
 async function drainAll(): Promise<void> {
   for (let pass = 0; pass < 5; pass++) {
     const drained = await drainUntilIdle({ owner: 'carried-subscription-release', teamId });
@@ -189,16 +222,43 @@ async function drainAll(): Promise<void> {
   }
 }
 
+const RELEASE_SYNC_KEY = `listen_subscription_release_sync:${RELEASE}`;
+
+/** The release's sync row, done or not: absent once it ran to the end. */
+async function releaseSyncRow(): Promise<{ attempts: number; dead_at: Date | null; dead_reason: string | null } | undefined> {
+  return getAutomationsQb(['work']).selectFrom('work').where('key', '=', RELEASE_SYNC_KEY).select(['attempts', 'dead_at', 'dead_reason']).executeTakeFirst();
+}
+
+/** The deploy check of the release, over the deploy check's own wiring: its sweep
+ *  is given no automation (the database is every suite's) and records nothing,
+ *  so each call queues the release's sync again. */
+async function deployCheck(): Promise<void> {
+  const live = liveDeployCheckDeps(thisDeployCheckRelease(RELEASE));
+  expect(await runDeployCheck({ ...live, listMovements: async () => [], recordRun: async () => undefined })).not.toBeNull();
+  expect(await releaseSyncRow()).toEqual(expect.objectContaining({ dead_at: null }));
+}
+
 /** What the release does for subscriptions: the deploy check queues one sync
- *  of every team, which the api's drain runs. */
+ *  of every team, which the api's drain runs through its handler. */
 async function afterTheRelease(): Promise<void> {
-  await queueListenSubscriptionSyncAfterRelease({ release: RELEASE });
-  const [queued] = (await listWorkByKind('listen_subscription_release_sync')).filter((row) => row.key.endsWith(RELEASE));
-  if (queued === undefined) throw new Error("test: the release's sync was not queued");
-  await removeWork({ key: queued.key });
-  // Run as its handler runs it, for every team; only this team's outcome is this test's.
-  const { failed } = await syncListenSubscriptionsAfterRelease();
-  expect(failed).not.toContain(teamId);
+  await deployCheck();
+  await drainUntilIdle({ owner: 'carried-subscription-release' });
+  expect(await releaseSyncRow()).toBeUndefined();
+}
+
+/** `body` while another session holds the team's doors alone, as an upgrade
+ *  moving its listens does. */
+async function whileDoorsHeld(body: () => Promise<void>): Promise<void> {
+  const upgrade = new Client({ connectionString: getDatabaseUrl(false).url });
+  await upgrade.connect();
+  try {
+    await upgrade.query('begin');
+    await upgrade.query('select pg_advisory_xact_lock(hashtextextended($1::text, 0))', [`doors:${teamId}`]);
+    await body();
+  } finally {
+    await upgrade.query('rollback').catch(() => undefined);
+    await upgrade.end();
+  }
 }
 
 beforeAll(async () => {
@@ -216,6 +276,7 @@ beforeAll(async () => {
 
   resetWorkHandlersForTests();
   registerReadDeliveryWork();
+  registerListenSubscriptionWork();
   setWorkNotifier({ notify() {} });
 
   const manifest = getAdapterManifest('attio');
@@ -259,6 +320,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  await removeWork({ key: RELEASE_SYNC_KEY });
   for (const row of await listWorkByKind('read_delivery')) if (row.teamId === teamId) await removeWork({ key: row.key });
   for (const row of await listWorkByKind('dispatch_event')) if (row.teamId === teamId) await removeWork({ key: row.key });
   await getAutomationsQb(['webhook_subscription']).deleteFrom('webhook_subscription').where('team_id', '=', teamId).execute();
@@ -335,6 +397,56 @@ describe('a carried narrowed push listen across the release that versions its ke
     expect(await subscriptionRows()).toEqual(once);
     expect(stand.webhooks).toEqual([]);
     expect(stand.removed).toEqual([]);
+  });
+
+  it("the release's step tries again while the team cannot be synced, gives up after its attempts, and a check run again queues it afresh", async () => {
+    const carried = await insertListen(carriedMovement);
+    const { carried: key, digest } = await keysOf(carried);
+    const old = await rowAsV0153Left(key);
+    const renamed = async () => edgeSubscriptionOf((await subscriptionRows())[0]!.subscriptions)?.digest === digest;
+
+    await deployCheck();
+    await whileDoorsHeld(async () => {
+      // The team's sync cannot look at the team: the row is released for a retry.
+      await drainUntilIdle({ owner: 'carried-subscription-release' });
+      expect(await releaseSyncRow()).toEqual({ attempts: 1, dead_at: null, dead_reason: null });
+      expect(await renamed()).toBe(false);
+
+      // Its last attempt, the doors still held: it gives up, saying which team.
+      await getAutomationsQb(['work'])
+        .updateTable('work')
+        .set({ attempts: RELEASE_SYNC_ATTEMPTS - 1, due_at: new Date() })
+        .where('key', '=', RELEASE_SYNC_KEY)
+        .execute();
+      await drainUntilIdle({ owner: 'carried-subscription-release' });
+      const dead = await releaseSyncRow();
+      expect(dead).toEqual({ attempts: RELEASE_SYNC_ATTEMPTS, dead_at: expect.any(Date), dead_reason: expect.stringContaining(teamId) });
+      expect(dead?.dead_reason).toContain(RELEASE);
+    });
+
+    await afterTheRelease();
+    expect((await subscriptionRows()).map((row) => row.id)).toEqual([old]);
+    expect(await renamed()).toBe(true);
+    expect(stand.webhooks).toEqual([]);
+    expect(stand.removed).toEqual([]);
+  });
+
+  it('two syncs of the team started together take the row over once: no second webhook, nothing removed', async () => {
+    const carried = await insertListen(carriedMovement);
+    const { carried: key, digest } = await keysOf(carried);
+    const old = await rowAsV0153Left(key);
+
+    // Each would rename the row as it reads it: held, so both have read it first.
+    await whileRowHeld(old, () => Promise.all([syncListenSubscriptions({ teamId }), syncListenSubscriptions({ teamId })]));
+
+    const rows = await subscriptionRows();
+    expect(rows.map((row) => row.id)).toEqual([old]);
+    expect(edgeSubscriptionOf(rows[0]!.subscriptions)).toEqual(expect.objectContaining({ digest, version: '0.15' }));
+    expect(stand.webhooks).toEqual([]);
+    expect(stand.removed).toEqual([]);
+    await postDeleted(old, 'rec-1');
+    await drainAll();
+    expect(await receiptsOf(carried)).toEqual([{ status: 'received' }]);
   });
 
   it("on an installation v0.16.0's sync registered the carried key on, the step changes nothing", async () => {

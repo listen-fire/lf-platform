@@ -58,8 +58,17 @@ export function unnarrowed(key: Pick<ListenEdgeKey, 'taken' | 'scope'>, delivery
  *  upgrade: when, and whether it polls on the cursor it brought rather than
  *  sharing a poll. The platform keeps it, not the version, so it is read off a
  *  row whichever version plans it: the keys of a listen that polls alone name
- *  it (`alone`) whether its version is current or carried. */
-export const carriedFromSchema = z.object({ at: z.string(), pollsAlone: z.boolean().optional() });
+ *  it (`alone`) whether its version is current or carried. `from012`: whether
+ *  its place came from 0.12, by that move or an earlier one (`placeFrom012`). */
+export const carriedFromSchema = z.object({ at: z.string(), pollsAlone: z.boolean().optional(), from012: z.boolean().optional() });
+
+/** Whether a listen's place came from 0.12, so a webhook a 0.12 settings listen
+ *  registered may be all it hears through until its own subscription is up.
+ *  Every note says so from 0.16.1 on; one written before says nothing, and
+ *  each of those was written by a move off 0.12, the only move that noted one. */
+export function placeFrom012(carriedFrom: z.infer<typeof carriedFromSchema> | undefined): boolean {
+  return carriedFrom !== undefined && (carriedFrom.from012 ?? true);
+}
 
 const rowCarriedFromSchema = z.object({ listen: z.object({ carriedFrom: carriedFromSchema }) });
 

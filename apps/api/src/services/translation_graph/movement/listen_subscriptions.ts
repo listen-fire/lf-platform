@@ -31,7 +31,19 @@
 //     transaction (`takeOverEarlierSubscriptions`);
 //   - a team whose engine is lf wants no subscription at all: a cloud lf
 //     registers its own, so every one is removed, and a switch back to the
-//     platform registers them afresh (lf_engine/switch.ts runs this sync).
+//     platform registers them afresh (lf_engine/switch.ts runs this sync);
+//   - one sync of a team runs at a time (`withTeamSyncedAlone`). It looks at
+//     the team twice under the team's doors, held shared (`withDoorsHeld`):
+//     first for what its listens want and the rows, renaming each wanted one
+//     onto the row it takes over, then, once registered, again for what nothing
+//     wants now, which it retires. An upgrade holds the doors alone while it
+//     moves listens and renames rows (`takeOverEarlierSubscriptions`), so its
+//     commit falls wholly before or after each look. A provider is called only
+//     between the looks and after them, with the doors let go: the team's sync
+//     lock, which nothing but another sync of the team waits for, is all that
+//     is held then. Nothing that holds the doors (a door, a poll's keep, an
+//     upgrade) ever waits for that lock, and a sync takes it before the doors,
+//     so neither waits on the other in turn.
 //
 // Called after a save or delete has reconciled the trigger rows, so the trigger
 // table IS the desired state; the sync is per team and idempotent. Failures
@@ -41,6 +53,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { sql } from 'kysely';
+import Pg from 'pg';
 import { z } from 'zod';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
@@ -50,6 +63,7 @@ import type { AdapterManifest } from 'movement-engine/public/adapter';
 import type { WorkHandler } from '../../work/kinds';
 
 import { getAutomationsQb } from '../../../lib/kysely';
+import { getDatabaseUrl } from '../../../prisma';
 import { logger } from 'movement-engine/public/log';
 import { buildWebhookTargetUrl, webhookProviderKey } from '../../webhook_sync/urls';
 import { UNREGISTERED_SECRET } from 'movement-engine/public/inbound';
@@ -58,12 +72,14 @@ import { resolveAdapter } from '../adapters/resolve';
 import { builtinInboundSecretIssuedByProvider } from '../adapters/builtin_modules';
 import { teamAdapterManifestSet } from '../adapters/team_manifests';
 import { readTeamEngine } from '../../lf_engine/team_engine';
-import { carriedVersions, type ListeningLane, type ModulePlatform } from '@listen-fire/language-versions';
+import { carriedVersions, type CarriedVersion, type ListeningLane, type ModulePlatform } from '@listen-fire/language-versions';
 
 import { savedListens, type SavedListen } from '../../inbound/listen_door';
 import { carriedEdgeKeysOf, carriedListensContained, kindsOf, kindsPinnedTo } from '../../inbound/carried_listens';
 import { neverAsAny } from 'movement-engine/public/types';
-import { earlierNamesOf, isPushed, listenEdgeDigest, listenEdgeKeysOf, namesReadBesides, type ListenEdgeKey, type PlaceNames } from '../../inbound/listen_edge';
+import { earlierNamesOf, isPushed, listenEdgeDigest, listenEdgeKeysOf, namesReadBesides, placeFrom012, type ListenEdgeKey, type PlaceNames } from '../../inbound/listen_edge';
+import { withDoorsHeld } from '../../movement_engine/run_host_deliveries';
+import { WorkDeferred } from '../../work/deferred';
 import { WorkGivesUp, registerWorkHandler } from '../../work/drain';
 import { enqueueWork } from '../../work/store';
 import { teamIdSchema } from '../../../lib/team_id';
@@ -185,7 +201,7 @@ function carriedSubscriber(lane: ListeningLane, install: { teamId: TeamId; adapt
   };
 }
 
-interface SubscriptionRow {
+export interface SubscriptionRow {
   id: string;
   provider: string;
   credentialsId: string | null;
@@ -286,31 +302,67 @@ async function provisionedRows(teamId: TeamId): Promise<SubscriptionRow[]> {
   }));
 }
 
+/** The newer release first: `0.15.3` before `0.12.4`. */
+function newerReleaseFirst(a: CarriedVersion, b: CarriedVersion): number {
+  const parts = (version: CarriedVersion) => version.release.split('.').map(Number);
+  const [x, y] = [parts(a), parts(b)];
+  for (let at = 0; at < Math.max(x.length, y.length); at++) {
+    const by = (y[at] ?? 0) - (x[at] ?? 0);
+    if (by !== 0) return by;
+  }
+  return 0;
+}
+
 /** The names a narrowed subscription's listens were subscribed under before
  *  the version reading them changed, most recent first, each unlike its own:
  *  a carried key's, from while its version was current (`earlierNamesOf`); a
- *  current key's, under each carried version, from before its listens were
- *  upgraded off it, with that version. One to a whole connection's edge is
- *  named alike by every version, so it has none. */
+ *  current key's, under each carried version, newest first, from before its
+ *  listens were upgraded off it, with that version. One to a whole
+ *  connection's edge is named alike by every version, so it has none. */
 function earlierSubscriptionNamesOf(key: ListenEdgeKey): Array<{ digest: string; version?: string }> {
   if (key.version !== undefined) return earlierNamesOf(key).map((digest) => ({ digest }));
   if (key.taken === undefined && key.scope === undefined) return [];
   return carriedVersions()
     .filter((version) => version.provides.listen.kind === 'carried')
+    .sort(newerReleaseFirst)
     .map((version) => ({ digest: listenEdgeDigest({ ...key, version: version.key }), version: version.key }));
+}
+
+/**
+ * The row a wanted subscription with no row of its own takes over, by the one
+ * rule for a place kept under an earlier name (`namesReadBesides`): of its
+ * earlier names, newest first, the first a row on its provider holds is the
+ * place. That row is taken (moved) when no other key reads its name, as its own
+ * or as an earlier one, and no version whose listens could not be read was
+ * subscribed under it (it is not known unwanted). Otherwise none is: the row
+ * stays (copied), and this key is registered on a row of its own. An older name
+ * is never tried past the first row found.
+ */
+export function earlierRowToTake(input: {
+  subscription: Pick<DesiredSubscription, 'key' | 'providerKey'>;
+  rows: readonly SubscriptionRow[];
+  readBesides: ReadonlySet<string>;
+  carriedUnread: ReadonlySet<string>;
+}): { row: SubscriptionRow; earlier: string } | undefined {
+  for (const { digest, version } of earlierSubscriptionNamesOf(input.subscription.key)) {
+    const row = input.rows.find((candidate) => candidate.held?.digest === digest && candidate.provider === input.subscription.providerKey);
+    if (row === undefined) continue;
+    const readElsewhere = input.readBesides.has(digest) || (version !== undefined && input.carriedUnread.has(version));
+    return readElsewhere ? undefined : { row, earlier: digest };
+  }
+  return undefined;
 }
 
 /**
  * Each wanted subscription with no row of its own takes over the row its
  * listens were subscribed under by an earlier name (a release that versioned
- * its key, or an upgrade that unversioned it), when no other subscription reads
- * that name, as its own or as an earlier one (`namesReadBesides`, the rule a
- * carried poll's cursor is taken over by, poll_source/worker.ts): the row is
- * renamed, so the webhook the source already posts to is this key's, its
- * registration unchanged. When one does, the row stays, and this key is
- * registered on a row of its own. A name a version whose listens could not be
- * read was subscribed under is not known unwanted, so it is never taken.
- * Answers the rows as they now stand.
+ * its key, or an upgrade that unversioned it), as `earlierRowToTake` says: the
+ * row is renamed, so the webhook the source already posts to is this key's,
+ * its registration unchanged. Answers the rows as they now stand.
+ *
+ * Called under the team's doors, held shared by a sync (which also holds the
+ * team's sync lock) or alone by an upgrade, so nothing else renames or retires
+ * a row between the read and the rename.
  */
 async function takeOverEarlierRows(input: {
   desired: readonly DesiredSubscription[];
@@ -319,31 +371,79 @@ async function takeOverEarlierRows(input: {
 }): Promise<SubscriptionRow[]> {
   const named = input.desired.map((subscription): PlaceNames => ({ own: subscription.held.digest, earlier: earlierSubscriptionNamesOf(subscription.key).map(({ digest }) => digest) }));
   const rows = [...input.existing];
-  const onRow = (digest: string, providerKey: string) => rows.findIndex((row) => row.held?.digest === digest && row.provider === providerKey);
   for (const subscription of input.desired) {
-    if (onRow(subscription.held.digest, subscription.providerKey) !== -1) continue;
+    if (rowOf(rows, subscription) !== undefined) continue;
     const readBesides = namesReadBesides({ taker: subscription.held.digest, keys: named });
-    for (const { digest: earlier, version } of earlierSubscriptionNamesOf(subscription.key)) {
-      if (readBesides.has(earlier) || (version !== undefined && input.carriedUnread.has(version))) continue;
-      const at = onRow(earlier, subscription.providerKey);
-      const row = rows[at];
-      if (row === undefined) continue;
-      // Renamed only while it still holds the earlier name: a sync running
-      // beside this one may have taken it over or retired it.
-      const renamed = await getAutomationsQb(['webhook_subscription'])
-        .updateTable('webhook_subscription')
-        .set({ subscriptions: JSON.stringify(subscription.held), updated_at: new Date() })
-        .where('id', '=', row.id as WebhookSubscriptionId)
-        .where('deleted_at', 'is', null)
-        .where(sql<string>`subscriptions->>'digest'`, '=', earlier)
-        .executeTakeFirst();
-      if (renamed.numUpdatedRows === BigInt(0)) continue;
-      logger.info('[ListenSubscriptions] a subscription took over the row of its earlier name', { teamId: subscription.key.teamId, row: row.id, from: earlier, to: subscription.held.digest });
-      rows[at] = { ...row, held: subscription.held };
-      break;
+    const taken = earlierRowToTake({ subscription, rows, readBesides, carriedUnread: input.carriedUnread });
+    if (taken === undefined) continue;
+    const renamed = await getAutomationsQb(['webhook_subscription'])
+      .updateTable('webhook_subscription')
+      .set({ subscriptions: JSON.stringify(subscription.held), updated_at: new Date() })
+      .where('id', '=', taken.row.id as WebhookSubscriptionId)
+      .where('deleted_at', 'is', null)
+      .where(sql<string>`subscriptions->>'digest'`, '=', taken.earlier)
+      .executeTakeFirst();
+    // The locks above leave no way for the row to have changed since it was
+    // read: carrying on from a stale read is how two webhooks came to post one event.
+    if (renamed.numUpdatedRows === BigInt(0)) {
+      throw new Error(`the subscription row ${taken.row.id} no longer holds ${taken.earlier}, though nothing else may change it while the team's doors are held`);
     }
+    logger.info('[ListenSubscriptions] a subscription took over the row of its earlier name', { teamId: subscription.key.teamId, row: taken.row.id, from: taken.earlier, to: subscription.held.digest });
+    rows[rows.indexOf(taken.row)] = { ...taken.row, held: subscription.held };
   }
   return rows;
+}
+
+/** The row holding `subscription`, if any. */
+function rowOf(rows: readonly SubscriptionRow[], subscription: Pick<DesiredSubscription, 'held' | 'providerKey'>): SubscriptionRow | undefined {
+  return rows.find((row) => row.held?.digest === subscription.held.digest && row.provider === subscription.providerKey);
+}
+
+/** The team as one look under its doors sees it: what its listens want, and its
+ *  rows, each wanted subscription renamed onto the row it takes over. */
+interface TeamLook {
+  desired: DesiredSubscription[];
+  carriedUnread: ReadonlySet<string>;
+  rows: SubscriptionRow[];
+}
+
+/** One look at the team. Its caller holds the team's doors. */
+async function lookAtTeam(input: {
+  teamId: TeamId;
+  manifestBySlug: ReadonlyMap<string, AdapterManifest>;
+  remoteDegraded: boolean;
+  lfEngined: boolean;
+  account: SyncAccount;
+}): Promise<TeamLook> {
+  const { desired, carriedUnread } = input.lfEngined ? { desired: [], carriedUnread: new Set<string>() } : await desiredSubscriptions(input);
+  const rows = await takeOverEarlierRows({ desired, existing: await provisionedRows(input.teamId), carriedUnread });
+  return { desired, carriedUnread, rows };
+}
+
+/** The live row holding `subscription`, else one minted for it, pending. Its
+ *  caller holds the team's doors: an upgrade that committed since the sync
+ *  looked may have renamed a row onto this name, and a second row for it would
+ *  be a second webhook posting each event. */
+async function rowFoundOrMinted(input: { teamId: TeamId; subscription: DesiredSubscription }): Promise<SubscriptionRow> {
+  const { providerKey, key, held } = input.subscription;
+  const found = rowOf(await provisionedRows(input.teamId), input.subscription);
+  if (found !== undefined) return found;
+  // The row is minted first: its id is the stable URL the source posts to.
+  const id = randomUUID();
+  await getAutomationsQb(['webhook_subscription'])
+    .insertInto('webhook_subscription')
+    .values({
+      id: id as WebhookSubscriptionId,
+      team_id: input.teamId,
+      provider: providerKey,
+      credentials_id: key.credentialsId as ExternalServiceCredentialsId | null,
+      webhook_secret: UNREGISTERED_SECRET,
+      subscriptions: JSON.stringify(held),
+      status: 'pending',
+      provisioned_by: MOVEMENT_LISTEN_PROVISIONER,
+    })
+    .execute();
+  return { id, provider: providerKey, credentialsId: key.credentialsId, externalWebhookId: null, secret: UNREGISTERED_SECRET, held, legacyScope: {}, status: 'pending' };
 }
 
 const NO_SECRET_REFUSAL = 'remote adapter returned no secret; deliveries cannot be verified';
@@ -405,11 +505,10 @@ async function ensureSubscription(input: {
 }): Promise<void> {
   const { teamId, subscription, remote, account } = input;
   const { slug, providerKey, key, held } = subscription;
-  const settled = input.row !== undefined && input.row.status === 'active';
   // A remote is asked again on every sync even when nothing changed here: its
   // subscription lives in somebody else's system, which may have lost it. A
   // built-in's registration is trusted until it changes.
-  if (settled && !remote) return;
+  if (input.row?.status === 'active' && !remote) return;
   const adapter: Subscriber =
     subscription.lane !== undefined
       ? carriedSubscriber(subscription.lane, { teamId, adapterType: slug, credentialsId: key.credentialsId, ...(key.constructionArgs !== undefined ? { constructionArgs: key.constructionArgs } : {}) })
@@ -423,25 +522,9 @@ async function ensureSubscription(input: {
     noteUnregistered(account, held.digest, `${slug}: its manifest declares ensureEventSubscription but the adapter does not answer it, so ${key.edge} receives nothing`);
     return;
   }
-  let row = input.row;
-  if (row === undefined) {
-    // The row is minted first: its id is the stable URL the source posts to.
-    const id = randomUUID();
-    await getAutomationsQb(['webhook_subscription'])
-      .insertInto('webhook_subscription')
-      .values({
-        id: id as WebhookSubscriptionId,
-        team_id: teamId,
-        provider: providerKey,
-        credentials_id: key.credentialsId as ExternalServiceCredentialsId | null,
-        webhook_secret: UNREGISTERED_SECRET,
-        subscriptions: JSON.stringify(held),
-        status: 'pending',
-        provisioned_by: MOVEMENT_LISTEN_PROVISIONER,
-      })
-      .execute();
-    row = { id, provider: providerKey, credentialsId: key.credentialsId, externalWebhookId: null, secret: UNREGISTERED_SECRET, held, legacyScope: {}, status: 'pending' };
-  }
+  const row = input.row ?? (await withDoorsHeld(teamId, () => rowFoundOrMinted({ teamId, subscription })));
+  const settled = row.status === 'active';
+  if (settled && !remote) return;
   const callbackUrl = buildWebhookTargetUrl(providerKey, row.id);
   const registration = await adapter.ensureEventSubscription({
     edge: held.edge,
@@ -473,14 +556,16 @@ async function ensureSubscription(input: {
 }
 
 /**
- * Which 0.12 webhooks a listen an upgrade moved still hears through: its own
- * subscription is not registered yet (the source refused, or the listen has not
- * been resolved to its scope). A delivery at such a webhook is judged by every
- * current listen on the module, so withdrawing it would lose what arrives until
- * the retry succeeds. Keeping it costs nothing: a listen hears an arrival once.
+ * Which 0.12 webhooks a listen whose place came from 0.12 still hears through:
+ * its own subscription is not registered yet (the source refused, or the listen
+ * has not been resolved to its scope). A delivery at such a webhook is judged by
+ * every current listen on the module, so withdrawing it would lose what arrives
+ * until the retry succeeds. Keeping it costs nothing: a listen hears an arrival
+ * once. A listen upgraded off a later version never heard through one, so it
+ * keeps none (`placeFrom012`).
  */
 async function webhooksStillCarryingMoved(input: { teamId: TeamId; manifestBySlug: ReadonlyMap<string, AdapterManifest> }): Promise<(row: SubscriptionRow) => boolean> {
-  const moved = (await savedListens({ teamId: input.teamId })).filter((listen) => listen.carriedFrom !== undefined);
+  const moved = (await savedListens({ teamId: input.teamId })).filter((listen) => placeFrom012(listen.carriedFrom));
   if (moved.length === 0) return () => false;
   const up = new Set((await provisionedRows(input.teamId)).flatMap((row) => (row.held !== null && row.status === 'active' ? [row.held.digest] : [])));
   const waiting: Array<{ provider: string; credentialsId: string | null }> = [];
@@ -530,52 +615,130 @@ export async function takeOverEarlierSubscriptions(input: { teamId: TeamId }): P
   const account: SyncAccount = { notes: [], unregistered: [] };
   const { manifests, remoteDegraded } = await teamAdapterManifestSet(input.teamId, account.notes);
   const manifestBySlug = new Map(manifests.map((m) => [m.adapterType, m]));
-  const { desired, carriedUnread } = await desiredSubscriptions({ teamId: input.teamId, manifestBySlug, remoteDegraded, account });
-  await takeOverEarlierRows({ desired, existing: await provisionedRows(input.teamId), carriedUnread });
+  // The upgrade holds the team's doors alone, so this look needs no hold of its own.
+  await lookAtTeam({ teamId: input.teamId, manifestBySlug, remoteDegraded, lfEngined: false, account });
+}
+
+/** How long a sync waits for the sync of the team before it. A sync takes
+ *  seconds, so a longer wait is one stuck at a provider: this one is deferred,
+ *  and its caller's work row tries again later. */
+const SYNC_WAIT_MS = 60_000;
+
+const LOCK_NOT_AVAILABLE = '55P03';
+
+/** A sync that could not have its turn on the team: it did nothing. Deferred
+ *  in a work row, which spends no attempt on it. */
+export class TeamSyncBusy extends WorkDeferred {
+  constructor(teamId: TeamId, options: { cause: unknown }) {
+    super(`another sync of team ${teamId}'s subscriptions ran for over ${SYNC_WAIT_MS / 1000} s, so this one did nothing; it is tried again`);
+    this.name = 'TeamSyncBusy';
+    this.cause = options.cause;
+  }
+}
+
+/**
+ * `body` as the team's only sync: two at once would each read the rows before
+ * the other renamed them, register a second webhook, and remove the one in use.
+ * The team's sync lock is held across the provider calls on a connection of its
+ * own, outside any transaction and every pool, and only another sync of the
+ * team ever waits for it (header). The connection ending lets it go.
+ */
+async function withTeamSyncedAlone<T>(teamId: TeamId, body: () => Promise<T>): Promise<T> {
+  const lock = new Pg.Client({ connectionString: getDatabaseUrl(false).url, application_name: 'lf-subscription-sync-lock' });
+  // An unheard `error` ends the process. A lost connection lets the lock go
+  // with it; the next sync's wait is all that notices.
+  lock.on('error', (error) => logger.warn("[ListenSubscriptions] the connection holding a team's sync lock failed", { teamId, cause: error.message }));
+  await lock.connect();
+  try {
+    await lock.query("select set_config('lock_timeout', $1, false)", [`${SYNC_WAIT_MS}ms`]);
+    try {
+      await lock.query('select pg_advisory_lock(hashtextextended($1::text, 0))', [`listen-subscriptions:${teamId}`]);
+    } catch (cause) {
+      if (cause instanceof Error && 'code' in cause && cause.code === LOCK_NOT_AVAILABLE) throw new TeamSyncBusy(teamId, { cause });
+      throw cause;
+    }
+    return await body();
+  } finally {
+    await lock.end().catch(() => undefined);
+  }
 }
 
 /**
  * Bring the team's subscriptions in line with its listens. Idempotent; every
- * failure is contained per subscription and surfaced as a note.
+ * failure is contained per subscription and surfaced as a note. One sync of a
+ * team at a time (`withTeamSyncedAlone`).
  */
 export async function syncListenSubscriptions(input: { teamId: TeamId }): Promise<SyncAccount> {
-  const account: SyncAccount = { notes: [], unregistered: [] };
-  const { notes } = account;
-  const { manifests, remoteSlugs, remoteDegraded } = await teamAdapterManifestSet(input.teamId, notes);
-  const manifestBySlug = new Map(manifests.map((m) => [m.adapterType, m]));
-  // A remote install's provider key is not a registry alias, so teardown maps
-  // a row's key back to its slug through the same rule that minted it.
-  const slugByProviderKey = new Map(manifests.map((m) => [webhookProviderKey(m), m.adapterType]));
-  // Read fresh, not through dispatch's copy: this runs right after a switch.
-  const lfEngined = (await readTeamEngine(input.teamId)).engine === 'lf';
-  const { desired, carriedUnread } = lfEngined ? { desired: [], carriedUnread: new Set<string>() } : await desiredSubscriptions({ teamId: input.teamId, manifestBySlug, remoteDegraded, account });
-  const existing = await takeOverEarlierRows({ desired, existing: await provisionedRows(input.teamId), carriedUnread });
-  const rowOf = (subscription: DesiredSubscription) =>
-    existing.find((row) => row.held?.digest === subscription.held.digest && row.provider === subscription.providerKey);
+  return withTeamSyncedAlone(input.teamId, () => syncAlone(input.teamId));
+}
 
-  for (const subscription of desired) {
+async function syncAlone(teamId: TeamId): Promise<SyncAccount> {
+  const account: SyncAccount = { notes: [], unregistered: [] };
+  const { manifests, remoteSlugs, remoteDegraded } = await teamAdapterManifestSet(teamId, account.notes);
+  const manifestBySlug = new Map(manifests.map((m) => [m.adapterType, m]));
+  // Read fresh, not through dispatch's copy: this runs right after a switch.
+  const lfEngined = (await readTeamEngine(teamId)).engine === 'lf';
+  const looking = { teamId, manifestBySlug, remoteDegraded, lfEngined };
+
+  const wanted = await withDoorsHeld(teamId, () => lookAtTeam({ ...looking, account }));
+  for (const subscription of wanted.desired) {
     try {
-      await ensureSubscription({ teamId: input.teamId, subscription, row: rowOf(subscription), remote: remoteSlugs.has(subscription.slug), account });
+      await ensureSubscription({ teamId, subscription, row: rowOf(wanted.rows, subscription), remote: remoteSlugs.has(subscription.slug), account });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      logger.error('[ListenSubscriptions] ensure failed', { teamId: input.teamId, adapter: subscription.slug, edge: subscription.key.edge, error: message });
+      logger.error('[ListenSubscriptions] ensure failed', { teamId, adapter: subscription.slug, edge: subscription.key.edge, error: message });
       noteUnregistered(account, subscription.held.digest, `${subscription.slug}: subscribing for ${subscription.key.edge} failed (${message})`);
     }
   }
 
-  const stillCarrying = lfEngined ? () => false : await webhooksStillCarryingMoved({ teamId: input.teamId, manifestBySlug });
-  const unreadKinds = await kindsPinnedTo({ teamId: input.teamId, versions: carriedUnread });
+  // Looked at again: registering took a while, and an upgrade may have moved
+  // listens and renamed rows since. A row is retired before it is removed at the
+  // source, so no upgrade can take over a row this sync is removing.
+  const retired = await withDoorsHeld(teamId, () => retireUnwanted({ ...looking, manifests, account }));
+  for (const { row, slug } of retired) {
+    try {
+      const adapter = await subscriberOfRow({ teamId, slug, row });
+      await adapter.removeEventSubscription?.(removalOf(row, buildWebhookTargetUrl(row.provider, row.id)));
+    } catch (err) {
+      // A source-side webhook left behind posts at a row that no longer
+      // verifies, and is removable by hand.
+      account.notes.push(`${slug}: removing its subscription at the source failed (${err instanceof Error ? err.message : String(err)}); retired here`);
+    }
+  }
+  return account;
+}
 
-  for (const row of existing) {
-    if (desired.some((subscription) => rowOf(subscription) === row)) continue;
+/** Retires each row nothing wants now, and answers them with the module that
+ *  removes each at the source. Its caller holds the team's doors. */
+async function retireUnwanted(input: {
+  teamId: TeamId;
+  manifests: readonly AdapterManifest[];
+  manifestBySlug: ReadonlyMap<string, AdapterManifest>;
+  remoteDegraded: boolean;
+  lfEngined: boolean;
+  account: SyncAccount;
+}): Promise<Array<{ row: SubscriptionRow; slug: string }>> {
+  const { teamId } = input;
+  const { notes } = input.account;
+  // What this look would note, the first said already.
+  const now = await lookAtTeam({ ...input, account: { notes: [], unregistered: [] } });
+  // A remote install's provider key is not a registry alias, so teardown maps
+  // a row's key back to its slug through the same rule that minted it.
+  const slugByProviderKey = new Map(input.manifests.map((m) => [webhookProviderKey(m), m.adapterType]));
+  const stillCarrying = input.lfEngined ? () => false : await webhooksStillCarryingMoved({ teamId, manifestBySlug: input.manifestBySlug });
+  const unreadKinds = await kindsPinnedTo({ teamId, versions: now.carriedUnread });
+
+  const retired: Array<{ row: SubscriptionRow; slug: string }> = [];
+  for (const row of now.rows) {
+    if (now.desired.some((subscription) => rowOf(now.rows, subscription) === row)) continue;
     const slug = slugByProviderKey.get(row.provider) ?? resolveAdapterSlug(row.provider);
     // Nor is one of a version whose listens could not be read: it is not known unwanted.
-    if (row.held?.version !== undefined && carriedUnread.has(row.held.version)) continue;
+    if (row.held?.version !== undefined && now.carriedUnread.has(row.held.version)) continue;
     // Nor is one no version is recorded on (this release registered it, or it
     // is a 0.12 webhook) on a module such a version has listens on: it may be
     // the one subscription both versions share.
     if (row.held?.version === undefined && kindsOf({ adapterType: slug, providerKey: row.provider }).some((kind) => unreadKinds.has(kind))) {
-      notes.push(`${row.provider}: its subscription stays while the listens of ${[...carriedUnread].join(', ')} on it cannot be read`);
+      notes.push(`${row.provider}: its subscription stays while the listens of ${[...now.carriedUnread].join(', ')} on it cannot be read`);
       continue;
     }
     // Nor is the one a moved listen still hears through, until its own is up.
@@ -585,26 +748,18 @@ export async function syncListenSubscriptions(input: { teamId: TeamId }): Promis
     }
     // With the remote installs only partly read, a row no built-in owns may be
     // a live remote subscription whose manifest simply went unread: keep it.
-    if (remoteDegraded && !hasAdapter(resolveAdapterSlug(row.provider))) {
+    if (input.remoteDegraded && !hasAdapter(resolveAdapterSlug(row.provider))) {
       notes.push(`${row.provider}: remote installs could not all be read, so its subscription is left in place`);
       continue;
-    }
-    try {
-      const adapter = await subscriberOfRow({ teamId: input.teamId, slug, row });
-      await adapter.removeEventSubscription?.(removalOf(row, buildWebhookTargetUrl(row.provider, row.id)));
-    } catch (err) {
-      // Retired here regardless: a source-side webhook left behind posts at a
-      // row that no longer verifies, and is removable by hand.
-      notes.push(`${slug}: removing its subscription at the source failed (${err instanceof Error ? err.message : String(err)}); retired here`);
     }
     await getAutomationsQb(['webhook_subscription'])
       .updateTable('webhook_subscription')
       .set({ deleted_at: new Date(), status: 'disabled', updated_at: new Date() })
       .where('id', '=', row.id as WebhookSubscriptionId)
       .execute();
+    retired.push({ row, slug });
   }
-
-  return account;
+  return retired;
 }
 
 /** Each team with a provisioned row still pending, or holding a 0.12 webhook,
@@ -619,8 +774,13 @@ export async function retryListenSubscriptions(): Promise<{ teams: number }> {
     .execute();
   const teams = new Set(rows.filter((row) => row.status === 'pending' || edgeSubscriptionOf(row.subscriptions) === null).map((row) => row.team_id as TeamId));
   for (const teamId of teams) {
-    const { notes } = await syncListenSubscriptions({ teamId });
-    if (notes.length > 0) logger.warn('[ListenSubscriptions] a retry left notes', { teamId, notes });
+    try {
+      const { notes } = await syncListenSubscriptions({ teamId });
+      if (notes.length > 0) logger.warn('[ListenSubscriptions] a retry left notes', { teamId, notes });
+    } catch (err) {
+      // The next period's retry asks again; the other teams go on.
+      logger.warn("[ListenSubscriptions] a retry of a team's subscriptions failed", { teamId, error: err instanceof Error ? err.message : String(err) });
+    }
   }
   return { teams: teams.size };
 }

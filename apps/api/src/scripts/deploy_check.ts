@@ -12,12 +12,15 @@
  * every team's listen subscriptions, which the api runs once it is up
  * (services/translation_graph/movement/listen_subscriptions.ts).
  *
- * It fails the deployment in one case only: a run parked on a version this
+ * It fails the deployment in two cases only. A run parked on a version this
  * release does not run (a legacy id, or 0.12, whose engine it dropped), which
- * nothing here can continue. It is named, and the deployment stops until it is
- * answered or cancelled on the release that parked it. Otherwise a check that
- * cannot finish logs why and exits 0, because it changes no pin, while a failed
- * one-shot would keep the api from starting.
+ * nothing here can continue: it is named, and the deployment stops until it is
+ * answered or cancelled on the release that parked it. And the release's sync
+ * of listen subscriptions not queued: until it runs, a carried push listen whose
+ * subscription the release renames hears nothing, and nothing says so, while
+ * running the check again queues it. Otherwise a check that cannot finish logs
+ * why and exits 0, because it changes no pin, while a failed one-shot would keep
+ * the api from starting.
  *
  * Usage:
  *   node build/scripts/deploy_check.js             # run the check
@@ -33,6 +36,7 @@ import {
   DEPLOY_CHECK_OUTCOMES,
   latestDeployCheckSummary,
   liveDeployCheckDeps,
+  ReleaseSyncNotQueued,
   runDeployCheck,
   thisDeployCheckRelease,
   type DeployCheckOutcome,
@@ -142,7 +146,8 @@ async function runCheck(): Promise<void> {
 }
 
 /** The exit code the one-shot ends with: 1 only while a run is parked on a
- *  version this release does not run. */
+ *  version this release does not run, or when the release's sync of listen
+ *  subscriptions could not be queued. */
 export async function deployCheckMain(): Promise<number> {
   if (process.argv.includes('--summary')) {
     await printSummary();
@@ -158,6 +163,13 @@ export async function deployCheckMain(): Promise<number> {
   try {
     await runCheck();
   } catch (err) {
+    if (err instanceof ReleaseSyncNotQueued) {
+      logger.error(
+        "[DeployCheck] the release's sync of listen subscriptions was not queued, so a carried push listen whose subscription this release renames would hear nothing until a save: the deployment stops. Run the check again (node build/scripts/deploy_check.js), which queues it and sweeps",
+        { error: err.message },
+      );
+      return 1;
+    }
     logger.error('[DeployCheck] the check could not finish — it moves no pin, so nothing changed', {
       error: err instanceof Error ? (err.stack ?? err.message) : String(err),
     });

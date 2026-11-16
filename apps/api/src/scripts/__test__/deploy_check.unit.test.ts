@@ -1,15 +1,19 @@
 // The summary `deploy/up.sh` prints: outcomes by automation name.
 
 jest.mock('../../services', () => ({}));
+jest.mock('../../products', () => ({ mounts: () => true }));
+jest.mock('../../services/translation_graph/movement/dropped_pins', () => ({ droppedPins: jest.fn(async () => ({ automations: [], parkedRuns: [] })) }));
 jest.mock('../../services/translation_graph/movement/language_upgrade', () => ({
   DEPLOY_CHECK_OUTCOMES: ['upgradable', 'current', 'warned', 'refused', 'unverified'],
   latestDeployCheckSummary: jest.fn(),
   liveDeployCheckDeps: jest.fn(),
+  ReleaseSyncNotQueued: class ReleaseSyncNotQueued extends Error {},
   runDeployCheck: jest.fn(),
   thisDeployCheckRelease: jest.fn(),
 }));
 
-import { renderSummary } from '../deploy_check';
+import { ReleaseSyncNotQueued, runDeployCheck } from '../../services/translation_graph/movement/language_upgrade';
+import { deployCheckMain, renderSummary } from '../deploy_check';
 
 const LEGACY = { version: '4', name: '4' };
 const INSTALLED = { version: '0.12.0', name: '0.12.0' };
@@ -52,5 +56,17 @@ describe('renderSummary', () => {
 
     expect(text).toContain('run-1. Cancel them, then upgrade the automation');
     expect(text).not.toMatch(/before deploying|on 0\.12\.13/);
+  });
+});
+
+describe('deployCheckMain', () => {
+  it("stops the deployment when the release's sync of listen subscriptions could not be queued", async () => {
+    jest.mocked(runDeployCheck).mockRejectedValueOnce(new ReleaseSyncNotQueued({ cause: new Error('the database refused the write') }));
+    expect(await deployCheckMain()).toBe(1);
+  });
+
+  it('lets the deployment go ahead when the sweep cannot finish for another reason: it moves no pin', async () => {
+    jest.mocked(runDeployCheck).mockRejectedValueOnce(new Error('a movement could not be listed'));
+    expect(await deployCheckMain()).toBe(0);
   });
 });

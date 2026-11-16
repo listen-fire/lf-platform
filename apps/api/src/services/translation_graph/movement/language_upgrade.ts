@@ -439,10 +439,24 @@ export interface DeployCheckDeps {
   now(): Date;
 }
 
+/** The release's sync of listen subscriptions could not be queued, so nothing
+ *  renames the subscription of a carried listen whose key the release renamed
+ *  until someone saves, and what its webhook posts meanwhile is heard by no
+ *  listen. Thrown before the sweep: run again, the check queues it, as this run
+ *  recorded nothing. */
+export class ReleaseSyncNotQueued extends Error {
+  constructor(options: { cause: unknown }) {
+    super(`the release's sync of listen subscriptions could not be queued (${options.cause instanceof Error ? options.cause.message : String(options.cause)})`);
+    this.name = 'ReleaseSyncNotQueued';
+    this.cause = options.cause;
+  }
+}
+
 /**
  * Sweep every saved movement once for this release. Returns null when this
  * release was already swept. Never throws for one movement's sake: a movement
- * the check cannot finish is `unverified`, and the sweep goes on.
+ * the check cannot finish is `unverified`, and the sweep goes on. Throws
+ * `ReleaseSyncNotQueued` when the release's sync could not be queued.
  */
 export async function runDeployCheck(deps: DeployCheckDeps): Promise<DeployCheckSummary | null> {
   const { release } = deps;
@@ -450,7 +464,11 @@ export async function runDeployCheck(deps: DeployCheckDeps): Promise<DeployCheck
   if (await deps.alreadyRan({ tag: release.tag, languageRelease })) return null;
   // Before the sweep, so a check that cannot finish still leaves it queued; a
   // second check of the release queues it again only if this one recorded nothing.
-  await deps.queueSubscriptionSync({ tag: release.tag });
+  try {
+    await deps.queueSubscriptionSync({ tag: release.tag });
+  } catch (cause) {
+    throw new ReleaseSyncNotQueued({ cause });
+  }
 
   const at = deps.now().toISOString();
   const current = release.language.current;
