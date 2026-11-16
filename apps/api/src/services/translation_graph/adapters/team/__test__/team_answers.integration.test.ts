@@ -112,6 +112,16 @@ describe('team.isMember over the platform’s tables', () => {
     expect(await isMember(droppedEmail)).toBe(false);
   });
 
+  it('an_email_without_granted_access_is_not', async () => {
+    const email = `ora-${suffix()}@acme.test`;
+    const userId = await member({ in: team, email });
+    expect(await isMember(email)).toBe(true);
+
+    await getCoreQb(['user']).updateTable('user').set({ granted_access_at: null }).where('id', '=', userId).execute();
+    expect(await isMember(email)).toBe(false);
+    expect(await userFor(email)).toBeNull();
+  });
+
   it('a_phone_without_granted_access_is_not', async () => {
     const phone = `+4477009${Math.floor(10000 + Math.random() * 89999)}`;
     const userId = await member({ in: team, email: `eve-${suffix()}@acme.test` });
@@ -245,6 +255,18 @@ describe('the answers kept for team.isMember', () => {
     expect(await answer()).toMatchObject({ value: true });
 
     await getCoreQb(['user']).updateTable('user').set({ granted_access_at: null }).where('id', '=', nat).execute();
+
+    expect(await until(answer, (a) => 'value' in a && a.value === false)).toMatchObject({ value: false });
+  });
+
+  it('forgets an email’s answer when its access is revoked', async () => {
+    const email = `pam-${suffix()}@acme.test`;
+    const pam = await member({ in: team, email });
+    await settled();
+    const { answer } = questionFor(email);
+    expect(await answer()).toMatchObject({ value: true });
+
+    await getCoreQb(['user']).updateTable('user').set({ granted_access_at: null }).where('id', '=', pam).execute();
 
     expect(await until(answer, (a) => 'value' in a && a.value === false)).toMatchObject({ value: false });
   });

@@ -9,7 +9,7 @@ import { PluginAnswerCache, type PluginAnswer } from '../plugin_answers';
 const MEMBER: PluginQuestion = { plugin: '@lf-platform/team/is_member', args: ['ada@example.com'] };
 const OTHER: PluginQuestion = { plugin: '@lf-platform/team/is_member', args: ['bob@example.com'] };
 
-function cacheWith(options: { maxAgeSeconds?: number | undefined; now?: () => number; ready?: () => Promise<void> } = {}) {
+function cacheWith(options: { maxAgeSeconds?: number | undefined; now?: () => number; ready?: () => Promise<void>; maxKeptPerTeam?: number } = {}) {
   const { maxAgeSeconds, ...rest } = options;
   const age = 'maxAgeSeconds' in options ? maxAgeSeconds : 300;
   return new PluginAnswerCache({ maxAgeSeconds: () => age, ...rest });
@@ -181,5 +181,53 @@ describe('the platform answer cache', () => {
     };
     await expect(cache.answers('team-1', [MEMBER], ask)).rejects.toThrow('boom');
     expect(await cache.answers('team-1', [MEMBER], ask)).toEqual([{ ...MEMBER, value: true }]);
+  });
+
+  describe('what a team may hold', () => {
+    const claim = (n: number): PluginQuestion => ({ plugin: MEMBER.plugin, args: [`sender-${n}@example.com`] });
+
+    it('sweeps the team’s aged answers when a new one is kept', async () => {
+      let clock = 0;
+      const cache = cacheWith({ now: () => clock, maxAgeSeconds: 10 });
+      const host = counting();
+      await cache.answers('team-1', [claim(1), claim(2)], host.ask);
+      clock = 11_000;
+      await cache.answers('team-1', [claim(3)], host.ask);
+      expect(cache.keptCount('team-1')).toBe(1);
+    });
+
+    it('does not sweep answers that have not aged out', async () => {
+      let clock = 0;
+      const cache = cacheWith({ now: () => clock, maxAgeSeconds: 10 });
+      const host = counting();
+      await cache.answers('team-1', [claim(1)], host.ask);
+      clock = 5_000;
+      await cache.answers('team-1', [claim(2)], host.ask);
+      expect(cache.keptCount('team-1')).toBe(2);
+    });
+
+    it('caps a team’s answers, dropping the oldest first', async () => {
+      let clock = 0;
+      const cache = cacheWith({ now: () => clock, maxKeptPerTeam: 3 });
+      const host = counting();
+      for (let n = 1; n <= 4; n++) {
+        clock += 1;
+        await cache.answers('team-1', [claim(n)], host.ask);
+      }
+      expect(cache.keptCount('team-1')).toBe(3);
+      host.asked.length = 0;
+      await cache.answers('team-1', [claim(4), claim(3), claim(2)], host.ask);
+      expect(host.asked).toHaveLength(0);
+      await cache.answers('team-1', [claim(1)], host.ask);
+      expect(host.asked).toHaveLength(1);
+    });
+
+    it('does not let one team’s claims evict another’s', async () => {
+      const cache = cacheWith({ maxKeptPerTeam: 2 });
+      const host = counting();
+      await cache.answers('team-2', [claim(1)], host.ask);
+      for (let n = 1; n <= 5; n++) await cache.answers('team-1', [claim(n)], host.ask);
+      expect(cache.keptCount('team-2')).toBe(1);
+    });
   });
 });

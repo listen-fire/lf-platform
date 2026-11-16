@@ -5,13 +5,13 @@
 // Email matches as the platform's inbound has always matched a sender: the
 // exact address on a non service `user_email`, else the address without its
 // `+tag` on a row that accepts plus addressing. Phone matches the number of a
-// verified link, for a user who has been granted access (the grant is the
-// boundary an invited or revoked user must not cross).
+// verified link. Either way the user must have been granted access (the grant
+// is the boundary an invited or revoked user must not cross), so a claim never
+// reaches a member whose access was revoked.
 //
 // Two queries rather than a join wherever the number lives in automations and
 // the person in core: the carve forbids a query that spans both.
 
-import { z } from 'zod';
 import { TEAM_LEVELS } from '@lf-platform/team';
 
 import type { ModuleContext } from 'module-kit';
@@ -22,9 +22,7 @@ import type { TeamLevel, TeamMember, TeamRecords } from '@lf-platform/team';
 
 import { getAutomationsQb, getCoreQb } from '../../../../lib/kysely';
 import { teamIdSchema } from '../../../../lib/team_id';
-
-/** `phone_number.user_id` is an opaque id (no foreign key across the carve): read as a user's id where it is used to look one up. */
-const userIdSchema = z.custom<UserId>((value) => z.guid().safeParse(value).success);
+import { userIdSchema } from '../../../../lib/user_id';
 
 function levelOf(access: string): TeamLevel {
   const level = TEAM_LEVELS.find((candidate) => candidate === access);
@@ -39,14 +37,15 @@ function withoutPlusTag(email: string): string {
 
 /** The member `userId` is in `teamId`, shown by their primary email (their
  *  username when they have none) and name (their username when unnamed). */
-async function memberRow(teamId: TeamId, userId: UserId, options: { requireGrantedAccess: boolean }): Promise<TeamMember | null> {
-  let query = getCoreQb(['user', 'team_membership', 'user_email'])
+async function memberRow(teamId: TeamId, userId: UserId): Promise<TeamMember | null> {
+  const row = await getCoreQb(['user', 'team_membership', 'user_email'])
     .selectFrom('user as u')
     .innerJoin('team_membership as tm', (join) => join.onRef('tm.user_id', '=', 'u.id').on('tm.team_id', '=', teamId))
     .leftJoin('user_email as ue', (join) => join.onRef('ue.user_id', '=', 'u.id').on('ue.is_primary', '=', true))
-    .where('u.id', '=', userId);
-  if (options.requireGrantedAccess) query = query.where('u.granted_access_at', 'is not', null);
-  const row = await query.select(['u.id', 'u.username', 'u.name', 'ue.email', 'tm.access']).executeTakeFirst();
+    .where('u.id', '=', userId)
+    .where('u.granted_access_at', 'is not', null)
+    .select(['u.id', 'u.username', 'u.name', 'ue.email', 'tm.access'])
+    .executeTakeFirst();
   if (row === undefined) return null;
   return {
     id: row.id,
@@ -68,9 +67,9 @@ async function userWithEmail(input: { email: string; acceptsPlusOnly: boolean })
 /** The first of `candidates` that is a member of `teamId`: an address is one
  *  user's, but a user of another team may hold the same text before this
  *  team's member does, so each candidate is asked in turn. */
-async function firstMember(teamId: TeamId, candidates: readonly UserId[], options: { requireGrantedAccess: boolean }): Promise<TeamMember | null> {
+async function firstMember(teamId: TeamId, candidates: readonly UserId[]): Promise<TeamMember | null> {
   for (const userId of candidates) {
-    const member = await memberRow(teamId, userId, options);
+    const member = await memberRow(teamId, userId);
     if (member !== null) return member;
   }
   return null;
@@ -80,11 +79,11 @@ export function teamRecordsFor(tenant: string): TeamRecords {
   const teamId = teamIdSchema.parse(tenant);
   return {
     async memberByEmail(email) {
-      const direct = await firstMember(teamId, await userWithEmail({ email, acceptsPlusOnly: false }), { requireGrantedAccess: false });
+      const direct = await firstMember(teamId, await userWithEmail({ email, acceptsPlusOnly: false }));
       if (direct !== null) return direct;
       const stripped = withoutPlusTag(email);
       if (stripped === email) return null;
-      return firstMember(teamId, await userWithEmail({ email: stripped, acceptsPlusOnly: true }), { requireGrantedAccess: false });
+      return firstMember(teamId, await userWithEmail({ email: stripped, acceptsPlusOnly: true }));
     },
     async memberByPhone(phone) {
       const links = await getAutomationsQb(['phone_number'])
@@ -94,8 +93,9 @@ export function teamRecordsFor(tenant: string): TeamRecords {
         .where('user_id', 'is not', null)
         .select('user_id')
         .execute();
+      // phone_number.user_id is an opaque id (no foreign key across the carve): read as a user's id here.
       const users = links.flatMap((link) => (link.user_id === null ? [] : [userIdSchema.parse(link.user_id)]));
-      return firstMember(teamId, users, { requireGrantedAccess: true });
+      return firstMember(teamId, users);
     },
   };
 }

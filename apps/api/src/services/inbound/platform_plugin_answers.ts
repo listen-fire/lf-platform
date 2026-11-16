@@ -6,6 +6,7 @@
 
 import { logger } from 'movement-engine/public/log';
 
+import type { UserId } from '../../generated/kysely/core/User';
 import { getCoreQb } from '../../lib/kysely';
 import { getDatabaseUrl } from '../../prisma';
 import { recomputeLibraryStanding } from '../access/decide';
@@ -14,10 +15,10 @@ import { platformPluginModules } from '../translation_graph/adapters/builtin_mod
 import { platformPluginSpecNamed } from '../translation_graph/movement/plugin_specs';
 import { PluginAnswerCache } from './plugin_answers';
 
-async function teamsOf(userId: string): Promise<string[]> {
+async function teamsOf(userId: UserId): Promise<string[]> {
   const rows = await getCoreQb(['team_membership'])
     .selectFrom('team_membership')
-    .where('user_id', '=', userId as never)
+    .where('user_id', '=', userId)
     .select('team_id')
     .execute();
   return rows.map((row) => row.team_id);

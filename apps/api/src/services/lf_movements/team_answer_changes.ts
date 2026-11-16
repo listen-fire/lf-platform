@@ -16,19 +16,24 @@
 import { Client } from 'pg';
 import { logger } from 'movement-engine/public/log';
 
+import type { UserId } from '../../generated/kysely/core/User';
+import { userIdSchema } from '../../lib/user_id';
+
 const CLIENT_KEEPALIVE_DELAY_MS = 30_000;
 
 /** The channel the triggers notify. */
 export const TEAM_ANSWERS_CHANNEL = 'lf_team_answers';
 
-export type TeamAnswerChange = { kind: 'team'; id: string } | { kind: 'user'; id: string };
+export type TeamAnswerChange = { kind: 'team'; id: string } | { kind: 'user'; id: UserId };
 
 /** A trigger's payload, read at the boundary: anything else is not one of ours. */
 export function teamAnswerChangeOf(payload: string | undefined): TeamAnswerChange | null {
   const match = /^(team|user):([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/.exec(payload ?? '');
   if (match === null) return null;
   const [, kind, id] = match;
-  return kind === 'team' ? { kind, id } : { kind: 'user', id };
+  if (kind === 'team') return { kind, id };
+  const userId = userIdSchema.safeParse(id);
+  return userId.success ? { kind: 'user', id: userId.data } : null;
 }
 
 export interface TeamAnswerFeedOptions {
@@ -38,7 +43,7 @@ export interface TeamAnswerFeedOptions {
    *  (their email, phone or granted access). */
   changed(input: { teamId: string; why: 'membership' | 'person' }): void | Promise<void>;
   /** The teams a user is a member of. */
-  teamsOf(userId: string): Promise<string[]>;
+  teamsOf(userId: UserId): Promise<string[]>;
   /** The connection was lost, or has just been made again: any team may have changed unheard. */
   lost(): void;
 }
