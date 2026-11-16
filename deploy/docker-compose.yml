@@ -240,8 +240,9 @@ services:
         # one-shot runs exactly once per deployment however many api replicas
         # follow, after the schema and before the api takes traffic. It stops
         # the deployment while a run is parked on a language version this
-        # release does not run, or when it cannot tell whether one is; any
-        # other failure to finish is logged and the deployment goes on.
+        # release does not run, when it cannot tell whether one is, or when
+        # it cannot queue the release's subscription sync; any other failure
+        # to finish is logged and the deployment goes on.
         node build/scripts/deploy_check.js
     environment:
       LISTEN_FIRE_DEMO: ${LISTEN_FIRE_DEMO:-0}

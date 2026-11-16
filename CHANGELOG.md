@@ -17,6 +17,18 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 
 <!-- add merged PRs here -->
 
+## [0.16.1] - 2026-11-16
+
+A patch on 0.16.0: an automation pinned to 0.15 keeps its listens' place across the release and across its upgrade to 0.16. Read `deploy/UPGRADING.md` before deploying: no 0.16.0 service, and no drain inside a 0.16.0 api, may still run once 0.16.1 starts.
+
+- **A carried listen keeps its place across a release.** On 0.16.0, a listen pinned to 0.15 that polls (a Gmail inbox, the system events, a schedule) started over at its first poll after the deploy, because its poll was filed under a new name. What arrived between the last 0.15.3 poll and that first poll was never heard; a `Release Applied` listen missed the release. On 0.16.1 such a listen resumes from the newest place it had: the one 0.16.0 kept, or else the one 0.15.3 kept. What 0.16.0 already missed stays missed: its deliveries were never kept.
+- **A listen that brought its own place from 0.12 polls alone again.** 0.16.0 let it share a poll with other listens on the same source; 0.16.1 restores the rule it had on 0.15.3.
+- **Upgrading an automation from 0.15 to 0.16 keeps each listen's place.** The upgrade moves where each polled listen stands onto the name it polls under afterwards, in the upgrade's own write: nothing is replayed from an older place and nothing is lost. A poll that is running when the upgrade commits fires its page once.
+- **A carried listen on a webhook hears its deliveries after a release.** The subscription it had under 0.15.3 becomes its own, with the webhook at the source unchanged, once per release and without anyone saving. An upgrade does the same in its own write. Deliveries in the seconds between the new api taking traffic and that step are kept and can be replayed.
+- A save that cannot read a listen's carried mark is refused with the listen named, rather than dropping the mark.
+- The deploy check also stops the deployment when it cannot queue the release's subscription sync; running the step again retries it.
+- An upgrade off 0.12 or a legacy version keeps the listen's 0.12 webhook until its own subscription is up, and a webhook the sync retires is removed at the source on a later sync if the first removal fails.
+
 ## [0.16.0] - 2026-11-16
 
 Takes listen-fire 0.16.0 and states who may reach what. Read `deploy/UPGRADING.md` before deploying: the deploy stops while a run is parked on language versions 1 to 4 or 0.12, and the access statement step runs a second time once the new api is healthy.
@@ -2335,7 +2347,8 @@ Releases before v0.11 are kept one file per minor line, newest first:
 - [v0.2.x](docs/changelog/v0.2.md) (v0.2.0)
 - [v0.1.x](docs/changelog/v0.1.md) (v0.1.0 to v0.1.2)
 
-[Unreleased]: https://github.com/listen-fire/lf-platform/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/listen-fire/lf-platform/compare/v0.16.1...HEAD
+[0.16.1]: https://github.com/listen-fire/lf-platform/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/listen-fire/lf-platform/compare/v0.15.3...v0.16.0
 [0.15.3]: https://github.com/listen-fire/lf-platform/compare/v0.15.2...v0.15.3
 [0.15.2]: https://github.com/listen-fire/lf-platform/compare/v0.12.13...v0.15.2
