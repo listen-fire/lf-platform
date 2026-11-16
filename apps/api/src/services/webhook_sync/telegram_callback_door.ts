@@ -13,9 +13,9 @@
 //     until this lands. It is sent on EVERY outcome, including the ones that
 //     changed nothing, and even when answering threw.
 //   • `editMessageReplyMarkup` — the keyboard is retired only when the tap
-//     answered the ask, or its button was retired. Closed-request-wins: a late tap on a settled question
-//     gets the notice and the keyboard STAYS, because whoever acted first owns
-//     the message.
+//     answered the ask, or its button was retired. Closed-request-wins: a late
+//     tap on a settled question gets the notice and the keyboard STAYS, because
+//     whoever acted first owns the message.
 //
 // It lives HERE, in the inbound layer, and not in `adapters/telegram` — a
 // platform adapter must know nothing about questions, and questions nothing

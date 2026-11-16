@@ -405,6 +405,31 @@ describe('a pin by the compatibility rule', () => {
     expect(issues.map((e) => e.reason)).toEqual([expect.stringContaining(OLDER_LINE), expect.stringContaining(NEWER_LINE)]);
   });
 
+  it('a 0.15.3 pin runs on the carried 0.15 engine: it keeps its listens, is checked under its own pin and is not held, while pins 1 to 4 and 0.12 stay held', async () => {
+    const store = fakeStore({
+      movements: [
+        movement({ id: 'carried-015', languageVersion: '0.15.3' }),
+        movement({ id: 'held-4', languageVersion: '4' }),
+        movement({ id: 'held-012', languageVersion: '0.12.13' }),
+      ],
+      verdicts: {},
+    });
+
+    const summary = await runDeployCheck(store.deps);
+
+    expectNoPinMoved();
+    expect(summary?.automations.map((a) => [a.name, a.outcome])).toEqual([
+      ['carried-015', 'carried'],
+      ['held-4', 'upgradable'],
+      ['held-012', 'upgradable'],
+    ]);
+    // Only the 0.12 pin is unprovisioned: 0.15's listens keep firing.
+    expect(store.unprovisioned).toEqual(['held-012']);
+    expect(summary?.automations[0]?.detail).toContain('its listens fire on 0.15.3, unchanged');
+    expect(summary?.legacyStopped?.map((entry) => entry.name)).toEqual(['held-4', 'held-012']);
+    expect(store.validations.filter((v) => v.movement.id === 'carried-015').map((v) => v.languageVersion)).toEqual(['0.15.3']);
+  });
+
   it('a 0.12 pin, whose engine this platform dropped, is judged as a legacy id is: stopped first, then validated under its own pin and under the installed language', async () => {
     const store = fakeStore({
       movements: [

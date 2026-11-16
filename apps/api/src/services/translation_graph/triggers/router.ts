@@ -14,14 +14,12 @@ import type { TriggerEvent } from 'movement-engine/public/inbound';
 
 import { handleError } from '../../../lib/errors';
 import { logger } from 'movement-engine/public/log';
-import { resolveAdapter } from '../adapters/resolve';
 import { loadTriggerById } from '../storage/tg_table';
 import {
   TriggerRunRecorder,
   type TriggerRunTriggerType,
 } from '../runs/trigger_run';
 import { runModeGate } from './run_mode';
-import { consultActorGate, type ActorGateDisposition } from './actor_gate';
 import * as loopGuard from '../../loop_guard';
 import { isWriteEffect } from 'movement-engine/public/trace';
 import { notifyBreach } from '../../loop_guard/notify';
@@ -171,39 +169,10 @@ export async function dispatchTriggerByIdEvent(
   }
 
   // A run's own echo is the loop breaker's (inbound/loop_breaker.ts): it
-  // caps every chain of writes and arrivals as a queued run starts.
-  if (!dryRun && !refused) {
-    const sourceAdapter = await resolveAdapter({
-      adapterType: input.event.adapterType,
-      teamId: input.teamId,
-      credentialsId: triggerRow.credentialsId ?? undefined,
-    });
-
-    // ── OWNERSHIP GATE (§6.4b — registered actors only, below 0.16) ────────
-    // For a pin from before the module's listens stopped being limited
-    // (Slack's, 0.16.0) it asks the source adapter "is the sender one of
-    // ours": Slack's parser forwards every inner event, bots included, so
-    // without this such a listen+reply movement replies to its own replies
-    // forever. From 0.16 the listen's filter alone decided, at the door.
-    // Fail closed; the delivery stays replayable.
-    const actorGate: ActorGateDisposition =
-      fired?.kind === 'shipped'
-        ? await consultActorGate({
-            teamId: input.teamId,
-            pin: fired.movement.version.languageVersion,
-            sourceAdapter,
-            event: input.event,
-          })
-        : { kind: 'proceed' };
-    if (actorGate.kind === 'drop') {
-      logger.info('[TGRouter] dispatch dropped — inbound actor is not a registered user (ownership gate)', {
-        triggerId: input.triggerId,
-        adapterType: input.event.adapterType,
-        reason: actorGate.reason,
-      });
-      return { evaluations: [], droppedReason: 'actor_unregistered' };
-    }
-  }
+  // caps every chain of writes and arrivals as a queued run starts. The
+  // ownership gate is not here: a listen on this release's pin is judged by
+  // its filter alone, and one on a carried pin is gated by its own version in
+  // dispatch_event.
 
   const recordingTriggerType: TriggerRunTriggerType =
     input.recordingTriggerType ?? mapRecordingTriggerType(input.event.triggerType);

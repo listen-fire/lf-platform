@@ -118,7 +118,7 @@ async function judgedBy(runId: string): Promise<boolean[]> {
   const rows = await getAutomationsQb(['wait_seen', 'wait_row'])
     .selectFrom('wait_seen')
     .innerJoin('wait_row', 'wait_row.id', 'wait_seen.wait_id')
-    .where('wait_row.run_id', '=', runId as never)
+    .where('wait_row.run_id', '=', runId)
     .select('wait_seen.matched')
     .execute();
   return rows.map((row) => row.matched);
@@ -126,7 +126,7 @@ async function judgedBy(runId: string): Promise<boolean[]> {
 
 /** The run's waits that are parked, on which edge. */
 async function parkedWaitsOf(runId: string) {
-  return getAutomationsQb(['wait_row']).selectFrom('wait_row').where('run_id', '=', runId as never).where('address', 'is not', null).select(['edge', 'key']).execute();
+  return getAutomationsQb(['wait_row']).selectFrom('wait_row').where('run_id', '=', runId).where('address', 'is not', null).select(['edge', 'key']).execute();
 }
 
 beforeAll(async () => {

@@ -1,9 +1,11 @@
-// The router's ownership gate runs only for a pin from before Slack's listens
-// stopped being limited (its manifest's `listensLimitedBefore`, 0.16.0): there,
-// only registered team members' Slack messages set an automation off. From
-// 0.16 a Slack listen is judged by its filter alone, at the door
-// (inbound/listen_door.ts), so a message the door let through runs whoever
-// sent it.
+// The router holds no ownership gate. A listen on this release's pin (0.16 or
+// later) is judged by its filter alone at the door, so a message the door let
+// through runs whoever sent it. A listen on a carried pin (0.15.3) is never
+// dispatched by the router at all in production; it is read, gated and fired
+// by its own version in dispatch_event (the 0.15 gate cases:
+// services/inbound/__test__/carried_015_listen.integration.test.ts, and the
+// whole flow in carried_015_flow.integration.test.ts). Were one to reach the
+// router, it still asks nobody who sent the message.
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
@@ -63,37 +65,14 @@ beforeEach(() => {
   });
 });
 
-describe('the gate runs only below 0.16', () => {
-  it('suppresses an unregistered Slack sender on a 0.15.3 automation', async () => {
-    pinnedTo('0.15.3');
-    mockResolveActingUser.mockResolvedValue(null);
-    const result = await dispatchTriggerByIdEvent({ triggerId: 't1', event: slackMessage, teamId: TEAM_ID });
-    expect(result.droppedReason).toBe('actor_unregistered');
-    expect(mockRunMovementFiring).not.toHaveBeenCalled();
-  });
-
-  it('lets a registered Slack sender through on a 0.15.3 automation', async () => {
-    pinnedTo('0.15.3');
-    mockResolveActingUser.mockResolvedValue({ id: 'u-1', email: 'ada@example.com', name: 'Ada' });
-    const result = await dispatchTriggerByIdEvent({ triggerId: 't1', event: slackMessage, teamId: TEAM_ID });
-    expect(result.droppedReason).toBeUndefined();
-    expect(mockRunMovementFiring).toHaveBeenCalledTimes(1);
-  });
-
-  it('a 0.16.0 Slack listen whose filter passed runs for an unregistered sender, asking nobody who they are', async () => {
-    pinnedTo('0.16.0');
+describe('the router does not consult the ownership gate', () => {
+  it.each(['0.15.3', '0.16.0', LANGUAGE_VERSION])('a %s Slack listen runs for an unregistered sender, asking nobody who they are', async (pin) => {
+    pinnedTo(pin);
     mockResolveActingUser.mockResolvedValue(null);
     const result = await dispatchTriggerByIdEvent({ triggerId: 't1', event: slackMessage, teamId: TEAM_ID });
     expect(result.droppedReason).toBeUndefined();
     expect(mockRunMovementFiring).toHaveBeenCalledTimes(1);
     expect(mockResolveActingUser).not.toHaveBeenCalled();
-  });
-
-  it('this release`s own pin is 0.16 or later, so its Slack listens are never gated', async () => {
-    pinnedTo(LANGUAGE_VERSION);
-    mockResolveActingUser.mockResolvedValue(null);
-    const result = await dispatchTriggerByIdEvent({ triggerId: 't1', event: slackMessage, teamId: TEAM_ID });
-    expect(result.droppedReason).toBeUndefined();
-    expect(mockRunMovementFiring).toHaveBeenCalledTimes(1);
+    expect(mockResolveAdapter).not.toHaveBeenCalled();
   });
 });

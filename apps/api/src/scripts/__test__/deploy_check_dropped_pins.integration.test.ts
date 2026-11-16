@@ -92,4 +92,21 @@ describe('the deploy check, over automations on dropped pins', () => {
     expect(found.automations.filter((automation) => automation.teamId === TEAM)).toEqual([]);
     expect(renderDropped({ automations: [], parkedRuns: [] })).toBe('');
   });
+
+  it('a run parked on a 0.15.3 automation holds nothing: the carried 0.15 engine continues it, while a 0.12 or legacy pin is still named', async () => {
+    const carried = await load('timer');
+    const legacy = await load('legacy-4-timer');
+    const carriedMovement = await getAutomationsQb(['trigger_run', 'movement_version'])
+      .selectFrom('trigger_run')
+      .innerJoin('movement_version', 'movement_version.id', 'trigger_run.movement_version_id')
+      .where('trigger_run.id', '=', carried.runId)
+      .select(['movement_version.id as versionId', 'movement_version.movement_id as movementId'])
+      .executeTakeFirstOrThrow();
+    await getAutomationsQb(['movement_version']).updateTable('movement_version').set({ language_version: '0.15.3' }).where('id', '=', carriedMovement.versionId).execute();
+    await getAutomationsQb(['movement']).updateTable('movement').set({ language_version: '0.15.3' }).where('id', '=', carriedMovement.movementId).execute();
+
+    const found = await droppedPins();
+    expect(found.parkedRuns.filter((run) => run.teamId === TEAM).map((run) => run.id)).toEqual([legacy.runId]);
+    expect(found.automations.filter((automation) => automation.teamId === TEAM).map((automation) => automation.pin)).toEqual(['4']);
+  });
 });

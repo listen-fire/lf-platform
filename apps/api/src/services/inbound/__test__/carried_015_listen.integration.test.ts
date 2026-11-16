@@ -322,9 +322,18 @@ describe('one Slack delivery read by the version each listen is pinned to (real 
     expect((await savedListens({ teamId, adapterType: 'slack' })).map((listen) => listen.triggerId).sort()).toEqual([listen016, listen015].sort());
 
     // A delivery now queues no reading under 0.15: nothing pinned to it listens.
+    const byGate = async () => (await receiptsOf(listen015)).filter((receipt) => receipt.status === 'suppressed' && /registered team user/.test(receipt.failure_reason ?? '')).length;
+    const gated = await byGate();
     const readingsBefore = (await workOf('read_delivery')).length;
     await handleSlackEventsInbound(envelope({ user: 'U2', text: 'deploy', ts: '1700000000.000500' }));
     expect(await workOf('read_delivery')).toHaveLength(readingsBefore);
+
+    // The old gate goes with the row's old reader: 0.15's reader no longer
+    // claims the re-planned row, and the unregistered sender's message made no
+    // gate suppression of it.
+    expect(lane.isListenRow({ config: rows[0]!.config })).toBe(false);
+    await drainAll();
+    expect(await byGate()).toBe(gated);
   });
 
   it('a file with two listens on one connection upgrades to this release keeping both trigger ids', async () => {
@@ -394,7 +403,7 @@ describe('one Slack delivery read by the version each listen is pinned to (real 
     expect(readings.map((row) => (row.payload as { version: string }).version)).toEqual(['0.15']);
     // The reading row itself, as its drain runs it: 0.15's module reads the
     // kept delivery, and its arrival on `Messages` lists the listen again.
-    for (const row of readings) await readDeliveryHandler.run(row.payload, { attempts: 1, now: new Date() } as never);
+    for (const row of readings) await readDeliveryHandler.run(row.payload, { attempts: 1, now: new Date(), owner: 'test', heartbeat: async () => {} });
     expect(await relists()).toEqual([`resolve_listen:${listen.pipeline}`]);
 
     await getAutomationsQb(['work']).deleteFrom('work').where('team_id', '=', teamId).where('kind', 'in', ['read_delivery', 'resolve_listen', 'dispatch_event']).execute();
