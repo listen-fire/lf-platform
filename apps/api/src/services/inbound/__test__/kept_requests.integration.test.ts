@@ -4,6 +4,7 @@
 // (use on its connection), each read recorded; and the prune forgets requests and
 // deliveries with the runs' retention.
 
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { randomUUID } from 'node:crypto';
 
 import { sql } from 'kysely';
@@ -64,7 +65,7 @@ beforeAll(async () => {
   otherTeamId = randomUUID() as TeamId;
   movementId = randomUUID() as MovementId;
   await getCoreQb(['team']).insertInto('team').values({ id: teamId, name: `kept-${teamId.slice(0, 8)}` }).execute();
-  await getAutomationsQb(['movement']).insertInto('movement').values({ id: movementId, team_id: teamId, name: 'kept', source: '' }).execute();
+  await getAutomationsQb(['movement']).insertInto('movement').values({ id: movementId, team_id: teamId, name: 'kept', source: '', language_version: LANGUAGE_VERSION }).execute();
   listen = await insertTestListen({ teamId, movementId, adapterType: ADAPTER, edge: 'Things', delivery: 'connection', movement: 'heard' });
   elsewhere = await insertTestListen({ teamId, movementId, adapterType: 'other_test', edge: 'Things', delivery: 'connection', movement: 'other' });
 });

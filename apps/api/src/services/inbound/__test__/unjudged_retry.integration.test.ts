@@ -94,7 +94,7 @@ beforeEach(async () => {
   teamId = randomUUID() as TeamId;
   movementId = randomUUID() as MovementId;
   await getCoreQb(['team']).insertInto('team').values({ id: teamId, name: `retry-${teamId.slice(0, 8)}` }).execute();
-  await getAutomationsQb(['movement']).insertInto('movement').values({ id: movementId, team_id: teamId, name: 'team.lf', source: '' }).execute();
+  await getAutomationsQb(['movement']).insertInto('movement').values({ id: movementId, team_id: teamId, name: 'team.lf', source: '', language_version: LANGUAGE_VERSION }).execute();
   triggerId = await insertTestListen({
     teamId,
     movementId,

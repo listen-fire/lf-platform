@@ -12,7 +12,6 @@ import type { Arrival } from 'engine-contracts';
 
 jest.mock('../../inbound/carried_delivery', () => ({
   keepForEveryVersion: jest.fn(async () => ({ kind: 'read', deliveryId: 'kept-first' })),
-  carriedListensOn: jest.fn(async () => []),
   receiveJudgedEvent: jest.fn(async () => undefined),
 }));
 jest.mock('../../translation_graph/adapters/resolve', () => ({ resolveAdapter: jest.fn() }));

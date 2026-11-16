@@ -14,20 +14,17 @@
 // time. Failures are contained per row — one bad credential never starves the
 // rest.
 
-import type { TeamId } from '../../generated/kysely/core/Team';
 import type { WorkHandler } from '../work/kinds';
 import type { WorkKindRegistration } from '../work/drain';
 import type { RefreshEdgeSubscriptionInput } from 'engine-contracts';
 import type { WebhookSubscriptionId } from '../../generated/kysely/automations/WebhookSubscription';
 
-import { carriedVersions } from '@listen-fire/language-versions';
 import { logger } from 'movement-engine/public/log';
 import { getAutomationsQb } from '../../lib/kysely';
 import { HOUR } from '../../constants';
 import { teamIdSchema } from '../../lib/team_id';
 import { MOVEMENT_LISTEN_PROVISIONER, edgeSubscriptionOf } from '../translation_graph/movement/listen_subscriptions';
 import { resolveAdapter } from '../translation_graph/adapters/resolve';
-import { modulePlatform } from '../translation_graph/movement/carried_run';
 
 /** The webhook_subscription.provider key for Airtable (the uppercase trigger
  *  kind; see webhook_sync/providers/index.ts). */
@@ -42,7 +39,7 @@ const REFRESH_AFTER = 6 * 24 * HOUR;
  * Refresh each of the listens' Airtable subscriptions whose window is due, as
  * the edge it serves (`refreshEventSubscription({ edge, filter, externalId })`,
  * adapter protocol 2.6). A webhook a 0.12 settings listen registered is never
- * refreshed as an edge: 0.12's own module refreshes it while a listen holds it.
+ * refreshed: no version this build carries holds one.
  */
 /** Advance the window mark so it isn't re-refreshed until the next cycle. */
 async function markRefreshed(id: unknown, now: Date): Promise<void> {
@@ -51,18 +48,6 @@ async function markRefreshed(id: unknown, now: Date): Promise<void> {
     .set({ updated_at: now })
     .where('id', '=', id as WebhookSubscriptionId)
     .execute();
-}
-
-/** Whether a carried version took the refresh: the version with listen rows,
- *  when a row of it still holds this webhook. */
-async function refreshCarriedWebhook(input: { teamId: TeamId; credentialsId: unknown; externalId: string; scope: unknown }): Promise<boolean> {
-  const credentialsId = input.credentialsId as string;
-  const version = carriedVersions().find((candidate) => candidate.listenRows !== undefined);
-  if (version?.listenRows === undefined) return false;
-  const scope = typeof input.scope === 'string' ? (JSON.parse(input.scope) as Record<string, string>) : ((input.scope ?? {}) as Record<string, string>);
-  const lane = await version.listenRows();
-  await lane.refreshChannel({ teamId: input.teamId, slug: 'airtable', credentialsId, externalId: input.externalId, scope }, modulePlatform());
-  return true;
 }
 
 export async function refreshDueAirtableWebhooks(now = new Date()): Promise<void> {
@@ -82,14 +67,9 @@ export async function refreshDueAirtableWebhooks(now = new Date()): Promise<void
     try {
       if (row.credentials_id === null || row.external_webhook_id === null) continue;
       const held = edgeSubscriptionOf(row.subscriptions);
-      if (held === null) {
-        // A webhook a listen on a carried version holds: its own module keeps it
-        // open. One no such listen wants is removed by the subscription retry.
-        if (await refreshCarriedWebhook({ teamId: teamIdSchema.parse(row.team_id), credentialsId: row.credentials_id, externalId: row.external_webhook_id, scope: row.scope })) {
-          await markRefreshed(row.id, now);
-        }
-        continue;
-      }
+      // A 0.12 webhook (its cell a list of event types) is no edge's: the
+      // subscription retry removes it.
+      if (held === null) continue;
       const adapter = await resolveAdapter({
         adapterType: 'airtable',
         teamId: teamIdSchema.parse(row.team_id),

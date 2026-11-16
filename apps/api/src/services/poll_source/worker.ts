@@ -26,12 +26,11 @@ import { SECOND } from '../../constants';
 import { getAutomationsQb } from '../../lib/kysely';
 import { teamIdSchema } from '../../lib/team_id';
 import { logger } from 'movement-engine/public/log';
-import { deliverArrivals, listenConfigSchema, type SavedListen } from '../inbound/listen_door';
+import { currentListenOf, deliverArrivals, type SavedListen } from '../inbound/listen_door';
 import { keptPage } from '../inbound/captured_request';
 import { lfEngineTeams } from '../lf_engine/team_engine';
 import { notifyWork, registerWorkHandler } from '../work/drain';
 import { enqueueWork, listWorkByKind, removeWork } from '../work/store';
-import { forgetCarriedPollProgress, reconcileCarriedPolls } from './carried_worker';
 import { edgePollerOf } from './edge_poller';
 import { listenEdgeKeysOf, type ListenEdgeKey } from '../inbound/listen_edge';
 
@@ -85,16 +84,23 @@ export async function sharedPolls(input: { teamId?: TeamId } = {}): Promise<Shar
   if (input.teamId !== undefined) query = query.where('trigger.team_id', '=', input.teamId);
   const [rows, lfTeams] = await Promise.all([
     query
-      .select(['trigger.id as id', 'trigger.team_id as teamId', 'trigger.config as config', 'trigger.credentials_id as credentialsId', 'movement.name as file'])
+      .select([
+        'trigger.id as id',
+        'trigger.team_id as teamId',
+        'trigger.config as config',
+        'trigger.credentials_id as credentialsId',
+        'movement.name as file',
+        'movement.language_version as pin',
+      ])
       .execute(),
     lfEngineTeams(),
   ]);
   const polls = new Map<string, SharedPoll>();
   for (const row of rows) {
     if (lfTeams.has(row.teamId)) continue;
-    const parsed = listenConfigSchema.safeParse(row.config);
-    if (!parsed.success) continue;
-    const listen: SavedListen = { ...parsed.data.listen, triggerId: row.id, teamId: teamIdSchema.parse(row.teamId), file: row.file, credentialsId: row.credentialsId ?? null };
+    const config = currentListenOf(row);
+    if (config === null) continue;
+    const listen: SavedListen = { ...config, triggerId: row.id, teamId: teamIdSchema.parse(row.teamId), file: row.file, credentialsId: row.credentialsId ?? null };
     for (const { key, digest, delivery } of listenEdgeKeysOf(listen, ['polled'])) {
       const everyMs = (delivery.pollEverySeconds ?? DEFAULT_POLL_EVERY_SECONDS) * SECOND;
       const shared = polls.get(digest);
@@ -191,34 +197,28 @@ export const pollEdgeHandler: WorkHandler = {
  *  none for a key no listen shares any more. */
 export const pollReconcileHandler: WorkHandler = {
   async run(_payload, ctx) {
-    try {
-      const [polls, rows] = await Promise.all([sharedPolls(), listWorkByKind('poll_edge')]);
-      const armed = new Set(rows.map((row) => row.key));
-      const active = new Set<string>();
-      for (const poll of polls) {
-        const key = pollWorkKey(poll.digest);
-        active.add(key);
-        // An armed row keeps its time: its handler arms it after each poll, and
-        // a failed one holds its backoff.
-        if (armed.has(key)) continue;
-        try {
-          await armPoll(poll, ctx.now);
-        } catch (err) {
-          logger.error('[EdgePolls] reconcile failed for a shared poll', {
-            teamId: poll.key.teamId,
-            adapterType: poll.key.adapterType,
-            edge: poll.key.edge,
-            error: err instanceof Error ? err.message : String(err),
-          });
-        }
+    const [polls, rows] = await Promise.all([sharedPolls(), listWorkByKind('poll_edge')]);
+    const armed = new Set(rows.map((row) => row.key));
+    const active = new Set<string>();
+    for (const poll of polls) {
+      const key = pollWorkKey(poll.digest);
+      active.add(key);
+      // An armed row keeps its time: its handler arms it after each poll, and
+      // a failed one holds its backoff.
+      if (armed.has(key)) continue;
+      try {
+        await armPoll(poll, ctx.now);
+      } catch (err) {
+        logger.error('[EdgePolls] reconcile failed for a shared poll', {
+          teamId: poll.key.teamId,
+          adapterType: poll.key.adapterType,
+          edge: poll.key.edge,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
-      for (const row of rows) {
-        if (!active.has(row.key)) await removeWork({ key: row.key });
-      }
-    } finally {
-      // A carried version's listens are polled per row, on their own cursors. A
-      // failure above is this row's to retry, and is no reason for them not to be armed.
-      await reconcileCarriedPolls(ctx.now);
+    }
+    for (const row of rows) {
+      if (!active.has(row.key)) await removeWork({ key: row.key });
     }
   },
 };
@@ -234,7 +234,6 @@ export async function forgetPollProgress(teamId: TeamId): Promise<void> {
   await sql`
     delete from automations.inbound_checkpoint
     where team_id = ${teamId}::uuid and subscription_id like 'edge-poll:%'`.execute(getAutomationsQb(['inbound_checkpoint']));
-  await forgetCarriedPollProgress(teamId);
 }
 
 /**

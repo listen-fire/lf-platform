@@ -364,7 +364,9 @@ const loadLang015 = () => import('@listen-fire/lang-0.15');
  *  catalog its own modules describe, judges its pins: 0.15's checker cannot
  *  read this release's catalog. Its own engine runs them, on the platform's
  *  one run host: a 0.15 run parks in the rows a current run parks in, and the
- *  platform's drains step it, each segment on 0.15's engine. */
+ *  platform's drains step it, each segment on 0.15's engine. Its listens keep
+ *  the plan shape every version's trigger rows share; the row's pin hands them
+ *  to 0.15's own module, judge and gate. */
 const VERSION_015: CarriedVersion = {
   key: '0.15',
   release: '0.15.3',
@@ -374,8 +376,9 @@ const VERSION_015: CarriedVersion = {
     help: HELD,
     run: { kind: 'carried', lane: loadLang015 },
     resume: { kind: 'carried', lane: loadLang015 },
-    listen: HELD,
+    listen: { kind: 'carried', lane: loadLang015 },
   },
+  listenRows: loadLang015,
 };
 
 const CARRIED: readonly CarriedVersion[] = [CURRENT_VERSION, VERSION_015];

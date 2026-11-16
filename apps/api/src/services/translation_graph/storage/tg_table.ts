@@ -18,11 +18,10 @@ import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
 
 import { getAutomationsQb } from '../../../lib/kysely';
-import { listeningOf } from '@listen-fire/language-versions';
 import { parseRunMode, type TriggerRunMode } from '../triggers/run_mode';
 import { resolveAdapterSlug, siblingKindsForAdapter } from '../adapters/registry';
 import { inboxKeysOf } from '../adapters/email/listen_keys';
-import { listenConfigSchema } from '../../inbound/listen_door';
+import { currentListenOf } from '../../inbound/listen_door';
 
 /**
  * Load one `trigger` row by id. Returns null when missing. Dispatchers
@@ -87,11 +86,6 @@ export async function loadTriggerById(triggerId: string): Promise<{
  * still key on legacy channel kinds ('CUSTOM_EMAIL', 'MAILGUN'). Expand each
  * requested kind to its canonical slug + sibling kinds so both resolve.
  */
-function inboxKeyOfCarriedRow(config: unknown): string | undefined {
-  const key = typeof config === 'object' && config !== null && 'key' in config ? config.key : undefined;
-  return typeof key === 'string' ? key.toLowerCase() : undefined;
-}
-
 export async function findTriggerByInboundKey(input: {
   teamId: string;
   kinds: string[];
@@ -116,11 +110,9 @@ export async function findTriggerByInboundKey(input: {
     .execute();
   const key = input.key.toLowerCase();
   const row = rows.find((candidate) => {
-    const listen = listenConfigSchema.safeParse(candidate.config);
-    if (listen.success) return inboxKeysOf(listen.data.listen.plan, listen.data.listen.fieldIds).includes(key);
-    // A carried version's listen keeps its key in its config, as production
-    // read it, compared the way a public inbox's claim is.
-    return candidate.pin !== null && listeningOf(candidate.pin).kind === 'carried' && inboxKeyOfCarriedRow(candidate.config) === key;
+    if (candidate.pin === null) return false;
+    const listen = currentListenOf({ config: candidate.config, pin: candidate.pin });
+    return listen !== null && inboxKeysOf(listen.plan, listen.fieldIds).includes(key);
   });
   if (!row) return null;
   return {

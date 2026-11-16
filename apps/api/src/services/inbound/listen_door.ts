@@ -55,6 +55,7 @@ import {
   type NewWorkRow,
 } from 'movement-engine/public/run-host';
 import { logger } from 'movement-engine/public/log';
+import { isCurrent } from '@listen-fire/language-versions';
 
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { TriggerId } from '../../generated/kysely/automations/Trigger';
@@ -138,6 +139,18 @@ export const listenConfigSchema = z.object({
 export type ListenConfig = z.infer<typeof listenConfigSchema>['listen'];
 export type ResolvedHop = z.infer<typeof resolvedHopSchema>;
 
+/** A trigger row's listen under this release: one its automation pins to the
+ *  current version, read with this release's plan schema. A row pinned to a
+ *  carried version is that version's alone, its plan read only with its own
+ *  release's schema (carried_delivery.ts), so the current door never claims it,
+ *  whatever its config reads as here. Null for that, and for a row that is no
+ *  listen. */
+export function currentListenOf(row: { config: unknown; pin: string }): ListenConfig | null {
+  if (!isCurrent(row.pin)) return null;
+  const parsed = listenConfigSchema.safeParse(row.config);
+  return parsed.success ? parsed.data.listen : null;
+}
+
 /** One saved listen of a team: its trigger row and what it keeps. */
 export interface SavedListen extends ListenConfig {
   triggerId: TriggerId;
@@ -154,7 +167,8 @@ export interface SavedListen extends ListenConfig {
 
 /** The listens `teamId` saved (on `adapterType`'s module, when it names one;
  *  in one file, when `movementId` does). A trigger row of another shape (a
- *  pin 1 to 4 listener) is not a listen and is skipped. */
+ *  pin 1 to 4 listener), or pinned to a carried version, is not a listen of
+ *  this door and is skipped. */
 export async function savedListens(input: { teamId: TeamId; adapterType?: string; movementId?: MovementId }): Promise<SavedListen[]> {
   let query = getAutomationsQb(['trigger', 'movement'])
     .selectFrom('trigger')
@@ -163,29 +177,37 @@ export async function savedListens(input: { teamId: TeamId; adapterType?: string
   if (input.adapterType !== undefined) query = query.where('trigger.kind', '=', input.adapterType);
   if (input.movementId !== undefined) query = query.where('trigger.movement_id', '=', input.movementId);
   const rows = await query
-    .select(['trigger.id as id', 'trigger.config as config', 'trigger.credentials_id as credentialsId', 'movement.name as file'])
+    .select(['trigger.id as id', 'trigger.config as config', 'trigger.credentials_id as credentialsId', 'movement.name as file', 'movement.language_version as pin'])
     .execute();
   const listens = rows.flatMap((row) => {
-    const parsed = listenConfigSchema.safeParse(row.config);
-    if (!parsed.success) return [];
-    return [{ ...parsed.data.listen, triggerId: row.id, teamId: input.teamId, file: row.file, credentialsId: row.credentialsId ?? null }];
+    const listen = currentListenOf(row);
+    if (listen === null) return [];
+    return [{ ...listen, triggerId: row.id, teamId: input.teamId, file: row.file, credentialsId: row.credentialsId ?? null }];
   });
   return withWatching(listens);
 }
 
-/** The saved listen a trigger row is, or null when it is no listen. */
+/** The saved listen a trigger row is, or null when it is no listen of this
+ *  door. */
 export async function savedListenOf(triggerId: TriggerId): Promise<SavedListen | null> {
   const row = await getAutomationsQb(['trigger', 'movement'])
     .selectFrom('trigger')
     .innerJoin('movement', 'movement.id', 'trigger.movement_id')
     .where('trigger.id', '=', triggerId)
-    .select(['trigger.id as id', 'trigger.team_id as teamId', 'trigger.config as config', 'trigger.credentials_id as credentialsId', 'movement.name as file'])
+    .select([
+      'trigger.id as id',
+      'trigger.team_id as teamId',
+      'trigger.config as config',
+      'trigger.credentials_id as credentialsId',
+      'movement.name as file',
+      'movement.language_version as pin',
+    ])
     .executeTakeFirst();
   if (row === undefined) return null;
-  const parsed = listenConfigSchema.safeParse(row.config);
-  if (!parsed.success) return null;
+  const listen = currentListenOf(row);
+  if (listen === null) return null;
   // The row's team as the branded id the rest of the door carries (its boundary).
-  return withWatchingOne({ ...parsed.data.listen, triggerId: row.id, teamId: row.teamId as TeamId, file: row.file, credentialsId: row.credentialsId ?? null });
+  return withWatchingOne({ ...listen, triggerId: row.id, teamId: row.teamId as TeamId, file: row.file, credentialsId: row.credentialsId ?? null });
 }
 
 // ── Judging a delivery's arrivals ───────────────────────────────────────────

@@ -6,6 +6,7 @@
 // form and never renewed; a remote that answers no secret is withdrawn and
 // left pending, and the platform's retry asks it again.
 
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { randomUUID } from 'node:crypto';
 
 import { sql } from 'kysely';
@@ -78,7 +79,7 @@ beforeAll(async () => {
   teamId = randomUUID() as TeamId;
   movementId = randomUUID() as MovementId;
   await getCoreQb(['team']).insertInto('team').values({ id: teamId, name: `subs-${teamId.slice(0, 8)}` }).execute();
-  await getAutomationsQb(['movement']).insertInto('movement').values({ id: movementId, team_id: teamId, name: 'subs', source: '' }).execute();
+  await getAutomationsQb(['movement']).insertInto('movement').values({ id: movementId, team_id: teamId, name: 'subs', source: '', language_version: LANGUAGE_VERSION }).execute();
 });
 
 afterAll(async () => {

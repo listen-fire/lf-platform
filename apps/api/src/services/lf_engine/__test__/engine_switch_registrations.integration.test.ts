@@ -5,6 +5,7 @@
 // is registered afresh and the first poll arms a new cursor rather than
 // replaying what lf handled.
 
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { randomUUID } from 'node:crypto';
 
 import type { Arrival } from 'engine-contracts';
@@ -76,7 +77,7 @@ beforeAll(async () => {
   teamId = randomUUID() as TeamId;
   const movementId = randomUUID() as MovementId;
   await getCoreQb(['team']).insertInto('team').values({ id: teamId, name: `switch-${teamId.slice(0, 8)}` }).execute();
-  await getAutomationsQb(['movement']).insertInto('movement').values({ id: movementId, team_id: teamId, name: 'hello', source: '' }).execute();
+  await getAutomationsQb(['movement']).insertInto('movement').values({ id: movementId, team_id: teamId, name: 'hello', source: '', language_version: LANGUAGE_VERSION }).execute();
   await insertTestListen({ teamId, movementId, adapterType: VENDOR, edge: 'Things', delivery: 'connection' });
   await insertTestListen({ teamId, movementId, adapterType: VENDOR_POLL, edge: 'Things', delivery: 'polled' });
   const [poll] = await sharedPolls({ teamId });

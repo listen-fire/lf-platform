@@ -12,7 +12,6 @@ import crypto from "node:crypto";
 const installByIdentifier = new Map<string, { id: string; team_id: string }>();
 jest.mock('../../inbound/carried_delivery', () => ({
   keepForEveryVersion: jest.fn(async () => ({ kind: 'read', deliveryId: 'kept-first' })),
-  carriedListensOn: jest.fn(async () => []),
   receiveJudgedEvent: jest.fn(async () => undefined),
 }));
 jest.mock('../../../lib/kysely', () => {

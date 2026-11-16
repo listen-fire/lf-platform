@@ -7,6 +7,7 @@
 // The claim is written "Deals" and the listen "deals": keys are
 // case-insensitive across the feature, so the door still finds the listener.
 
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { randomUUID } from 'node:crypto';
 
 import type { TeamId } from '../../../../../generated/kysely/core/Team';
@@ -75,7 +76,7 @@ beforeAll(async () => {
     status: 'claimed',
   });
   const movementId = randomUUID() as MovementId;
-  await getAutomationsQb(['movement']).insertInto('movement').values({ id: movementId, team_id: TEAM, name: 'deal inbox', source: '' }).execute();
+  await getAutomationsQb(['movement']).insertInto('movement').values({ id: movementId, team_id: TEAM, name: 'deal inbox', source: '', language_version: LANGUAGE_VERSION }).execute();
   triggerId = await insertTestListen({
     teamId: TEAM,
     movementId,

@@ -136,7 +136,7 @@ export async function validateUnderCarried(input: {
  *  where it would go live: it is saved and checked under its own version, and
  *  what its version provides, in the registry's words. */
 export function notListenedDiagnostic(pin: LanguageVersion): Diagnostic {
-  const refusal = refusalOf(pin, 'listen') ?? `language ${pin}'s listens fire`;
+  const refusal = refusalOf(pin, 'listen') ?? `this release does not yet plan the listens of a ${pin} save, so the listens it shipped before keep firing as they were`;
   return {
     code: 'MOV_LANGUAGE_VERSION_UNSUPPORTED',
     message: `it is saved and checked under ${pin}; ${refusal}`,

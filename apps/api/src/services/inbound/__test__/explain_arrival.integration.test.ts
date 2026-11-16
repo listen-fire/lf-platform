@@ -3,6 +3,7 @@
 // may read, the first term that failed named; a host function asked now says
 // its answer is as of now; and nothing is written.
 
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { randomUUID } from 'node:crypto';
 
 import { sql } from 'kysely';
@@ -40,7 +41,7 @@ const from = (email: string): Arrival => ({
 
 async function newMovement(name: string): Promise<MovementId> {
   const id = randomUUID() as MovementId;
-  await getAutomationsQb(['movement']).insertInto('movement').values({ id, team_id: teamId, name, source: '' }).execute();
+  await getAutomationsQb(['movement']).insertInto('movement').values({ id, team_id: teamId, name, source: '', language_version: LANGUAGE_VERSION }).execute();
   return id;
 }
 

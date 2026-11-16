@@ -4,6 +4,7 @@
 // task at its minute, and the task starts the job with the invoker's token.
 // The module's clock is held still so a test never straddles a window.
 
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { randomUUID } from 'node:crypto';
 
 jest.mock('../../poll_source/edge_poller', () => ({
@@ -50,7 +51,7 @@ beforeAll(async () => {
     .execute();
   await getAutomationsQb(['movement'])
     .insertInto('movement')
-    .values({ id: movementId, team_id: teamId, name: 'wake test', source: '' })
+    .values({ id: movementId, team_id: teamId, name: 'wake test', source: '', language_version: LANGUAGE_VERSION })
     .execute();
 });
 

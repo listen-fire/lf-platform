@@ -15,10 +15,10 @@
 //   - a subscription no listen shares any more is removed at the source
 //     (`removeEventSubscription({ edge, filter, callbackUrl, externalId })`)
 //     and its row retired. A webhook a 0.12 settings listen registered (its
-//     cell a list of event types) is never renewed: it is removed in its own
-//     form (callback URL, external id, scope), once no listen on a carried
-//     version wants it (./carried_subscriptions.ts). Operator-created rows
-//     (`provisioned_by` NULL) are never touched;
+//     cell a list of event types) is never renewed: no version this build
+//     carries listens through one, so it is removed in its own form (callback
+//     URL, external id, scope). Operator-created rows (`provisioned_by` NULL)
+//     are never touched;
 //   - a registration the source refused keeps its row `pending` (no secret
 //     anything verifies against), and the periodic retry asks again
 //     (`retryListenSubscriptions`);
@@ -53,9 +53,8 @@ import { readTeamEngine } from '../../lf_engine/team_engine';
 import { savedListens, type SavedListen } from '../../inbound/listen_door';
 import { listenEdgeKeysOf, watchedTraversals, type ListenEdgeKey } from '../../inbound/listen_edge';
 import { registerWorkHandler } from '../../work/drain';
-import { MOVEMENT_LISTEN_PROVISIONER, carriedChannelsOf, ensureCarriedChannel, sameScope, type ChannelRowHeld, type WantedChannels } from './carried_subscriptions';
 
-export { MOVEMENT_LISTEN_PROVISIONER };
+export const MOVEMENT_LISTEN_PROVISIONER = 'movement-listen';
 
 /** What a provisioned row's `subscriptions` cell keeps for an edge's
  *  subscription: its key, and the digest it is found by. An edge pushed per
@@ -137,19 +136,8 @@ interface SubscriptionRow {
   held: EdgeSubscription | null;
   /** A 0.12 webhook's adapter-declared scope (Airtable's `{ base, table }`). */
   legacyScope: Record<string, string>;
-  /** A 0.12 webhook's event types, as its cell lists them. */
-  legacyEvents: string[];
   /** 'active' once registered; 'pending' while it still needs registering. */
   status: string;
-}
-
-function legacyEventsOf(rawValue: unknown): string[] {
-  const raw = typeof rawValue === 'string' ? safeJson(rawValue) : rawValue;
-  if (!Array.isArray(raw)) return [];
-  return raw.flatMap((entry: unknown) => {
-    const type: unknown = typeof entry === 'object' && entry !== null ? Reflect.get(entry, 'event_type') : undefined;
-    return typeof type === 'string' ? [type] : [];
-  });
 }
 
 function legacyScopeOf(rawValue: unknown): Record<string, string> {
@@ -217,7 +205,6 @@ async function provisionedRows(teamId: TeamId): Promise<SubscriptionRow[]> {
     secret: r.webhook_secret,
     held: edgeSubscriptionOf(r.subscriptions),
     legacyScope: legacyScopeOf(r.scope),
-    legacyEvents: legacyEventsOf(r.subscriptions),
     status: r.status,
   }));
 }
@@ -313,7 +300,7 @@ async function ensureSubscription(input: {
         provisioned_by: MOVEMENT_LISTEN_PROVISIONER,
       })
       .execute();
-    row = { id, provider: providerKey, credentialsId: key.credentialsId, externalWebhookId: null, secret: UNREGISTERED_SECRET, held, legacyScope: {}, legacyEvents: [], status: 'pending' };
+    row = { id, provider: providerKey, credentialsId: key.credentialsId, externalWebhookId: null, secret: UNREGISTERED_SECRET, held, legacyScope: {}, status: 'pending' };
   }
   const callbackUrl = buildWebhookTargetUrl(providerKey, row.id);
   const registration = await adapter.ensureEventSubscription({
@@ -386,10 +373,6 @@ export async function syncListenSubscriptions(input: { teamId: TeamId }): Promis
   const existing = await provisionedRows(input.teamId);
   const rowOf = (subscription: DesiredSubscription) =>
     existing.find((row) => row.held?.digest === subscription.held.digest && row.provider === subscription.providerKey);
-  const carried: WantedChannels[] = lfEngined ? [] : await carriedChannelsOf({ teamId: input.teamId, manifests, notes });
-  // A webhook a carried version's listens hold: the one row of its channel.
-  const carriedRowOf = (channel: WantedChannels['channels'][number]): SubscriptionRow | undefined =>
-    existing.find((row) => row.held === null && row.provider === channel.providerKey && row.credentialsId === channel.credentialsId && sameScope(row.legacyScope, channel.scope));
 
   for (const subscription of desired) {
     try {
@@ -401,30 +384,10 @@ export async function syncListenSubscriptions(input: { teamId: TeamId }): Promis
     }
   }
 
-  for (const { lane, channels } of carried) {
-    for (const channel of channels) {
-      const row = carriedRowOf(channel);
-      const held: ChannelRowHeld | undefined =
-        row === undefined
-          ? undefined
-          : { id: row.id, provider: row.provider, credentialsId: row.credentialsId, externalWebhookId: row.externalWebhookId, secret: row.secret, events: row.legacyEvents, scope: row.legacyScope, status: row.status };
-      try {
-        await ensureCarriedChannel({ teamId: input.teamId, lane, channel, row: held, remote: remoteSlugs.has(channel.slug), notes });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        logger.error('[ListenSubscriptions] ensure failed', { teamId: input.teamId, adapter: channel.slug, error: message });
-        notes.push(`${channel.slug}: event-subscription provisioning failed (${message})`);
-      }
-    }
-  }
-
-  const heldForCarried = new Set(carried.flatMap(({ channels }) => channels.map(carriedRowOf)));
   const stillCarrying = lfEngined ? () => false : await webhooksStillCarryingMoved({ teamId: input.teamId, manifestBySlug });
 
   for (const row of existing) {
     if (desired.some((subscription) => rowOf(subscription) === row)) continue;
-    // A listen on a carried version hears through it.
-    if (heldForCarried.has(row)) continue;
     // Nor is the one a moved listen still hears through, until its own is up.
     if (stillCarrying(row)) {
       notes.push(`${row.provider}: its 0.12 webhook stays until the upgraded listen's own subscription is up`);
@@ -460,9 +423,9 @@ export async function syncListenSubscriptions(input: { teamId: TeamId }): Promis
   return account;
 }
 
-/** Each team with a provisioned row still pending, or holding a 0.12 webhook no
- *  listen on 0.12 wants any more, synced again: the platform's own retry of what
- *  a source refused and of what an upgrade left registered. */
+/** Each team with a provisioned row still pending, or holding a 0.12 webhook,
+ *  synced again: the platform's own retry of what a source refused and of what
+ *  an upgrade left registered. */
 export async function retryListenSubscriptions(): Promise<{ teams: number }> {
   const rows = await getAutomationsQb(['webhook_subscription'])
     .selectFrom('webhook_subscription')
@@ -470,28 +433,12 @@ export async function retryListenSubscriptions(): Promise<{ teams: number }> {
     .where('deleted_at', 'is', null)
     .select(['team_id', 'status', 'subscriptions'])
     .execute();
-  const teams = new Set(rows.filter((row) => row.status === 'pending').map((row) => row.team_id as TeamId));
-  const withWebhook = new Set(rows.filter((row) => edgeSubscriptionOf(row.subscriptions) === null).map((row) => row.team_id as TeamId));
-  for (const teamId of withWebhook) {
-    if (!teams.has(teamId) && (await holdsAWebhookNoListenWants(teamId))) teams.add(teamId);
-  }
+  const teams = new Set(rows.filter((row) => row.status === 'pending' || edgeSubscriptionOf(row.subscriptions) === null).map((row) => row.team_id as TeamId));
   for (const teamId of teams) {
     const { notes } = await syncListenSubscriptions({ teamId });
     if (notes.length > 0) logger.warn('[ListenSubscriptions] a retry left notes', { teamId, notes });
   }
   return { teams: teams.size };
-}
-
-/** Whether a 0.12 webhook of the team is one no listen on 0.12 wants. A row that
- *  is wanted is left alone between saves, as production left it. */
-async function holdsAWebhookNoListenWants(teamId: TeamId): Promise<boolean> {
-  const notes: string[] = [];
-  const { manifests } = await teamAdapterManifestSet(teamId, notes);
-  const wanted = await carriedChannelsOf({ teamId, manifests, notes });
-  const channels = wanted.flatMap((version) => version.channels);
-  return (await provisionedRows(teamId)).some(
-    (row) => row.held === null && !channels.some((channel) => channel.providerKey === row.provider && channel.credentialsId === row.credentialsId && sameScope(row.legacyScope, channel.scope)),
-  );
 }
 
 export const listenSubscriptionRetryHandler: WorkHandler = {

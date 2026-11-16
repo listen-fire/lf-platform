@@ -82,7 +82,6 @@ import { inboxAddressesOf } from '../adapters/email/listen_keys';
 import { enqueueWork } from '../../work/store';
 import type { WorkKind } from '../../work/kinds';
 import { syncListenSubscriptions } from './listen_subscriptions';
-import { pollSubscriptionId } from '../../poll_source/worker';
 import { movementWriteRunMode } from './dry_run';
 import { loopBreakerPauses, pauseListenConfig, pipelineOfConfig } from '../../inbound/listen_pause';
 import {
@@ -150,10 +149,7 @@ import {
   type MovementValidityAssessment,
 } from './authoring';
 import { checkInstalled, routeOf } from './language_route';
-import { notListenedDiagnostic, teamFactsOf, validateUnderCarried } from './carried_check';
-import { carriedListen, carryingFromShipped, heardAnything, heardSoFarOf, keepCarriedCursors, keepingCarriedFrom, predecessorsOf, type CarriedListen, type CarryingFrom, type HeardRow } from './carried_cursors';
-import { modulePlatform } from './carried_run';
-import { listeningOf, type ListeningLane } from '@listen-fire/language-versions';
+import { notListenedDiagnostic, validateUnderCarried } from './carried_check';
 import { runningOf } from '@listen-fire/language-versions';
 import { plannedListensOfSource } from './listen_plans';
 import { carriedPauses, listenIdentityOf, type CarriedPause } from './carried_pauses';
@@ -231,10 +227,6 @@ export interface ProvisionedMovement {
    *  tell which of the earlier listens a person had paused. Not a warning of
    *  every save, so it is not among `warnings`. */
   leftPaused?: string[];
-  /** A language upgrade's: the listens that had heard something and could not
-   *  take how far with them, each starting from its first poll. As `leftPaused`,
-   *  not a warning of every save. */
-  cursorsNotCarried?: string[];
 }
 
 export interface ProvisionMovementFailure {
@@ -485,14 +477,8 @@ async function reconcileDerivedTriggers(input: {
   /** A language upgrade: it never changes whether anything is live, so every
    *  pause outlasts it, even where the new plan cannot be matched to its row. */
   keepPauses?: boolean;
-  /** A language upgrade from a carried version: each listen takes how far its
-   *  predecessor heard (./carried_cursors.ts). */
-  carrying?: CarryingFrom;
-}): Promise<{ listeners: ProvisionedListener[]; reconciles: Set<WorkKind>; leftPaused: string[]; cursorsNotCarried: string[] }> {
+}): Promise<{ listeners: ProvisionedListener[]; reconciles: Set<WorkKind>; leftPaused: string[] }> {
   const qb = getAutomationsQb(['trigger']);
-  // Read before the rows are touched, with each held: a tick or a pull under its
-  // old version committed first, or finds its row moved.
-  const heard = input.carrying !== undefined ? await heardSoFarOf(input.movementRow.id) : new Map<string, HeardRow>();
   // The schedule reconciles whose rows this save made stale: a new, changed or
   // retired cron or poll. An unchanged listener is armed already.
   const reconciles = new Set<WorkKind>();
@@ -540,25 +526,6 @@ async function reconcileDerivedTriggers(input: {
         return { identity: listenIdentityOf({ movementName: row.firedMovementName, kind: row.kind, credentialsId: row.credentialsId }), pause };
       })
     : [];
-  const { predecessors, unmatched } =
-    input.carrying !== undefined
-      ? predecessorsOf({
-          desired: input.desired.map(({ movementName, adapter, credentialsId }) => ({ movementName, adapter, credentialsId })),
-          rows: existing,
-          statements: input.carrying.statements,
-        })
-      : { predecessors: [], unmatched: [] };
-  // A cursor is never lost in silence: what cannot be carried is said, by the
-  // listen, in the upgrade's answer.
-  const cursorsNotCarried: string[] = [];
-  const cursorNotCarried = (row: { id: string; kind: string; firedMovementName: string | null; config: unknown }): void => {
-    logger.warn('[LanguageUpgrade] how far a listen heard was not carried', { movementId: input.movementRow.id, triggerId: row.id, kind: row.kind, firedMovementName: row.firedMovementName });
-    cursorsNotCarried.push(`${input.movementRow.name}: how far the ${row.kind} listen ${JSON.stringify(row.config)} that fired \`${row.firedMovementName ?? ''}\` had heard was not carried: it could not be told from the automation's other listens, or its place could not be read. It starts from its first poll, so what arrived after its last poll or tick under its earlier version is not delivered.`);
-  };
-  for (const row of unmatched) {
-    if (heardAnything(heard.get(row.id))) cursorNotCarried(row);
-  }
-  const carriedCursors: CarriedListen['cursors'] = [];
   const freshIndexes = input.desired.flatMap((_, i) => (plan.matches[i] === undefined ? [i] : []));
   const carried = new Map(
     carriedPauses({
@@ -618,21 +585,9 @@ async function reconcileDerivedTriggers(input: {
   for (let i = 0; i < input.desired.length; i++) {
     const kept = plan.matches[i];
     const rowId = kept?.id ?? randomUUID();
-    const moved =
-      input.carrying !== undefined
-        ? carriedListen({
-            carrying: input.carrying,
-            config: input.desired[i].config,
-            listen: { triggerId: rowId as TriggerId, teamId: input.teamId, file: input.movementRow.name, credentialsId: input.desired[i].credentialsId },
-            heard: predecessors[i] !== null && predecessors[i] !== undefined ? heard.get(predecessors[i]!.id) : undefined,
-            pollSubscriptionId,
-          })
-        : undefined;
-    if (moved !== undefined) carriedCursors.push(...moved.cursors);
-    if (moved?.notCarried === true) cursorNotCarried(predecessors[i]!);
     const desired: DesiredListener = {
       ...input.desired[i],
-      config: moved?.config ?? (kept !== undefined ? keepingCarriedFrom(input.desired[i].config, kept.config) : input.desired[i].config),
+      config: kept !== undefined ? keepingCarriedFrom(input.desired[i].config, kept.config) : input.desired[i].config,
     };
     const name = desired.alias ?? `movement/${input.movementRow.name}/${desired.movementName}`;
 
@@ -726,101 +681,20 @@ async function reconcileDerivedTriggers(input: {
       reused: kept !== undefined,
     });
   }
-  await keepCarriedCursors(input.teamId, carriedCursors);
-  return { listeners, reconciles, leftPaused, cursorsNotCarried };
+  return { listeners, reconciles, leftPaused };
+}
+
+/** A re-save of a listen an upgrade moved from 0.12 keeps the mark of the move,
+ *  so it keeps polling on the cursor it brought (inbound/listen_edge.ts). */
+function keepingCarriedFrom(config: Record<string, unknown>, kept: unknown): Record<string, unknown> {
+  const before = listenConfigSchema.safeParse(kept);
+  const carriedFrom = before.success ? before.data.listen.carriedFrom : undefined;
+  const now = listenConfigSchema.safeParse(config);
+  if (carriedFrom === undefined || !now.success) return config;
+  return { ...config, listen: { ...now.data.listen, carriedFrom } };
 }
 
 // ── Provision: check the program, then reconcile the listeners ──────────────
-
-/** A carried version's listens: its own collection of them, kept as production's
- *  rows kept them, read and judged only by that version (carried_delivery.ts). As
- *  production's save did: each listen's address is resolved before any row is
- *  touched, and a listen that does not resolve refuses the save, or ships without
- *  an address on a consented one; its run mode is what the text says; its schedule
- *  or poll is armed, and its webhook is reached for through the version's own
- *  module. */
-async function provisionCarriedListeners(input: {
-  teamId: TeamId;
-  audience: CatalogAudience;
-  movementRow: MovementRow;
-  source: string;
-  lane: ListeningLane;
-  keepPauses?: boolean;
-  provisionDespiteErrors?: boolean;
-  providersLater?: boolean;
-  timer?: StepTimer;
-  notes: string[];
-}): Promise<ProvisionMovementResult> {
-  const pin = input.movementRow.languageVersion;
-  const { lane } = input;
-  const within = <T>(name: string, run: () => Promise<T>): Promise<T> => (input.timer ? input.timer.within(name, run) : run());
-  const team = await teamFactsOf(input.teamId, { imports: 'live', audience: input.audience });
-  const credentialOf = (name: string): string | null => team.credentials.find((row) => row.name === name)?.id ?? null;
-  // A text its version cannot parse states no listens: answered as the current
-  // version's save answers it. The class is that version's own, so it is read by name.
-  let statements: ReturnType<ListeningLane['listenersOf']>;
-  try {
-    statements = lane.listenersOf({ source: input.source, pin });
-  } catch (error) {
-    if (!(error instanceof Error) || error.name !== 'MovementParseError') throw error;
-    const at = { line: 1, col: 1 };
-    return { ok: false, diagnostics: [{ code: 'MOV_PARSE', message: error.message, span: { start: at, end: at } }], catalogNotes: input.notes };
-  }
-  const desired: DesiredListener[] = statements.map((statement) => ({
-    movementName: statement.movementName,
-    adapter: statement.adapter,
-    ...(statement.alias !== undefined ? { alias: statement.alias } : {}),
-    config: statement.config,
-    textRunMode: lane.writeRunModeOf({ source: input.source, pin, movementName: statement.movementName }),
-    credentialsId: statement.credentialName !== undefined ? credentialOf(statement.credentialName) : null,
-  }));
-  const addressFailures: string[] = [];
-  await within('listenAddress', async () => {
-    for (const [index, listener] of desired.entries()) {
-      const statement = statements[index];
-      try {
-        const resolution = await lane.resolveListenAddress(
-          {
-            teamId: input.teamId,
-            adapter: listener.adapter,
-            credentialsId: listener.credentialsId,
-            ...(statement.constructionArgs !== undefined ? { constructionArgs: statement.constructionArgs } : {}),
-            config: statement.config,
-          },
-          modulePlatform(),
-        );
-        if (resolution.ok) listener.resolvedAddress = resolution.address;
-        else addressFailures.push(`the '${listener.adapter}' listener firing '${listener.movementName}': ${resolution.reason}`);
-      } catch (err) {
-        addressFailures.push(`the '${listener.adapter}' listener firing '${listener.movementName}': address resolution failed (${err instanceof Error ? err.message : String(err)})`);
-      }
-    }
-  });
-  if (addressFailures.length > 0 && input.provisionDespiteErrors !== true) {
-    return { ok: false, errors: addressFailures, catalogNotes: input.notes };
-  }
-  const { listeners, reconciles, leftPaused } = await within('reconcile', () =>
-    reconcileDerivedTriggers({
-      teamId: input.teamId,
-      movementRow: input.movementRow,
-      desired,
-      ...(input.keepPauses === true ? { keepPauses: true } : {}),
-    }),
-  );
-  // A carried version's schedule is armed by its own reconcile; it too is idempotent.
-  for (const kind of reconciles.size > 0 ? ([...reconciles, 'cron_reconcile'] as const) : []) await enqueueWork({ kind, key: `${kind}:shipped` });
-  // Inside a caller's transaction the providers are left to its work row.
-  const subscriptionNotes = input.providersLater === true ? [] : (await within('subscriptionSync', () => syncListenSubscriptions({ teamId: input.teamId }))).notes;
-  return {
-    ok: true,
-    movementName: input.movementRow.name,
-    listeners,
-    infos: [],
-    catalogNotes: [...input.notes, ...subscriptionNotes],
-    warnings: [],
-    ...(leftPaused.length > 0 ? { leftPaused } : {}),
-  };
-}
 
 async function provisionListeners(input: {
   teamId: TeamId;
@@ -842,9 +716,6 @@ async function provisionListeners(input: {
   providersLater?: boolean;
   /** A language upgrade: see `reconcileDerivedTriggers`. */
   keepPauses?: boolean;
-  /** An upgrade moving from a carried version: its doors lock is held, as of this
-   *  instant. */
-  movedAt?: Date;
 }): Promise<ProvisionMovementResult> {
   const { teamCatalog } = input;
   const within = <T>(name: string, run: () => Promise<T>): Promise<T> =>
@@ -919,14 +790,12 @@ async function provisionListeners(input: {
         : null,
   }));
 
-  const carrying = input.movedAt !== undefined ? await carryingFromShipped(input.movementRow, input.movedAt) : undefined;
-  const { listeners, reconciles, leftPaused, cursorsNotCarried } = await within('reconcile', () =>
+  const { listeners, reconciles, leftPaused } = await within('reconcile', () =>
     reconcileDerivedTriggers({
       teamId: input.teamId,
       movementRow: input.movementRow,
       desired,
       ...(input.keepPauses === true ? { keepPauses: true } : {}),
-      ...(carrying !== undefined ? { carrying } : {}),
     }),
   );
 
@@ -974,7 +843,6 @@ async function provisionListeners(input: {
     // itself has no view of the rest of the team's automations.
     warnings: [],
     ...(leftPaused.length > 0 ? { leftPaused } : {}),
-    ...(cursorsNotCarried.length > 0 ? { cursorsNotCarried } : {}),
   };
 }
 
@@ -1043,9 +911,6 @@ export interface SaveMovementInput {
    *  ordinary save never moves the pin. */
   languageUpgrade?: {
     to: LanguageVersion;
-    /** The upgrade's instant, with the team's doors held: a move from a carried
-     *  version takes how far its listens heard as of then. */
-    movedAt?: Date;
   };
   /** Set only by the language upgrade: the save joins its open transaction. */
   inTransaction?: SaveInTransaction;
@@ -1591,23 +1456,9 @@ async function runSave(
   // derive them, in which case the EXISTING trigger rows stay and now fire
   // this new source (which fails — fires-and-fails, by design).
   // A pin a carried version checks ships its text, and its listens are not
-  // provisioned: this platform does not run that version, and says so.
-  const carriedListening = teamCatalog === undefined ? listeningOf(row.languageVersion) : undefined;
+  // planned here: that version plans its own, and says so until it does.
   const provisioned: ProvisionMovementResult =
-    carriedListening?.kind === 'carried'
-      ? await provisionCarriedListeners({
-          teamId: input.teamId as TeamId,
-          audience: input.audience,
-          movementRow: row,
-          source: input.source,
-          lane: await carriedListening.lane(),
-          ...(input.languageUpgrade !== undefined ? { keepPauses: true } : {}),
-          ...(consented ? { provisionDespiteErrors: true } : {}),
-          ...(input.inTransaction !== undefined ? { providersLater: true } : {}),
-          timer,
-          notes,
-        })
-      : teamCatalog === undefined
+    teamCatalog === undefined
       ? { ok: false, diagnostics: [notListenedDiagnostic(row.languageVersion)], catalogNotes: notes }
       : await timer.step('listeners', () => provisionListeners({
           teamId: input.teamId as TeamId,
@@ -1617,7 +1468,6 @@ async function runSave(
           timer,
           ...(input.inTransaction !== undefined ? { providersLater: true } : {}),
           ...(input.languageUpgrade !== undefined ? { keepPauses: true } : {}),
-          ...(input.languageUpgrade?.movedAt !== undefined ? { movedAt: input.languageUpgrade.movedAt } : {}),
           // A consented non-valid save ships: derive its declared listens despite
           // check errors so it genuinely fires-and-fails (decision 3b).
           ...(consented ? { provisionDespiteErrors: true } : {}),
@@ -1638,9 +1488,9 @@ async function runSave(
   // nothing of this release's listener reconciliation reads its text.
   if (teamCatalog === undefined) {
     recordMilestones();
-    // The text is saved, under its pin, whether or not its version fires
+    // The text is saved, under its pin, whether or not its version plans
     // listens yet: that is what a person is told, and not a failed save.
-    if (!provisioned.ok && carriedListening?.kind === 'held') {
+    if (!provisioned.ok) {
       return {
         ok: true,
         movementId: row.id,
@@ -1653,7 +1503,6 @@ async function runSave(
         validity,
       };
     }
-    if (!provisioned.ok) return { ...provisioned, movementId: row.id, validity };
     return { ...provisioned, ...playback, movementId: row.id, validity };
   }
 

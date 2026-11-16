@@ -57,19 +57,26 @@ describe('the language versions this build carries', () => {
     }
   });
 
-  it('a 0.15 pin is carried as release 0.15.3: its own checker checks it and its own engine runs and resumes it; its listens do not yet fire', () => {
+  it('a 0.15 pin is carried as release 0.15.3: its own checker checks it, its own engine runs and resumes it, and its own lane fires its listens', () => {
     for (const pin of ['0.15.0', '0.15.3']) {
       expect(versionOf(pin)?.release).toBe('0.15.3');
       expect(isCurrent(pin)).toBe(false);
       expect(checkingOf(pin)).toEqual({ kind: 'carried', lane: expect.any(Function) });
       expect(runningOf(pin)).toEqual({ kind: 'carried', lane: expect.any(Function) });
       expect(resumingOf(pin)).toEqual({ kind: 'carried', lane: expect.any(Function) });
-      expect(providedFlagsFor(pin)).toEqual({ check: true, run: true, resume: true, listen: false });
-      expect(refusalOf(pin, 'run')).toBeUndefined();
-      expect(refusalOf(pin, 'resume')).toBeUndefined();
-      expect(refusalOf(pin, 'listen')).toMatch(/this platform carries 0\.15\.3 to check, run and resume its automations, but not to fire its listens/);
+      expect(listeningOf(pin)).toEqual({ kind: 'carried', lane: expect.any(Function) });
+      expect(versionOf(pin)?.listenRows).toEqual(expect.any(Function));
+      expect(providedFlagsFor(pin)).toEqual({ check: true, run: true, resume: true, listen: true });
+      for (const needed of ['run', 'resume', 'listen'] as const) expect(refusalOf(pin, needed)).toBeUndefined();
     }
-    expect(untilUpgraded('0.15.3')).toBe('its listens do not fire, and a run of it that waits (an ask, a pause) resumes');
+    expect(untilUpgraded('0.15.3')).toBe('its listens keep firing, and a run of it that waits (an ask, a pause) resumes');
+  });
+
+  it("0.15's listen lane is its package's own planning, reading, judging and gate", async () => {
+    const lane = await versionOf('0.15.3')?.listenRows?.();
+    expect(lane).toBeDefined();
+    expect(lane?.isListenRow({ config: { leftoverForUnfinishedRuns: true } })).toBe(false);
+    for (const method of ['planListens', 'isListenRow', 'readDelivery', 'gateFiring', 'readEvent'] as const) expect(typeof lane?.[method]).toBe('function');
   });
 
   it('no carried version parks on keys or mints callbacks: 0.15 parks in the run host every version shares', () => {

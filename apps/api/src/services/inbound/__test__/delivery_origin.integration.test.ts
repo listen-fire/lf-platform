@@ -4,6 +4,7 @@
 // a built-in's through the registry's kinds, a remote install's by the key it
 // mints — and a listen of that module is found on it.
 
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { randomUUID } from 'node:crypto';
 
 import { sql } from 'kysely';
@@ -16,7 +17,7 @@ import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
 import { cleanupTeam } from '../../../test/harness/cleanup';
 import { insertTestListen } from '../../../test/harness/listens';
 import { upsertRemoteAdapter } from '../../translation_graph/adapters/remote/store';
-import { MOVEMENT_LISTEN_PROVISIONER } from '../../translation_graph/movement/carried_subscriptions';
+import { MOVEMENT_LISTEN_PROVISIONER } from '../../translation_graph/movement/listen_subscriptions';
 import { capturedRequest } from '../captured_request';
 import { keepForEveryVersion } from '../carried_delivery';
 import { deliveryOriginOf } from '../delivery_origin';
@@ -71,7 +72,7 @@ afterEach(async () => {
 describe('a kept webhook delivery names the module its provider key is read by', () => {
   it('reads a built-in provider key as its module, and finds the listen filed under it', async () => {
     const movementId = randomUUID() as MovementId;
-    await getAutomationsQb(['movement']).insertInto('movement').values({ id: movementId, team_id: teamId, name: 'team_only', source: '' }).execute();
+    await getAutomationsQb(['movement']).insertInto('movement').values({ id: movementId, team_id: teamId, name: 'team_only', source: '', language_version: LANGUAGE_VERSION }).execute();
     const listen = await insertTestListen({ teamId, movementId, adapterType: 'slack', edge: 'Messages', delivery: 'connection' });
     const subscriptionId = await subscriptionFor('SLACK');
     const deliveryId = await keptThrough({ subscriptionId, adapterType: 'slack', providerKey: 'SLACK' });

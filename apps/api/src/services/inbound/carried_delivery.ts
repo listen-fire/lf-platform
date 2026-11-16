@@ -7,8 +7,9 @@
 // translates for another, and no drain loads a version it has no work for.
 //
 // What rides on a delivery, for a version: a listen pinned to it on that module,
-// when its listens fire; or a run it parked on that module's keys, whose reply
-// this may be.
+// when its listens fire. A carried version's runs park on the run host's waits,
+// as the current version's do, never on a module's keys, so a reply to one is
+// the current reading's to wake.
 
 import { createHash, randomUUID } from 'node:crypto';
 
@@ -24,15 +25,14 @@ import type { TriggerEventId } from '../../generated/kysely/automations/TriggerE
 
 import { getAutomationsQb } from '../../lib/kysely';
 import { teamIdSchema } from '../../lib/team_id';
-import { queueAwaitWakesOf } from '../movement_engine/carried_correlations';
+import { triggerIdSchema } from '../../lib/trigger_id';
 import { WAITING_KEY_PREFIX, deliveryRowStore, withDoorsHeld } from '../movement_engine/run_host_deliveries';
 import { stillHoldingDoors } from '../movement_engine/doors_hold';
 import type { StoreDb } from '../movement_engine/run_host_queue';
 import { WorkGivesUp, notifyWork, registerWorkHandler } from '../work/drain';
 import { enqueueWork } from '../work/store';
 import { modulePlatform } from '../translation_graph/movement/carried_run';
-import { MOVEMENT_LISTEN_PROVISIONER } from '../translation_graph/movement/carried_subscriptions';
-import { edgeSubscriptionOf } from '../translation_graph/movement/listen_subscriptions';
+import { MOVEMENT_LISTEN_PROVISIONER, edgeSubscriptionOf } from '../translation_graph/movement/listen_subscriptions';
 import { siblingKindsForAdapter } from '../translation_graph/adapters/registry';
 import { dispatchWorkKey } from '../translation_graph/triggers/dispatch_event';
 import { storeTriggerEvent } from '../translation_graph/triggers/event_store';
@@ -97,7 +97,7 @@ async function arrivedWhereCarriedHears(db: StoreDb, origin: DeliveryOrigin, sub
 /** The keys of the carried versions something rides on this delivery for, read
  *  on the keep's own transaction. */
 async function versionsConcerned(db: StoreDb, origin: DeliveryOrigin, subscriptionId: string): Promise<string[]> {
-  const carried = carriedVersions().filter((version) => version.provides.listen.kind === 'carried' || version.provides.resume.kind === 'carried');
+  const carried = carriedVersions().filter((version) => version.provides.listen.kind === 'carried');
   if (carried.length === 0) return [];
   if (!(await arrivedWhereCarriedHears(db, origin, subscriptionId))) return [];
   const pins = await db
@@ -115,14 +115,7 @@ async function versionsConcerned(db: StoreDb, origin: DeliveryOrigin, subscripti
       return version !== undefined && version.provides.listen.kind === 'carried' ? [version.key] : [];
     }),
   );
-  const parked = await db
-    .selectFrom('adapter_await')
-    .where('team_id', '=', origin.teamId)
-    .where('adapter_type', '=', origin.adapterType)
-    .select('id')
-    .limit(1)
-    .executeTakeFirst();
-  return carried.filter((version) => listening.has(version.key) || (parked !== undefined && version.provides.resume.kind === 'carried')).map((version) => version.key);
+  return carried.filter((version) => listening.has(version.key)).map((version) => version.key);
 }
 
 function readingRows(origin: DeliveryOrigin, deliveryId: string, versions: readonly string[]): NewWorkRow[] {
@@ -188,24 +181,6 @@ export async function judgedEmpty(input: { teamId: string; id: string }): Promis
   await deliveryRowStore({ host: 'platform', teamId: input.teamId }).judgedEmpty({ id: input.id });
 }
 
-/** The listens on a module pinned to a carried version whose listens fire, for
- *  the doors that build a version's event themselves (WhatsApp's media, email's
- *  routing key): production's doors at 0.12.13 built it, and no module reads a
- *  request there. */
-export async function carriedListensOn(origin: Pick<DeliveryOrigin, 'teamId' | 'adapterType' | 'providerKey'>): Promise<Array<ListenRow & { lane: () => Promise<ListeningLane> }>> {
-  const listening = carriedVersions().filter((version) => version.provides.listen.kind === 'carried');
-  if (listening.length === 0) return [];
-  const rows = await shippedListenRows(origin);
-  const live = await Promise.all(
-    rows.map(async (row) => {
-      const version = listening.find((candidate) => candidate.key === versionOf(row.pin)?.key);
-      if (version?.listenRows === undefined) return [];
-      return (await version.listenRows()).isListenRow(row) ? [{ ...row, lane: version.listenRows }] : [];
-    }),
-  );
-  return live.flat();
-}
-
 /** Every row of the origin's module, each with the text its automation shipped. */
 async function shippedListenRows(origin: Pick<DeliveryOrigin, 'teamId' | 'adapterType' | 'providerKey'>): Promise<ListenRow[]> {
   const rows = await getAutomationsQb(['trigger', 'movement', 'movement_version'])
@@ -227,11 +202,11 @@ async function shippedListenRows(origin: Pick<DeliveryOrigin, 'teamId' | 'adapte
   return rows.map((row) => ({ ...row, credentialsId: row.credentialsId ?? null }));
 }
 
-/** The rows of `row`'s module pinned to its version: a legacy id's among them,
- *  whose firing is refused by name. */
-async function listenRowsFor(row: ReadDeliveryRow, version: CarriedVersion): Promise<ListenRow[]> {
+/** The rows of `row`'s module pinned to its version that read as listens under
+ *  its own plan schema: the only rows it judges. */
+async function listenRowsFor(row: ReadDeliveryRow, version: CarriedVersion, lane: Pick<ListeningLane, 'isListenRow'>): Promise<ListenRow[]> {
   if (version.provides.listen.kind !== 'carried') return [];
-  return (await shippedListenRows(row)).filter((listen) => versionOf(listen.pin)?.key === version.key);
+  return (await shippedListenRows(row)).filter((listen) => versionOf(listen.pin)?.key === version.key && lane.isListenRow(listen));
 }
 
 async function keptDeliveryOf(row: ReadDeliveryRow): Promise<CarriedKeptDelivery | null> {
@@ -270,33 +245,18 @@ async function receiptStatus(id: TriggerEventId): Promise<string | undefined> {
 }
 
 /** The automations a delivery was owed to under a version: those with a listen
- *  it might have fired, and those with a run parked on the module's keys, whose
- *  reply it might have been. */
+ *  it might have fired. */
 async function ownersOfDelivery(row: ReadDeliveryRow, version: CarriedVersion): Promise<Array<{ movementId: string; movementName: string; triggerName: string }>> {
-  const listens = (await listenRowsFor(row, version)).map((listen) => listen.id);
-  const heard =
-    listens.length === 0
-      ? []
-      : await getAutomationsQb(['trigger', 'movement'])
-          .selectFrom('trigger')
-          .innerJoin('movement', 'movement.id', 'trigger.movement_id')
-          .where('trigger.id', 'in', listens as never[])
-          .select(['movement.id as movementId', 'movement.name as movementName', 'trigger.name as triggerName'])
-          .execute();
-  const parked =
-    version.provides.resume.kind !== 'carried'
-      ? []
-      : await getAutomationsQb(['adapter_await', 'trigger_run', 'movement_version', 'movement'])
-          .selectFrom('adapter_await')
-          .innerJoin('trigger_run', 'trigger_run.id', 'adapter_await.run_id')
-          .innerJoin('movement_version', 'movement_version.id', 'trigger_run.movement_version_id')
-          .innerJoin('movement', 'movement.id', 'movement_version.movement_id')
-          .where('adapter_await.team_id', '=', row.teamId)
-          .where('adapter_await.adapter_type', '=', row.adapterType)
-          .select(['movement.id as movementId', 'movement.name as movementName'])
-          .distinct()
-          .execute();
-  return [...heard, ...parked.map((owner) => ({ ...owner, triggerName: row.adapterType }))];
+  if (version.listenRows === undefined) return [];
+  const lane = await version.listenRows();
+  const listens = (await listenRowsFor(row, version, lane)).map((listen) => triggerIdSchema.parse(listen.id));
+  if (listens.length === 0) return [];
+  return getAutomationsQb(['trigger', 'movement'])
+    .selectFrom('trigger')
+    .innerJoin('movement', 'movement.id', 'trigger.movement_id')
+    .where('trigger.id', 'in', listens)
+    .select(['movement.id as movementId', 'movement.name as movementName', 'trigger.name as triggerName'])
+    .execute();
 }
 
 /** A reading given up on is no silent loss: each automation it was owed to has
@@ -335,8 +295,8 @@ async function readKeptDelivery(row: ReadDeliveryRow): Promise<void> {
     logger.warn(`[ReadDelivery] delivery ${row.deliveryId} kept no request version ${row.version} can read: it reads nothing`);
     return;
   }
-  const listens = await listenRowsFor(row, version);
   const lane = await laneOf();
+  const listens = await listenRowsFor(row, version, lane);
   const read = await lane.readDelivery(
     {
       teamId: row.teamId,
@@ -353,7 +313,6 @@ async function readKeptDelivery(row: ReadDeliveryRow): Promise<void> {
   for (const [index, receipt] of read.receipts.entries()) {
     await receiveJudgedEvent({ teamId: row.teamId, triggerId: receipt.triggerId, event: receipt.event, lane, stableKey: `delivery:${row.deliveryId}:${index}` });
   }
-  await queueAwaitWakesOf({ adapterType: row.adapterType, teamId: row.teamId, keys: read.wakeKeys });
   notifyWork();
 }
 

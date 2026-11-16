@@ -205,8 +205,6 @@ export interface ReadDeliveryOutcome {
   /** One per listen an arrival fired: the event its run is handed, in 0.15's
    *  shape, as JSON. */
   receipts: { triggerId: string; event: Record<string, unknown> }[];
-  /** 0.15 parks on waits, never on keys: always empty. */
-  wakeKeys: string[];
   /** Why an arrival ran nothing, for the log. */
   lines: string[];
 }
@@ -223,11 +221,11 @@ export async function readDelivery(request: ReadDeliveryRequest, modules: Module
     if (request.matchAnyCredential !== true && row.credentialsId !== null && row.credentialsId !== request.credentialsId) return [];
     return [{ row, listen: parsed.data.listen }];
   });
-  if (listens.length === 0) return { receipts: [], wakeKeys: [], lines };
+  if (listens.length === 0) return { receipts: [], lines };
   const adapter = await moduleTable(modules).resolve(adapterType, { teamId, ...(request.credentialsId !== null ? { credentialsId: request.credentialsId } : {}) });
   if (adapter.preprocessInbound === undefined) {
     lines.push(`${adapterType} under 0.15 reads no delivery: nothing in it is judged under 0.15`);
-    return { receipts: [], wakeKeys: [], lines };
+    return { receipts: [], lines };
   }
   const read = await adapter.preprocessInbound({ raw: bodyOf(delivery), ...(delivery.checkpoint !== undefined ? { checkpoint: delivery.checkpoint } : {}) });
   const now = new Date(request.now);
@@ -247,7 +245,7 @@ export async function readDelivery(request: ReadDeliveryRequest, modules: Module
       receipts.push({ triggerId: row.id, event: JSON.parse(JSON.stringify(event)) });
     }
   }
-  return { receipts, wakeKeys: [], lines };
+  return { receipts, lines };
 }
 
 /** What the source module says of a firing before it runs: the old ownership

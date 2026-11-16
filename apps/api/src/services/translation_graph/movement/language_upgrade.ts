@@ -1033,7 +1033,7 @@ export const advanceLive: Advance = async ({ movement, to, source, movingWith })
       ...(movingWith.size > 0 ? { movingWith } : {}),
     }),
   );
-  return async ({ movedAt }) => {
+  return async () => {
     const stale = staleSinceChecked(movement, await lockMovementRow({ teamId: movement.teamId, id: movement.id }));
     if (stale !== null) return { ok: false, detail: stale };
     const saved = await saveMovement({
@@ -1041,11 +1041,11 @@ export const advanceLive: Advance = async ({ movement, to, source, movingWith })
       id: movement.id,
       source,
       audience: UPGRADE_AUDIENCE,
-      languageUpgrade: { to, movedAt },
+      languageUpgrade: { to },
       inTransaction: { teamCatalog },
     });
     if (saved.ok) {
-      const warnings = [...(saved.leftPaused ?? []), ...(saved.cursorsNotCarried ?? [])];
+      const warnings = saved.leftPaused ?? [];
       return { ok: true, ...(warnings.length > 0 ? { warnings } : {}) };
     }
     const what = source === movement.source ? `it did not ship under ${to}` : 'the rewritten text did not ship';

@@ -18,7 +18,6 @@ jest.mock('../carried_delivery', () => ({
   waitingKeyOf: jest.fn(() => 'waiting:golden'),
   withDoorsHeld: jest.fn((_teamId: string, body: () => Promise<unknown>) => body()),
   judgedEmpty: jest.fn(async () => undefined),
-  carriedListensOn: jest.fn(async () => []),
   receiveJudgedEvent: jest.fn(async () => undefined),
 }));
 jest.mock('../../../lib/kysely', () => ({ ...jest.requireActual('../../../lib/kysely'), ...require('./fakes').kyselyFake() }));

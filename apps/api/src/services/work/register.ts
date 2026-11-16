@@ -7,8 +7,6 @@ import { MINUTE, SECOND } from '../../constants';
 import { registerAwaitWork } from '../movement_engine/await_resume';
 import { registerCallbackFireWork } from '../movement_engine/callback_fire';
 import { registerTimerWork } from '../movement_engine/timer_resume';
-import { registerCronWork } from '../movement_scheduler/worker';
-import { registerCarriedPollWork } from '../poll_source/carried_worker';
 import { registerPollWork } from '../poll_source/worker';
 import { registerListenSubscriptionWork } from '../translation_graph/movement/listen_subscriptions';
 import { registerBringUpListensWork } from '../translation_graph/movement/listens_up';
@@ -21,13 +19,8 @@ import { registerRetryUnjudgedWork } from '../inbound/unjudged_retry';
 import { periodicUnitWorkKinds, type CoreWorkKind } from './kinds';
 import { ensurePeriodicWork, removeRetiredWork } from './store';
 
-/** Production's cadence for `cron_reconcile`: a 0.12.13 service beside this one
- *  ensures the same row. */
-const CRON_RECONCILE_MS = 30 * SECOND;
-
 const CORE_PERIODIC_WORK: ReadonlyArray<{ kind: CoreWorkKind; intervalMs: number }> = [
   { kind: 'poll_reconcile', intervalMs: 30 * SECOND },
-  { kind: 'cron_reconcile', intervalMs: CRON_RECONCILE_MS },
   { kind: 'listen_subscription_retry', intervalMs: 5 * MINUTE },
   { kind: 'timer_sweep', intervalMs: 30 * SECOND },
   { kind: 'run_orphan_sweep', intervalMs: 30 * SECOND },
@@ -54,8 +47,6 @@ async function ensureAutomationsPeriodicWork(): Promise<void> {
 function registerCoreWork(): void {
   registerTimerWork();
   registerPollWork();
-  registerCarriedPollWork();
-  registerCronWork();
   registerListenSubscriptionWork();
   registerBringUpListensWork();
   registerFireEventWork();

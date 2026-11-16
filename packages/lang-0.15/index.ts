@@ -56,6 +56,7 @@ export { outlineOf } from './lane/outline';
 export { storyOf } from './lane/story';
 export { hostedModuleTypes } from './lane/modules';
 export { manualInvocationEvent, manualListens, readEvent, resumeSegment, runSegment } from './lane/run';
+export { gateFiring, isListenRow, planListens, readDelivery } from './lane/listen';
 
 /** A parse, as plain data: the program, or where (`loc`) and why (`message`)
  *  it does not parse. */

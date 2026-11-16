@@ -6,6 +6,7 @@
 // when its module said to poll again if that is sooner, and the reconcile
 // keeps one row per shared poll.
 
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { randomUUID } from 'node:crypto';
 
 import type { Arrival } from 'engine-contracts';
@@ -49,7 +50,7 @@ beforeAll(async () => {
   teamId = randomUUID() as TeamId;
   movementId = randomUUID() as MovementId;
   await getCoreQb(['team']).insertInto('team').values({ id: teamId, name: `polls-${teamId.slice(0, 8)}` }).execute();
-  await getAutomationsQb(['movement']).insertInto('movement').values({ id: movementId, team_id: teamId, name: 'polls', source: '' }).execute();
+  await getAutomationsQb(['movement']).insertInto('movement').values({ id: movementId, team_id: teamId, name: 'polls', source: '', language_version: LANGUAGE_VERSION }).execute();
 });
 
 afterAll(async () => {

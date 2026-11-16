@@ -23,7 +23,7 @@ import type { KgStore } from '@listen-fire/kg/store';
 import type { SlackComposeChat } from '@listen-fire/slack/compose';
 import type { SystemRecords } from '@listen-fire/system/records';
 
-import type { TeamFacts } from './index';
+import type { CheckRequest, TeamFacts } from './index';
 
 /** The team member a carried run acts as. 0.16 retired the shape from the
  *  engine (who acted is a claim), so it is stated here, as a version from
@@ -481,8 +481,10 @@ export interface ReadDeliveryRequest {
 }
 
 export interface ReadDeliveryOutcome {
+  /** One per listen an arrival fired: the event its run is handed, in the
+   *  version's own shape. */
   receipts: { triggerId: string; event: Record<string, unknown> }[];
-  wakeKeys: string[];
+  /** Why an arrival ran nothing, for the log. */
   lines: string[];
 }
 
@@ -492,105 +494,39 @@ export type GateAnswer = { kind: 'suppress'; reason: string } | { kind: 'proceed
  *  module reads them: 0.15's records are this release's (`@listen-fire/system`). */
 export type CarriedSystemRecords = SystemRecords;
 
-export interface AddressRequest {
-  teamId: string;
-  adapter: string;
-  credentialsId: string | null;
-  constructionArgs?: Record<string, string>;
-  config: Record<string, unknown>;
-}
-
-export type AddressResolution = { ok: true; address: Record<string, string> } | { ok: false; reason: string };
-
-export interface ChannelRow {
-  name: string;
-  kind: string;
-  credentialsId: string | null;
-  config: unknown;
-  resolvedAddress: unknown;
-}
-
-export interface RemoteChannelFacts {
-  adapterType: string;
-  methods: readonly string[];
-  requiredCredentialType?: string;
-}
-
-/** One webhook a carried version's listens want. */
-export interface Channel {
-  slug: string;
-  providerKey: string;
-  credentialsId: string | null;
-  events: string[];
-  scope: Record<string, string>;
-}
-
-export interface ChannelRegistration {
-  externalId?: string;
-  secret?: string;
-}
-
-/** Where a carried listen stood, as its row keeps it, for the current version's
- *  edge the cursor is asked for. */
-export interface HeardSoFar {
-  adapterType: string;
-  edge: string;
-  pollCheckpoint: unknown;
-  cronLastFiredAt: string | null;
-}
-
-/** A carried version's own reading and judging of a kept delivery. */
-export interface ListeningLane {
-  /** What a text's listen on `movementName` rehearses, off its own parse. */
-  writeRunModeOf(request: { source: string; pin: string; movementName: string }): 'live' | 'dry_run';
-  resolveListenAddress(request: AddressRequest, modules: ModulePlatform): Promise<AddressResolution>;
-  channelsOf(
-    request: { rows: readonly ChannelRow[]; slugOf: (kind: string) => string; remote: readonly RemoteChannelFacts[] },
-    modules: ModulePlatform,
-  ): { channels: Channel[]; notes: string[] };
-  ensureChannel(
-    request: {
-      teamId: string;
-      slug: string;
-      credentialsId: string | null;
-      events: readonly string[];
-      callbackUrl: string;
-      current?: { externalId?: string; events: readonly string[] };
-      scope: Record<string, string>;
-    },
-    modules: ModulePlatform,
-  ): Promise<ChannelRegistration | null>;
-  removeChannel(
-    request: { teamId: string; slug: string; credentialsId: string | null; callbackUrl: string; externalId: string | null; scope: Record<string, string> },
-    modules: ModulePlatform,
-  ): Promise<void>;
-  refreshChannel(request: { teamId: string; slug: string; credentialsId: string | null; externalId: string; scope: Record<string, string> }, modules: ModulePlatform): Promise<void>;
-  polledKinds(modules: ModulePlatform): string[];
-  pollSecondsOf(adapterType: string, modules: ModulePlatform): number | undefined;
-  pollListen(
-    request: { teamId: string; triggerId: string; adapterType: string; credentialsId: string | null; movementId: string; config: unknown; checkpoint: unknown; now: string },
-    modules: ModulePlatform,
-  ): Promise<{ events: Record<string, unknown>[]; checkpoint: unknown }>;
-  /** One tick of a schedule, in the version's shape. */
-  tickEvent(request: { triggerId: string; due: string; schedule: string }): CarriedEvent;
-  /** The one-off map from a carried listen's cursor to the current version's. */
-  cursorOnCurrent(heard: HeardSoFar): { cursor: unknown } | undefined;
-  readDelivery(request: ReadDeliveryRequest, modules: ModulePlatform): Promise<ReadDeliveryOutcome>;
-  gateFiring(request: { teamId: string; adapterType: string; credentialsId: string | null; config: unknown; event: CarriedEvent }, modules: ModulePlatform): Promise<GateAnswer>;
-  /** Whether a kept row is a listen under this version. */
-  isListenRow(row: Pick<ListenRow, 'config' | 'firedMovementName' | 'source' | 'pin'>): boolean;
-  /** The listens a text states, as the version collects them. */
-  listenersOf(request: { source: string; pin: string }): readonly CarriedFileListener[];
-  readEvent(event: CarriedEvent): CarriedEventReading;
-}
-
-export interface CarriedFileListener {
-  adapter: string;
+/** One listen as its version's check plans it: the config its trigger row
+ *  keeps, in the version's own listen shape, which only that version reads
+ *  again. The platform reads only what names the row: its pipeline, the
+ *  module and the movement it fires, and the connection it names. */
+export type CarriedListenConfig = Readonly<Record<string, unknown>> & {
+  pipeline: string;
+  plan: { readonly adapter: string; readonly movement: string };
   credentialName?: string;
   constructionArgs?: Record<string, string>;
-  config: Record<string, unknown>;
-  movementName: string;
-  alias?: string;
+};
+
+/** A file's listens as its version plans them; a listen the platform would
+ *  not fire as written is refused by name. A text the version cannot read has
+ *  its refusal instead. */
+export type PlannedListens = { ok: true; listens: CarriedListenConfig[]; refused: string[] } | { ok: false; refused: string };
+
+/** A carried version's listens, in the plan shape every version's trigger rows
+ *  share: the row's pin chooses the version, and only that version plans,
+ *  reads, judges and gates them. A row's plan is read with its own release's
+ *  schema, never another's. */
+export interface ListeningLane {
+  /** The listens a file states, planned by the version's own check. */
+  planListens(request: CheckRequest & { file: string }): Promise<PlannedListens>;
+  /** Whether a kept row's config reads as a listen under the version's own
+   *  plan schema. */
+  isListenRow(row: Pick<ListenRow, 'config'>): boolean;
+  /** A kept delivery read again by the version's own module, each arrival
+   *  judged by its own judge against the rows pinned to it. */
+  readDelivery(request: ReadDeliveryRequest, modules: ModulePlatform): Promise<ReadDeliveryOutcome>;
+  /** What the source module says of a firing before it runs: the version's
+   *  own gate. */
+  gateFiring(request: { teamId: string; adapterType: string; credentialsId: string | null; config: unknown; event: CarriedEvent }, modules: ModulePlatform): Promise<GateAnswer>;
+  readEvent(event: CarriedEvent): CarriedEventReading;
 }
 
 /** What a remote adapter of this release stores fetched files in, and the

@@ -1333,10 +1333,6 @@ export interface ProvisionedMovement {
      *  tell which of the earlier listens a person had paused. Not a warning of
      *  every save, so it is not among `warnings`. */
     leftPaused?: string[];
-    /** A language upgrade's: the listens that had heard something and could not
-     *  take how far with them, each starting from its first poll. As `leftPaused`,
-     *  not a warning of every save. */
-    cursorsNotCarried?: string[];
 }
 export interface ProvisionMovementFailure {
     ok: false;

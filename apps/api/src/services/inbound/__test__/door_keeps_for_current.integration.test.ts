@@ -5,6 +5,7 @@
 // a request a module refused is never kept; and a store that cannot write
 // answers the provider an error, with nothing read or kept.
 
+import { LANGUAGE_VERSION } from 'movement-lang';
 import { createHmac, randomUUID } from 'node:crypto';
 
 const mockResolve = jest.fn();
@@ -52,7 +53,7 @@ describe('the door that keeps first, from the current version', () => {
     teamId = randomUUID() as TeamId;
     movementId = randomUUID() as MovementId;
     await getCoreQb(['team']).insertInto('team').values({ id: teamId, name: `keeps-${teamId}` }).execute();
-    await getAutomationsQb(['movement']).insertInto('movement').values({ id: movementId, team_id: teamId, name: 'heard', source: '' }).execute();
+    await getAutomationsQb(['movement']).insertInto('movement').values({ id: movementId, team_id: teamId, name: 'heard', source: '', language_version: LANGUAGE_VERSION }).execute();
   });
 
   afterEach(async () => {
@@ -112,7 +113,7 @@ describe('the door that keeps first, from the current version', () => {
     teamId = randomUUID() as TeamId;
     movementId = randomUUID() as MovementId;
     await getCoreQb(['team']).insertInto('team').values({ id: teamId, name: `keeps-${teamId}` }).execute();
-    await getAutomationsQb(['movement']).insertInto('movement').values({ id: movementId, team_id: teamId, name: 'heard', source: '' }).execute();
+    await getAutomationsQb(['movement']).insertInto('movement').values({ id: movementId, team_id: teamId, name: 'heard', source: '', language_version: LANGUAGE_VERSION }).execute();
     const without = await attioSubscription(SECRET);
     await insertTestListen({ teamId, movementId, adapterType: 'attio', edge: 'Things', delivery: 'connection' });
     const bare = await deliver({ subscriptionId: without, rawBody: bodyOf('a'), keptFirst: false });
