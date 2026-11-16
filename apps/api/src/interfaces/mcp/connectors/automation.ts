@@ -303,11 +303,11 @@ function automationConnectorOptions(): McpRouterOptions {
       },
       setAccess: {
         description:
-          "Change who may reach one automation or one connection, by replacing one of its lists. An automation has two: read; write (change, run and delete it, and change these lists; whoever may write may also read). A connection has one, use (run automations on it, read through it, and change this list). Ask the person you are working for who should be on the list, and pass what they say; never choose for them, and never widen a list on your own judgement. This REPLACES the whole list: read the current list first, then pass it back with the requested change made; never pass just the one person to add, which would remove everyone else. Each list takes the team or members of it. A list is never empty. Changing an automation's lists needs write on it; a connection's needs use; a team admin may change any list on the team, a locked one too. A new automation's lists are given to saveAutomation, and a new connection's to connectSystem; this changes them afterwards. Returns the list as stored. The current lists are in getAutomation's and describeConnection's `access`, or for a locked thing in its listAutomations or listConnections entry; leave out anyone marked `onTeam: false`, who has left the team. (grantAccess is different: it opens a provider's picker to grant items inside a connection.)",
+          "Change who may reach one automation or one connection, by replacing one of its lists. An automation has two: read; write (change, run and delete it, and change these lists; whoever may write may also read). A connection has one, use (run automations on it, read through it, and change this list). A file that exports (a library) also has use: who may import it and call its exported functions without reading its source. Setting a library's use list needs use on every connection and library it names, a team admin too. Ask the person you are working for who should be on the list, and pass what they say; never choose for them, and never widen a list on your own judgement. This REPLACES the whole list: read the current list first, then pass it back with the requested change made; never pass just the one person to add, which would remove everyone else. Each list takes the team or members of it. A list is never empty. Changing an automation's lists needs write on it; a connection's needs use; a team admin may change any list on the team, a locked one too. A new automation's lists are given to saveAutomation, and a new connection's to connectSystem; this changes them afterwards. Returns the list as stored. The current lists are in getAutomation's and describeConnection's `access`, or for a locked thing in its listAutomations or listConnections entry; leave out anyone marked `onTeam: false`, who has left the team. (grantAccess is different: it opens a provider's picker to grant items inside a connection.)",
         inputSchema: {
           automation: z.string().optional().describe('The automation (id or exact name). Name this or connection, not both.'),
           connection: z.string().optional().describe('The connection (id or exact name, from listConnections). Name this or automation, not both.'),
-          verb: z.enum(['read', 'write', 'use']).describe('Which list: read or write for an automation; use for a connection.'),
+          verb: z.enum(['read', 'write', 'use']).describe('Which list: read or write for an automation (use too, for a file that exports); use for a connection.'),
           grantees: GranteesInput.describe(
             'The whole new list, replacing the old one: { kind: "team" } or { kind: "user", userId }. From the person you are working for.',
           ),
@@ -445,10 +445,11 @@ function automationConnectorOptions(): McpRouterOptions {
             .object({
               read: GranteesInput.optional().describe(LIST_DESCRIPTIONS.read),
               write: GranteesInput.optional().describe(LIST_DESCRIPTIONS.write),
+              use: GranteesInput.optional().describe(LIST_DESCRIPTIONS.useLibrary),
             })
             .optional()
             .describe(
-              'Who may reach a NEW automation: both lists, each from the person you are working for. Refused on a save over an existing automation (use setAccess).',
+              'Who may reach a NEW automation: both lists, each from the person you are working for. A file that exports (a library) needs `use` too, and so does the save that adds a file\'s first export: it may then carry `use` alone. Otherwise refused on a save over an existing automation (use setAccess).',
             ),
           team: z.string().optional().describe('Team id (see instructions).'),
         },

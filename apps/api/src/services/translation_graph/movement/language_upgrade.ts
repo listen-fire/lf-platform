@@ -87,7 +87,7 @@ import { movementCatalogForTeam, type ImportedFile } from './catalog';
 import type { CatalogAudience } from './audience';
 import type { Principal } from 'principal';
 import { accessTo } from '../../access/decide';
-import { connectionsNamed, connectionsRefusal, unusableConnections } from './save_access';
+import { connectionsNamed, connectionsRefusal, librariesNamed, librariesRefusal, unusableConnections, unusableLibraries } from './save_access';
 
 import { getAutomationsQb } from '../../../lib/kysely';
 import { listenPauses } from '../../inbound/listen_pause';
@@ -1320,7 +1320,17 @@ export async function upgradeMovement(input: {
         ),
       )
     ).flat();
-    if (unusable.length > 0) return { status: 'blocked', ...shown, diagnostics, detail: (await connectionsRefusal(by, unusable)).message };
+    if (unusable.length > 0) return { status: 'blocked', ...shown, diagnostics, detail: connectionsRefusal(unusable).message };
+    const unusableLibs = (
+      await Promise.all(
+        checked.map(async (member) => unusableLibraries(by, await librariesNamed({ teamId: input.teamId, source: member.rewrite.source }))),
+      )
+    ).flat();
+    if (unusableLibs.length > 0) {
+      // Two members importing one library name it once.
+      const once = [...new Map(unusableLibs.map((library) => [library.name, library])).values()];
+      return { status: 'blocked', ...shown, diagnostics, detail: librariesRefusal(once).message };
+    }
   }
   if (checked.some((member) => member.held)) {
     return { status: 'blocked', ...shown, diagnostics, ...(own.held ? {} : { detail: heldDetail(heldBy) }) };

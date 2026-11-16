@@ -21,8 +21,15 @@ type Thing = 'automation' | 'connection';
 
 type Verb = 'read' | 'write' | 'use';
 
-/** The verbs each thing's statement has: reading and writing are an automation's, using is a connection's. */
-type StatedVerb<T extends Thing> = T extends 'automation' ? 'read' | 'write' : 'use';
+/**
+ * The verbs each thing's statement has: reading and writing are an automation's,
+ * using is a connection's, and a file that exports (a library) has it too: use
+ * lets someone import and call what it exports without reading its source.
+ */
+type StatedVerb<T extends Thing> = T extends 'automation' ? 'read' | 'write' | 'use' : 'use';
+
+/** What someone may do with an automation's file itself: see it, or change it. Using it, as a library, is `use`. */
+type FileVerb = 'read' | 'write';
 
 type Target<T extends Thing = Thing> = { thing: T; id: string };
 
@@ -295,6 +302,86 @@ async function carryStatements(from: Target, to: Target, options: { teamId: stri
   return moved.numUpdatedRows > 0n;
 }
 
+/** What a thing is called, for a sentence that names it. */
+async function nameOf(target: Target): Promise<string> {
+  switch (target.thing) {
+    case 'automation': {
+      const row = await getAutomationsQb(['movement'])
+        .selectFrom('movement')
+        .select('name')
+        .where('id', '=', target.id as MovementId)
+        .executeTakeFirst();
+      return row?.name ?? target.id;
+    }
+    case 'connection': {
+      const row = await getAutomationsQb(['external_service_credentials'])
+        .selectFrom('external_service_credentials')
+        .select('name')
+        .where('id', '=', target.id as ExternalServiceCredentialsId)
+        .executeTakeFirst();
+      return row?.name ?? target.id;
+    }
+    default:
+      return neverAsAny(target.thing);
+  }
+}
+
+/** The automations of a team that have a use list: the files that export. */
+async function librariesOf(teamId: string): Promise<string[]> {
+  const rows = await getAutomationsQb(['access_statement'])
+    .selectFrom('access_statement')
+    .select('thing_id')
+    .distinct()
+    .where('team_id', '=', teamId)
+    .where('thing', '=', 'automation')
+    .where('verb', '=', 'use')
+    .execute();
+  return rows.map((r) => r.thing_id);
+}
+
+/** What a file names directly: the connections its own `connect` statements name, and the libraries its own import lines name. Whatever does not resolve is left out. */
+type DirectNames = { connections: Target<'connection'>[]; libraries: Target<'automation'>[] };
+
+/**
+ * The file's direct names, read from its stored text. The reading belongs to
+ * the translation graph, which itself decides through this store, so it is
+ * loaded when asked for rather than when this file is.
+ */
+async function namedBy(target: Target<'automation'>): Promise<DirectNames> {
+  const { directNamesOf } = await import('../translation_graph/movement/save_access');
+  return directNamesOf(target.id);
+}
+
+/** Whether the file's stored text exports anything: it is a library, and has a use list. */
+async function exportsSomething(target: Target<'automation'>): Promise<boolean> {
+  const { fileExportsSomething } = await import('../translation_graph/movement/save_access');
+  return fileExportsSomething(target.id);
+}
+
+/** Where a library stands: undefined when it has not been worked out. `lostConnectionId` is null when it stands. */
+async function standingsOf(ids: readonly string[]): Promise<Map<string, { lostConnectionId: string | null }>> {
+  const wanted = ids.filter(isUuid);
+  if (wanted.length === 0) return new Map();
+  const rows = await getAutomationsQb(['library_standing'])
+    .selectFrom('library_standing')
+    .select(['movement_id', 'lost_connection_id'])
+    .where('movement_id', 'in', wanted.map((id) => id as MovementId))
+    .execute();
+  return new Map(rows.map((r) => [r.movement_id, { lostConnectionId: r.lost_connection_id }]));
+}
+
+async function setStanding(
+  target: Target<'automation'>,
+  options: { teamId: string; lostConnectionId: string | null },
+): Promise<void> {
+  const lost = options.lostConnectionId === null ? null : (options.lostConnectionId as ExternalServiceCredentialsId);
+  await getAutomationsQb(['library_standing'])
+    .insertInto('library_standing')
+    .values({ team_id: options.teamId, movement_id: target.id as MovementId, lost_connection_id: lost })
+    .onConflict((oc) => oc.column('movement_id').doUpdateSet({ lost_connection_id: lost, checked_at: sql`now()` }))
+    .execute();
+}
+
 /** The team's admins, oldest first. */
 async function adminsOf(teamId: string): Promise<string[]> {
   const rows = await getCoreQb(['team_membership'])
@@ -321,6 +408,12 @@ const StatementStore = {
   membershipsAmong,
   membersOf,
   adminsOf,
+  librariesOf,
+  exportsSomething,
+  nameOf,
+  namedBy,
+  standingsOf,
+  setStanding,
 };
 
 export {
@@ -328,8 +421,10 @@ export {
   type Thing,
   type Verb,
   type StatedVerb,
+  type FileVerb,
   type Target,
   type Grantee,
   type GranteeKind,
+  type DirectNames,
   StatementStore,
 };

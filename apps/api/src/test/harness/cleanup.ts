@@ -92,6 +92,7 @@ const TABLES_TEAM_SCOPED: readonly (readonly [
   ['automations', 'arrival_unjudged'],
   // Statements name their thing by id, with no FK to it.
   ['automations', 'access_statement'],
+  ['automations', 'library_standing'],
   // Remote-adapter installs (the credentials_id FK is SET NULL in-schema).
   ['automations', 'remote_adapter'],
   ['automations', 'external_service_credentials'],

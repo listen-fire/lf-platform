@@ -92,7 +92,7 @@ import {
 } from './files';
 import { movementCatalogForTeam, type CatalogGap, type TeamMovementCatalog } from './catalog';
 import type { CatalogAudience } from './audience';
-import { checkCreation, stateCreation, StatementRefusedError, type CreationStatements } from '../../access/decide';
+import { checkCreation, checkedList, recomputeLibraryStanding, setStatement, stateCreation, StatementRefusedError, type CreationStatements } from '../../access/decide';
 import {
   READ_ONLY_REFUSAL,
   STATEMENTS_ON_OVERWRITE_REFUSAL,
@@ -100,7 +100,11 @@ import {
   connectionsNamed,
   connectionsRefusal,
   creationStatements,
+  exportsSomething,
+  FIRST_EXPORT_REFUSAL,
   inOneTransaction,
+  librariesNamed,
+  librariesRefusal,
   missingStatementRefusal,
   nameGoneRefusal,
   nameTakenRefusal,
@@ -108,6 +112,7 @@ import {
   saverOf,
   stateRunCreation,
   unusableConnections,
+  unusableLibraries,
   type SaveRefusal,
 } from './save_access';
 import { StatementStore } from '../../access/statement';
@@ -989,8 +994,10 @@ export interface SaveMovementInput {
   /** Whose save this is: the connections its check, and its listens, may
    *  resolve. A person's save is also decided for them (./save_access.ts). */
   audience: CatalogAudience;
-  /** Who may read and write the automation, when this save creates it.
-   *  A person's save that creates one without all three is refused. */
+  /** Who may read and write the automation, when this save creates it, and who
+   *  may use it when it exports (the use list alone may also be given by a save
+   *  that adds a file's first export). A person's save that creates one without
+   *  them is refused. */
   statements?: Partial<CreationStatements>;
   /** Existing movement row id (the editor's re-save path). */
   id?: string;
@@ -1383,7 +1390,9 @@ async function runSave(
   // what the saver may do to its holder is not for this save to tell them.
   if (input.intent === 'create' && over !== null) return refused({ kind: 'name_taken', name }, nameTakenRefusal(name));
   let creating: CreationStatements | undefined;
+  let firstUse: CreationStatements['use'];
   let named: Awaited<ReturnType<typeof connectionsNamed>> = [];
+  const exporting = exportsSomething(input.source);
   if (saver !== undefined) {
     if (over !== null && existing === null) {
       const refusal = await overwriteRefusal(saver, over);
@@ -1393,11 +1402,29 @@ async function runSave(
       if (refusal === 'unseen') return refused({ kind: 'name_taken', name }, nameTakenRefusal(name));
       if (refusal === 'read_only') return refused({ kind: 'read_only' }, READ_ONLY_REFUSAL);
     }
+    // The save that adds a file's first export is the one that states its use
+    // list: there is no default, and it is the one statement an overwrite may carry.
+    const firstExport = over !== null && exporting && !(await hasUseList(input.teamId, over.id));
     if (over !== null && input.statements !== undefined) {
-      return refused({ kind: 'statement', reason: 'on_overwrite', message: STATEMENTS_ON_OVERWRITE_REFUSAL }, STATEMENTS_ON_OVERWRITE_REFUSAL);
+      const onlyTheUseList = input.statements.read === undefined && input.statements.write === undefined && input.statements.use !== undefined;
+      if (!(firstExport && onlyTheUseList)) {
+        return refused({ kind: 'statement', reason: 'on_overwrite', message: STATEMENTS_ON_OVERWRITE_REFUSAL }, STATEMENTS_ON_OVERWRITE_REFUSAL);
+      }
+    }
+    if (firstExport) {
+      if (input.statements?.use === undefined) {
+        return refused({ kind: 'statement', reason: 'first_export', message: FIRST_EXPORT_REFUSAL }, FIRST_EXPORT_REFUSAL);
+      }
+      try {
+        await checkedList(input.teamId, { verb: 'use', grantees: input.statements.use });
+      } catch (error) {
+        if (!(error instanceof StatementRefusedError)) throw error;
+        return refused({ kind: 'statement', reason: error.refusal, message: error.message }, error.message);
+      }
+      firstUse = input.statements.use;
     }
     if (over === null) {
-      const given = creationStatements(input.statements);
+      const given = creationStatements(input.statements, { exports: exporting });
       if ('missing' in given) {
         return refused({ kind: 'missing_statement', missing: given.missing }, missingStatementRefusal(given.missing));
       }
@@ -1412,7 +1439,12 @@ async function runSave(
     named = await timer.step('connections', () => connectionsNamed({ teamId: input.teamId, file: name, source: input.source }));
     const unusable = await unusableConnections(saver, named);
     if (unusable.length > 0) {
-      const refusal = await connectionsRefusal(saver, unusable);
+      const refusal = connectionsRefusal(unusable);
+      return refused(refusal.refused, refusal.message);
+    }
+    const unusableLibs = await unusableLibraries(saver, await librariesNamed({ teamId: input.teamId, source: input.source }));
+    if (unusableLibs.length > 0) {
+      const refusal = librariesRefusal(unusableLibs);
       return refused(refusal.refused, refusal.message);
     }
   }
@@ -1433,15 +1465,32 @@ async function runSave(
   // person choosing who may reach it.
   const stated = async (created: MovementRow): Promise<MovementRow> => {
     const target = { thing: 'automation', id: created.id } as const;
-    if (saver === undefined) await stateRunCreation({ teamId: input.teamId, target, given: input.statements });
+    if (saver === undefined) await stateRunCreation({ teamId: input.teamId, target, given: input.statements, exports: exporting });
     else if (statements !== undefined) await stateCreation(saver, { target, statements });
     else throw new Error('a person creating an automation reached the write with no statements decided');
     return created;
   };
+  // An overwrite that adds the first export states the use list with the text.
+  const statedFirstExport = async (overwritten: MovementRow): Promise<MovementRow> => {
+    const target = { thing: 'automation', id: overwritten.id } as const;
+    if (saver === undefined) await stateRunCreation({ teamId: input.teamId, target, given: undefined, exports: true, only: 'use' });
+    else if (firstUse !== undefined) await setStatement(saver, { target, verb: 'use', grantees: firstUse });
+    else throw new Error('a person adding a first export reached the write with no use list decided');
+    return overwritten;
+  };
   const creates = intent.kind === 'create';
+  const addsFirstExport = !creates && exporting && over !== null && !(await hasUseList(input.teamId, over.id));
   let row: MovementRow;
   try {
-    row = await timer.step('persist', () => (creates ? inOneTransaction(async () => stated(await persist())) : persist()));
+    row = await timer.step('persist', () =>
+      creates
+        ? inOneTransaction(async () => stated(await persist()))
+        : addsFirstExport
+          ? inOneTransaction(async () => statedFirstExport(await persist()))
+          : persist(),
+    );
+    // What it names may have changed, and with it whether its writers still hold what it reaches.
+    if (exporting) await recomputeLibraryStanding(input.teamId, [row.id]);
   } catch (error) {
     // Between the checks above and the write, the name was taken or the row
     // deleted. Neither is repaired by writing something nobody decided.
@@ -1861,6 +1910,11 @@ export async function getMovement(input: {
  * canonical, so removing it removes everything derived from it. Returns
  * false when the movement doesn't exist.
  */
+/** Whether a file has a use list: it is a library. */
+async function hasUseList(teamId: string, id: string): Promise<boolean> {
+  return (await StatementStore.grantsOf({ thing: 'automation', id }, { teamId, verb: 'use' })).length > 0;
+}
+
 export async function deleteMovement(input: { teamId: string; id: string }): Promise<boolean> {
   const row = await getMovementRow(input);
   if (!row) return false;

@@ -36,6 +36,7 @@ jest.mock('../../../../services/access/statement', () => {
   return {
     ...actual,
     StatementStore: {
+      ...jest.requireActual('../../../../services/access/__test__/no_libraries').noLibraries,
       teamOf: async (target: Target) => mockState.things.get(`${target.thing}:${target.id}`),
       grantsOf: async (target: Target, options: { teamId: string; verb: Verb }) =>
         mockState.rows
@@ -198,13 +199,17 @@ describe('what setAccess answers', () => {
     expect(answer).toEqual({ status: 200, body: { connection: { id: FINANCE_A, name: 'Finance' }, verb: 'use', grantees: [user(BOB)] } });
   });
 
-  it.each([
-    ['an automation asked for use', { automation: 'Deals', verb: 'use', grantees: [team] }],
-    ['a connection asked for read', { connection: 'Finance', verb: 'read', grantees: [team] }],
-  ])('refuses %s with a 400 naming the verbs each takes, changing nothing', async (_, body) => {
+  it('refuses a connection asked for read with a 400 naming the verbs each takes, changing nothing', async () => {
     const before = JSON.stringify(mockState.rows);
-    const answer = await call({ body });
-    expect(answer).toEqual({ status: 400, body: { error: "An automation's lists are read and write; a connection's is use." } });
+    const answer = await call({ body: { connection: 'Finance', verb: 'read', grantees: [team] } });
+    expect(answer).toEqual({ status: 400, body: { error: "A connection's one list is use; an automation's are read and write, and use once it exports." } });
+    expect(JSON.stringify(mockState.rows)).toBe(before);
+  });
+
+  it('refuses a use list on an automation that exports nothing, changing nothing', async () => {
+    const before = JSON.stringify(mockState.rows);
+    const answer = await call({ body: { automation: 'Deals', verb: 'use', grantees: [team] } });
+    expect(answer).toMatchObject({ status: 400, body: { refusal: 'not_a_library' } });
     expect(JSON.stringify(mockState.rows)).toBe(before);
   });
 

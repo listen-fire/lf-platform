@@ -51,6 +51,23 @@ describe("the access panel", () => {
     expect(html).toContain("Only you");
   });
 
+  it("offers a use list on a file that exports, with its own words, and none on a file that does not", () => {
+    const library = panel({
+      listing: {
+        thing: "automation",
+        lists: { read: [{ kind: "team" }], write: [{ kind: "team" }], use: [{ kind: "user", userId: BOB, name: "Bob", email: "bob@acme.com", onTeam: true }] },
+        mayChange: true,
+        onlyYou: false,
+        viewerUserId: ME,
+      },
+    });
+    expect(library).toContain('data-testid="access-use"');
+    expect(library).toContain('data-testid="access-edit-use"');
+    expect(library).toContain("without reading its source");
+    expect(library).toContain("Bob");
+    expect(panel({})).not.toContain('data-testid="access-use"');
+  });
+
   it("offers a change on each list to someone who may change them, and to nobody else", () => {
     const writer = panel({});
     expect(writer).toContain('data-testid="access-edit-read"');

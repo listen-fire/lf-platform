@@ -19,7 +19,7 @@ type SetInput = RouterInputs["views"]["access"]["set"];
 function setInputOf(target: { thing: Thing; id: string }, verb: Verb, grantees: Grantee[]): SetInput | null {
   switch (target.thing) {
     case "automation":
-      return verb === "use" ? null : { thing: "automation", id: target.id, verb, grantees };
+      return { thing: "automation", id: target.id, verb, grantees };
     case "connection":
       return verb === "use" ? { thing: "connection", id: target.id, verb, grantees } : null;
     default: {

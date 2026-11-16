@@ -229,7 +229,9 @@ export type ListRefusal =
   | "not_a_member"
   | "not_a_writer"
   | "malformed"
-  | "already_stated";
+  | "already_stated"
+  | "needs_use_on_names"
+  | "not_a_library";
 
 /** Why a changed list was refused, in the page's words: the server's text is written for agents and is never shown. */
 export function listRefusalSentence(refusal: ListRefusal, thing: "automation" | "connection"): string {
@@ -250,6 +252,10 @@ export function listRefusalSentence(refusal: ListRefusal, thing: "automation" | 
       return "Something you chose could not be read. Choose again.";
     case "already_stated":
       return `This ${thing} already says who may reach it. Reload the page to see it.`;
+    case "needs_use_on_names":
+      return "To say who may use a library you need use on every connection and library it names. A team admin adds themselves to those lists first.";
+    case "not_a_library":
+      return "Only a file that exports something has a list of who may use it.";
     default: {
       const unreachable: never = refusal;
       return unreachable;

@@ -717,8 +717,8 @@ async function assembleTeamCatalog(
   const manifests = await teamAdapterManifests(teamId, notes);
   const manifestBySlug = indexManifestsByName(manifests);
 
-  const credentialRows = await loadCredentialRows(teamId, options.audience);
-  const credentialsByName = credentialImportNames({ rows: credentialRows, manifests });
+  let credentialRows = await loadCredentialRows(teamId, options.audience);
+  let credentialsByName = credentialImportNames({ rows: credentialRows, manifests });
 
   // File-import closure: libraries construct their OWN instances, so their
   // (adapter, credential) pairs join the referenced set, and the resolver
@@ -747,6 +747,16 @@ async function assembleTeamCatalog(
         })
       : await allTeamMovementSources(teamId, { pin: rootPin, pins: filePins });
   const resolveFile = resolverOverSources(fileSources);
+  if (options.source !== undefined && options.audience.for !== 'run' && fileSources.size > 0) {
+    credentialRows = await withConnectionsOfLibraries({
+      teamId,
+      manifests,
+      usable: credentialRows,
+      rootSource: options.source,
+      libraries: fileSources.values(),
+    });
+    credentialsByName = credentialImportNames({ rows: credentialRows, manifests });
+  }
 
   const schemaByAdapterAndCred = new Map<string, AdapterSchemaProjection>();
   // Keyed by (adapter, credential, ENTRY POSITION) — the position (from the
@@ -2112,6 +2122,31 @@ export async function resolveCredentialIdByImportName(input: {
 }
 
 // ── DB helpers ──────────────────────────────────────────────────────────────
+
+/**
+ * The connections a person may use, and those the libraries a file imports
+ * name: use on a library covers the connections it reaches, so checking the
+ * import has to see them. The file's own text never reaches beyond what the
+ * person may use: a connection named in the file itself stays hidden from them
+ * unless they hold it, and the save refuses it.
+ */
+async function withConnectionsOfLibraries(input: {
+  teamId: TeamId;
+  manifests: AdapterManifest[];
+  usable: CredentialRow[];
+  rootSource: string;
+  libraries: Iterable<string>;
+}): Promise<CredentialRow[]> {
+  const all = await loadCredentialRows(input.teamId, { for: 'run' });
+  const byName = credentialImportNames({ rows: all, manifests: input.manifests });
+  const named = (source: string) => constructionsOf(source).flatMap((ref) => (ref.credential === undefined ? [] : [ref.credential]));
+  const ownNames = new Set(named(input.rootSource));
+  const reached = new Set(
+    [...input.libraries].flatMap(named).flatMap((name) => (ownNames.has(name) ? [] : [byName[name]?.id ?? ''])),
+  );
+  const have = new Set(input.usable.map((row) => row.id));
+  return [...input.usable, ...all.filter((row) => reached.has(row.id) && !have.has(row.id))];
+}
 
 export async function loadCredentialRows(teamId: TeamId, audience: CatalogAudience): Promise<CredentialRow[]> {
   const usable =

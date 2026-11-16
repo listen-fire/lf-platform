@@ -118,9 +118,9 @@ async function everythingStated(ids: {
 }
 
 describe('stating what exists', () => {
-  it('the backfill states read, write and use and parses no source', async () => {
+  it('the backfill states read, write and use, and reads no source that does not say export', async () => {
     const { slack, onSlack, onEmail, mixed } = await seed();
-    // A source no parser can read, under a pin only a legacy parser knows: it is stated the same, and never read.
+    // A source no parser can read, under a pin only a legacy parser knows: it is stated the same, and never read (it exports nothing).
     const unreadable = await automation('Unreadable', 'movement broken( {', '4');
     const carried = await automation('Carried', SLACK_LISTEN, '0.12.13');
 
@@ -194,5 +194,60 @@ describe('stating what exists', () => {
 
     expect(await listOf({ thing: 'connection', id: slack }, 'use')).toEqual([]);
     expect(await listOf({ thing: 'automation', id: onSlack }, 'read')).toEqual([]);
+  });
+});
+
+describe('deploy_sets_use_equal_to_read: a file that exports gets the use list its readers imply', () => {
+  const LIBRARY = 'export function tally(t: <text>) {\n  return t\n}\n';
+  const named = (id: string, verb: 'read' | 'write' | 'use') =>
+    client
+      .query(`SELECT grantee, value FROM automations.access_statement WHERE thing = 'automation' AND thing_id = $1::uuid AND verb = $2 ORDER BY grantee, value`, [id, verb])
+      .then((r) => r.rows);
+
+  async function stateList(id: string, verb: 'read' | 'write', grantees: Grantee[]): Promise<void> {
+    await StatementStore.replaceGrants({ thing: 'automation', id }, { teamId, verb, grantees });
+  }
+
+  it('gives use equal to who may read it, writers included since writing implies reading, and leaves other files alone', async () => {
+    const alice = randomUUID();
+    const bob = randomUUID();
+    const library = await automation('Library', LIBRARY);
+    await stateList(library, 'write', [{ kind: 'user', userId: alice }]);
+    await stateList(library, 'read', [{ kind: 'user', userId: bob }]);
+    const plain = await automation('Plain', EMAIL_LISTEN);
+    await stateList(plain, 'write', TEAM);
+    await stateList(plain, 'read', TEAM);
+    // A word that only looks like an export is not one.
+    const lookalike = await automation('Lookalike', '# export function nothing\nx = 1\n');
+    await stateList(lookalike, 'write', TEAM);
+    await stateList(lookalike, 'read', TEAM);
+
+    await stateTheTeam();
+
+    expect(await named(library, 'use')).toEqual(
+      [alice, bob].sort().map((value) => ({ grantee: 'user', value })),
+    );
+    expect(await named(plain, 'use')).toEqual([]);
+    expect(await named(lookalike, 'use')).toEqual([]);
+  });
+
+  it('states a library an unstated team arrives with from the lists the same run gives it, and a second run changes nothing', async () => {
+    const library = await automation('Library', LIBRARY);
+    await stateTheTeam();
+    expect(await named(library, 'use')).toEqual([{ grantee: 'team', value: null }]);
+
+    const before = await statementAudits();
+    await stateTheTeam();
+    expect(await statementAudits()).toBe(before);
+  });
+
+  it('finds a team whose only gap is a library without a use list', async () => {
+    const library = await automation('Library', LIBRARY);
+    await stateList(library, 'write', TEAM);
+    await stateList(library, 'read', TEAM);
+    const { teamsWithUnstated } = await import('../state_unstated');
+    expect(await teamsWithUnstated(client)).toContain(teamId);
+    await stateTheTeam();
+    expect(await named(library, 'use')).toEqual([{ grantee: 'team', value: null }]);
   });
 });

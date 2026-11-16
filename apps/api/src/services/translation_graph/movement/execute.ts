@@ -46,6 +46,7 @@ import { runCatalogSnapshotForTeam } from './catalog';
 import { getMovementRow, recordValidityOutcome, type MovementRow } from './store';
 import { assessMovementValidity, validateMovementForTeam } from './authoring';
 import { loadPinnedVersion, movementSourceHash } from './version_store';
+import { libraryRefusal } from './library_refusal';
 import { recordMovementFailureIssue, resolveMovementIssues } from './issues';
 import { clearIntrospectionCache } from './instance_cache';
 import { engineEvent, withFiringContext } from './firing_context';
@@ -368,16 +369,19 @@ export async function runMovementFiring(
   return withFiringContext(input, () => runMovementFiringInContext(input));
 }
 
-/** A firing whose door the pin's version does not serve: recorded failed
- *  with the registry's refusal, loudly, and an issue for a live one. */
+/** A firing refused before it starts (its door is not served by the pin's
+ *  version, or a library it imports no longer stands): recorded failed with the
+ *  refusal, loudly, and an issue for a live one. */
 async function refuseFiring(refused: {
   input: MovementFiringInput;
   recorder: TriggerRunRecorder;
   movementName: string | undefined;
   refusal: string;
+  /** What was refused, for the log. */
+  because: 'door' | 'library';
 }): Promise<MovementFiringOutcome> {
   const { input, recorder, refusal } = refused;
-  logger.error('[MovementEngine] firing refused: the pinned version does not serve its door', {
+  logger.error(`[MovementEngine] firing refused: ${refused.because === 'door' ? 'the pinned version does not serve its door' : 'a library it imports no longer stands'}`, {
     triggerId: input.triggerId,
     movementId: input.movement.row.id,
     languageVersion: input.movement.version.languageVersion,
@@ -429,7 +433,11 @@ async function runMovementFiringInContext(
   // A version without it refuses, recorded as the firing's failure: nothing
   // runs on any engine.
   const refusal = doorRefusal(input.movement.version.languageVersion, input.door);
-  if (refusal !== undefined) return refuseFiring({ input, recorder, movementName, refusal });
+  if (refusal !== undefined) return refuseFiring({ input, recorder, movementName, refusal, because: 'door' });
+  // Made once, here: a run that has started keeps the connections it began
+  // with, so resuming one never asks again.
+  const libraryLost = await libraryRefusal({ teamId: input.teamId, source: input.movement.version.source });
+  if (libraryLost !== undefined) return refuseFiring({ input, recorder, movementName, refusal: libraryLost, because: 'library' });
   // The cooperative cancel gate (runs-and-cancel spec §cancel): reads
   // trigger_run.cancel_requested_at (debounced) so a user-requested cancel stops
   // the run at the next statement / LLM-call boundary. Fail-open — a read fault

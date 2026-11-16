@@ -4630,7 +4630,7 @@ CREATE TABLE automations.access_statement (
     created_at timestamptz DEFAULT now() NOT NULL,
     CONSTRAINT access_statement_thing_check CHECK (thing IN ('automation', 'connection')),
     CONSTRAINT access_statement_verb_check CHECK (verb IN ('read', 'write', 'use')),
-    CONSTRAINT access_statement_verb_thing_check CHECK ((verb = 'use') = (thing = 'connection')),
+    CONSTRAINT access_statement_verb_thing_check CHECK (thing <> 'connection' OR verb = 'use'),
     CONSTRAINT access_statement_grantee_check CHECK (grantee IN ('team', 'user')),
     CONSTRAINT access_statement_value_check CHECK ((value IS NULL) = (grantee = 'team'))
 );
@@ -4643,6 +4643,34 @@ CREATE UNIQUE INDEX access_statement_grant_key ON automations.access_statement U
 CREATE INDEX access_statement_team_idx ON automations.access_statement USING btree (team_id, thing, verb);
 
 CREATE TRIGGER access_statement_audit AFTER INSERT OR DELETE OR UPDATE ON automations.access_statement FOR EACH ROW EXECUTE FUNCTION automations.audit();
+
+-- Whether a library file still stands: one of its writers holds use on each
+-- connection it names directly. `lost_connection_id` is the first that fails,
+-- null when it stands. Recomputed when a list, a membership or the library
+-- changes (services/access/library_standing.ts); a run start reads it.
+CREATE TABLE automations.library_standing (
+    id uuid DEFAULT pg_catalog.gen_random_uuid() NOT NULL,
+    team_id uuid NOT NULL, -- opaque tenant id; no foreign key (D3)
+    movement_id uuid NOT NULL,
+    lost_connection_id uuid,
+    checked_at timestamptz DEFAULT now() NOT NULL
+);
+
+ALTER TABLE ONLY automations.library_standing
+    ADD CONSTRAINT library_standing_pkey PRIMARY KEY (id);
+
+ALTER TABLE ONLY automations.library_standing
+    ADD CONSTRAINT library_standing_movement_id_key UNIQUE (movement_id);
+
+ALTER TABLE ONLY automations.library_standing
+    ADD CONSTRAINT library_standing_movement_id_fkey FOREIGN KEY (movement_id) REFERENCES automations.movement(id) ON DELETE CASCADE;
+
+ALTER TABLE ONLY automations.library_standing
+    ADD CONSTRAINT library_standing_lost_connection_id_fkey FOREIGN KEY (lost_connection_id) REFERENCES automations.external_service_credentials(id) ON DELETE SET NULL;
+
+CREATE INDEX library_standing_team_idx ON automations.library_standing USING btree (team_id);
+
+CREATE TRIGGER library_standing_audit AFTER INSERT OR DELETE OR UPDATE ON automations.library_standing FOR EACH ROW EXECUTE FUNCTION automations.audit();
 
 -- lf's movements slot: the listing behind each `movements.watch` cursor
 -- (services/lf_movements/watch.ts). A cursor is a hash of the team and the

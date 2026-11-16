@@ -133,6 +133,9 @@ jest.mock('../firing_context', () => ({
   withFiringContext: <T>(_firing: unknown, fn: () => Promise<T>) => fn(),
 }));
 
+// A library's standing is its own module's question (./library_standing); here only whether the run asks.
+jest.mock('../library_refusal', () => ({ libraryRefusal: jest.fn(async () => undefined) }));
+
 const sendSlackNotification = jest.fn(async () => undefined);
 jest.mock('../../../../lib/slack', () => ({
   sendSlackNotification: (...args: unknown[]) => sendSlackNotification(...(args as [])),
@@ -171,6 +174,7 @@ const { getMovementRow } = jest.requireMock('../store') as {
 const { loadPinnedVersion } = jest.requireMock('../version_store') as {
   loadPinnedVersion: jest.Mock;
 };
+const { libraryRefusal } = jest.requireMock('../library_refusal') as { libraryRefusal: jest.Mock };
 const { TriggerRunRecorder } = jest.requireMock('../../runs/trigger_run') as {
   TriggerRunRecorder: jest.Mock;
 };
@@ -387,6 +391,25 @@ describe('runMovementFiring', () => {
     expect(runMovement).not.toHaveBeenCalled();
     expect(outcome.result).toBeNull();
     expect(outcome.error).toContain(runRefusal('0.13.0'));
+  });
+
+  it('a_library_whose_writers_lost_the_connection_refuses_new_runs: a fresh firing is refused naming the library and the connection, before any catalog is assembled, on no engine', async () => {
+    const refusal = 'The library "helpers" no longer stands: none of the people who may change it may use the connection "Finance" it names.';
+    libraryRefusal.mockResolvedValueOnce(refusal);
+    const outcome = await runMovementFiring({
+      door: { kind: 'listen' },
+      teamId: TEAM,
+      triggerId: 't-1',
+      triggerName: 'movement/intake_file/intake',
+      movement: shippedMovement() as never,
+      event,
+      recordingTriggerType: 'webhook',
+    });
+
+    expect(libraryRefusal).toHaveBeenCalledWith({ teamId: TEAM, source: CLEAN_SOURCE });
+    expect(runCatalogSnapshotForTeam).not.toHaveBeenCalled();
+    expect(runMovement).not.toHaveBeenCalled();
+    expect(outcome).toEqual({ result: null, error: refusal });
   });
 
   it('a press of a 0.12 automation, whose engine this platform dropped, is refused before any catalog is assembled, on no engine', async () => {
@@ -608,6 +631,17 @@ describe('resumeMovementFiring', () => {
     expect(runCatalogSnapshotForTeam).not.toHaveBeenCalled();
     expect(resumeMovement).not.toHaveBeenCalled();
     expect(outcome.error).toContain(resumeRefusal('0.12.13'));
+  });
+
+  it('a_running_run_keeps_its_connection: resuming never asks about its libraries again, though one has since lost its standing', async () => {
+    libraryRefusal.mockResolvedValue('The library "helpers" no longer stands.');
+    resumeMovement.mockResolvedValue({ movementName: 'intake', writes: [], extractionSites: {}, trace: [] });
+    const outcome = await resumeMovementFiring({ ...resumeInput, answer: true });
+    libraryRefusal.mockResolvedValue(undefined);
+
+    expect(libraryRefusal).not.toHaveBeenCalled();
+    expect(resumeMovement).toHaveBeenCalled();
+    expect(outcome.error).toBeUndefined();
   });
 
   it('resumes on the engine the run row says parked it', async () => {

@@ -41,6 +41,7 @@ import { validateUnderCarried } from './carried_check';
 import { importsAcrossVersions } from './imports_across_versions';
 import { editorPinOf } from './language_service';
 import { stepTimer, type StepTimer } from './timing';
+import { hideUnreadableLibraries } from './save_access';
 import { dedupeDiagnostics, toAuthoringDiagnostic } from './authoring_diagnostic';
 
 export { toAuthoringDiagnostic };
@@ -294,7 +295,15 @@ export function assessMovementValidity(input: {
  * referenced-construction-scoped assembly `saveMovement` uses, so the
  * verdict predicts the save.
  */
-export async function validateMovementForTeam(input: {
+export async function validateMovementForTeam(input: Parameters<typeof validateFor>[0]): Promise<TeamMovementValidation> {
+  const validation = await validateFor(input);
+  return {
+    ...validation,
+    diagnostics: await hideUnreadableLibraries(validation.diagnostics, { teamId: input.teamId, audience: input.audience }),
+  };
+}
+
+async function validateFor(input: {
   teamId: string;
   source: string;
   /** A person checking a text sees only the connections they may use; a run's own check sees all of them. */

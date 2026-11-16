@@ -20,7 +20,7 @@ import { EventEmitter } from 'node:events';
 import { runWithPrincipal, type Access, type Principal } from 'principal';
 
 import type { RequestHandler } from 'express';
-import type { Grantee, Target, Verb } from '../../services/access/statement';
+import type { FileVerb, Grantee, Target, Verb } from '../../services/access/statement';
 
 const mockTeam = '11111111-1111-4111-8111-111111111111';
 const TEAM = mockTeam;
@@ -137,6 +137,7 @@ jest.mock('../../services/access/statement', () => {
   return {
     ...actual,
     StatementStore: {
+      ...jest.requireActual('../../services/access/__test__/no_libraries').noLibraries,
       teamOf: async (target: Target) => {
         ask();
         return mockState.things.get(`${target.thing}:${target.id}`);
@@ -1206,7 +1207,7 @@ const restUses = restRoutes.filter((route) => decidesOn(route.key, 'connection')
 const trpcUses = procedureNames.filter((name) => decidesOn(name, 'connection'));
 
 /** The verb a route asks of an automation. */
-function verbOf(route: string): 'read' | 'write' | undefined {
+function verbOf(route: string): FileVerb | undefined {
   const decision = decidedOn(route).find((d) => d.thing === 'automation');
   return decision?.thing === 'automation' ? decision.verb : undefined;
 }

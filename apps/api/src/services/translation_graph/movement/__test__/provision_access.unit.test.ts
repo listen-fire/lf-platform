@@ -160,6 +160,9 @@ jest.mock('../../../access/statement', () => {
   return {
     ...actual,
     StatementStore: {
+      ...jest.requireActual('../../../access/__test__/no_libraries').noLibraries,
+      exportsSomething: async (target: Target) =>
+        jest.requireActual('../save_access').exportsSomething(__tables.movement.find((row: { id: string }) => row.id === target.id)?.source ?? ''),
       teamOf: async (target: Target) =>
         target.thing === 'automation'
           ? (__tables.movement.find((row: { id: string }) => row.id === target.id)?.team_id as string | undefined)
@@ -300,6 +303,7 @@ jest.mock('../listen_subscriptions', () => ({ syncListenSubscriptions: jest.fn(a
 jest.mock('../../storage/tg_table', () => ({ saveTriggerEntriesForTrigger: jest.fn(async () => undefined) }));
 
 import { getRemoteAdapter } from '../../adapters/remote/store';
+import { accessTo } from '../../../access/decide';
 import { saveMovement, type SaveMovementInput } from '../provision';
 import { STATEMENTS_ON_OVERWRITE_REFUSAL, accessWarnings } from '../save_access';
 
@@ -381,7 +385,7 @@ const asAlice = (input: Omit<SaveMovementInput, 'teamId' | 'audience'>) => saveM
 /** An automation saved as a run would save it, with these statements, as it stands before Alice's save. */
 async function existing(
   source: string,
-  statements: Partial<Record<'read' | 'write', Grantee[]>>,
+  statements: Partial<Record<'read' | 'write' | 'use', Grantee[]>>,
   name?: string,
 ): Promise<string> {
   const saved = await saveMovement({ teamId: TEAM, audience: { for: 'run' }, source, acknowledgeErrors: true, ...(name !== undefined ? { name } : {}) });
@@ -390,7 +394,7 @@ async function existing(
   const { movementId } = saved;
   mockAccess.rows = mockAccess.rows.filter((r) => r.target.id !== movementId);
   mockAccess.stated = [];
-  for (const verb of ['read', 'write'] as const) {
+  for (const verb of ['read', 'write', 'use'] as const) {
     const grantees = statements[verb];
     if (grantees !== undefined) stated(automation(saved.movementId), verb, grantees);
   }
@@ -636,28 +640,36 @@ describe('every connection the file and its imports name needs use', () => {
     expect(JSON.stringify(hidden)).toBe(JSON.stringify(nowhere).split('Nowhere').join('Finance'));
   });
 
-  it('refuses a file whose import names one, naming the connection and the imported file when the saver can read it', async () => {
-    await existing(LIBRARY, { read: [user(ALICE)] }, 'helpers');
+  it('a_file_naming_a_library_without_use_is_refused: naming the library, even one the saver may read, and stores nothing', async () => {
+    await existing(LIBRARY, { read: [user(ALICE)], write: [user(BOB)], use: [user(BOB)] }, 'helpers');
+    const before = stored();
     const refused = await asAlice({ source: importsLibrary('deals'), statements: STATEMENTS, acknowledgeErrors: true });
     expect(refused).toMatchObject({
       ok: false,
-      refused: { kind: 'connections', connections: [{ connection: 'Finance', file: 'helpers' }], unreadableFiles: [] },
-      errors: [expect.stringContaining('"Finance" (named in "helpers")')],
+      refused: { kind: 'libraries', libraries: ['helpers'] },
+      errors: [expect.stringContaining('"helpers"')],
     });
+    expect(stored()).toEqual(before);
   });
 
-  it('names only the imported file, never its connection, when the saver may not read that file', async () => {
-    await existing(LIBRARY, { read: [user(BOB)] }, 'helpers');
-    const before = stored();
-    const refused = await asAlice({ source: importsLibrary('deals'), statements: STATEMENTS, acknowledgeErrors: true });
-    expect(refused).toEqual({
-      ok: false,
-      errors: ['A file this imports names a connection you may not use: helpers. A save may name only connections you may use.'],
-      catalogNotes: [],
-      refused: { kind: 'connections', connections: [], unreadableFiles: ['helpers'] },
-    });
-    expect(JSON.stringify(refused)).not.toContain('Finance');
-    expect(stored()).toEqual(before);
+  it('answers a library that does not exist exactly as one the saver may not use', async () => {
+    await existing(LIBRARY, { read: [user(BOB)], write: [user(BOB)], use: [user(BOB)] }, 'helpers');
+    const hidden = await asAlice({ source: importsLibrary('deals'), statements: STATEMENTS, acknowledgeErrors: true });
+    const nowhere = await asAlice({ source: importsLibrary('deals').replace('"helpers"', '"nowhere"'), statements: STATEMENTS, acknowledgeErrors: true });
+    expect(JSON.stringify(hidden)).toBe(JSON.stringify(nowhere).split('nowhere').join('helpers'));
+  });
+
+  it("use_on_a_library_covers_its_connections: use on the library is enough though the saver may not use the connection it names, or read it", async () => {
+    await existing(LIBRARY, { read: [user(BOB)], write: [user(BOB)], use: [user(ALICE)] }, 'helpers');
+    expect(await accessTo(alice, { target: { thing: 'connection', id: FINANCE }, verb: 'use' })).toBe(false);
+    const saved = await asAlice({ source: importsLibrary('deals'), statements: STATEMENTS, acknowledgeErrors: true });
+    expect(saved).toMatchObject({ ok: true });
+  });
+
+  it('checks only what the file names itself: the connections of a library it imports are the library’s own', async () => {
+    await existing(LIBRARY, { read: [user(ALICE)], write: [user(BOB)], use: [user(ALICE)] }, 'helpers');
+    const saved = await asAlice({ source: importsLibrary('deals'), statements: STATEMENTS, acknowledgeErrors: true });
+    expect(saved).toMatchObject({ ok: true });
   });
 
   it("asks for use on a remote module's own connection when a construction names none", async () => {
@@ -708,6 +720,72 @@ describe('statements apply only when creating', () => {
   it('is told a reader\'s refusal first, so the statements show nothing of what she may not change', async () => {
     const deals = await existing(manualOnly('deals'), { read: [user(ALICE)], write: [user(BOB)] });
     expect(await asAlice({ id: deals, source: manualOnly('deals'), statements: STATEMENTS })).toMatchObject({ refused: { kind: 'read_only' } });
+  });
+});
+
+describe('the first export states its use list', () => {
+  const PLAIN_LIBRARY = 'export function tally(t: <text>) {\n  return t\n}\n';
+
+  it('the_first_export_states_its_use_list: a new library is refused without one, and stores nothing', async () => {
+    const before = stored();
+    const refused = await asAlice({ source: PLAIN_LIBRARY, name: 'helpers', statements: STATEMENTS });
+    expect(refused).toMatchObject({ ok: false, refused: { kind: 'missing_statement', missing: ['use'] } });
+    expect(stored()).toEqual(before);
+  });
+
+  it('creates a library with its three lists', async () => {
+    const saved = await asAlice({ source: PLAIN_LIBRARY, name: 'helpers', statements: { ...STATEMENTS, use: [team] } });
+    expect(saved).toMatchObject({ ok: true });
+    if (saved.movementId === undefined) throw new Error('nothing saved');
+    expect(listOf(saved.movementId, 'use')).toEqual([team]);
+    expect(listOf(saved.movementId, 'write')).toEqual([user(ALICE)]);
+  });
+
+  it('does not ask a file that exports nothing for a use list, and ignores one it is given', async () => {
+    const saved = await asAlice({ source: manualOnly('deals'), statements: { ...STATEMENTS, use: [team] } });
+    expect(saved).toMatchObject({ ok: true });
+    if (saved.movementId === undefined) throw new Error('nothing saved');
+    expect(listOf(saved.movementId, 'use')).toEqual([]);
+  });
+
+  it('refuses the save that adds a file’s first export without a use list, storing nothing', async () => {
+    const deals = await existing(manualOnly('deals'), { read: [team], write: [user(ALICE)] });
+    const before = stored();
+    const refused = await asAlice({ id: deals, source: `${PLAIN_LIBRARY}\n${manualOnly('deals')}` });
+    expect(refused).toMatchObject({ ok: false, refused: { kind: 'statement', reason: 'first_export' } });
+    expect(stored()).toEqual(before);
+  });
+
+  it('takes the use list alone on that save, and states it with the text', async () => {
+    const deals = await existing(manualOnly('deals'), { read: [team], write: [user(ALICE)] });
+    const source = `${PLAIN_LIBRARY}\n${manualOnly('deals')}`;
+    const saved = await asAlice({ id: deals, source, statements: { use: [user(BOB)] } });
+    expect(saved).toMatchObject({ ok: true, movementId: deals });
+    expect(listOf(deals, 'use')).toEqual([user(BOB)]);
+    expect(listOf(deals, 'read')).toEqual([team]);
+    expect(mockAccess.stated.map((entry) => entry.verb)).toEqual(['use']);
+    expect(mockAccess.stated.every((entry) => entry.inTransaction)).toBe(true);
+  });
+
+  it('refuses read or write statements on a save over a file, even beside the use list', async () => {
+    const deals = await existing(manualOnly('deals'), { read: [team], write: [user(ALICE)] });
+    const refused = await asAlice({ id: deals, source: `${PLAIN_LIBRARY}\n${manualOnly('deals')}`, statements: { ...STATEMENTS, use: [team] } });
+    expect(refused).toMatchObject({ ok: false, refused: { kind: 'statement', reason: 'on_overwrite' } });
+  });
+
+  it('asks nothing of a later save over a library that already has its use list', async () => {
+    const helpers = await existing(PLAIN_LIBRARY, { read: [team], write: [user(ALICE)], use: [team] }, 'helpers');
+    const saved = await asAlice({ id: helpers, source: `${PLAIN_LIBRARY}\n# more\n` });
+    expect(saved).toMatchObject({ ok: true });
+    expect(listOf(helpers, 'use')).toEqual([team]);
+  });
+
+  it('gives a library a run creates the team to use, since nobody is there to ask', async () => {
+    const helpers = await existing(PLAIN_LIBRARY, {}, 'helpers2');
+    void helpers;
+    const saved = await saveMovement({ teamId: TEAM, audience: { for: 'run' }, source: PLAIN_LIBRARY, name: 'helpers3', acknowledgeErrors: true });
+    if (saved.movementId === undefined) throw new Error('nothing saved');
+    expect(listOf(saved.movementId, 'use')).toEqual([team]);
   });
 });
 

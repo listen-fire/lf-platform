@@ -18,6 +18,8 @@ import { StatementStore, type Grantee, type StatedVerb, type Target, type Thing,
 
 type StatementRefusal =
   | 'empty'
+  | 'needs_use_on_names'
+  | 'not_a_library'
   | 'not_found'
   | 'not_allowed'
   | 'not_a_member'
@@ -318,7 +320,15 @@ async function setStatement<T extends Thing>(
     );
   }
   const list = await checkedList(teamId, { verb, grantees });
+  if (target.thing === 'automation' && verb === 'use') {
+    const library: Target<'automation'> = { thing: 'automation', id: target.id };
+    if (!(await StatementStore.exportsSomething(library))) {
+      throw new StatementRefusedError('not_a_library', 'Only a file that exports something has a use list: it is what lets others import and call it.');
+    }
+    await requireUseOnWhatItNames(principal, { library: { thing: 'automation', id: target.id }, teamId });
+  }
   await StatementStore.replaceGrants(target, { teamId, verb, grantees: list });
+  await recomputeAfterListChange({ teamId, target, verb });
   switch (right) {
     case 'listed':
       return;
@@ -334,6 +344,33 @@ async function setStatement<T extends Thing>(
     default:
       return neverAsAny(right);
   }
+}
+
+/**
+ * Changing a library's use list needs use on every connection and library it
+ * names directly, an admin's change included: an admin first adds themselves
+ * to those lists, where their holders see it. The refusal names what is
+ * missing only to someone who may read the library, since naming a connection
+ * a file reaches shows what the file reads through.
+ */
+async function requireUseOnWhatItNames(
+  principal: Principal,
+  asked: { library: Target<'automation'>; teamId: string },
+): Promise<void> {
+  const names = await StatementStore.namedBy(asked.library);
+  const lacking: Target[] = [];
+  for (const named of [...names.connections, ...names.libraries]) {
+    if (!(await accessTo<Thing>(principal, { target: named, verb: 'use' }))) lacking.push(named);
+  }
+  if (lacking.length === 0) return;
+  const mayRead = await accessTo(principal, { target: asked.library, verb: 'read' });
+  const which = mayRead
+    ? `: ${(await Promise.all(lacking.map((target) => StatementStore.nameOf(target)))).join(', ')}`
+    : '';
+  throw new StatementRefusedError(
+    'needs_use_on_names',
+    `To set who may use a library you need use on every connection and library it names${which}. A team admin adds themselves to those lists first.`,
+  );
 }
 
 /**
@@ -367,8 +404,8 @@ async function checkedList(teamId: string, stated: { verb: Verb; grantees: reado
   return list;
 }
 
-/** The read and write lists a new automation is created with. */
-type CreationStatements = Readonly<Record<StatedVerb<'automation'>, readonly Grantee[]>>;
+/** The read and write lists a new automation is created with, and its use list when it exports. */
+type CreationStatements = Readonly<Record<'read' | 'write', readonly Grantee[]>> & { readonly use?: readonly Grantee[] };
 
 /**
  * Whether the principal may create an automation on this team with these
@@ -388,6 +425,7 @@ async function checkCreation(
   }
   const write = await checkedList(teamId, { verb: 'write', grantees: statements.write });
   await checkedList(teamId, { verb: 'read', grantees: statements.read });
+  if (statements.use !== undefined) await checkedList(teamId, { verb: 'use', grantees: statements.use });
   if (!write.some((grantee) => admits(grantee, standing))) {
     throw new StatementRefusedError(
       'not_allowed',
@@ -409,6 +447,7 @@ async function stateCreation(
   for (const verb of ['write', 'read'] as const) {
     await setStatement(principal, { target, verb, grantees: statements[verb] });
   }
+  if (statements.use !== undefined) await setStatement(principal, { target, verb: 'use', grantees: statements.use });
 }
 
 /**
@@ -543,6 +582,59 @@ async function passOnWhatTheyHeld(input: {
       to: admins.length > 0 ? admins : 'team',
     });
   }
+  await recomputeLibraryStanding(teamId);
+}
+
+/**
+ * Whether a library stands: for every connection it names directly, at least
+ * one of its writers holds use on it, as the team stands now. Returns the
+ * first connection that fails, or null when it stands. A library with no
+ * writer stands on nothing.
+ */
+async function lostConnectionOf(library: Target<'automation'>, teamId: string): Promise<string | null> {
+  const { connections } = await StatementStore.namedBy(library);
+  if (connections.length === 0) return null;
+  const writers = await membersAdmitted(teamId, [
+    { verb: 'write', grantees: await StatementStore.grantsOf(library, { teamId, verb: 'write' }) },
+  ]);
+  for (const connection of connections) {
+    const users = await membersAdmitted(teamId, [
+      { verb: 'use', grantees: await StatementStore.grantsOf(connection, { teamId, verb: 'use' }) },
+    ]);
+    if (![...writers].some((writer) => users.has(writer))) return connection.id;
+  }
+  return null;
+}
+
+/**
+ * Work out again whether libraries stand and keep the answer, for the given
+ * files of the team or, with none given, every file with a use list. Called
+ * when a list changes, a membership changes, or a library is saved; a run
+ * start reads the answer and never works it out for a run already going.
+ */
+async function recomputeLibraryStanding(teamId: string, movementIds?: readonly string[]): Promise<void> {
+  const ids = movementIds ?? (await StatementStore.librariesOf(teamId));
+  for (const id of ids) {
+    const library: Target<'automation'> = { thing: 'automation', id };
+    if ((await StatementStore.teamOf(library)) !== teamId) continue;
+    await StatementStore.setStanding(library, { teamId, lostConnectionId: await lostConnectionOf(library, teamId) });
+  }
+}
+
+/** A list changed: the libraries whose standing it can move are worked out again. */
+async function recomputeAfterListChange(changed: { teamId: string; target: Target; verb: Verb }): Promise<void> {
+  const { teamId, target, verb } = changed;
+  switch (target.thing) {
+    case 'connection':
+      // Any library of the team may name it.
+      return recomputeLibraryStanding(teamId);
+    case 'automation':
+      // Only a library's writers matter to its standing; its use list is who may import it.
+      if (verb === 'write') await recomputeLibraryStanding(teamId, [target.id]);
+      return;
+    default:
+      return neverAsAny(target.thing);
+  }
 }
 
 export {
@@ -559,7 +651,9 @@ export {
   checkConnectionCreation,
   stateAtCreation,
   membersAdmitted,
+  checkedList,
   passOnWhatTheyHeld,
+  recomputeLibraryStanding,
   StatementRefusedError,
   type CreationStatements,
   type StatedList,

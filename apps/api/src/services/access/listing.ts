@@ -22,10 +22,15 @@ type ShownGrantee =
 
 type Person = { name: string | null; email: string | null; onTeam: boolean };
 
+/** An automation's lists: read and write, and use once it is a library (it has a use list). */
+type AutomationLists = Record<'read' | 'write', ShownGrantee[]> & { use?: ShownGrantee[] };
+
+type Lists<T extends Thing> = T extends 'automation' ? AutomationLists : Record<StatedVerb<T>, ShownGrantee[]>;
+
 type Shown<T extends Thing> = {
   thing: T;
   id: string;
-  lists: Record<StatedVerb<T>, ShownGrantee[]>;
+  lists: Lists<T>;
   /** Whether the caller may change these lists; otherwise they are read-only. */
   mayChange: boolean;
   /** Whether the lists that let someone see it admit the caller alone. */
@@ -36,7 +41,7 @@ type Shown<T extends Thing> = {
 
 type AccessView = Shown<'automation'> | Shown<'connection'>;
 
-const AUTOMATION_VERBS = ['read', 'write'] as const satisfies readonly StatedVerb<'automation'>[];
+const AUTOMATION_VERBS = ['read', 'write', 'use'] as const satisfies readonly StatedVerb<'automation'>[];
 
 const uuid = z.string().uuid();
 
@@ -105,10 +110,11 @@ async function automationView(id: string): Promise<Shown<'automation'> | undefin
   const teamId = await StatementStore.teamOf(target);
   if (teamId === undefined) return undefined;
   const lists = await listsOf(target, { teamId, verbs: AUTOMATION_VERBS });
+  const use = lists.get('use') ?? [];
   return {
     thing: 'automation',
     id,
-    lists: { read: lists.get('read') ?? [], write: lists.get('write') ?? [] },
+    lists: { read: lists.get('read') ?? [], write: lists.get('write') ?? [], ...(use.length > 0 ? { use } : {}) },
     ...(await standingOn(target, teamId)),
   };
 }
@@ -123,7 +129,7 @@ async function connectionView(id: string): Promise<Shown<'connection'> | undefin
 }
 
 /** An automation's lists as an agent reads them: each list in the shape `setAccess` takes back. */
-type AutomationAccess = Record<StatedVerb<'automation'>, ShownGrantee[]> & { mayChange: boolean; onlyYou: boolean };
+type AutomationAccess = AutomationLists & { mayChange: boolean; onlyYou: boolean };
 
 /** A connection's list as an agent reads it. */
 type ConnectionAccess = Record<StatedVerb<'connection'>, ShownGrantee[]> & { mayChange: boolean; onlyYou: boolean };

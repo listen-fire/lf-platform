@@ -14,24 +14,29 @@ const REASONS: readonly StatementReason[] = [
   "not_a_writer",
   "malformed",
   "already_stated",
+  "needs_use_on_names",
+  "not_a_library",
   "on_overwrite",
+  "first_export",
 ];
 
 describe("a save that was not the saver's to make", () => {
-  it("lists each connection they may not use with the file that names it, and a file they can't read as such", () => {
+  it("lists each connection they may not use with the file that names it", () => {
     const html = notice({
       kind: "connections",
       connections: [{ connection: "finance_attio", file: "Deals" }],
-      unreadableFiles: ["Payroll"],
     });
     expect(html).toContain('data-testid="save-refused-connections"');
     expect(html).toContain("finance_attio");
     expect(html).toContain("named in");
     expect(html).toContain("Deals");
-    expect(html).toContain("Payroll");
-    expect(html).toContain("a file you can&#x27;t read");
-    // The connection a file the saver can't read names is never shown.
-    expect(html).not.toContain("payroll_");
+  });
+
+  it("lists each library they may not use, by name", () => {
+    const html = notice({ kind: "libraries", libraries: ["lib/finance"] });
+    expect(html).toContain('data-testid="save-refused-libraries"');
+    expect(html).toContain("lib/finance");
+    expect(html).toContain("may not use");
   });
 
   it("offers the choice of who may reach a new automation when its save lacked one", () => {

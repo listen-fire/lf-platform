@@ -82,7 +82,7 @@ import { readFileAsBase64, type PickedFile } from "@/lib/picked-file";
 import { AccessPanel } from "@/components/access/access-panel";
 import { ChooseUseDialog, CreateAutomationDialog } from "@/components/access/creation";
 import type { AutomationVerb, Grantee } from "@/components/access/grantees";
-import { creationParts, mustChooseFirst, refusesChoice } from "@/components/access/creation-save";
+import { asksForLibraryUse, creationParts, mustChooseFirst, refusesChoice } from "@/components/access/creation-save";
 import { SaveRefusalNotice, SaveWarnings } from "@/components/movements/save-notice";
 
 const VIM_PREFERENCE_KEY = "listen-fire.movements.vim";
@@ -646,9 +646,13 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
   // sent with every save until one creates it.
   const [creationStatements, setCreationStatements] = useState<Record<AutomationVerb, Grantee[]> | null>(null);
   const [choosingAccess, setChoosingAccess] = useState(false);
+  // Who may use the file once it exports: asked when a save creates a library
+  // or adds a file's first export, and sent with the save that follows.
+  const [libraryUse, setLibraryUse] = useState<Grantee[] | null>(null);
+  const [choosingLibraryUse, setChoosingLibraryUse] = useState(false);
   const creation = useMemo(
-    () => ({ movementId, statements: creationStatements }),
-    [movementId, creationStatements],
+    () => ({ movementId, statements: creationStatements, libraryUse }),
+    [movementId, creationStatements, libraryUse],
   );
   const statementsForSave = useMemo(() => creationParts(creation), [creation]);
 
@@ -657,7 +661,14 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
       if (!result.ok && "refused" in result && result.refused !== undefined) {
         // A choice the server refused is not sent again: the person chooses anew.
         if (refusesChoice(result.refused)) setCreationStatements(null);
-        if (result.refused.kind === "missing_statement") setChoosingAccess(true);
+        if (asksForLibraryUse(result.refused)) {
+          setLibraryUse(null);
+          setChoosingLibraryUse(true);
+        }
+        if (result.refused.kind === "missing_statement" && result.refused.missing.some((verb) => verb !== "use")) setChoosingAccess(true);
+      } else if (result.ok) {
+        // The use list went with this save; a later save over the file takes none.
+        setLibraryUse(null);
       }
       void utils.views.movement.list.invalidate();
       if (props.movementId) {
@@ -1091,9 +1102,25 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
       setChoosingAccess(false);
       const source = editorRef.current?.getSource();
       if (!source) return;
-      save.mutate({ source, ...(movementId ? { id: movementId } : {}), ...creationParts({ movementId, statements }) });
+      save.mutate({ source, ...(movementId ? { id: movementId } : {}), ...creationParts({ movementId, statements, libraryUse }) });
     },
-    [save, movementId],
+    [save, movementId, libraryUse],
+  );
+
+  const saveWithLibraryUse = useCallback(
+    (use: Grantee[]) => {
+      setLibraryUse(use);
+      setChoosingLibraryUse(false);
+      const source = editorRef.current?.getSource();
+      if (!source) return;
+      save.mutate({
+        source,
+        ...(movementId ? { id: movementId } : {}),
+        ...(baseUpdatedAt ? { baseUpdatedAt } : {}),
+        ...creationParts({ movementId, statements: creationStatements, libraryUse: use }),
+      });
+    },
+    [save, movementId, baseUpdatedAt, creationStatements],
   );
 
   // Rename from the breadcrumb. A movement's name is also the identity other
@@ -1893,6 +1920,12 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
         isOpen={choosingAccess}
         onCancel={() => setChoosingAccess(false)}
         onConfirm={saveWithStatements}
+      />
+      <ChooseUseDialog
+        isOpen={choosingLibraryUse}
+        title="Who may use this library"
+        onCancel={() => setChoosingLibraryUse(false)}
+        onConfirm={saveWithLibraryUse}
       />
       <ChooseUseDialog
         isOpen={useChoiceRequest !== null}

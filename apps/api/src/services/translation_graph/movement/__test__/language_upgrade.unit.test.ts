@@ -53,7 +53,10 @@ jest.mock('../../../access/decide', () => ({ accessTo: jest.fn(async () => true)
 jest.mock('../save_access', () => ({
   connectionsNamed: jest.fn(async () => []),
   unusableConnections: jest.fn(async () => []),
-  connectionsRefusal: async (_saver: unknown, unusable: { file: string }[]) => ({ message: `names connections you may not use (in ${unusable.map((u) => u.file).join(', ')})` }),
+  connectionsRefusal: (unusable: { file: string }[]) => ({ message: `names connections you may not use (in ${unusable.map((u) => u.file).join(', ')})` }),
+  librariesNamed: jest.fn(async () => []),
+  unusableLibraries: jest.fn(async () => []),
+  librariesRefusal: (unusable: { name: string }[]) => ({ message: `imports libraries you may not use (${unusable.map((u) => u.name).join(', ')})` }),
 }));
 
 import { LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalog, mockCatalogSnapshot, type LanguageVersion, type PluginOutput, type PluginSpec, type ResolveFile } from 'movement-lang';
@@ -67,7 +70,7 @@ import { saveMovement } from '../provision';
 import { bringUpListensLater } from '../listens_up';
 import { accessTo } from '../../../access/decide';
 import { holdsOnMoving } from '../upgrade_holds';
-import { connectionsNamed, unusableConnections } from '../save_access';
+import { connectionsNamed, unusableConnections, unusableLibraries } from '../save_access';
 import {
   runDeployCheck,
   upgradeMovement,
@@ -1582,6 +1585,7 @@ describe('a person upgrading needs write on what moves', () => {
     jest.mocked(holdsOnMoving).mockReset().mockResolvedValue([]);
     jest.mocked(connectionsNamed).mockClear();
     jest.mocked(unusableConnections).mockReset().mockResolvedValue([]);
+    jest.mocked(unusableLibraries).mockReset().mockResolvedValue([]);
     jest.mocked(assessMovementValidity).mockReturnValue({ status: 'valid', reason: null } as never);
   });
 
@@ -1624,6 +1628,22 @@ describe('a person upgrading needs write on what moves', () => {
     advance.mockClear();
     const all = await upgradeMovement({ teamId: 'team-1', id: 'app', acknowledge: true, applyAllFixes: true, by, validate, advance });
     expect(all).toEqual(expect.objectContaining({ status: 'blocked', detail: expect.stringContaining('names connections you may not use') }));
+    expect(advance).not.toHaveBeenCalled();
+    jest.mocked(getMovementRow).mockReset();
+    jest.mocked(listMovementRows).mockReset().mockResolvedValue([]);
+  });
+
+  it('needs use on the libraries the rewritten texts import too, under applyAllFixes', async () => {
+    jest.mocked(getMovementRow).mockResolvedValue(rows[1]);
+    jest.mocked(listMovementRows).mockResolvedValue(rows);
+    jest.mocked(unusableLibraries).mockResolvedValue([{ name: 'helpers', id: 'lib' }]);
+
+    const safe = await upgradeMovement({ teamId: 'team-1', id: 'app', acknowledge: true, by, validate, advance });
+    expect(safe.status).toBe('upgraded');
+
+    advance.mockClear();
+    const all = await upgradeMovement({ teamId: 'team-1', id: 'app', acknowledge: true, applyAllFixes: true, by, validate, advance });
+    expect(all).toEqual(expect.objectContaining({ status: 'blocked', detail: expect.stringContaining('imports libraries you may not use (helpers)') }));
     expect(advance).not.toHaveBeenCalled();
     jest.mocked(getMovementRow).mockReset();
     jest.mocked(listMovementRows).mockReset().mockResolvedValue([]);

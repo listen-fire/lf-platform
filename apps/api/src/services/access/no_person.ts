@@ -21,7 +21,13 @@ function automationWithNoPerson(): CreationStatements {
 
 /** The lists in the order they are stated: write first, so whoever may change it is said before anything else. */
 function automationLists(statements: CreationStatements): StatedList<'automation'>[] {
-  return (['write', 'read'] as const).map((verb) => ({ verb, grantees: statements[verb] }));
+  const lists: StatedList<'automation'>[] = (['write', 'read'] as const).map((verb) => ({ verb, grantees: statements[verb] }));
+  return statements.use === undefined ? lists : [...lists, { verb: 'use', grantees: statements.use }];
 }
 
-export { automationWithNoPerson, connectionWithNoPerson, automationLists };
+/** The use list of a library created with no person in the request: the whole team may import it. */
+function libraryUseWithNoPerson(): readonly Grantee[] {
+  return TEAM;
+}
+
+export { automationWithNoPerson, connectionWithNoPerson, automationLists, libraryUseWithNoPerson };

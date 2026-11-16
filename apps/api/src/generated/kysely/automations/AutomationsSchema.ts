@@ -19,6 +19,7 @@ import type { default as WriteLedgerTable } from './WriteLedger';
 import type { default as RemoteAdapterTable } from './RemoteAdapter';
 import type { default as MovementTable } from './Movement';
 import type { default as MovementIssueTable } from './MovementIssue';
+import type { default as LibraryStandingTable } from './LibraryStanding';
 import type { default as PhoneNumberTable } from './PhoneNumber';
 import type { default as TeamSettingsTable } from './TeamSettings';
 import type { default as EventReceiptTable } from './EventReceipt';
@@ -89,6 +90,8 @@ export default interface AutomationsSchema {
   movement: MovementTable;
 
   movement_issue: MovementIssueTable;
+
+  library_standing: LibraryStandingTable;
 
   phone_number: PhoneNumberTable;
 

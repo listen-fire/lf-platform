@@ -12,11 +12,18 @@ import type { Thing } from './statement';
 
 import { automationLists, automationWithNoPerson, connectionWithNoPerson } from './no_person';
 import { storedRowOf } from './statement';
+import { movementFileFacets } from '../translation_graph/movement/files';
 
 type Unstated = { automations: string[]; connections: string[] };
 
-/** What a run stated: the automations and connections that had no statement at all. */
-type StatedThings = Unstated;
+/**
+ * What a run stated: the automations and connections that had no statement at
+ * all, and the libraries (files that export) given a use list.
+ */
+type StatedThings = Unstated & { libraries: string[] };
+
+// A cheap cut before the parser looks: a line that starts with `export`.
+const MAY_EXPORT = String.raw`t.source ~ '(^|\n)[ \t]*export[ \t]'`;
 
 // A thing with any statement was stated by a person, or by its creation since
 // statements existed: it is never touched here.
@@ -49,6 +56,10 @@ async function teamsWithUnstated(client: Client): Promise<string[]> {
        SELECT team_id, id, 'connection' AS thing FROM automations.external_service_credentials
      ) t
      WHERE NOT EXISTS (SELECT 1 FROM automations.access_statement s WHERE s.thing = t.thing AND s.thing_id = t.id)
+     UNION
+     SELECT t.team_id::text FROM automations.movement t
+      WHERE ${MAY_EXPORT}
+        AND NOT EXISTS (SELECT 1 FROM automations.access_statement s WHERE s.thing = 'automation' AND s.thing_id = t.id AND s.verb = 'use')
      ORDER BY 1`,
   );
   return rows.rows.map((r) => r.team_id);
@@ -102,7 +113,7 @@ async function stateIfStillUnstated<T extends Thing>(
 async function stateWhatIsUnstated(client: Client, teamId: string): Promise<StatedThings> {
   const unstated = await unstatedIn(client, teamId);
 
-  const stated: StatedThings = { automations: [], connections: [] };
+  const stated: StatedThings = { automations: [], connections: [], libraries: [] };
   for (const id of unstated.automations) {
     const lists = automationLists(automationWithNoPerson());
     if (await stateIfStillUnstated(client, { teamId, thing: 'automation', id, lists }))
@@ -115,11 +126,42 @@ async function stateWhatIsUnstated(client: Client, teamId: string): Promise<Stat
     if (await stateIfStillUnstated(client, { teamId, thing: 'connection', id, lists }))
       stated.connections.push(id);
   }
+  stated.libraries = await stateLibraryUse(client, teamId);
+  return stated;
+}
+
+/**
+ * Give every file of one team that exports and has no use list a use list
+ * equal to who may read it today (the read list and the write list, since
+ * whoever may write may read), so the importers it has keep importing.
+ * Returns the ids it stated; a file with a use list is never touched.
+ */
+async function stateLibraryUse(client: Client, teamId: string): Promise<string[]> {
+  const candidates = await client.query<{ id: string; source: string; language_version: string }>(
+    `SELECT t.id::text AS id, t.source, t.language_version FROM automations.movement t
+      WHERE t.team_id = $1::uuid AND ${MAY_EXPORT}
+        AND NOT EXISTS (SELECT 1 FROM automations.access_statement s WHERE s.thing = 'automation' AND s.thing_id = t.id AND s.verb = 'use')`,
+    [teamId],
+  );
+  const stated: string[] = [];
+  for (const { id, source, language_version } of candidates.rows) {
+    if (!movementFileFacets(source, language_version).isLibrary) continue;
+    const written = await client.query(
+      `INSERT INTO automations.access_statement (team_id, thing, thing_id, verb, grantee, value)
+       SELECT DISTINCT s.team_id, s.thing, s.thing_id, 'use', s.grantee, s.value
+         FROM automations.access_statement s
+        WHERE s.thing = 'automation' AND s.thing_id = $1::uuid AND s.verb IN ('read', 'write')
+          AND NOT EXISTS (SELECT 1 FROM automations.access_statement u WHERE u.thing = 'automation' AND u.thing_id = $1::uuid AND u.verb = 'use')`,
+      [id],
+    );
+    if ((written.rowCount ?? 0) > 0) stated.push(id);
+  }
   return stated;
 }
 
 export {
   stateWhatIsUnstated,
+  stateLibraryUse,
   unstatedIn,
   teamsWithUnstated,
   teamHasStatements,

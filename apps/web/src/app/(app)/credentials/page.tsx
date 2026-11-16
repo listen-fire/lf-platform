@@ -205,6 +205,11 @@ export default function ConnectionsPage() {
                       <div className="mt-0.5 text-[12px] text-gray-400">
                         {automationCountLabel(integration.automationCount)}
                       </div>
+                      {integration.sharedThrough.length > 0 && (
+                        <div className="mt-0.5 text-[12px] text-gray-400" data-testid={`connection-shared-through-${integration.name}`}>
+                          Shared through these libraries: {integration.sharedThrough.join(", ")}
+                        </div>
+                      )}
                       {integration.connectLines.length > 0 && (
                         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                           {integration.connectLines.map((line) => (

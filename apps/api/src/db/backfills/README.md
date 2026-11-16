@@ -29,8 +29,13 @@ connection, and a thing with none admits nobody. This states every automation
 and connection that has none with the reach it has today, through the same rule
 a creation with no person uses (`services/access/no_person.ts`), so turning on
 the access checks changes nobody's reach: the team may read, write and use it.
-It reads no source and no pin. It writes only to things with no statement at all, so it is safe to
-re-run, and it never changes a thing a person or a creation stated.
+It reads no source and no pin to state an automation or a connection. It writes only to things with no
+statement at all, so it is safe to re-run, and it never changes a thing a person or a creation stated.
+
+It also gives every file that exports (a library, found by a line that starts with `export`, then
+confirmed by the parser) a use list equal to who may read it today: its read list and its write list,
+since whoever may write may read. That keeps today's importers importing once use on a library is
+checked. A file that already has a use list keeps it.
 
 It is not a `.sql` migration because the rule is code. `deploy:render-pre` and
 the compose `migrate` one-shot run it after the schema migrates, on every

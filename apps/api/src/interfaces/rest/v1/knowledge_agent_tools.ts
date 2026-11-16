@@ -1516,11 +1516,11 @@ async function listNow(target: Target, verb: SetAccessInput['verb']): Promise<Gr
 }
 
 const SET_ACCESS_DESCRIPTION =
-  'Change who may reach one automation or one connection: replace one of its lists. An automation has two — read and write (change, run, delete, and change these lists; whoever may write may also read) — and a connection one, use. Body: { automation | connection (id or exact name), verb, grantees, team? }. Each list takes { kind: "team" } or { kind: "user", userId }. A list is never empty, and names only people on the team. Ask the person you are working for who should be on it; never choose for them. This REPLACES the whole list: read the current list first (getAutomation\'s or describeConnection\'s `access`, or a locked entry\'s `access` in listAutomations and listConnections), then pass it back with your change made. Never pass just the one person to add, which would remove everyone else. Changing an automation\'s lists needs write on it; a connection\'s needs use; a team admin may change any on the team. Returns the list as stored. The current lists are in getAutomation\'s and describeConnection\'s `access`; leave out anyone marked `onTeam: false`, who has left the team. Also the top-level "setAccess" tool.';
+  'Change who may reach one automation or one connection: replace one of its lists. An automation has two — read and write (change, run, delete, and change these lists; whoever may write may also read) — and a connection one, use. A file that exports (a library) has use as well: who may import it and call its exported functions without reading its source; changing it needs use on every connection and library the file names. Body: { automation | connection (id or exact name), verb, grantees, team? }. Each list takes { kind: "team" } or { kind: "user", userId }. A list is never empty, and names only people on the team. Ask the person you are working for who should be on it; never choose for them. This REPLACES the whole list: read the current list first (getAutomation\'s or describeConnection\'s `access`, or a locked entry\'s `access` in listAutomations and listConnections), then pass it back with your change made. Never pass just the one person to add, which would remove everyone else. Changing an automation\'s lists needs write on it; a connection\'s needs use; a team admin may change any on the team. Returns the list as stored. The current lists are in getAutomation\'s and describeConnection\'s `access`; leave out anyone marked `onTeam: false`, who has left the team. Also the top-level "setAccess" tool.';
 
 const READ_ONLY_CONNECTION_MESSAGE = 'You may use this connection but not change who may.';
 
-const WRONG_VERB = "An automation's lists are read and write; a connection's is use.";
+const WRONG_VERB = "A connection's one list is use; an automation's are read and write, and use once it exports.";
 
 // Replace one of a thing's lists, as the person the agent works for chose it.
 // The decision is the thing's own: write on the automation, use on the
@@ -1545,7 +1545,6 @@ const setAccessHandler: RequestHandler = async (req, res) => {
         if (refused instanceof Forbidden) return res.status(403).json({ error: refused.message });
         if (refused !== null) return res.status(404).json(refused);
       }
-      if (input.verb === 'use') return res.status(400).json({ error: WRONG_VERB });
       await setStatement(currentPrincipal(), { target: automation, verb: input.verb, grantees: input.grantees });
       target = automation;
       named = { automation: { id: row.id, name: row.name } };

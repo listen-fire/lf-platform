@@ -1191,8 +1191,12 @@ export interface DependentCheckResult {
 }
 
 export type Thing = 'automation' | 'connection';
-/** The verbs each thing's statement has: reading and writing are an automation's, using is a connection's. */
-export type StatedVerb<T extends Thing> = T extends 'automation' ? 'read' | 'write' : 'use';
+/**
+ * The verbs each thing's statement has: reading and writing are an automation's,
+ * using is a connection's, and a file that exports (a library) has it too: use
+ * lets someone import and call what it exports without reading its source.
+ */
+export type StatedVerb<T extends Thing> = T extends 'automation' ? 'read' | 'write' | 'use' : 'use';
 /** One entry on a verb's list: the team, or one person on it. */
 export type Grantee = {
     kind: 'team';
@@ -1201,10 +1205,14 @@ export type Grantee = {
     userId: string;
 };
 
-export type StatementRefusal = 'empty' | 'not_found' | 'not_allowed' | 'not_a_member' | 'not_a_writer' | 'malformed' | 'already_stated';
+export type StatementRefusal = 'empty' | 'needs_use_on_names' | 'not_a_library' | 'not_found' | 'not_allowed' | 'not_a_member' | 'not_a_writer' | 'malformed' | 'already_stated';
+/** The read and write lists a new automation is created with, and its use list when it exports. */
+export type CreationStatements = Readonly<Record<'read' | 'write', readonly Grantee[]>> & {
+    readonly use?: readonly Grantee[];
+};
 
 /** Why a creation's statements were refused: the decision's own reasons, and statements given to a save that overwrites. */
-export type StatementReason = StatementRefusal | 'on_overwrite';
+export type StatementReason = StatementRefusal | 'on_overwrite' | 'first_export';
 /** Why a person's save was refused. Nothing of the text was stored. */
 export type SaveRefusal = {
     kind: 'read_only';
@@ -1227,7 +1235,9 @@ export type SaveRefusal = {
         connection: string;
         file: string;
     }[];
-    unreadableFiles: string[];
+} | {
+    kind: 'libraries';
+    libraries: string[];
 };
 
 /** Why a listen runs nothing until a person resumes it. */
@@ -1851,6 +1861,8 @@ export type ConnectionsIntegration = {
     connectLines: string[];
     /** Whether only the caller may use it. */
     onlyYou: boolean;
+    /** The libraries (files that export) that name it, so it is shared through them with those who may use the library: derived each time, never stored on the connection. */
+    sharedThrough: string[];
 };
 /** A connection a team admin may not use, shown by its name alone: its list is its access panel's. */
 export type LockedConnection = {
@@ -1989,10 +2001,15 @@ export type ShownGrantee = Exclude<Grantee, {
     email: string | null;
     onTeam: boolean;
 };
+/** An automation's lists: read and write, and use once it is a library (it has a use list). */
+export type AutomationLists = Record<'read' | 'write', ShownGrantee[]> & {
+    use?: ShownGrantee[];
+};
+export type Lists<T extends Thing> = T extends 'automation' ? AutomationLists : Record<StatedVerb<T>, ShownGrantee[]>;
 export type Shown<T extends Thing> = {
     thing: T;
     id: string;
-    lists: Record<StatedVerb<T>, ShownGrantee[]>;
+    lists: Lists<T>;
     /** Whether the caller may change these lists; otherwise they are read-only. */
     mayChange: boolean;
     /** Whether the lists that let someone see it admit the caller alone. */
@@ -2219,7 +2236,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _input_in: {
                     thing: "automation";
                     id: string;
-                    verb: "read" | "write";
+                    verb: "read" | "write" | "use";
                     grantees: ({
                         kind: "team";
                     } | {
@@ -2240,7 +2257,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _input_out: {
                     thing: "automation";
                     id: string;
-                    verb: "read" | "write";
+                    verb: "read" | "write" | "use";
                     grantees: ({
                         kind: "team";
                     } | {
@@ -4913,7 +4930,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     owned?: {
                         name: string;
                         allowPattern?: string | undefined;
-                        format?: "cron" | "timeZone" | undefined;
+                        format?: "timeZone" | "cron" | undefined;
                     } | undefined;
                     record?: {
                         typeId: string;
@@ -5004,7 +5021,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                         owned?: {
                             name: string;
                             allowPattern?: string | undefined;
-                            format?: "cron" | "timeZone" | undefined;
+                            format?: "timeZone" | "cron" | undefined;
                         } | undefined;
                         record?: {
                             typeId: string;
@@ -9179,7 +9196,7 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                     name?: string | undefined;
                     baseUpdatedAt?: string | undefined;
                     acknowledgeErrors?: boolean | undefined;
-                    statements?: Partial<Readonly<Record<"read" | "write", readonly Grantee[]>>> | undefined;
+                    statements?: Partial<CreationStatements> | undefined;
                     intent?: "create" | undefined;
                 };
                 _output_in: typeof _trpc_server.unsetMarker;

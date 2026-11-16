@@ -118,14 +118,14 @@ describe('the save rule (real Postgres)', () => {
     const source = ['inbox = email()', 'chat =', '  slack(credentials: `Slack`)', 'movement broken( {'].join('\n');
     const row = await writeMovementRow({ teamId, intent: { kind: 'create' }, name: 'Run made', source });
     const target = { thing: 'automation', id: row.id } as const;
-    await stateRunCreation({ teamId, target, given: undefined });
+    await stateRunCreation({ teamId, target, given: undefined, exports: false });
     expect(await StatementStore.grantsOf(target, { teamId, verb: 'read' })).toEqual([{ kind: 'team' }]);
     expect(await StatementStore.grantsOf(target, { teamId, verb: 'write' })).toEqual([{ kind: 'team' }]);
   });
   it('deletes what is stated about an automation with it', async () => {
     const row = await writeMovementRow({ teamId, intent: { kind: 'create' }, name: 'Going', source: RUN_NOW });
     const target = { thing: 'automation', id: row.id } as const;
-    await stateRunCreation({ teamId, target, given: undefined });
+    await stateRunCreation({ teamId, target, given: undefined, exports: false });
     await deleteMovement({ teamId, id: row.id });
     expect(await StatementStore.hasAnyStatement(target)).toBe(false);
   });

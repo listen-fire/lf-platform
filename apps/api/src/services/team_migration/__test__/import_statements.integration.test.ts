@@ -77,7 +77,7 @@ describe('an imported team', () => {
     const alice = randomUUID();
     await StatementStore.replaceGrants({ thing: 'automation', id: stated }, { teamId, verb: 'write', grantees: [{ kind: 'user', userId: alice }] });
 
-    expect(await stateWhatIsUnstated(client, teamId)).toEqual({ automations: [], connections: [] });
+    expect(await stateWhatIsUnstated(client, teamId)).toEqual({ automations: [], connections: [], libraries: [] });
     expect(await listOf({ thing: 'automation', id: stated }, 'write')).toEqual([{ kind: 'user', userId: alice }]);
     expect(await listOf({ thing: 'automation', id: stated }, 'read')).toEqual([]);
   });

@@ -17,16 +17,20 @@ export type StatementReason =
   | "not_a_writer"
   | "malformed"
   | "already_stated"
-  | "on_overwrite";
+  | "needs_use_on_names"
+  | "not_a_library"
+  | "on_overwrite"
+  | "first_export";
 
 /** Why a person's save was refused. The server's `SaveRefusal` (save_access.ts). */
 export type SaveRefusal =
   | { kind: "read_only" }
   | { kind: "name_taken"; name: string }
   | { kind: "name_gone"; name: string }
-  | { kind: "missing_statement"; missing: ("read" | "write")[] }
+  | { kind: "missing_statement"; missing: ("read" | "write" | "use")[] }
   | { kind: "statement"; reason: StatementReason }
-  | { kind: "connections"; connections: { connection: string; file: string }[]; unreadableFiles: string[] };
+  | { kind: "connections"; connections: { connection: string; file: string }[] }
+  | { kind: "libraries"; libraries: string[] };
 
 export function SaveRefusalNotice({
   refused,
@@ -66,8 +70,14 @@ export function statementReasonSentence(reason: StatementReason): string {
       return "Something you chose could not be read. Choose again.";
     case "already_stated":
       return "This automation already says who may reach it. Change that under Access on its page.";
+    case "needs_use_on_names":
+      return "To say who may use a library you need use on every connection and library it names.";
+    case "not_a_library":
+      return "Only a file that exports something has a list of who may use it.";
     case "on_overwrite":
       return "Who may reach an automation is chosen when it is created. Change it under Access on the automation's page.";
+    case "first_export":
+      return "This file now exports, which makes it a library. Choose who may use it: import it and call what it exports without reading its source.";
     default: {
       const unreachable: never = reason;
       return unreachable;
@@ -103,7 +113,11 @@ function RefusalBody({ refused, onChooseAccess }: { refused: SaveRefusal; onChoo
     case "missing_statement":
       return (
         <>
-          <p>A new automation needs to say who may see and change it.</p>
+          <p>
+            {refused.missing.every((verb) => verb === "use")
+              ? "A file that exports is a library, and needs to say who may use it."
+              : "A new automation needs to say who may see and change it."}
+          </p>
           {onChooseAccess !== undefined && <ChooseAccessButton onChooseAccess={onChooseAccess} />}
         </>
       );
@@ -126,14 +140,22 @@ function RefusalBody({ refused, onChooseAccess }: { refused: SaveRefusal; onChoo
                 <span className="font-mono text-[11px]">{c.file}</span>
               </li>
             ))}
-            {refused.unreadableFiles.map((file) => (
-              <li key={`unreadable\u0000${file}`}>
-                <span className="font-mono text-[11px]">{file}</span>
-                <span className="text-amber-600">, a file you can&apos;t read, names one</span>
+          </ul>
+          <p>A save may name only connections you may use. Ask someone who may use them to share them with you.</p>
+        </>
+      );
+    case "libraries":
+      return (
+        <>
+          <p>This file imports libraries you may not use, or that do not exist:</p>
+          <ul className="space-y-1" data-testid="save-refused-library-list">
+            {refused.libraries.map((name) => (
+              <li key={name} className="font-mono text-[11px]">
+                {name}
               </li>
             ))}
           </ul>
-          <p>A save may name only connections you may use. Ask someone who may use them to share them with you.</p>
+          <p>A save may import only libraries you may use. Ask someone who may change a library to let you use it.</p>
         </>
       );
     default: {

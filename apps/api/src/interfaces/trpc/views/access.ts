@@ -35,7 +35,7 @@ export type { AccessView };
  */
 export type SetResult = { ok: true; view: AccessView } | { ok: false; refusal: StatementRefusal };
 
-const AUTOMATION_VERBS = ['read', 'write'] as const satisfies readonly StatedVerb<'automation'>[];
+const AUTOMATION_VERBS = ['read', 'write', 'use'] as const satisfies readonly StatedVerb<'automation'>[];
 
 const NOT_FOUND: Record<Thing, string> = {
   automation: 'That automation was not found.',

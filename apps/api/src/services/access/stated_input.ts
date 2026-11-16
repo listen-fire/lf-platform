@@ -19,6 +19,7 @@ const GranteesInput = z.array(GranteeInput);
 const CreationStatementsInput: z.ZodType<Partial<CreationStatements>> = z.object({
   read: GranteesInput.optional(),
   write: GranteesInput.optional(),
+  use: GranteesInput.optional(),
 });
 
 /** What an agent is told about any list it passes: the choice is its person's. */
@@ -28,6 +29,7 @@ const TEAM_OR_MEMBERS = 'Each entry is { kind: "team" } (everyone on the team) o
 const LIST_DESCRIPTIONS = {
   use: `Who may use the connection: run automations on it, read through it, and change this list. ${ASK_YOUR_PERSON} ${TEAM_OR_MEMBERS}, and you or the team must be on it.`,
   read: `Who may read the automation. ${ASK_YOUR_PERSON} ${TEAM_OR_MEMBERS}. Whoever may write it may also read it.`,
+  useLibrary: `Who may use the library (a file that exports): import it and call its exported functions without reading its source. ${ASK_YOUR_PERSON} ${TEAM_OR_MEMBERS}. Setting it takes use on every connection and library the file names.`,
   write: `Who may change, run and delete the automation, and change who may reach it. ${ASK_YOUR_PERSON} ${TEAM_OR_MEMBERS}, and you or the team must be on it.`,
 } as const;
 

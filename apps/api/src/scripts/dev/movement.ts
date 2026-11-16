@@ -72,7 +72,7 @@ import {
   ensureDevLoopTeam,
 } from './_lib';
 import { saveMovement } from '../../services/translation_graph/movement/provision';
-import { stateRunCreation } from '../../services/translation_graph/movement/save_access';
+import { exportsSomething, stateRunCreation } from '../../services/translation_graph/movement/save_access';
 import { inOneTransaction } from '../../services/context/one_transaction';
 import { upgradeMovement } from '../../services/translation_graph/movement/language_upgrade';
 import { getMovementRunStatus, runMovementAsync, runMovementNow } from '../../services/translation_graph/movement/run_now';
@@ -576,7 +576,7 @@ async function main() {
           .insertInto('movement')
           .values({ id: created as MovementId, team_id: seed.teamId as TeamId, name: movementName, source, description: '', language_version: pin })
           .execute();
-        await stateRunCreation({ teamId: seed.teamId, target: { thing: 'automation', id: created }, given: undefined });
+        await stateRunCreation({ teamId: seed.teamId, target: { thing: 'automation', id: created }, given: undefined, exports: exportsSomething(source) });
       });
     }
   }

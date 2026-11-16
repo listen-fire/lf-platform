@@ -409,6 +409,12 @@ export const MANIFEST: Record<Product, TableSpec[]> = {
     // the move; a user grant names a user id, which counts only while that user
     // is on the team at the target.
     { table: 'access_statement', tenancy: { kind: 'team_column' } },
+    {
+      table: 'library_standing',
+      tenancy: { kind: 'team_column' },
+      exportExcludedBecause:
+        'derived from the lists and the writers a library has, so it is worked out again on the target when a run first imports the library or a list changes there',
+    },
     { table: 'team_settings', tenancy: { kind: 'team_column' } },
     {
       table: 'team_engine',

@@ -14,7 +14,10 @@ const mockTable: {
   members: Map<string, Access>;
   memberSince: string[];
   rows: Row[];
-} = { things: new Map(), members: new Map(), memberSince: [], rows: [] };
+  /** What each file names directly, by file id; a file in here exports. */
+  names: Map<string, { connections: Target<'connection'>[]; libraries: Target<'automation'>[] }>;
+  standing: Map<string, string | null>;
+} = { things: new Map(), members: new Map(), memberSince: [], rows: [], names: new Map(), standing: new Map() };
 
 jest.mock('../statement', () => {
   const actual = jest.requireActual('../statement');
@@ -59,6 +62,17 @@ jest.mock('../statement', () => {
           .filter((r) => r.teamId === options.teamId && r.grantee.kind === 'user' && r.grantee.userId === options.userId)
           .map((r) => ({ target: r.target, verb: r.verb })),
       hasAnyStatement: async (target: Target) => mockTable.rows.some((r) => same(r.target, target)),
+      librariesOf: async (teamId: string) => [
+        ...new Set(mockTable.rows.filter((r) => r.teamId === teamId && r.target.thing === 'automation' && r.verb === 'use').map((r) => r.target.id)),
+      ],
+      exportsSomething: async (target: Target) => mockTable.names.has(target.id),
+      namedBy: async (target: Target) => mockTable.names.get(target.id) ?? { connections: [], libraries: [] },
+      nameOf: async (target: Target) => `name-of-${target.id.slice(-1)}`,
+      standingsOf: async (ids: string[]) =>
+        new Map(ids.flatMap((id) => (mockTable.standing.has(id) ? [[id, { lostConnectionId: mockTable.standing.get(id) ?? null }] as const] : []))),
+      setStanding: async (target: Target, options: { lostConnectionId: string | null }) => {
+        mockTable.standing.set(target.id, options.lostConnectionId);
+      },
       // Membership is keyed by a uuid column, which Postgres compares without
       // regard to case, and it answers with the canonical lowercase id.
       membershipsOf: async (userId: string, teamIds: string[]) =>
@@ -100,6 +114,7 @@ import {
   maySeeStatement,
   membersAdmitted,
   passOnWhatTheyHeld,
+  recomputeLibraryStanding,
   seenOnlyBy,
   readableIds,
   setStatement,
@@ -115,6 +130,7 @@ const CAROL = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const DEALS: Target<'automation'> = { thing: 'automation', id: 'd0000000-0000-4000-8000-000000000001' };
 const NOTES: Target<'automation'> = { thing: 'automation', id: 'd0000000-0000-4000-8000-000000000002' };
 const ELSEWHERE: Target<'automation'> = { thing: 'automation', id: 'd0000000-0000-4000-8000-000000000003' };
+const LEDGER: Target<'automation'> = { thing: 'automation', id: 'd0000000-0000-4000-8000-000000000004' };
 const FINANCE: Target<'connection'> = { thing: 'connection', id: 'c0000000-0000-4000-8000-000000000001' };
 
 function member(teamId: string, userId: string, access: Access): void {
@@ -155,6 +171,8 @@ beforeEach(() => {
   mockTable.members = new Map();
   mockTable.memberSince = [];
   mockTable.rows = [];
+  mockTable.names = new Map();
+  mockTable.standing = new Map();
   thing(DEALS);
   thing(NOTES);
   thing(FINANCE);
@@ -731,5 +749,116 @@ describe('stating a thing as it is created', () => {
       stateAtCreation(NOTES, { teamId: TEAM, lists: [{ verb: 'write', grantees: [team] }, { verb: 'read', grantees: [user(BOB)] }] }),
     ).rejects.toMatchObject({ refusal: 'not_a_member' });
     expect(listOf(NOTES, 'write')).toEqual([]);
+  });
+});
+
+
+describe('use on a library', () => {
+  const SALES_LIB: Target<'automation'> = { thing: 'automation', id: 'd0000000-0000-4000-8000-000000000005' };
+
+  beforeEach(() => {
+    member(TEAM, ALICE, 'admin');
+    member(TEAM, BOB, 'write');
+    member(TEAM, CAROL, 'write');
+    thing(LEDGER);
+    thing(SALES_LIB);
+    // The ledger names the finance connection and the sales library, and exports.
+    mockTable.names.set(LEDGER.id, { connections: [FINANCE], libraries: [SALES_LIB] });
+    mockTable.names.set(SALES_LIB.id, { connections: [], libraries: [] });
+    stated(LEDGER, 'write', [user(BOB)]);
+    stated(LEDGER, 'read', [team]);
+    stated(LEDGER, 'use', [team]);
+    stated(SALES_LIB, 'write', [user(BOB)]);
+    stated(SALES_LIB, 'read', [team]);
+    stated(SALES_LIB, 'use', [team]);
+    stated(FINANCE, 'use', [user(BOB)]);
+  });
+
+  it('setting_a_library_use_list_needs_use_on_what_it_names: an admin without it is refused, and passes once they add themselves', async () => {
+    await expect(setStatement(person(ALICE), { target: LEDGER, verb: 'use', grantees: [user(BOB)] })).rejects.toMatchObject({
+      refusal: 'needs_use_on_names',
+    });
+    expect(listOf(LEDGER, 'use')).toEqual([team]);
+
+    // The admin adds themselves to the connection's list, where its holders see it; the library is still named.
+    mockTable.rows = mockTable.rows.filter((r) => !(r.target.id === SALES_LIB.id && r.verb === 'use'));
+    stated(SALES_LIB, 'use', [user(BOB)]);
+    await setStatement(person(ALICE), { target: FINANCE, verb: 'use', grantees: [user(BOB), user(ALICE)] });
+    await expect(setStatement(person(ALICE), { target: LEDGER, verb: 'use', grantees: [user(BOB)] })).rejects.toMatchObject({
+      refusal: 'needs_use_on_names',
+    });
+    await setStatement(person(ALICE), { target: SALES_LIB, verb: 'use', grantees: [user(ALICE)] });
+    await setStatement(person(ALICE), { target: LEDGER, verb: 'use', grantees: [user(BOB)] });
+    expect(listOf(LEDGER, 'use')).toEqual([user(BOB)]);
+  });
+
+  it('lets a writer who holds use on everything the library names change its use list', async () => {
+    stated(SALES_LIB, 'use', [user(BOB)]);
+    mockTable.rows = mockTable.rows.filter((r) => !(r.target.id === SALES_LIB.id && r.verb === 'use' && r.grantee.kind === 'team'));
+    await setStatement(person(BOB), { target: LEDGER, verb: 'use', grantees: [team] });
+    expect(listOf(LEDGER, 'use')).toEqual([team]);
+  });
+
+  it('names what is missing only to someone who may read the library', async () => {
+    const unreadable = new Error('unset');
+    stated(FINANCE, 'use', [user(CAROL)]);
+    mockTable.rows = mockTable.rows.filter((r) => !(r.target.id === LEDGER.id && r.verb === 'read'));
+    stated(LEDGER, 'read', [user(BOB)]);
+    // Alice (admin) cannot read the library, and is told nothing of what it names.
+    await expect(setStatement(person(ALICE), { target: LEDGER, verb: 'use', grantees: [team] })).rejects.not.toThrow(unreadable);
+    await expect(setStatement(person(ALICE), { target: LEDGER, verb: 'use', grantees: [team] })).rejects.toMatchObject({
+      refusal: 'needs_use_on_names',
+      message: expect.not.stringContaining('name-of-'),
+    });
+    // Bob reads it, holds use on the connection, but not the sales library once its list drops him.
+    mockTable.rows = mockTable.rows.filter((r) => !(r.target.id === SALES_LIB.id && r.verb === 'use'));
+    stated(SALES_LIB, 'use', [user(CAROL)]);
+    await expect(setStatement(person(BOB), { target: LEDGER, verb: 'use', grantees: [team] })).rejects.toMatchObject({
+      refusal: 'needs_use_on_names',
+      message: expect.stringContaining('name-of-5'),
+    });
+  });
+
+  it('refuses a use list on a file that exports nothing', async () => {
+    await expect(setStatement(person(BOB), { target: DEALS, verb: 'use', grantees: [team] })).rejects.toMatchObject({
+      refusal: 'not_a_library',
+    });
+  });
+
+  it('stands while one of its writers holds use on each connection it names, worked out when a list changes', async () => {
+    await recomputeLibraryStanding(TEAM, [LEDGER.id]);
+    expect(mockTable.standing.get(LEDGER.id)).toBeNull();
+
+    // Bob, its only writer, loses the connection: the library stops standing, naming the connection.
+    await setStatement(person(ALICE), { target: FINANCE, verb: 'use', grantees: [user(CAROL)] });
+    expect(mockTable.standing.get(LEDGER.id)).toBe(FINANCE.id);
+
+    // Another writer who holds it restores it.
+    await setStatement(person(BOB), { target: LEDGER, verb: 'write', grantees: [user(BOB), user(CAROL)] });
+    expect(mockTable.standing.get(LEDGER.id)).toBeNull();
+  });
+
+  it('is worked out again when a writer leaves the team', async () => {
+    stated(LEDGER, 'write', [user(CAROL)]);
+    stated(FINANCE, 'use', [user(CAROL)]);
+    await recomputeLibraryStanding(TEAM);
+    expect(mockTable.standing.get(LEDGER.id)).toBeNull();
+
+    leaves(TEAM, CAROL);
+    await passOnWhatTheyHeld({ teamId: TEAM, userId: CAROL, because: 'left' });
+    // Bob still writes it but lost the connection long ago in this setup: only Carol held both.
+    expect(mockTable.standing.get(LEDGER.id)).toBeNull();
+  });
+
+  it('a library with no writer that holds the connection does not stand after the last holder leaves', async () => {
+    mockTable.rows = mockTable.rows.filter((r) => !(r.target.id === FINANCE.id));
+    stated(FINANCE, 'use', [user(CAROL)]);
+    stated(LEDGER, 'write', [user(BOB), user(CAROL)]);
+    await recomputeLibraryStanding(TEAM);
+    expect(mockTable.standing.get(LEDGER.id)).toBeNull();
+
+    leaves(TEAM, CAROL);
+    await passOnWhatTheyHeld({ teamId: TEAM, userId: CAROL, because: 'left' });
+    expect(mockTable.standing.get(LEDGER.id)).toBe(FINANCE.id);
   });
 });

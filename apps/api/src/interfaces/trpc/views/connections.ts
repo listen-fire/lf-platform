@@ -51,6 +51,7 @@ import {
 } from '../../../services/translation_graph/adapters/telegram/handshake';
 import { USE_CONNECTION, connectionUnseen, decidesEach, readableAmong, seenAmong } from '../../access_route';
 import { seenOnlyBy } from '../../../services/access/decide';
+import { librariesSharingConnections } from '../../../services/access/library_sharing';
 import { GranteesInput } from '../../../services/access/stated_input';
 import { useForNewConnection } from './connection_creation';
 
@@ -81,6 +82,8 @@ export type ConnectionsIntegration = {
   connectLines: string[];
   /** Whether only the caller may use it. */
   onlyYou: boolean;
+  /** The libraries (files that export) that name it, so it is shared through them with those who may use the library: derived each time, never stored on the connection. */
+  sharedThrough: string[];
 };
 
 /** A connection a team admin may not use, shown by its name alone: its list is its access panel's. */
@@ -339,6 +342,7 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
         list.push({ name: importName, adapters: row.adapters });
         importedByCredentialId.set(row.id, list);
       }
+      const sharedThrough = await librariesSharingConnections(currentPrincipal(), teamId);
       const installsBySecretId = new Map<string, string[]>();
       for (const install of remoteInstalls) {
         const secretId = install.credentials_id as unknown as string | null;
@@ -371,6 +375,7 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
             secretOf: installsBySecretId.get(credId) ?? [],
           }),
           onlyYou: onlyYours.has(credId),
+          sharedThrough: sharedThrough.get(credId) ?? [],
         };
       });
 

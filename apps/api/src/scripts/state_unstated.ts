@@ -46,6 +46,7 @@ function reportStated(teamId: string, stated: StatedThings, firstRun: boolean): 
   const things = [
     ...stated.automations.map((id) => ({ kind: 'automation', id })),
     ...stated.connections.map((id) => ({ kind: 'connection', id })),
+    ...stated.libraries.map((id) => ({ kind: 'library use list of', id })),
   ];
   for (const { kind, id } of things) {
     console.log(`[state-unstated] team ${teamId}: stated ${kind} ${id}`);

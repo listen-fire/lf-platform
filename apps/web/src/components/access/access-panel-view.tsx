@@ -24,15 +24,34 @@ export type Thing = "automation" | "connection";
 
 export const ONLY_YOU = "Only you can see this";
 
-const VERBS: Record<Thing, readonly Verb[]> = {
-  automation: ["read", "write"],
-  connection: ["use"],
-};
+/** The lists a thing shows: a file shows its use list once it is a library (the server sends one only then). */
+function verbsOf(listing: AccessListing): readonly Verb[] {
+  switch (listing.thing) {
+    case "automation":
+      return listing.lists.use === undefined ? ["read", "write"] : ["read", "write", "use"];
+    case "connection":
+      return ["use"];
+    default: {
+      const unreachable: never = listing.thing;
+      return unreachable;
+    }
+  }
+}
 
-const TITLES: Record<Verb, { title: string; hint: string }> = {
-  read: { title: "Read", hint: "Who may see it. Whoever may change it may also see it." },
-  write: { title: "Write", hint: "Who may change, run and delete it, and change these lists." },
-  use: { title: "Use", hint: "Who may run automations on it, read through it, and change this list." },
+const TITLES: Record<Thing, Record<Verb, { title: string; hint: string }>> = {
+  automation: {
+    read: { title: "Read", hint: "Who may see it. Whoever may change it may also see it." },
+    write: { title: "Write", hint: "Who may change, run and delete it, and change these lists." },
+    use: {
+      title: "Use",
+      hint: "Who may import this library and call what it exports, without reading its source. It covers the connections the library names. Changing it takes use on everything the library names, a team admin too.",
+    },
+  },
+  connection: {
+    read: { title: "Read", hint: "" },
+    write: { title: "Write", hint: "" },
+    use: { title: "Use", hint: "Who may run automations on it, read through it, and change this list." },
+  },
 };
 
 /** What the server says about the thing's lists. */
@@ -82,15 +101,15 @@ export function AccessPanelView(props: AccessPanelViewProps) {
         )}
       </div>
       <ul className="space-y-3">
-        {VERBS[listing.thing].map((verb) => {
+        {verbsOf(listing).map((verb) => {
           const list = listing.lists[verb] ?? [];
           const isEditing = editing?.verb === verb;
           return (
             <li key={verb} className="rounded-lg border border-gray-100 px-3 py-2.5" data-testid={`access-${verb}`}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <div className="text-[12px] font-medium text-gray-800">{TITLES[verb].title}</div>
-                  <div className="text-[11.5px] leading-relaxed text-gray-400">{TITLES[verb].hint}</div>
+                  <div className="text-[12px] font-medium text-gray-800">{TITLES[listing.thing][verb].title}</div>
+                  <div className="text-[11.5px] leading-relaxed text-gray-400">{TITLES[listing.thing][verb].hint}</div>
                 </div>
                 {listing.mayChange && !isEditing && editing === null && (
                   <button

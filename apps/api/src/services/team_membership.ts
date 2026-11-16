@@ -27,7 +27,7 @@ import type CoreSchema from '../generated/kysely/core/CoreSchema';
 import { getCoreQb } from '../lib/kysely';
 import { logger } from 'movement-engine/public/log';
 import { ProvisioningService } from './provisioning';
-import { passOnWhatTheyHeld } from './access/decide';
+import { passOnWhatTheyHeld, recomputeLibraryStanding } from './access/decide';
 
 type MembershipDb = Kysely<Pick<CoreSchema, 'team_membership'>>;
 
@@ -126,6 +126,9 @@ async function afterAccessChange(input: {
 }): Promise<void> {
   if (input.wasWrite && !meets(input.access, 'write')) {
     await passOnWhatTheyHeld({ teamId: input.teamId, userId: input.userId, because: 'lost_write' });
+  } else {
+    // Who the writers are has changed, so which libraries still stand may have.
+    await recomputeLibraryStanding(input.teamId);
   }
 }
 
@@ -241,6 +244,7 @@ async function addMember(input: {
       email: lower,
       access: input.access,
     }));
+    await recomputeLibraryStanding(input.teamId);
     // Provisioning lowercases the handle it derives from an address; a name
     // somebody typed is kept exactly as typed, as the admin app's add-user does.
     await getCoreQb(['user'])
@@ -307,6 +311,7 @@ async function createServiceAccount(input: {
     .insertInto('team_membership')
     .values({ user_id: user.id, team_id: input.teamId, access: input.access })
     .execute();
+  await recomputeLibraryStanding(input.teamId);
 
   return { status: 'created', member: { id: user.id, username: user.username, email } };
 }
