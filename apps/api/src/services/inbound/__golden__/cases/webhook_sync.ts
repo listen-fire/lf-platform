@@ -566,8 +566,8 @@ export const webhookSyncCases: GoldenCase[] = define('webhook_sync', [
     })),
   },
   {
-    id: 'whatsapp-interactive-reply-fires-callback-and-continues',
-    note: 'A tapped reply button carrying a callback id fires it and is acked on WhatsApp, and the delivery still goes on to the adapter.',
+    id: 'whatsapp-interactive-reply-answers-retired-callback-and-continues',
+    note: 'A tapped reply button carrying a callback id is answered on WhatsApp that it was retired, and the delivery still goes on to the adapter.',
     arrange: () => {
       givenSubscription({ provider: 'INBOUND_WHATSAPP', webhook_secret: SECRETS.whatsappSub });
       givenTrigger({ kind: 'INBOUND_WHATSAPP' });

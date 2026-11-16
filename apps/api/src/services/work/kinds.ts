@@ -11,8 +11,7 @@ export const CORE_WORK_KINDS = [
   'run_carried', // payload: CarriedRunRow (movement/carried_run_now.ts): one run of a carried version someone started
   'resume_timer', // payload: { runId: string }
   'poll_edge', // payload: { teamId: string; digest: string } (poll_source/worker.ts): one shared poll of a listenable edge
-  'wake_await', // payload: a wait's wake, or { adapterType: string; teamId: string; correlationKey: string } for a run parked on a key (0.12)
-  'fire_callback', // payload: { callbackId: string; teamId: string; callIndex: number } (callback_fire.ts): a callback's call, on the version that minted it (0.12)
+  'wake_await', // payload: a wait's wake (movement_engine/await_resume.ts)
   'poll_reconcile', // periodic, payload {}
   'listen_subscription_retry', // periodic, payload {} (movement/listen_subscriptions.ts): subscriptions a source refused, asked for again
   'bring_up_listens', // payload: { teamId: string; movementIds: string[] } (movement/listens_up.ts): what an upgrade owes the providers

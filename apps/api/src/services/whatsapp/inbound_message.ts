@@ -17,8 +17,7 @@ import { enqueueWork } from '../work/store';
 import { dispatchWhatsappMessage } from './dispatch';
 import { resolveWhatsappSender } from './utils';
 import { getMetaWhatsappApi } from './metaApi';
-import { isRetiredCallbackId } from '../interaction/retired_callback';
-import { answerCallbackTap } from '../movement_engine/callback_fire';
+import { RETIRED_CALLBACK_TEXT, isRetiredCallbackId } from '../interaction/retired_callback';
 
 declare module '../work/kinds' {
   interface UnitWorkKinds {
@@ -89,22 +88,16 @@ export async function enqueueWhatsappMessage(row: WhatsappMessageRow): Promise<v
 /**
  * One message, in an order that keeps a retry clean: the dispatch first (its
  * receipts make a rerun a no-op, and a failure throws so the row retries before
- * anything the tapper or ops can see has happened), then a tapped callback
- * button's fire (a failure throws, the same) and its reply, then the ops notice.
- * The reply and the notice never throw.
+ * anything the tapper or ops can see has happened), then the reply to a tapped
+ * retired callback button, then the ops notice. The reply and the notice never
+ * throw.
  */
 async function runWhatsappMessage(row: WhatsappMessageRow): Promise<void> {
   const { message, profileName, businessNumber, businessPhoneNumberId } = row;
   await dispatchWhatsappMessage({ message, profileName, businessNumber, businessPhoneNumberId });
   logger.info('Dispatched WhatsApp message', { messageId: message.id });
 
-  // A fire that fails throws, so the row retries with the tap still unspent. Only
-  // what the tapper is told afterwards may fail quietly.
-  const tapped = tappedCallbackOf(message);
-  if (tapped !== undefined) {
-    const { text } = await answerCallbackTap(tapped);
-    await tellTapper(row, text);
-  }
+  if (tappedRetiredCallback(message)) await tellTapper(row, RETIRED_CALLBACK_TEXT);
 
   if (row.announce) await announcing(message);
 }
@@ -122,23 +115,18 @@ async function announcing(message: WhatsAppMessage): Promise<void> {
 }
 
 /**
- * Each tapped 0.12 callback a delivery carries, fired and answered: what a door
+ * Each tapped retired callback button a delivery carries, answered: what a door
  * that holds a WhatsApp subscription of its own does before its events, since a
- * tap is an ordinary message there too and a delivery can batch several. A fire
- * that fails throws, so the provider's retry finds the tap unspent.
+ * tap is an ordinary message there too and a delivery can batch several.
  */
 export async function answerTappedCallbacks(body: Parameters<typeof whatsappMessageRowsOf>[0]): Promise<void> {
   for (const row of whatsappMessageRowsOf(body)) {
-    const tapped = tappedCallbackOf(row.message);
-    if (tapped === undefined) continue;
-    const { text } = await answerCallbackTap(tapped);
-    await tellTapper(row, text);
+    if (tappedRetiredCallback(row.message)) await tellTapper(row, RETIRED_CALLBACK_TEXT);
   }
 }
 
-function tappedCallbackOf(message: WhatsAppMessage): string | undefined {
-  const tapped = message.interactive?.button_reply?.id ?? message.interactive?.list_reply?.id;
-  return tapped !== undefined && isRetiredCallbackId(tapped) ? tapped : undefined;
+function tappedRetiredCallback(message: WhatsAppMessage): boolean {
+  return isRetiredCallbackId(message.interactive?.button_reply?.id ?? message.interactive?.list_reply?.id);
 }
 
 /** WhatsApp cannot edit a message, so the only feedback is a threaded reply. */
@@ -146,7 +134,7 @@ async function tellTapper(row: WhatsappMessageRow, text: string): Promise<void> 
   try {
     await getMetaWhatsappApi(row.businessPhoneNumberId).sendTextMessage(row.message.from, text, { replyToMessageId: row.message.id });
   } catch (error) {
-    logger.warn('[whatsapp/webhook] telling the tapper how a callback tap came out failed', {
+    logger.warn('[whatsapp/webhook] telling the tapper their button was retired failed', {
       messageId: row.message.id,
       error: error instanceof Error ? error.message : String(error),
     });
@@ -196,7 +184,7 @@ export const whatsappMessageHandler: WorkHandler = {
         error: error instanceof Error ? error.message : String(error),
       });
       if (parsed.data.announce) await announcing(parsed.data.message);
-      if (tappedCallbackOf(parsed.data.message) !== undefined) await tellTapper(parsed.data, 'Something went wrong recording that.');
+      if (tappedRetiredCallback(parsed.data.message)) await tellTapper(parsed.data, RETIRED_CALLBACK_TEXT);
     }
   },
 };

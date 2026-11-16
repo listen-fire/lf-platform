@@ -1,16 +1,14 @@
-// Telegram's door onto the callback router — the branch a button tap takes.
+// Telegram's door for a button tap — the branch a tap takes.
 //
 // Load-bearing in four separate ways, so all four are pinned:
 //   • a tap that is NOT ours must flow on untouched, or the door starts eating
 //     other people's buttons (and every non-callback update besides);
-//   • recognition order: a callback id first, the legacy ask link after — a
-//     re-authored automation and one not yet re-authored must both work;
+//   • recognition order: a retired callback id first, the ask link after;
 //   • a tap that IS ours must be acked on EVERY outcome, or the tapper's client
 //     spins forever;
-//   • the keyboard comes off only when the tap SERVED the message (recorded +
-//     single-use) — closed-request-wins means a late tap leaves the message
-//     exactly as whoever acted first left it, and a repeatable callback's
-//     keyboard is still live.
+//   • an answer's keyboard comes off only when the tap answered the question —
+//     closed-request-wins means a late tap leaves the message exactly as
+//     whoever acted first left it.
 //
 // The responder is a stub: the two Bot API calls are the door's whole contract
 // with Telegram, and the adapter's own credential resolution is tested with the
@@ -19,10 +17,6 @@
 const answerAskByToken = jest.fn();
 jest.mock('../../asks/doors', () => ({
   answerAskByToken: (...args: unknown[]) => answerAskByToken(...args),
-}));
-
-jest.mock('../../movement_engine/callback_fire', () => ({
-  answerCallbackTap: async () => ({ text: 'Ask its owner to upgrade the automation and run it again.', served: true, outcome: 'retired' }),
 }));
 
 import { captureEngineLogs } from '../../../test/engine_logs';

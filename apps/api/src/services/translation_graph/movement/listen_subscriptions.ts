@@ -53,7 +53,7 @@ import { readTeamEngine } from '../../lf_engine/team_engine';
 import { carriedVersions, type ListeningLane, type ModulePlatform } from '@listen-fire/language-versions';
 
 import { savedListens, type SavedListen } from '../../inbound/listen_door';
-import { carriedEdgeKeysOf, carriedListensContained } from '../../inbound/carried_listens';
+import { carriedEdgeKeysOf, carriedListensContained, kindsOf, kindsPinnedTo } from '../../inbound/carried_listens';
 import { neverAsAny } from 'movement-engine/public/types';
 import { listenEdgeKeysOf, watchedTraversals, type ListenEdgeKey } from '../../inbound/listen_edge';
 import { registerWorkHandler } from '../../work/drain';
@@ -476,11 +476,20 @@ export async function syncListenSubscriptions(input: { teamId: TeamId }): Promis
   }
 
   const stillCarrying = lfEngined ? () => false : await webhooksStillCarryingMoved({ teamId: input.teamId, manifestBySlug });
+  const unreadKinds = await kindsPinnedTo({ teamId: input.teamId, versions: carriedUnread });
 
   for (const row of existing) {
     if (desired.some((subscription) => rowOf(subscription) === row)) continue;
+    const slug = slugByProviderKey.get(row.provider) ?? resolveAdapterSlug(row.provider);
     // Nor is one of a version whose listens could not be read: it is not known unwanted.
     if (row.held?.version !== undefined && carriedUnread.has(row.held.version)) continue;
+    // Nor is one no version is recorded on (this release registered it, or it
+    // is a 0.12 webhook) on a module such a version has listens on: it may be
+    // the one subscription both versions share.
+    if (row.held?.version === undefined && kindsOf({ adapterType: slug, providerKey: row.provider }).some((kind) => unreadKinds.has(kind))) {
+      notes.push(`${row.provider}: its subscription stays while the listens of ${[...carriedUnread].join(', ')} on it cannot be read`);
+      continue;
+    }
     // Nor is the one a moved listen still hears through, until its own is up.
     if (stillCarrying(row)) {
       notes.push(`${row.provider}: its 0.12 webhook stays until the upgraded listen's own subscription is up`);
@@ -492,7 +501,6 @@ export async function syncListenSubscriptions(input: { teamId: TeamId }): Promis
       notes.push(`${row.provider}: remote installs could not all be read, so its subscription is left in place`);
       continue;
     }
-    const slug = slugByProviderKey.get(row.provider) ?? resolveAdapterSlug(row.provider);
     try {
       const adapter = await subscriberOfRow({ teamId: input.teamId, slug, row });
       await adapter.removeEventSubscription?.(removalOf(row, buildWebhookTargetUrl(row.provider, row.id)));

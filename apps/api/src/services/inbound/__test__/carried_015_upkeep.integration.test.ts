@@ -41,14 +41,14 @@ import { cleanupTeam } from '../../../test/harness/cleanup';
 import { insertTestListen, takenEquals, testListenConfig } from '../../../test/harness/listens';
 import { ProvisioningService } from '../../provisioning';
 import { drainUntilIdle, inProcessNotifier, resetWorkHandlersForTests, setWorkNotifier } from '../../work/drain';
-import { listWorkByKind, removeWork } from '../../work/store';
+import { enqueueWork, listWorkByKind, removeWork } from '../../work/store';
 import { registerCarriedRunWork } from '../../translation_graph/movement/carried_run_now';
 import { saveMovement } from '../../translation_graph/movement/provision';
 import { MOVEMENT_LISTEN_PROVISIONER, edgeSubscriptionOf, listensOfSubscription, syncListenSubscriptions } from '../../translation_graph/movement/listen_subscriptions';
 import { registerDispatchWork } from '../../translation_graph/triggers/dispatch_event';
 import { inboundEmailArrival } from '../../translation_graph/adapters/email/arrival';
 import { platformPushStore } from '../../webhook_sync/adapter_doors';
-import { pollEdgeHandler, pollShared, pollSubscriptionId, pollWorkKey, sharedPolls } from '../../poll_source/worker';
+import { pollEdgeHandler, pollReconcileHandler, pollShared, pollSubscriptionId, pollWorkKey, sharedPolls } from '../../poll_source/worker';
 import { runInContext } from '../../context/utils';
 import { inboundEmailHandler } from '../../../interfaces/rest/private';
 import { judgeCarriedPage, keepForEveryVersion } from '../carried_delivery';
@@ -543,5 +543,59 @@ describe("a 0.15 listen fires through 0.15's own module and judge, however its e
     await getAutomationsQb(['trigger']).deleteFrom('trigger').where('id', 'in', [oldAttio, nowCron, nowAttio]).execute();
     await syncListenSubscriptions({ teamId });
     expect(await subscriptionRows()).toEqual([]);
+  });
+
+  it("with 0.15's lane failing to load, the one subscription both versions share outlives its 0.16 listens", async () => {
+    const version = versionOf('0.15.3');
+    if (version?.listenRows === undefined) throw new Error('test: 0.15 carries no listen lane');
+    const old = await insert015Listen({ adapterType: 'attio', edge: 'Changes', delivery: 'connection', credentialsId: attioCredential, movement: 'tick' });
+    const now = await insertTestListen({ teamId, movementId: currentMovement, adapterType: 'attio', edge: 'Changes', delivery: 'connection', credentialsId: attioCredential });
+    await syncListenSubscriptions({ teamId });
+    const [shared] = await subscriptionRows();
+    // This release registered it, so the row names no version.
+    expect(edgeSubscriptionOf(shared!.subscriptions)?.version).toBeUndefined();
+    const removedBefore = stand.removed.length;
+
+    const failing = jest.spyOn(version, 'listenRows').mockRejectedValue(new Error('0.15 could not load'));
+    try {
+      await getAutomationsQb(['trigger']).deleteFrom('trigger').where('id', '=', now).execute();
+      const synced = await syncListenSubscriptions({ teamId });
+      // 0.15's listen on it may still want it: it is kept, and not withdrawn at the source.
+      expect((await subscriptionRows()).map((row) => row.id)).toEqual([shared!.id]);
+      expect(stand.removed).toHaveLength(removedBefore);
+      expect(synced.notes).toEqual(expect.arrayContaining([expect.stringContaining('stays while the listens of 0.15 on it cannot be read')]));
+    } finally {
+      failing.mockRestore();
+    }
+
+    // Read again, 0.15's listen keeps it; with that gone too, it is withdrawn.
+    await syncListenSubscriptions({ teamId });
+    expect((await subscriptionRows()).map((row) => row.id)).toEqual([shared!.id]);
+    await getAutomationsQb(['trigger']).deleteFrom('trigger').where('id', '=', old).execute();
+    await syncListenSubscriptions({ teamId });
+    expect(await subscriptionRows()).toEqual([]);
+    expect(stand.removed).toHaveLength(removedBefore + 1);
+  });
+
+  it("with 0.15's lane failing to load, the poll reconcile removes no poll row", async () => {
+    const version = versionOf('0.15.3');
+    if (version?.listenRows === undefined) throw new Error('test: 0.15 carries no listen lane');
+    // The reconcile is every team's: rows it arms for others are taken back.
+    const armedBefore = new Set((await listWorkByKind('poll_edge')).map((row) => row.key));
+    // A 0.15 listen that polls, whose lane then fails to load; and a row no
+    // listen read shares, as an unread version's poll looks while unread.
+    const old = await insert015Listen({ adapterType: 'cron', edge: 'Ticks', delivery: 'polled', taken: takenEquals('Schedule', '*/7 * * * *'), movement: 'tick' });
+    const stray = pollWorkKey(`stray-${randomUUID()}`);
+    await enqueueWork({ kind: 'poll_edge', key: stray, teamId, payload: { teamId, digest: 'stray' } });
+
+    const failing = jest.spyOn(version, 'listenRows').mockRejectedValue(new Error('0.15 could not load'));
+    try {
+      await pollReconcileHandler.run({}, { now: new Date(), owner: 'carried-upkeep', attempts: 1, heartbeat: async () => {} });
+      expect((await listWorkByKind('poll_edge')).map((row) => row.key)).toContain(stray);
+    } finally {
+      failing.mockRestore();
+      for (const row of await listWorkByKind('poll_edge')) if (!armedBefore.has(row.key)) await removeWork({ key: row.key });
+      await getAutomationsQb(['trigger']).deleteFrom('trigger').where('id', '=', old).execute();
+    }
   });
 });

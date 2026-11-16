@@ -26,7 +26,6 @@ import { getAutomationsQb, getQb } from '../../../lib/kysely';
 import { costMicrodollarsToUsd } from '../../../lib/llm_usage';
 import { mq } from '../../../lib/message_queue';
 import { logger } from 'movement-engine/public/log';
-import { revokeRunCallbacks } from '../../movement_engine/callback_store';
 import {
   startOpsRun,
   addOpsRunMessage,
@@ -663,9 +662,9 @@ export class TriggerRunRecorder {
 
   async snapshotSteps(): Promise<void> {
     if (this.finished) return;
-    // The segment being snapshotted is over (a park, a cancel, a callback
-    // body): its real step is about to land, so the provisional has nothing
-    // left to say. A resume builds a new recorder and starts a new one.
+    // The segment being snapshotted is over (a park or a cancel): its real
+    // step is about to land, so the provisional has nothing left to say. A
+    // resume builds a new recorder and starts a new one.
     this.endLiveTrace();
     if (this.steps.length === this.flushedSteps) return;
     try {
@@ -844,16 +843,6 @@ export class TriggerRunRecorder {
         logger.warn('[trigger_run] not settled: the run lease is no longer this segment\'s', { runId: this.id });
         return;
       }
-
-      // A run that ends revokes its live callbacks, however it ended: a callback
-      // is something only the running run can react to. Only a carried version
-      // (0.12) mints one.
-      await revokeRunCallbacks(this.id).catch((revokeErr) => {
-        logger.warn('[trigger_run] failed to revoke run callbacks', {
-          runId: this.id,
-          error: revokeErr instanceof Error ? revokeErr.message : String(revokeErr),
-        });
-      });
 
       // Best-effort live signal — a publish failure must never affect the firing.
       mq.triggerRuns.recorded

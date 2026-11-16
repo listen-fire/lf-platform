@@ -48,7 +48,7 @@ import {
 import { isLegacyLanguageVersion, type StoryIR, type StoryProblem, type StoryValidityStatus } from 'legacy-lang';
 import type { AdapterEventPhraseVocabulary, BrandIcon } from 'movement-engine/public/adapter';
 
-import type { KeyedAwaitsLane, ListeningLane, ModulePlatform, ResumingLane, RunningLane } from './running';
+import type { ListeningLane, ModulePlatform, ResumingLane, RunningLane } from './running';
 
 export * from './running';
 
@@ -330,9 +330,6 @@ export interface CarriedVersion {
   /** The version whose rows a trigger row on this key is: kept across a deploy
    *  whether or not its listens fire yet, and read only by it. */
   readonly listenRows?: () => Promise<ListeningLane>;
-  /** Its rules over the awaits it parks on an adapter identity and the
-   *  callbacks it mints, for a version whose runs park so. */
-  readonly keyedAwaits?: () => Promise<KeyedAwaitsLane>;
 }
 
 const HELD = { kind: 'held' } as const;
@@ -464,21 +461,6 @@ export function runningOf(pin: LanguageVersion): RunCapability {
 /** How a parked run of `pin` resumes. */
 export function resumingOf(pin: LanguageVersion): ResumeCapability {
   return providedFor(pin).resume;
-}
-
-/** The version that keeps an await correlated to an adapter identity: only a
- *  version whose awaits parked on keys ever wrote one, so a wake naming a key
- *  is its to step. Undefined once no carried version does. */
-export function correlatedAwaitsLane(): (() => Promise<KeyedAwaitsLane>) | undefined {
-  for (const version of CARRIED) {
-    if (version.keyedAwaits !== undefined && version.provides.resume.kind === 'carried') return version.keyedAwaits;
-  }
-  return undefined;
-}
-
-/** The versions whose listens fire through their own lane, with it. */
-export function carriedListeners(): ReadonlyArray<{ version: CarriedVersion; lane: () => Promise<ListeningLane> }> {
-  return CARRIED.flatMap((version) => (version.provides.listen.kind === 'carried' ? [{ version, lane: version.provides.listen.lane }] : []));
 }
 
 /** Whether a trigger row on `pin` stays across a deploy as its version's listen. */

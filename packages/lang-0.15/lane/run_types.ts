@@ -175,8 +175,6 @@ export interface ResumeRequest extends Omit<SegmentRequest, 'dryRun'> {
   reenter?: boolean;
   deferRaceSettlement?: boolean;
   settleRaceFrameAddress?: string;
-  /** 0.15 mints no callbacks: a request for a body is refused. */
-  callback?: { values: Record<string, unknown>; callIndex: number };
   priorSpentMicrodollars?: number;
   capBaselineMicrodollars?: number;
   limitPaused?: boolean;

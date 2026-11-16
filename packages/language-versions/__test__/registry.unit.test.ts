@@ -3,7 +3,6 @@ import { LANGUAGE_VERSION, languageVersionDiagnostic } from 'movement-lang';
 import {
   carriedVersions,
   checkingOf,
-  correlatedAwaitsLane,
   currentVersion,
   importKeyOf,
   isCurrent,
@@ -77,10 +76,6 @@ describe('the language versions this build carries', () => {
     expect(lane).toBeDefined();
     expect(lane?.isListenRow({ config: { leftoverForUnfinishedRuns: true } })).toBe(false);
     for (const method of ['planListens', 'isListenRow', 'readDelivery', 'gateFiring', 'readEvent'] as const) expect(typeof lane?.[method]).toBe('function');
-  });
-
-  it('no carried version parks on keys or mints callbacks: 0.15 parks in the run host every version shares', () => {
-    expect(correlatedAwaitsLane()).toBeUndefined();
   });
 
   it('legacy ids are carried by no entry, so every capability is held; they keep the key of 0.12, which they ran beside, for imports', () => {

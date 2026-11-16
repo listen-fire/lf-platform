@@ -11,9 +11,7 @@ import type { AskId } from '../../generated/kysely/asks/Ask';
 import { SECOND } from '../../constants';
 import { getAsksQb } from '../../lib/kysely';
 import { registerWorkKinds, type WorkKindRegistration } from '../work/drain';
-import { teamIdSchema } from '../../lib/team_id';
-import { loadClosedAskAwaitPage } from './carried_ask_awaits';
-import { deliverSettle, wakeRunsParkedOnAsk } from './in_process_notifier';
+import { deliverSettle } from './in_process_notifier';
 import { getAsk } from './store';
 
 /** How far back a settle is delivered again: well past any crash's restart. */
@@ -41,14 +39,6 @@ export const askClosedSweepHandler: WorkHandler = {
       if (rows.length < PAGE_SIZE) break;
       after = rows[rows.length - 1]?.id;
     }
-    // A run parked on an ask under 0.12, however long ago its ask closed: the
-    // correlation row says it has not been woken yet.
-    let correlated: string | undefined;
-    do {
-      const page = await loadClosedAskAwaitPage({ limit: PAGE_SIZE, ...(correlated !== undefined ? { after: correlated } : {}) });
-      for (const { teamId, askId } of page.wakes) await wakeRunsParkedOnAsk({ id: askId, teamId: teamIdSchema.parse(teamId) });
-      correlated = page.next;
-    } while (correlated !== undefined);
   },
 };
 

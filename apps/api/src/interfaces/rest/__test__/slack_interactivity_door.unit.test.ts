@@ -45,11 +45,7 @@ jest.mock('../slackEvents', () => ({
   verifySlackEventsRequest: () => ({ authorized: true }),
 }));
 
-const answerCallbackTap = jest.fn();
-jest.mock('../../../services/movement_engine/callback_fire', () => ({
-  answerCallbackTap: (...args: unknown[]) => answerCallbackTap(...args),
-}));
-
+import { RETIRED_CALLBACK_TEXT } from '../../../services/interaction/retired_callback';
 import { slackInteractivityRouter } from '../slackInteractivity';
 import { slackResponseHandler } from '../../../services/webhook_sync/slack_response_url';
 
@@ -191,53 +187,12 @@ describe('a tap that answers an ask', () => {
   });
 });
 
-describe('a tap on a callback', () => {
-  it('that served its message replaces the message', async () => {
-    answerCallbackTap.mockResolvedValue({ text: 'Thanks — that has been recorded.', served: true, outcome: 'recorded' });
-
-    await tap({ type: 'button', action_id: 'ship', value: 'cb_abc' });
-
-    expect(answerCallbackTap).toHaveBeenCalledWith('cb_abc', {});
-    expect(acks[0]).toEqual({
-      replace_original: true,
-      text: 'Thanks — that has been recorded.',
-      blocks: [{ type: 'section', text: { type: 'mrkdwn', text: ':white_check_mark: Thanks — that has been recorded.' } }],
-    });
-  });
-
-  it("passes a date picker's pick as the one supplied value", async () => {
-    answerCallbackTap.mockResolvedValue({ text: 'Thanks — that has been recorded.', served: true, outcome: 'recorded' });
-
-    await tap({ type: 'datepicker', action_id: 'cb_date', selected_date: '2026-08-15' });
-
-    expect(answerCallbackTap).toHaveBeenCalledWith('cb_date', { suppliedValue: '2026-08-15' });
-  });
-
-  it("leaves a repeatable callback's message alone: its controls are still live", async () => {
-    answerCallbackTap.mockResolvedValue({ text: 'Thanks — that has been recorded.', served: false, outcome: 'recorded' });
-
-    await tap({ type: 'button', action_id: 'refresh', value: 'cb_repeat' });
-
-    expect(acks[0]).toEqual({ response_type: 'ephemeral', replace_original: false, text: 'Thanks — that has been recorded.' });
-  });
-
-  it('that throws tells the tapper something went wrong, and still answers Slack', async () => {
-    answerCallbackTap.mockRejectedValue(new Error('the database dropped the connection'));
-
-    const res = await post({ type: 'button', action_id: 'ship', value: 'cb_abc' });
-    expect(res.status).toBe(200);
-    expect(queued[0]?.payload).toMatchObject({ body: { response_type: 'ephemeral', replace_original: false, text: 'Something went wrong recording that.' } });
-  });
-});
-
 describe('every refusal is said, and none of them touches the message', () => {
   it('a callback button an automation wired before 0.13 → an ephemeral notice that it was retired', async () => {
-    answerCallbackTap.mockResolvedValue({ text: 'Ask its owner to upgrade the automation and run it again.', served: true, outcome: 'retired' });
-
     await tap({ type: 'button', action_id: 'cb_abc', value: 'cb_abc' });
 
     expect(answerAskByToken).not.toHaveBeenCalled();
-    expect(acks[0]).toEqual({ response_type: 'ephemeral', replace_original: false, text: expect.stringContaining('upgrade the automation') });
+    expect(acks[0]).toEqual({ response_type: 'ephemeral', replace_original: false, text: RETIRED_CALLBACK_TEXT });
   });
 
   it('a closed ask → an ephemeral notice', async () => {

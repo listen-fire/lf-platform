@@ -155,7 +155,6 @@ import { neverAsAny } from 'movement-engine/public/types';
 import { plannedListensOfSource } from './listen_plans';
 import { carriedPauses, listenIdentityOf, type CarriedPause } from './carried_pauses';
 import { carriedRunTriggerId } from './carried_names';
-import { revokeCallbacksForRuns } from '../../movement_engine/callback_store';
 import { listenConfigSchema, type ListenConfig, type SavedListen } from '../../inbound/listen_door';
 import { resolveAndArm, resolveCarriedAndArm, resolvesCarried, resolvesListen } from '../../inbound/listen_resolve';
 import { carriedListens } from '../../inbound/carried_listens';
@@ -1944,12 +1943,6 @@ export async function deleteMovement(input: { teamId: string; id: string }): Pro
       'This run was still waiting to continue when the automation was deleted, so it was stopped.',
   });
 
-  // A RUNNING run isn't parked, so the settle above doesn't reach it, but its
-  // callbacks are just as unfireable once the version pin is gone (a fire has no
-  // program to resume into). Revoke every callback of every run of these
-  // triggers, so a late tap gets the closed answer rather than a router error.
-  await revokeCallbacksOfTriggers(runTriggerIds);
-
   for (const triggerId of triggerIds) {
     await qb
       .deleteFrom('trigger')
@@ -1966,14 +1959,6 @@ export async function deleteMovement(input: { teamId: string; id: string }): Pro
   await syncListenSubscriptions({ teamId: input.teamId as TeamId });
   emitMovementChange({ teamId: input.teamId, movementId: input.id, action: 'deleteMovement' });
   return true;
-}
-
-/** Revoke every callback minted by any run of these triggers (movement delete).
- *  Scoped by run so it is one indexed read plus one update: the callback table
- *  keys on the run, never on the trigger. */
-async function revokeCallbacksOfTriggers(triggerIds: readonly string[]): Promise<void> {
-  const runs = await getAutomationsQb(['trigger_run']).selectFrom('trigger_run').where('trigger_id', 'in', [...triggerIds]).select('id').execute();
-  await revokeCallbacksForRuns(runs.map((run) => run.id));
 }
 
 /** The first movement declaration's name. Uses the real parser (the installed

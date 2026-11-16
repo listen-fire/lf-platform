@@ -203,9 +203,9 @@
     "effects": []
   },
   {
-    "id": "interactive-reply-fires-callback",
+    "id": "interactive-reply-answers-retired-callback",
     "door": "whatsapp",
-    "note": "A tapped reply button is queued as its whatsapp_message row; the callback fires and the reply goes out from the receiving number when the row drains.",
+    "note": "A tapped reply button is queued as its whatsapp_message row; the reply that its button was retired goes out from the receiving number when the row drains.",
     "request": {
       "method": "POST",
       "path": "/api/public/whatsapp/webhook",

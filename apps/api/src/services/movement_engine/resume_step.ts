@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { triggerEventSchema, type TriggerEvent } from 'movement-engine/public/inbound';
 import { neverAsAny } from 'movement-engine/public/types';
 
-import { resumingOf, type CarriedEvent, type CarriedStep, type ResumingLane } from '@listen-fire/language-versions';
+import { resumingOf, type CarriedEvent, type ResumingLane } from '@listen-fire/language-versions';
 import { isLegacyLanguageVersion } from 'legacy-lang';
 import { drainDueTimers, drainRun, type HeldRunLease } from 'movement-engine/public/run-host';
 
@@ -29,7 +29,7 @@ import { hostedRunHost } from './run_host';
 
 /** Everything a segment needs to re-enter a run: its pinned source (the
  *  stored addresses name THAT AST), its trigger, its inbound event. */
-export interface RunContext {
+interface RunContext {
   teamId: TeamId;
   triggerId: string;
   triggerName: string;
@@ -74,7 +74,7 @@ async function firedThrough(input: {
 }
 
 /** Why a run cannot be re-entered, or its context. */
-export async function loadRunContext(runId: TriggerRunId): Promise<RunContext | { unresumable: string }> {
+async function loadRunContext(runId: TriggerRunId): Promise<RunContext | { unresumable: string }> {
   const run = await getAutomationsQb(['trigger_run'])
     .selectFrom('trigger_run')
     .where('id', '=', runId)
@@ -184,45 +184,6 @@ function firingFields(context: RunContext, runId: TriggerRunId, lease: HeldRunLe
     ...(lease !== undefined ? { lease } : {}),
     ...(context.carried !== undefined ? { carried: context.carried } : {}),
   };
-}
-
-/** The step of a run a carried version parked: the park state stays that
- *  version's, unread here. */
-function carriedStepOf(context: RunContext, runId: TriggerRunId, lease: HeldRunLease | undefined): CarriedStep {
-  const firing = firingFields(context, runId, lease);
-  return async (request, settle) => {
-    const common = { ...firing, carriedState: request.state, settleBranchComplete: async () => ({ runComplete: await settle.runComplete() }) };
-    switch (request.kind) {
-      case 'leaf':
-        return stepOutcomeOf(
-          await resumeMovementFiring({
-            ...common,
-            ...(request.reenter ? { reenter: true } : {}),
-            resumedLeaf: request.address,
-            deferRaceSettlement: request.deferRaceSettlement,
-          }),
-        );
-      case 'race':
-        return stepOutcomeOf(await resumeMovementFiring({ ...common, settleRaceFrameAddress: request.frameAddress }));
-      default:
-        return neverAsAny(request);
-    }
-  };
-}
-
-/** The step of a run a carried version parked; null (logged under `log`) when it
- *  cannot be re-entered or its version does not step it. */
-export async function carriedRunStep(input: { runId: TriggerRunId; lease?: HeldRunLease; log: string }): Promise<CarriedStep | null> {
-  const context = await loadRunContext(input.runId);
-  if ('unresumable' in context) {
-    logger.error(`[${input.log}] cannot resume: ${context.unresumable}`, { runId: input.runId });
-    return null;
-  }
-  if (context.carried === undefined) {
-    logger.error(`[${input.log}] cannot resume: a run pinned to ${context.pinnedLanguageVersion} parked on a key no carried version of it steps`, { runId: input.runId });
-    return null;
-  }
-  return carriedStepOf(context, input.runId, input.lease);
 }
 
 /** How one parked run's leaves are stepped: by the run host's rules, whichever

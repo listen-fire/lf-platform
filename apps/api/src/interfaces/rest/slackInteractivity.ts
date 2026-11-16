@@ -3,10 +3,10 @@
 // POST by construction, so this is the true one-tap path (GET never writes
 // anywhere — 5_build_order Ops decisions).
 //
-// What a tap CARRIES is an ask answer link (`<url-or-token>?answer=`) or a
-// callback id an automation wired under 0.12, in `value` or `action_id`; the door
-// answers the ask or fires the callback, and that is what wakes any run waiting
-// on it. The door keeps only what is genuinely
+// What a tap CARRIES is an ask answer link (`<url-or-token>?answer=`), in
+// `value` or `action_id`; the door answers the ask, and that is what wakes any
+// run waiting on it. A callback id an automation wired before 0.13 is answered
+// with the retired callback's text. The door keeps only what is genuinely
 // Slack-shaped: signature verification, the ack, and the message edit (queued
 // as a `slack_response` row before the ack, posted when it drains).
 //
@@ -25,8 +25,7 @@ import { logger } from 'movement-engine/public/log';
 import { verifySlackEventsRequest } from './slackEvents';
 import { answerAskByToken, type AskDoorOutcome } from '../../services/asks/doors';
 import { parseAskAction, parseAskLink } from '@listen-fire/ask/link';
-import { isRetiredCallbackId } from '../../services/interaction/retired_callback';
-import { answerCallbackTap, type CallbackTapAnswer } from '../../services/movement_engine/callback_fire';
+import { RETIRED_CALLBACK_TEXT, isRetiredCallbackId } from '../../services/interaction/retired_callback';
 import { enqueueSlackResponse } from '../../services/webhook_sync/slack_response_url';
 import { notifyWork } from '../../services/work/drain';
 
@@ -90,34 +89,20 @@ function tapTimeValue(action: BlockAction): string | undefined {
 /** What one block action turned out to be. `null`, the ordinary case, means some
  *  other block action Slack sent, which flows through untouched. */
 export type ResolvedBlockAction =
-  | {
-      kind: 'callback';
-      id: string;
-      /** Slack's one tap-time capture, unnamed. The router binds it
-       *  (`bindSuppliedValue`); the door never guesses a parameter name. */
-      suppliedValue?: string;
-    }
+  | { kind: 'retired_callback' }
   | { kind: 'ask'; token: string; answer: string };
 
 /**
  * Recognition, in precedence order:
  *
- *  1. A callback id: the pre-wired slot first (`value` / `selected_option.value`:
- *     a button or a per-option select, where the id alone says what the tap
- *     meant), then `action_id` (a control whose value does not exist until the
- *     tap: a `datepicker`, `timepicker` or text input). From `action_id`, whatever
- *     the tap captured rides along as the supplied value.
+ *  1. A retired callback's id, in the pre-wired slot (`value` /
+ *     `selected_option.value`) or in `action_id`.
  *  2. An ask answer link.
  */
 export function resolveBlockAction(action: BlockAction): ResolvedBlockAction | null {
   const preWired = blockActionValue(action);
-  if (preWired !== undefined && isRetiredCallbackId(preWired)) return { kind: 'callback', id: preWired };
-
   const actionId = typeof action.action_id === 'string' ? action.action_id : undefined;
-  if (actionId !== undefined && isRetiredCallbackId(actionId)) {
-    const supplied = tapTimeValue(action);
-    return supplied === undefined ? { kind: 'callback', id: actionId } : { kind: 'callback', id: actionId, suppliedValue: supplied };
-  }
+  if (isRetiredCallbackId(preWired) || isRetiredCallbackId(actionId)) return { kind: 'retired_callback' };
 
   const ask = resolveAskAction(action);
   return ask === null ? null : { kind: 'ask', ...ask };
@@ -232,9 +217,7 @@ async function captureBlockActions(payload: BlockActionsPayload): Promise<SlackR
     const resolved = resolveBlockAction(action);
     if (!resolved) continue;
     try {
-      if (resolved.kind === 'callback') {
-        return callbackReply(await answerCallbackTap(resolved.id, resolved.suppliedValue !== undefined ? { suppliedValue: resolved.suppliedValue } : {}));
-      }
+      if (resolved.kind === 'retired_callback') return RETIRED_CALLBACK_REPLY;
       return askReply(await answerAskByToken(resolved.token, resolved.answer));
     } catch (err) {
       // The tapper still hears back (silence reads as "it worked") and the
@@ -249,20 +232,9 @@ async function captureBlockActions(payload: BlockActionsPayload): Promise<SlackR
   return null;
 }
 
-/** The reply to a tapped callback. The message is replaced only when the tap
- *  served it; anything else is an ephemeral notice, so a message whose controls
- *  are still live keeps them, and a refusal never rewrites what the person who
- *  acted first is looking at. A retired button's message is left too: nothing
- *  was recorded for it to confirm. */
-function callbackReply({ text, served, outcome }: CallbackTapAnswer): SlackReply {
-  return served && outcome !== 'retired'
-    ? {
-        replace_original: true,
-        text,
-        blocks: [{ type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: ${text}` } }],
-      }
-    : { response_type: 'ephemeral', replace_original: false, text };
-}
+/** A retired button's message is left as it is: nothing was recorded for it
+ *  to confirm, so the tapper alone is told. */
+const RETIRED_CALLBACK_REPLY: SlackReply = { response_type: 'ephemeral', replace_original: false, text: RETIRED_CALLBACK_TEXT };
 
 /** The reply to a resolved (or already-closed) ask,
  *  replacing the buttons with a confirmation line. A late click on a

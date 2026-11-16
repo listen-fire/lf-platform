@@ -452,8 +452,8 @@ export const whatsappCases: GoldenCase[] = define('whatsapp', [
     request: post('/api/public/whatsapp/webhook', json(META_TEXT)),
   },
   {
-    id: 'interactive-reply-fires-callback',
-    note: 'A tapped reply button is queued as its whatsapp_message row; the callback fires and the reply goes out from the receiving number when the row drains.',
+    id: 'interactive-reply-answers-retired-callback',
+    note: 'A tapped reply button is queued as its whatsapp_message row; the reply that its button was retired goes out from the receiving number when the row drains.',
     request: post('/api/public/whatsapp/webhook', json(META_INTERACTIVE), metaSig(SECRETS.whatsappApp)),
   },
   {

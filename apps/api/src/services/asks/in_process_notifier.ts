@@ -22,9 +22,7 @@ import { ASK_ADAPTER_TYPE, RESPONSE_EDGE_NAME, responseArrival } from '@listen-f
 import { registerAskSettledNotifier } from './notifier';
 import { deliverArrivals } from '../inbound/listen_door';
 import { judgeCarriedPage } from '../inbound/carried_delivery';
-import { askHasWakeableAwait } from './carried_ask_awaits';
 import { notifyWork } from '../work/drain';
-import { enqueueWork } from '../work/store';
 
 /** The ask's settle, delivered as its `Response`'s arrival. The ask's id
  *  names the delivery, so a settle told twice is kept once. */
@@ -44,21 +42,7 @@ export async function deliverSettle(ask: AskRecord): Promise<void> {
   // A carried version's listens on `Response` judge the answer with their own
   // judge, one receipt per listen however often the settle is told.
   await judgeCarriedPage({ teamId: ask.teamId, adapterType: ASK_ADAPTER_TYPE, credentialsId: null, page: [arrival], stableKey: `${ask.state}:${ask.id}` });
-  await wakeRunsParkedOnAsk(ask);
   notifyWork();
-}
-
-/** A run parked on this ask under 0.12 waits on the ask's id as a key, not on a
- *  wait: it is woken by a `wake_await` row, as production woke it. One row per
- *  ask, however often the settle is told. */
-export async function wakeRunsParkedOnAsk(ask: Pick<AskRecord, 'id' | 'teamId'>): Promise<void> {
-  if (!(await askHasWakeableAwait(ask.id))) return;
-  await enqueueWork({
-    kind: 'wake_await',
-    key: `wake_await:ask_closed:${ask.id}`,
-    teamId: ask.teamId,
-    payload: { adapterType: ASK_ADAPTER_TYPE, teamId: ask.teamId, correlationKey: ask.id },
-  });
 }
 
 export function notifyEngineOfSettledAsks(): void {

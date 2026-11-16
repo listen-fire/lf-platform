@@ -130,12 +130,4 @@ describe("a 0.15 segment on the platform's run host", () => {
     );
     expect(failed).toEqual({ kind: 'failed', code: 'MOVENG_ERROR', message: expect.stringContaining('no'), partial: expect.objectContaining({ movementName: 'go' }) });
   });
-
-  it('refuses a callback body: 0.15 mints none', async () => {
-    const refusedBody = await resumeSegment(
-      { source: WAITS_015, pin: '0.15.3', event, teamId: 'team-1', firedAt, runId: 'run-1', team: team(), state: {}, callback: { values: {}, callIndex: 0 } },
-      platform([]),
-    );
-    expect(refusedBody).toEqual({ kind: 'failed', code: 'MOVENG_UNSUPPORTED', message: expect.stringContaining('callback') });
-  });
 });

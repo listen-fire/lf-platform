@@ -112,6 +112,18 @@ export async function anyCarriedPin(input: { teamId: TeamId; kinds: readonly str
   return (await listeningPins(input)).size > 0;
 }
 
+/** The kinds the team's rows pinned to these versions are filed under: what a
+ *  version whose listens could not be read has on which modules, read without
+ *  their plans. */
+export async function kindsPinnedTo(input: { teamId: TeamId; versions: ReadonlySet<string> }): Promise<Set<string>> {
+  if (input.versions.size === 0) return new Set();
+  const rows = await rowsQuery({ teamId: input.teamId }).select(['trigger.kind as kind', 'movement_version.language_version as pin']).distinct().execute();
+  return new Set(rows.flatMap(({ kind, pin }) => {
+    const key = versionOf(pin)?.key;
+    return key !== undefined && input.versions.has(key) ? [kind] : [];
+  }));
+}
+
 /** `listens` with what each listed listen's last listing came to. */
 async function withWatching(listens: CarriedListen[]): Promise<CarriedListen[]> {
   const byTeam = new Map<TeamId, string[]>();

@@ -274,9 +274,6 @@ function isParkState(state: unknown): state is AnyParkedScopeState {
  * or a race settled with its winners.
  */
 export async function resumeSegment(request: ResumeRequest, platform: RunPlatform): Promise<SegmentOutcome> {
-  if (request.callback !== undefined) {
-    return { kind: 'failed', code: 'MOVENG_UNSUPPORTED', message: 'MOVENG_UNSUPPORTED: language 0.15 mints no callbacks, so it runs no callback body' };
-  }
   setRunEngineRecorder(platform.recordEngine);
   try {
     const prepared = await preparedProgram(request, platform);

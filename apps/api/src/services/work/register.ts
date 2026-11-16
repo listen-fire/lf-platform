@@ -5,7 +5,6 @@
 
 import { MINUTE, SECOND } from '../../constants';
 import { registerAwaitWork } from '../movement_engine/await_resume';
-import { registerCallbackFireWork } from '../movement_engine/callback_fire';
 import { registerTimerWork } from '../movement_engine/timer_resume';
 import { registerPollWork } from '../poll_source/worker';
 import { registerListenSubscriptionWork } from '../translation_graph/movement/listen_subscriptions';
@@ -55,7 +54,6 @@ function registerCoreWork(): void {
   registerDispatchWork();
   registerReadDeliveryWork();
   registerAwaitWork();
-  registerCallbackFireWork();
   registerRunOrphanSweepWork();
 }
 

@@ -665,8 +665,6 @@ type ResumeFiringInput = {
   /** The version whose own engine steps the run, and the event in its shape;
    *  absent when this release's engines do. */
   carried?: { lane: ResumingLane; event: CarriedEvent };
-  /** The parked leaf's scope under `carried`: that version's, unread here. */
-  carriedState?: unknown;
   /** The validated answer to bind as the ask's result. Absent under `reenter`
    *  (an await / recurring-timer resume re-enters at its statement, binding
    *  nothing). */
@@ -825,7 +823,7 @@ async function resumeMovementFiringInContext(
               capBaselineMicrodollars: recorder.capBaselineMicrodollars,
               limitPaused: recorder.limitPaused,
               ...(recorder.parkedOnEngine !== undefined ? { parkedOnEngine: recorder.parkedOnEngine } : {}),
-              state: input.carriedState ?? input.state,
+              state: input.state,
               ...(input.answer !== undefined ? { answer: input.answer } : {}),
               ...(input.reenter !== undefined ? { reenter: input.reenter } : {}),
               ...(input.deferRaceSettlement !== undefined ? { deferRaceSettlement: input.deferRaceSettlement } : {}),
@@ -942,111 +940,6 @@ async function resumeMovementFiringInContext(
     }).catch(() => {});
     return { result: null, error: message };
   }
-}
-
-/**
- * Run a fired callback's body as a SEGMENT of its owning run, on the engine of
- * the version that minted it (`callback(…)` was retired in 0.13, so it is always
- * a carried one). The run's team, billing and step ledger; no new run identity.
- *
- * It does not settle the run: the main continuation is parked and wakes through
- * its own mechanism. A body that throws fails the SEGMENT and stops there: a
- * failed side entry must not kill the primary await.
- */
-export async function fireCallbackFiring(input: {
-  teamId: TeamId;
-  triggerId: string;
-  triggerName: string;
-  firedMovementName?: string;
-  pinnedSource: string;
-  pinnedLanguageVersion: LanguageVersion;
-  movementVersionId: string | null;
-  runId: TriggerRunId;
-  movementId: string;
-  event: TriggerEvent;
-  recordingTriggerType: TriggerRunTriggerType;
-  carried: { lane: ResumingLane; event: CarriedEvent };
-  /** The callback's captured closure: the minting version's, unread here. */
-  state: unknown;
-  values: Record<string, unknown>;
-  callIndex: number;
-  lease?: HeldRunLease;
-}): Promise<MovementFiringOutcome> {
-  return withFiringContext(input, async () => {
-    const recorder = new TriggerRunRecorder({
-      teamId: input.teamId,
-      triggerId: input.triggerId,
-      triggerType: input.recordingTriggerType,
-      triggerEvent: input.event,
-      movementVersionId: input.movementVersionId,
-      existingRunId: input.runId,
-    });
-    if (input.lease !== undefined) recorder.holdLease(input.lease);
-    const leaseContext = { runId: input.runId, movementId: input.movementId };
-    await recorder.adoptOpsRun();
-    const movementName = input.firedMovementName ?? firedMovementNameFromTriggerName(input.triggerName);
-    const cancelGate = makeDbCancelGate(recorder.triggerRunId, {
-      ...(input.lease !== undefined ? { lease: input.lease } : {}),
-    });
-    try {
-      const fire = () =>
-        resumeCarriedSegment({
-          lane: input.carried.lane,
-          teamId: input.teamId,
-          triggerRunId: input.runId,
-          cancel: cancelGate,
-          ...(input.lease !== undefined ? { lease: input.lease } : {}),
-          park: carriedParksOf(recorder, input.lease !== undefined ? { lease: input.lease } : {}),
-          request: {
-            source: input.pinnedSource,
-            pin: input.pinnedLanguageVersion,
-            ...(movementName !== undefined ? { movementName } : {}),
-            event: input.carried.event,
-            teamId: input.teamId,
-            // A body belongs to the run that minted it, clock included.
-            firedAt: recorder.firedAt.toISOString(),
-            runId: input.runId,
-            costCapMicrodollars: runCostCapFromEnv(),
-            priorSpentMicrodollars: recorder.priorSpentMicrodollars,
-            capBaselineMicrodollars: recorder.capBaselineMicrodollars,
-            ...(recorder.parkedOnEngine !== undefined ? { parkedOnEngine: recorder.parkedOnEngine } : {}),
-            state: input.state,
-            callback: { values: input.values, callIndex: input.callIndex },
-          },
-        });
-      const result = await new LlmUsageContext({
-        teamId: input.teamId as unknown as string,
-        triggerRunId: input.runId as unknown as string,
-        cancelGate,
-      }).runAsync(fire);
-      const lostBeforeSettle = leaseLostBeforeSettle(input.lease, leaseContext);
-      if (lostBeforeSettle !== null) return lostBeforeSettle;
-      recorder.recordMovementStep({
-        movementId: input.movementId,
-        movementName: result.movementName,
-        sourceAdapterType: input.event.adapterType,
-        result,
-      });
-      await recorder.snapshotSteps();
-      return { result };
-    } catch (err) {
-      const lost = leaseLostOutcome(err, leaseContext) ?? leaseLostBeforeSettle(input.lease, leaseContext);
-      if (lost !== null) return lost;
-      const { error, partial } = unwrapRunFailure(err);
-      const message = describeRunFailure(error);
-      logger.error('[MovementEngine] callback body failed', { triggerId: input.triggerId, movementId: input.movementId, runId: input.runId, error: message });
-      // The SEGMENT fails; the run does not.
-      recorder.recordStepFailure({
-        tgId: `movement:${input.movementId}`,
-        tgName: movementName ?? input.movementId,
-        sourceAdapterType: input.event.adapterType,
-        message,
-        ...(partial !== undefined ? { partial } : {}),
-      });
-      await recorder.snapshotSteps();
-      return { result: null, error: message };
-    }
-  });
 }
 
 /** Legacy fallback: recover the fired movement from the old name convention

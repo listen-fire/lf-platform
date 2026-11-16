@@ -184,7 +184,15 @@ export async function openDeliveryWaits(
 /** The arrivals logged after the wait's mark on its record's edge that it has
  *  not noted, in seq order, the first of each identity and version; none gone.
  *  One statement, so the wait's existence and its arrivals are read at one
- *  instant. An unknown wait fails. */
+ *  instant. An unknown wait fails.
+ *
+ *  The log holds one reading of each arrival, by this release's module, and a
+ *  run pinned to a carried version reads it too: its own engine judges each
+ *  one when it resumes. That is enough because this release's modules read
+ *  what 0.15's did plus fields of their own (Slack adds `User Email` and `Sent
+ *  By This App`), with no field's meaning changed. A module release that
+ *  changed one would declare it (the catalog's `changedFields`); from then on
+ *  a carried run's waits need that version's own reading. */
 export async function waitArrivals(exec: Exec, waitId: string): Promise<{ arrivals: ListedArrival[] }> {
   const { rows } = await sql<{ seq: string | null; identity: string | null; version: string | null; landing: unknown }>`
     select a.seq::text as seq, a.identity, a.version, a.landing

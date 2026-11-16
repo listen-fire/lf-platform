@@ -7,8 +7,10 @@
 // here steps them.
 
 import { readFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { join } from 'node:path';
 
+import express from 'express';
 import { sql } from 'kysely';
 
 import type { AskId } from '../../../generated/kysely/asks/Ask';
@@ -25,7 +27,8 @@ import { resetAskSettledNotifierForTests } from '../../asks/notifier';
 import { drainUntilIdle, resetWorkHandlersForTests } from '../../work/drain';
 import { registerCoreWork } from '../../work/register';
 import { askClosedSweepHandler, registerAskClosedSweepWork } from '../../asks/closed_sweep';
-import { callbackAckText, fireCallback } from '../callback_fire';
+import { callbacksRouter } from '../../../interfaces/rest/callbacks';
+import { RETIRED_CALLBACK_TEXT } from '../../interaction/retired_callback';
 
 const FIXTURES = join(__dirname, 'fixtures', 'production-0.12.13');
 const TEAM = '00000000-0000-4000-8000-0000000012a1' as TeamId;
@@ -157,31 +160,28 @@ describe('a run production parked', () => {
       expect(await correlationsOf(runId)).toHaveLength(1);
     });
 
-    it('a tap on a callback that is over answers as over, not as held', async () => {
-      const { runId } = await load('legacy-4-ask');
-      const minted = (JSON.parse(readFileSync(join(FIXTURES, 'callback.json'), 'utf8')) as Fixture).rows.callback?.[0];
-      await insertRow('callback', { ...minted, run_id: runId, status: 'revoked' });
-      expect(await fireCallback({ id: minted?.id as CallbackId, values: {} })).toMatchObject({ kind: 'closed' });
-    });
-
-    it('a tap on an expired callback answers as expired, not as held', async () => {
-      const { runId } = await load('legacy-4-ask');
-      const minted = (JSON.parse(readFileSync(join(FIXTURES, 'callback.json'), 'utf8')) as Fixture).rows.callback?.[0];
-      await insertRow('callback', { ...minted, run_id: runId, expires_at: new Date(Date.now() - 60_000).toISOString() });
-      expect(await fireCallback({ id: minted?.id as CallbackId, values: {} })).toMatchObject({ kind: 'expired' });
-    });
-
-    it('a tap on its callback is refused and says why: the call is not spent and nothing is queued', async () => {
+    it("a tap on its callback at the link's door says the button was retired: the call is not spent and nothing is queued", async () => {
       const { runId } = await load('legacy-4-ask');
       const minted = (JSON.parse(readFileSync(join(FIXTURES, 'callback.json'), 'utf8')) as Fixture).rows.callback?.[0];
       await insertRow('callback', { ...minted, run_id: runId });
-      const id = minted?.id as CallbackId;
-      const outcome = await fireCallback({ id, values: {} });
-      expect(outcome).toMatchObject({ kind: 'held' });
-      expect(callbackAckText(outcome)).toContain('its run cannot continue on this release');
+      const id = String(minted?.id);
+      const app = express();
+      app.use('/api/cb', callbacksRouter);
+      const server = createServer(app);
+      await new Promise<void>((listening) => server.listen(0, '127.0.0.1', listening));
+      try {
+        const address = server.address();
+        if (address === null || typeof address === 'string') throw new Error('the door has no port');
+        const res = await fetch(`http://127.0.0.1:${address.port}/api/cb/${encodeURIComponent(id)}`, { method: 'POST', headers: { accept: 'application/json' } });
+        expect(res.status).toBe(410);
+        expect(await res.json()).toEqual({ outcome: 'retired', message: RETIRED_CALLBACK_TEXT });
+      } finally {
+        await new Promise((closed) => server.close(closed));
+      }
       expect(await getAutomationsQb(['work']).selectFrom('work').where('team_id', '=', TEAM).select('kind').execute()).toEqual([]);
-      const callback = await getAutomationsQb(['callback']).selectFrom('callback').where('id', '=', id).select(['status', 'calls']).executeTakeFirstOrThrow();
+      const callback = await getAutomationsQb(['callback']).selectFrom('callback').where('id', '=', id as CallbackId).select(['status', 'calls']).executeTakeFirstOrThrow();
       expect(callback).toEqual({ status: 'live', calls: [] });
+      expect(await runOf(runId)).toMatchObject({ status: 'parked', failure_reason: null });
     });
   });
 });

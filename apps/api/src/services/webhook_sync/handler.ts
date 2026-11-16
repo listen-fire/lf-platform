@@ -187,9 +187,10 @@ function builtInIntercept(input: {
   }
   // A subscription an operator made for a WhatsApp number of their own posts here
   // (`webhookSubscriptions.create` takes any provider; the platform's own number
-  // posts at its own door). A tap on a 0.12 button is an ordinary message, and a
-  // delivery can batch several, so it is fired here and the delivery carries on:
-  // a module drops an interactive message as unclassified, so it is not fired twice.
+  // posts at its own door). A tap on a retired callback button is an ordinary
+  // message, and a delivery can batch several, so each is answered here and the
+  // delivery carries on: a module drops an interactive message as unclassified,
+  // so it is not answered twice.
   if (input.adapterType === WHATSAPP_ADAPTER_TYPE) {
     return {
       async intercept(body) {

@@ -53,8 +53,9 @@ import { upgradeMovement } from '../../translation_graph/movement/language_upgra
 import { saveMovement } from '../../translation_graph/movement/provision';
 import { registerDispatchWork } from '../../translation_graph/triggers/dispatch_event';
 import { handleSlackEventsInbound } from '../../webhook_sync/slack_events';
-import { registerReadDeliveryWork } from '../carried_delivery';
+import { readDeliveryHandler, registerReadDeliveryWork } from '../carried_delivery';
 import { listenConfigSchema, savedListens } from '../listen_door';
+import { registerListenResolveWork } from '../listen_resolve';
 
 const SLACK_TEAM = 'T015';
 
@@ -351,5 +352,52 @@ describe('one Slack delivery read by the version each listen is pinned to (real 
     const saved = await saveMovement({ audience: { for: 'run' }, teamId, id: dry, source: SLACK_015_DRY });
     expect(saved).toEqual(expect.objectContaining({ ok: true, listeners: [expect.objectContaining({ movementName: 'rehearse', runMode: 'dry_run' })] }));
     expect((await rowsOf(dry)).map((row) => row.run_mode)).toEqual(['dry_run']);
+  });
+
+  it("a delivery 0.15's reading row reads on a listed hop's edge whose members' changes are pushed lists that 0.15 listen again", async () => {
+    // A 0.15 listen whose first hop's members the host lists, and whose
+    // members' changes arrive on that hop's own edge (`Messages`).
+    const relister = randomUUID() as MovementId;
+    await getAutomationsQb(['movement']).insertInto('movement').values({ id: relister, team_id: teamId, name: 'relister', source: SLACK_015, description: '', language_version: '0.15.3' }).execute();
+    // Shipped, so the rows beside it are read as its version's.
+    expect(await saveMovement({ audience: { for: 'run' }, teamId, id: relister, source: SLACK_015 })).toEqual(expect.objectContaining({ ok: true }));
+    const id = randomUUID() as TriggerId;
+    const listen = {
+      pipeline: `listen:test:relist:${id.slice(0, 8)}`,
+      plan: {
+        movement: 'intake',
+        connection: 'chat',
+        adapter: 'slack',
+        hops: [
+          { edge: 'Messages', from: '', to: 'Message', judged: 'resolved' },
+          { edge: 'Replies', from: 'Message', to: 'Message', judged: 'arrival' },
+        ],
+        carries: ['Messages'],
+      },
+      awaits: { own: [], carried: {} },
+      fieldIds: {},
+      delivery: { kind: 'connection' },
+      resolvedHops: [{ hop: 0, membersChange: 'pushed' }],
+    };
+    expect(lane.watchOf({ config: { listen } })?.traversals).toEqual([expect.objectContaining({ pushedParentEdges: ['Messages'] })]);
+    await getAutomationsQb(['trigger'])
+      .insertInto('trigger')
+      .values({ id, team_id: teamId, name: 'intake:Replies', kind: 'slack', config: JSON.stringify({ listen }), movement_id: relister, credentials_id: credentialsId })
+      .execute();
+    // Registered only here: no earlier case's drain runs a listing.
+    registerListenResolveWork();
+    const relists = async () => (await workOf('resolve_listen')).map((row) => row.key);
+    expect(await relists()).toEqual([]);
+
+    await handleSlackEventsInbound(envelope({ user: 'U2', text: 'nothing', ts: '1700000000.000600' }));
+    const readings = await workOf('read_delivery');
+    expect(readings.map((row) => (row.payload as { version: string }).version)).toEqual(['0.15']);
+    // The reading row itself, as its drain runs it: 0.15's module reads the
+    // kept delivery, and its arrival on `Messages` lists the listen again.
+    for (const row of readings) await readDeliveryHandler.run(row.payload, { attempts: 1, now: new Date() } as never);
+    expect(await relists()).toEqual([`resolve_listen:${listen.pipeline}`]);
+
+    await getAutomationsQb(['work']).deleteFrom('work').where('team_id', '=', teamId).where('kind', 'in', ['read_delivery', 'resolve_listen', 'dispatch_event']).execute();
+    await getAutomationsQb(['trigger']).deleteFrom('trigger').where('movement_id', '=', relister).execute();
   });
 });

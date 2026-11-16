@@ -1717,9 +1717,9 @@
     "effects": []
   },
   {
-    "id": "whatsapp-interactive-reply-fires-callback-and-continues",
+    "id": "whatsapp-interactive-reply-answers-retired-callback-and-continues",
     "door": "webhook_sync",
-    "note": "A tapped reply button carrying a callback id fires it and is acked on WhatsApp, and the delivery still goes on to the adapter.",
+    "note": "A tapped reply button carrying a callback id is answered on WhatsApp that it was retired, and the delivery still goes on to the adapter.",
     "request": {
       "method": "POST",
       "path": "/api/public/webhook-sync/inbound_whatsapp/sub-1",
@@ -1738,41 +1738,6 @@
       "body": "{\"ok\":true,\"eventsProcessed\":1}"
     },
     "effects": [
-      {
-        "kind": "db",
-        "op": "select",
-        "table": "callback",
-        "steps": [
-          [
-            "where",
-            [
-              "id",
-              "=",
-              "cb_golden0001"
-            ]
-          ],
-          [
-            "select",
-            [
-              [
-                "id",
-                "team_id",
-                "run_id",
-                "address",
-                "params",
-                "state",
-                "calls",
-                "single_use",
-                "expires_at",
-                "status",
-                "created_at",
-                "fired_at",
-                "revoked_at"
-              ]
-            ]
-          ]
-        ]
-      },
       {
         "kind": "whatsapp_send_text",
         "businessPhoneNumberId": "pn-1",
