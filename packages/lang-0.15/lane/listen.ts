@@ -11,8 +11,9 @@
 // acted, among it), which the old Slack gate asks.
 
 import { z } from 'zod';
-import { listenPlanSchema, memberPlans, triggerEventSchema, type ListenPlan, type PlanHop } from '@listen-fire/engine-contracts';
+import { WireArrival, listenPlanSchema, memberPlans, triggerEventSchema, type Arrival, type ListenPlan, type PlanHop } from '@listen-fire/engine-contracts';
 import {
+  arrivalReceiptKey,
   arrivalTriggerOf,
   fieldIdsOf,
   landingNode,
@@ -129,12 +130,14 @@ export interface PlannedListen {
   textRunMode: 'live' | 'dry_run';
 }
 
+/** A file's listens as 0.15 plans them, or the refusal of a text it cannot
+ *  read. */
+export type PlannedListens = { ok: true; listens: PlannedListen[]; refused: string[] } | { ok: false; refused: string };
+
 /** A 0.15 file's listens as its own check plans them; one the platform would
  *  not fire as written is refused by name. A text 0.15 cannot read has its
  *  refusal instead. */
-export async function planListens(
-  request: CheckRequest & { file: string },
-): Promise<{ ok: true; listens: PlannedListen[]; refused: string[] } | { ok: false; refused: string }> {
+export async function planListens(request: CheckRequest & { file: string }): Promise<PlannedListens> {
   const read = await readProgram(request);
   if (!read.readable) return { ok: false, refused: read.refusal.message };
   const { program, teamCatalog } = read;
@@ -215,36 +218,43 @@ export interface ReadDeliveryRequest {
 
 export interface ReadDeliveryOutcome {
   /** One per listen an arrival fired: the event its run is handed, in 0.15's
-   *  shape, as JSON. */
-  receipts: { triggerId: string; event: Record<string, unknown> }[];
+   *  shape, as JSON, and what names the arrival it fired on (its edge,
+   *  identity and version), so a page judged again keeps one receipt. */
+  receipts: { triggerId: string; event: Record<string, unknown>; arrivalKey: string }[];
   /** Why an arrival ran nothing, for the log. */
   lines: string[];
+  /** The edges of the arrivals it read, fired or not: an arrival on a listed
+   *  hop's edge whose members' changes are pushed lists its listen again. */
+  edges: string[];
 }
 
-/** Reads what the door kept with 0.15's own module and judges each arrival
- *  with 0.15's own judge against the 0.15 rows handed in. A module's failure
- *  throws: the platform's row retries. */
-export async function readDelivery(request: ReadDeliveryRequest, modules: ModulePlatform): Promise<ReadDeliveryOutcome> {
-  const { teamId, adapterType, delivery } = request;
-  const lines: string[] = [];
-  const listens = request.listens.flatMap((row) => {
+/** The rows handed in that are 0.15 listens on the delivery's connection.
+ *  `installHeard`: a delivery for no connection is the module's install's,
+ *  which serves every connection (a page a door built). */
+function listensHearing(
+  request: Pick<ReadDeliveryRequest, 'listens' | 'credentialsId' | 'matchAnyCredential'>,
+  options: { installHeard: boolean },
+): { row: ListenRow; listen: ListenConfig }[] {
+  const everyConnection = request.matchAnyCredential === true || (options.installHeard && request.credentialsId === null);
+  return request.listens.flatMap((row) => {
     const parsed = listenConfigSchema.safeParse(row.config);
     if (!parsed.success) return [];
-    if (request.matchAnyCredential !== true && row.credentialsId !== null && row.credentialsId !== request.credentialsId) return [];
+    if (!everyConnection && row.credentialsId !== null && row.credentialsId !== request.credentialsId) return [];
     return [{ row, listen: parsed.data.listen }];
   });
-  if (listens.length === 0) return { receipts: [], lines };
-  const adapter = await moduleTable(modules).resolve(adapterType, { teamId, ...(request.credentialsId !== null ? { credentialsId: request.credentialsId } : {}) });
-  if (adapter.preprocessInbound === undefined) {
-    lines.push(`${adapterType} under 0.15 reads no delivery: nothing in it is judged under 0.15`);
-    return { receipts: [], lines };
-  }
-  const read = await adapter.preprocessInbound({ raw: bodyOf(delivery), ...(delivery.checkpoint !== undefined ? { checkpoint: delivery.checkpoint } : {}) });
-  const now = new Date(request.now);
+}
+
+/** Each arrival judged by 0.15's own judge against each listen, in the order
+ *  they came. */
+function judged(input: { listens: readonly { row: ListenRow; listen: ListenConfig }[]; arrivals: readonly Arrival[]; adapterType: string; now: Date }): ReadDeliveryOutcome {
+  const { adapterType, now } = input;
+  const lines: string[] = [];
   const receipts: ReadDeliveryOutcome['receipts'] = [];
-  for (const arrival of read.arrivals ?? []) {
+  const edges = new Set<string>();
+  for (const arrival of input.arrivals) {
     if ('gone' in arrival) continue;
-    for (const { row, listen } of listens) {
+    edges.add(arrival.edge);
+    for (const { row, listen } of input.listens) {
       const named = namedArrival(arrival, listen.fieldIds);
       const verdict = listenFires(listen, named, { adapterType }, now.getTime());
       if (verdict === null) continue;
@@ -254,10 +264,49 @@ export async function readDelivery(request: ReadDeliveryRequest, modules: Module
       }
       if (!('fires' in verdict)) continue;
       const event = arrivalTriggerOf({ pipelineInputId: listen.pipeline, adapterType, arrival, now });
-      receipts.push({ triggerId: row.id, event: JSON.parse(JSON.stringify(event)) });
+      receipts.push({ triggerId: row.id, event: JSON.parse(JSON.stringify(event)), arrivalKey: arrivalReceiptKey(arrival) });
     }
   }
-  return { receipts, lines };
+  return { receipts, lines, edges: [...edges] };
+}
+
+/** Reads what the door kept with 0.15's own module and judges each arrival
+ *  with 0.15's own judge against the 0.15 rows handed in. A module's failure
+ *  throws: the platform's row retries. */
+export async function readDelivery(request: ReadDeliveryRequest, modules: ModulePlatform): Promise<ReadDeliveryOutcome> {
+  const { teamId, adapterType, delivery } = request;
+  const listens = listensHearing(request, { installHeard: false });
+  if (listens.length === 0) return { receipts: [], lines: [], edges: [] };
+  const adapter = await moduleTable(modules).resolve(adapterType, { teamId, ...(request.credentialsId !== null ? { credentialsId: request.credentialsId } : {}) });
+  if (adapter.preprocessInbound === undefined) {
+    return { receipts: [], lines: [`${adapterType} under 0.15 reads no delivery: nothing in it is judged under 0.15`], edges: [] };
+  }
+  const read = await adapter.preprocessInbound({ raw: bodyOf(delivery), ...(delivery.checkpoint !== undefined ? { checkpoint: delivery.checkpoint } : {}) });
+  return judged({ listens, arrivals: read.arrivals ?? [], adapterType, now: new Date(request.now) });
+}
+
+export interface JudgePageRequest extends Omit<ReadDeliveryRequest, 'delivery'> {
+  /** The arrivals a door built itself (an email, a WhatsApp message, an ask's
+   *  answer, a remote module's push, a poll 0.15's module answered), as plain
+   *  data: 0.15 reads each with its own arrival schema. */
+  page: readonly unknown[];
+}
+
+/** A page of arrivals the platform's door built, each read with 0.15's own
+ *  arrival schema and judged by 0.15's own judge against the 0.15 rows handed
+ *  in. One 0.15 cannot read runs nothing, said by line. */
+export function judgePage(request: JudgePageRequest): ReadDeliveryOutcome {
+  const listens = listensHearing(request, { installHeard: true });
+  if (listens.length === 0) return { receipts: [], lines: [], edges: [] };
+  const lines: string[] = [];
+  const arrivals = request.page.flatMap((element): Arrival[] => {
+    const read = WireArrival.safeParse(element);
+    if (read.success) return [read.data];
+    lines.push(`${request.adapterType}: an arrival 0.15 does not read runs nothing under 0.15 (${read.error.issues[0]?.message ?? 'invalid'})`);
+    return [];
+  });
+  const outcome = judged({ listens, arrivals, adapterType: request.adapterType, now: new Date(request.now) });
+  return { ...outcome, lines: [...lines, ...outcome.lines] };
 }
 
 /** What the source module says of a firing before it runs: the old ownership

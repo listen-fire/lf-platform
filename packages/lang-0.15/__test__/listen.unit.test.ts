@@ -4,7 +4,8 @@
 
 import { createServer, type Server } from 'node:http';
 
-import { gateFiring, isListenRow, planListens, readDelivery } from '../lane/listen';
+import { gateFiring, isListenRow, judgePage, planListens, readDelivery } from '../lane/listen';
+import { watchOf } from '../lane/watch';
 import type { ModulePlatform } from '../lane/run_types';
 import type { TeamFacts } from '../lane/types';
 
@@ -103,12 +104,42 @@ describe("a 0.15 listen, by 0.15's planner, module and judge", () => {
         modules(),
       );
     const fired = await read('hello');
-    expect(fired.receipts).toEqual([{ triggerId: 'trigger-1', event: expect.objectContaining({ adapterType: 'slack' }) }]);
+    expect(fired.receipts).toEqual([{ triggerId: 'trigger-1', event: expect.objectContaining({ adapterType: 'slack' }), arrivalKey: expect.stringContaining('1700000000') }]);
+    expect(fired.edges).toEqual(['Messages']);
     // The filter is 0.15's: an empty message does not pass it.
     expect((await read('')).receipts).toEqual([]);
 
     const gate = await gateFiring({ teamId: 'team-1', adapterType: 'slack', credentialsId: 'c1', config: row.config, event: fired.receipts[0]?.event ?? {} }, modules());
     expect(gate).toEqual({ kind: 'needs-actor', candidates: [expect.objectContaining({ identity: expect.objectContaining({ identifier: 'U1', email: 'ada@example.com' }) })] });
+  });
+
+  it("judges a page a door built with 0.15's judge, reading each arrival with 0.15's own schema", async () => {
+    const planned = await planListens({ source: SLACK_015, pin: '0.15.3', file: 'intake', team: team(), connected: { teamId: 'team-1', modules: modules() } });
+    if (!planned.ok) throw new Error('unplanned');
+    const row = { id: 'trigger-1', credentialsId: 'c1', config: { listen: planned.listens[0]?.listen } };
+    const said = (text: string, identity: string) => ({ edge: 'Messages', identity, landing: { recordId: identity, recordType: 'Message', fields: { Message: text } } });
+    const judged = judgePage({ teamId: 'team-1', adapterType: 'slack', credentialsId: null, page: [said('hello', 'a'), said('', 'b'), { edge: 7 }], listens: [row], now: new Date().toISOString() });
+    // A page for no connection is the install's: the listen on `c1` hears it.
+    expect(judged.receipts).toEqual([{ triggerId: 'trigger-1', event: expect.objectContaining({ adapterType: 'slack' }), arrivalKey: expect.stringContaining('a') }]);
+    expect(judged.lines).toEqual([expect.stringContaining('an arrival 0.15 does not read')]);
+    // The edges of the arrivals it read, fired or not: an arrival on a listed
+    // hop's edge lists its listen again.
+    expect(judged.edges).toEqual(['Messages']);
+    // A page for another connection is not this listen's.
+    expect(judgePage({ teamId: 'team-1', adapterType: 'slack', credentialsId: 'c2', page: [said('hello', 'a')], listens: [row], now: new Date().toISOString() }).receipts).toEqual([]);
+  });
+
+  it('says how a 0.15 row is watched, off its own plan', async () => {
+    const planned = await planListens({ source: SLACK_015, pin: '0.15.3', file: 'intake', team: team(), connected: { teamId: 'team-1', modules: modules() } });
+    if (!planned.ok) throw new Error('unplanned');
+    const listen = planned.listens[0]?.listen;
+    expect(watchOf({ config: { listen } })).toEqual({
+      pipeline: listen?.pipeline,
+      adapter: 'slack',
+      movement: 'intake',
+      traversals: [expect.objectContaining({ edge: 'Messages', resolves: false, pushedParentEdges: [] })],
+    });
+    expect(watchOf({ config: { listen: { ...listen, plan: { lane: 'x' } } } })).toBeNull();
   });
 
   it("keeps the run mode the fired function's writes imply: a rehearsing connection's listen is dry_run", async () => {

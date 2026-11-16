@@ -38,7 +38,7 @@ import { z } from 'zod';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { ExternalServiceCredentialsId } from '../../../generated/kysely/automations/ExternalServiceCredentials';
 import type { WebhookSubscriptionId } from '../../../generated/kysely/automations/WebhookSubscription';
-import type { Adapter, AdapterManifest } from 'movement-engine/public/adapter';
+import type { AdapterManifest } from 'movement-engine/public/adapter';
 import type { WorkHandler } from '../../work/kinds';
 
 import { getAutomationsQb } from '../../../lib/kysely';
@@ -50,7 +50,11 @@ import { resolveAdapter } from '../adapters/resolve';
 import { builtinInboundSecretIssuedByProvider } from '../adapters/builtin_modules';
 import { teamAdapterManifestSet } from '../adapters/team_manifests';
 import { readTeamEngine } from '../../lf_engine/team_engine';
+import { carriedVersions, type ListeningLane, type ModulePlatform } from '@listen-fire/language-versions';
+
 import { savedListens, type SavedListen } from '../../inbound/listen_door';
+import { carriedEdgeKeysOf, carriedListensContained } from '../../inbound/carried_listens';
+import { neverAsAny } from 'movement-engine/public/types';
 import { listenEdgeKeysOf, watchedTraversals, type ListenEdgeKey } from '../../inbound/listen_edge';
 import { registerWorkHandler } from '../../work/drain';
 
@@ -66,6 +70,11 @@ const edgeSubscriptionSchema = z.object({
   filter: z.unknown().optional(),
   scope: z.string().optional(),
   constructionArgs: z.record(z.string(), z.string()).optional(),
+  /** The carried version that registered it, and removes it, through its own
+   *  module; absent for the current version's. A narrowed subscription is read
+   *  by that version's listens alone; one to a whole connection's edge, by every
+   *  version's listens sharing it (listen_edge.ts, `unnarrowed`). */
+  version: z.string().optional(),
 });
 type EdgeSubscription = z.infer<typeof edgeSubscriptionSchema>;
 
@@ -123,6 +132,47 @@ interface DesiredSubscription {
   providerKey: string;
   key: ListenEdgeKey;
   held: EdgeSubscription;
+  /** A carried version's listens want it: its own module registers it. */
+  lane?: ListeningLane;
+}
+
+/** What registers and removes a subscription: the module of the version whose
+ *  listens share it. */
+interface Subscriber {
+  ensureEventSubscription?(input: { edge: string; filter?: unknown; scope?: string; callbackUrl: string; current?: { externalId: string } }): Promise<{ externalId?: string; secret?: string } | undefined>;
+  removeEventSubscription?(input: ReturnType<typeof removalOf>): Promise<void>;
+}
+
+/** The platform's hosting of a carried version's modules. Loaded when a carried
+ *  listen is subscribed for: the carried run host reaches the catalog, which
+ *  reaches this sync. */
+async function carriedModules(): Promise<ModulePlatform> {
+  const { modulePlatform } = await import('./carried_run');
+  return modulePlatform();
+}
+
+/** A carried version's module, as a subscriber of one install's edges. */
+function carriedSubscriber(lane: ListeningLane, install: { teamId: TeamId; adapterType: string; credentialsId: string | null; constructionArgs?: Record<string, string> }): Required<Subscriber> {
+  return {
+    async ensureEventSubscription(input) {
+      const outcome = await lane.subscribeEdge({ ...install, ...input }, await carriedModules());
+      switch (outcome.kind) {
+        case 'unanswered':
+          throw new Error(`${install.adapterType}: its module under the listen's version does not answer ensureEventSubscription, so ${input.edge} receives nothing`);
+        case 'registered':
+          return {
+            ...(outcome.externalId !== undefined ? { externalId: outcome.externalId } : {}),
+            ...(outcome.secret !== undefined ? { secret: outcome.secret } : {}),
+          };
+        default:
+          return neverAsAny(outcome);
+      }
+    },
+    async removeEventSubscription(input) {
+      if (!('edge' in input)) throw new Error(`a carried version's subscription is removed by its edge`);
+      await lane.unsubscribeEdge({ ...install, ...input }, await carriedModules());
+    },
+  };
 }
 
 interface SubscriptionRow {
@@ -146,18 +196,33 @@ function legacyScopeOf(rawValue: unknown): Record<string, string> {
   return Object.fromEntries(Object.entries(raw).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
 }
 
-/** The team's desired subscriptions, off its saved listens. Only a module
- *  that answers `ensureEventSubscription` is subscribed for. */
+/** The team's desired subscriptions, off its saved listens, paused or not (a
+ *  paused listen keeps its subscription). Only a module that answers
+ *  `ensureEventSubscription` is subscribed for. `carriedUnread`: the carried
+ *  versions whose listens could not be read, left out so the current version's
+ *  subscriptions are synced whatever a carried version does. */
 async function desiredSubscriptions(input: {
   teamId: TeamId;
   manifestBySlug: ReadonlyMap<string, AdapterManifest>;
   remoteDegraded: boolean;
   account: SyncAccount;
-}): Promise<DesiredSubscription[]> {
+}): Promise<{ desired: DesiredSubscription[]; carriedUnread: ReadonlySet<string> }> {
   const { teamId, manifestBySlug, remoteDegraded, account } = input;
   const desired = new Map<string, DesiredSubscription>();
-  for (const listen of await savedListens({ teamId })) {
-    for (const { key, digest } of listenEdgeKeysOf(listen, ['connection', 'scope'])) {
+  const current = (await savedListens({ teamId })).map((listen) => ({ listen, label: `${listen.file}:${listen.plan.movement}`, keys: listenEdgeKeysOf(listen, ['connection', 'scope']), lane: undefined, version: undefined }));
+  const read = await carriedListensContained({ teamId });
+  for (const version of read.unread) account.notes.push(`the listens pinned to ${version} could not be read, so their subscriptions are left as they are`);
+  const carried = read.listens.map((listen) => ({
+    listen,
+    label: `${listen.file}:${listen.watch.movement}`,
+    keys: carriedEdgeKeysOf(listen, ['connection', 'scope']),
+    lane: listen.lane,
+    version: listen.version.key,
+  }));
+  // The current version's first: a subscription to a whole connection's edge
+  // that both versions' listens share is registered by this release's module.
+  for (const { label, keys, lane, version } of [...current, ...carried]) {
+    for (const { key, digest } of keys) {
       const slug = resolveAdapterSlug(key.adapterType);
       const manifest = manifestBySlug.get(slug);
       // With the remote installs only partly read, an unknown module may be a
@@ -168,7 +233,7 @@ async function desiredSubscriptions(input: {
       }
       if (manifest === undefined || !manifest.methods.includes('ensureEventSubscription')) continue;
       if (key.credentialsId === null && manifest.requiredCredentialType !== undefined) {
-        noteUnregistered(account, digest, `${slug}: ${listen.file}:${listen.plan.movement} has no credential, so ${key.edge} cannot be subscribed for`);
+        noteUnregistered(account, digest, `${slug}: ${label} has no credential, so ${key.edge} cannot be subscribed for`);
         continue;
       }
       if (desired.has(digest)) continue;
@@ -182,11 +247,13 @@ async function desiredSubscriptions(input: {
           ...(key.taken !== undefined ? { filter: key.taken } : {}),
           ...(key.scope !== undefined ? { scope: key.scope } : {}),
           ...(key.constructionArgs !== undefined ? { constructionArgs: key.constructionArgs } : {}),
+          ...(version !== undefined ? { version } : {}),
         },
+        ...(lane !== undefined ? { lane } : {}),
       });
     }
   }
-  return [...desired.values()];
+  return { desired: [...desired.values()], carriedUnread: read.unread };
 }
 
 async function provisionedRows(teamId: TeamId): Promise<SubscriptionRow[]> {
@@ -246,7 +313,7 @@ async function setRow(id: string, set: { status: string; secret?: string; extern
     .execute();
 }
 
-async function withdraw(adapter: Adapter, removal: ReturnType<typeof removalOf>, callbackUrl: string): Promise<void> {
+async function withdraw(adapter: Subscriber, removal: ReturnType<typeof removalOf>, callbackUrl: string): Promise<void> {
   try {
     await adapter.removeEventSubscription?.(removal);
   } catch (err) {
@@ -273,12 +340,15 @@ async function ensureSubscription(input: {
   // subscription lives in somebody else's system, which may have lost it. A
   // built-in's registration is trusted until it changes.
   if (settled && !remote) return;
-  const adapter = await resolveAdapter({
-    adapterType: slug,
-    teamId,
-    ...(key.credentialsId !== null ? { credentialsId: key.credentialsId } : {}),
-    ...(key.constructionArgs !== undefined ? { constructionArgs: key.constructionArgs } : {}),
-  });
+  const adapter: Subscriber =
+    subscription.lane !== undefined
+      ? carriedSubscriber(subscription.lane, { teamId, adapterType: slug, credentialsId: key.credentialsId, ...(key.constructionArgs !== undefined ? { constructionArgs: key.constructionArgs } : {}) })
+      : await resolveAdapter({
+          adapterType: slug,
+          teamId,
+          ...(key.credentialsId !== null ? { credentialsId: key.credentialsId } : {}),
+          ...(key.constructionArgs !== undefined ? { constructionArgs: key.constructionArgs } : {}),
+        });
   if (typeof adapter.ensureEventSubscription !== 'function') {
     noteUnregistered(account, held.digest, `${slug}: its manifest declares ensureEventSubscription but the adapter does not answer it, so ${key.edge} receives nothing`);
     return;
@@ -355,6 +425,27 @@ async function webhooksStillCarryingMoved(input: { teamId: TeamId; manifestBySlu
   return (row) => row.held === null && waiting.some((listen) => listen.provider === row.provider && listen.credentialsId === row.credentialsId);
 }
 
+/** What removes a row's subscription: the module of the version it names (a
+ *  carried version's own, through its lane; it removes one of its own while it
+ *  still carries the version), else this release's. */
+async function subscriberOfRow(input: { teamId: TeamId; slug: string; row: SubscriptionRow }): Promise<Subscriber> {
+  const { row } = input;
+  const install = {
+    teamId: input.teamId,
+    adapterType: input.slug,
+    credentialsId: row.credentialsId,
+    ...(row.held?.constructionArgs !== undefined ? { constructionArgs: row.held.constructionArgs } : {}),
+  };
+  const version = row.held?.version !== undefined ? carriedVersions().find((candidate) => candidate.key === row.held?.version) : undefined;
+  if (version?.listenRows !== undefined) return carriedSubscriber(await version.listenRows(), install);
+  return resolveAdapter({
+    adapterType: input.slug,
+    teamId: input.teamId,
+    ...(row.credentialsId !== null ? { credentialsId: row.credentialsId } : {}),
+    ...(install.constructionArgs !== undefined ? { constructionArgs: install.constructionArgs } : {}),
+  });
+}
+
 /**
  * Bring the team's subscriptions in line with its listens. Idempotent; every
  * failure is contained per subscription and surfaced as a note.
@@ -369,7 +460,7 @@ export async function syncListenSubscriptions(input: { teamId: TeamId }): Promis
   const slugByProviderKey = new Map(manifests.map((m) => [webhookProviderKey(m), m.adapterType]));
   // Read fresh, not through dispatch's copy: this runs right after a switch.
   const lfEngined = (await readTeamEngine(input.teamId)).engine === 'lf';
-  const desired = lfEngined ? [] : await desiredSubscriptions({ teamId: input.teamId, manifestBySlug, remoteDegraded, account });
+  const { desired, carriedUnread } = lfEngined ? { desired: [], carriedUnread: new Set<string>() } : await desiredSubscriptions({ teamId: input.teamId, manifestBySlug, remoteDegraded, account });
   const existing = await provisionedRows(input.teamId);
   const rowOf = (subscription: DesiredSubscription) =>
     existing.find((row) => row.held?.digest === subscription.held.digest && row.provider === subscription.providerKey);
@@ -388,6 +479,8 @@ export async function syncListenSubscriptions(input: { teamId: TeamId }): Promis
 
   for (const row of existing) {
     if (desired.some((subscription) => rowOf(subscription) === row)) continue;
+    // Nor is one of a version whose listens could not be read: it is not known unwanted.
+    if (row.held?.version !== undefined && carriedUnread.has(row.held.version)) continue;
     // Nor is the one a moved listen still hears through, until its own is up.
     if (stillCarrying(row)) {
       notes.push(`${row.provider}: its 0.12 webhook stays until the upgraded listen's own subscription is up`);
@@ -401,12 +494,7 @@ export async function syncListenSubscriptions(input: { teamId: TeamId }): Promis
     }
     const slug = slugByProviderKey.get(row.provider) ?? resolveAdapterSlug(row.provider);
     try {
-      const adapter = await resolveAdapter({
-        adapterType: slug,
-        teamId: input.teamId,
-        ...(row.credentialsId !== null ? { credentialsId: row.credentialsId } : {}),
-        ...(row.held?.constructionArgs !== undefined ? { constructionArgs: row.held.constructionArgs } : {}),
-      });
+      const adapter = await subscriberOfRow({ teamId: input.teamId, slug, row });
       await adapter.removeEventSubscription?.(removalOf(row, buildWebhookTargetUrl(row.provider, row.id)));
     } catch (err) {
       // Retired here regardless: a source-side webhook left behind posts at a

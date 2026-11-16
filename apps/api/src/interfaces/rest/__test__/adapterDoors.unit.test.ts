@@ -13,7 +13,8 @@ import type { AddressInfo } from 'node:net';
 
 const listRemoteAdaptersOfType = jest.fn();
 const loadRemoteAdapterSecret = jest.fn();
-const deliverArrivals = jest.fn();
+const deliverArrivals = jest.fn(async (_input: unknown) => ({ deliveryId: 'kept-1' }));
+const judgeCarriedPage = jest.fn(async (_input: unknown) => 0);
 const notifyWork = jest.fn();
 
 jest.mock('node:crypto', () => {
@@ -28,6 +29,9 @@ jest.mock('../../../services/translation_graph/adapters/resolve', () => ({
 }));
 jest.mock('../../../services/inbound/listen_door', () => ({
   deliverArrivals: (input: unknown) => deliverArrivals(input),
+}));
+jest.mock('../../../services/inbound/carried_delivery', () => ({
+  judgeCarriedPage: (input: unknown) => judgeCarriedPage(input),
 }));
 jest.mock('../../../services/work/drain', () => ({ notifyWork: () => notifyWork() }));
 // The platform's model client: answers, and reports what the call spent as a
@@ -82,7 +86,7 @@ beforeEach(() => {
       (adapterType === 'acme_crm' ? [TEAM_A, TEAM_B] : []).filter((row) => teamId === undefined || row.team_id === teamId),
   );
   loadRemoteAdapterSecret.mockImplementation(async (credentialsId: string) => SECRETS[credentialsId]);
-  deliverArrivals.mockResolvedValue(undefined);
+  deliverArrivals.mockResolvedValue({ deliveryId: 'kept-1' });
 });
 
 async function post(path: string, body: unknown, headers: Record<string, string> = {}) {
@@ -319,6 +323,8 @@ describe('wake', () => {
       // A push is kept as the arrivals it pushed, which a replay judges again.
       request: { adapter: 'acme_crm', arrivals: [ARRIVAL, second] },
     });
+    // A carried version's listens on the module judge the same page, named by its delivery.
+    expect(judgeCarriedPage).toHaveBeenCalledWith({ teamId: A_TEAM, adapterType: 'acme_crm', credentialsId: null, page: [ARRIVAL, second], stableKey: 'push:kept-1' });
     expect(notifyWork).toHaveBeenCalled();
   });
 

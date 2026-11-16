@@ -11,15 +11,17 @@
 // An answer is an arrival on the ask's `Response`, delivered as any module's
 // arrival is (listen_door.ts): logged in one write that wakes the run waiting
 // on the ask (keyed by its id), and judged by the team's listens on
-// `Response`. A cancel reports the ask gone: a run waiting on it is stranded
-// and its program hears `Wait Lost Its Record`, which it may race with a
-// sleep. Being registered is what tells the cancel door a drain exists here.
+// `Response` (a carried version's with that version's own judge). A cancel
+// reports the ask gone: a run waiting on it is stranded and its program hears
+// `Wait Lost Its Record`, which it may race with a sleep. Being registered is
+// what tells the cancel door a drain exists here.
 
 import type { AskRecord } from './store';
 
 import { ASK_ADAPTER_TYPE, RESPONSE_EDGE_NAME, responseArrival } from '@listen-fire/ask';
 import { registerAskSettledNotifier } from './notifier';
 import { deliverArrivals } from '../inbound/listen_door';
+import { judgeCarriedPage } from '../inbound/carried_delivery';
 import { askHasWakeableAwait } from './carried_ask_awaits';
 import { notifyWork } from '../work/drain';
 import { enqueueWork } from '../work/store';
@@ -39,6 +41,9 @@ export async function deliverSettle(ask: AskRecord): Promise<void> {
     source: 'hook',
     arrivals: [arrival],
   });
+  // A carried version's listens on `Response` judge the answer with their own
+  // judge, one receipt per listen however often the settle is told.
+  await judgeCarriedPage({ teamId: ask.teamId, adapterType: ASK_ADAPTER_TYPE, credentialsId: null, page: [arrival], stableKey: `${ask.state}:${ask.id}` });
   await wakeRunsParkedOnAsk(ask);
   notifyWork();
 }

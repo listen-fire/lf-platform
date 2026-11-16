@@ -805,10 +805,12 @@ async function runInDevLoopContext<T>(
 
 /**
  * Fire the team's `cron` movement trigger(s) immediately, bypassing the wall
- * clock + first-sight-skip. Synthesizes a `tick` TriggerEvent (the exact shape
- * `movement_scheduler/worker.ts` builds) and dispatches it in-process through
- * `dispatchTriggerByIdEvent` — the same entry the scheduler uses. No HTTP: cron
- * has no inbound route. Author a listener first:
+ * clock + first-sight-skip. Synthesizes a `tick` TriggerEvent in the shape the
+ * retired 0.12 scheduler built (a row's `config.schedule`) and dispatches it
+ * in-process through `dispatchTriggerByIdEvent`. A planned cron listen keeps no
+ * such schedule: its `Ticks` are polled (poll_source/worker.ts), and
+ * `pollTriggerNow` polls it off its schedule. No HTTP: cron has no inbound
+ * route. Author a listener first:
  *   listen to cron-[t:Ticks WHERE t.Schedule == "…"]-> fire <movement>
  */
 async function injectCron(args: { movement?: string }) {

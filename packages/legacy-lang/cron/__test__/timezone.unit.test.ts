@@ -104,7 +104,8 @@ describe('fall-back: a wall-clock time that occurs twice fires ONCE', () => {
   });
 
   test('simulating the scheduler across the fold fires exactly once', () => {
-    // Mirror movement_scheduler/worker.ts: checkpoint advances to `now` after
+    // Mirror the retired 0.12 scheduler (movement_scheduler/worker.ts, since
+    // deleted): checkpoint advances to `now` after
     // a fire; due = nextCronOccurrence(schedule, checkpoint); fire when due<=now.
     // This proves the cron_last_fired_at instant checkpoint + fold dedup yield
     // a single fire across the repeated hour.

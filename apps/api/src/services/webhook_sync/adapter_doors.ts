@@ -3,7 +3,9 @@
 // `answerWake`; `answerEmit` refuses by name, since from 0.13 an event fires
 // no listen): what arrived on the install's listenable edges is kept as a
 // delivery of its own, judged by the team's listens on that module and
-// waking the waits parked on each record (inbound/listen_door.ts).
+// waking the waits parked on each record (inbound/listen_door.ts), and judged
+// by each carried version's listens on the module with that version's own
+// judge (inbound/carried_delivery.ts).
 //
 // The caller presents the credential its install holds (the same secret
 // Listen-Fire authenticates to it with, carried the same way the install's
@@ -23,6 +25,7 @@ import { listRemoteAdaptersOfType, type RemoteAdapterRow } from '../translation_
 import { ADAPTER_TEAM_HEADER, authHeader } from 'movement-engine/public/adapter';
 import { deliverArrivals } from '../inbound/listen_door';
 import { keptPage } from '../inbound/captured_request';
+import { judgeCarriedPage } from '../inbound/carried_delivery';
 import { notifyWork } from '../work/drain';
 import { logger } from 'movement-engine/public/log';
 import { webhookProviderKey } from './urls';
@@ -120,8 +123,9 @@ export const platformPushStore: PushStore = {
   authenticate: (input) => authenticateAdapterDoor(input),
 
   async keepArrivals({ adapterType, teamId, arrivals }) {
-    await deliverArrivals({
-      teamId: teamIdSchema.parse(teamId),
+    const team = teamIdSchema.parse(teamId);
+    const { deliveryId } = await deliverArrivals({
+      teamId: team,
       delivered: { adapterType, credentialsId: null },
       subscriptionId: webhookProviderKey({ adapterType }),
       externalId: null,
@@ -131,6 +135,9 @@ export const platformPushStore: PushStore = {
       // them again as pushed.
       request: keptPage({ adapterType, credentialsId: null, arrivals }),
     });
+    // A carried version's listens on the module judge the pushed arrivals with
+    // their own judge; the push names no id, so its kept delivery names it.
+    await judgeCarriedPage({ teamId: team, adapterType, credentialsId: null, page: arrivals, stableKey: `push:${deliveryId}` });
   },
 
   notify: () => notifyWork(),

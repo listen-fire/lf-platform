@@ -1190,6 +1190,51 @@ describe('planListenerReconciliation — movement-scoped identity', () => {
     expect(plan.matches.map((m) => m?.id).sort()).toEqual([first.id, second.id].sort());
     expect(plan.retired).toEqual([]);
   });
+
+  it('two listens on one connection, both edited, each keep their own row', () => {
+    const a = row({ firedMovementName: 'x', configKey: 'a-old', kind: 'slack', credentialsId: 'conn-1' });
+    const b = row({ firedMovementName: 'y', configKey: 'b-old', kind: 'slack', credentialsId: 'conn-1' });
+    const plan = planListenerReconciliation({
+      desired: [
+        want({ movementName: 'y', configKey: 'b-new', kind: 'slack', credentialsId: 'conn-1' }),
+        want({ movementName: 'x', configKey: 'a-new', kind: 'slack', credentialsId: 'conn-1' }),
+      ],
+      existing: [a, b],
+    });
+    expect(plan.matches.map((m) => m?.id)).toEqual([b.id, a.id]);
+    expect(plan.retired).toEqual([]);
+  });
+
+  it('one listen edited, one deleted and one added on a connection: the added listen gets a fresh row, the deleted one\'s row retires', () => {
+    // The deleted listen's row carries its pause, trigger id, history and
+    // receipts; a listen firing another movement must never inherit them.
+    const a = row({ firedMovementName: 'x', configKey: 'a-old', kind: 'slack', credentialsId: 'conn-1' });
+    const c: DerivedTriggerRow = { ...row({ firedMovementName: 'z', configKey: 'c', kind: 'slack', credentialsId: 'conn-1' }), runMode: 'off' };
+    const plan = planListenerReconciliation({
+      desired: [
+        want({ movementName: 'x', configKey: 'a-new', kind: 'slack', credentialsId: 'conn-1' }),
+        want({ movementName: 'y', configKey: 'b', kind: 'slack', credentialsId: 'conn-1' }),
+      ],
+      existing: [a, c],
+    });
+    expect(plan.matches[0]?.id).toBe(a.id);
+    expect(plan.matches[1]).toBeUndefined();
+    expect(plan.retired.map((r) => r.id)).toEqual([c.id]);
+  });
+
+  it('two listens firing one movement on one connection, both edited, stay unmatched', () => {
+    const first = row({ firedMovementName: 'x', configKey: 'one-old', kind: 'slack', credentialsId: 'conn-1' });
+    const second = row({ firedMovementName: 'x', configKey: 'two-old', kind: 'slack', credentialsId: 'conn-1' });
+    const plan = planListenerReconciliation({
+      desired: [
+        want({ movementName: 'x', configKey: 'one-new', kind: 'slack', credentialsId: 'conn-1' }),
+        want({ movementName: 'x', configKey: 'two-new', kind: 'slack', credentialsId: 'conn-1' }),
+      ],
+      existing: [first, second],
+    });
+    expect(plan.matches).toEqual([undefined, undefined]);
+    expect(plan.retired.map((r) => r.id).sort()).toEqual([first.id, second.id].sort());
+  });
 });
 
 // A clean save mints an immutable version (deduped by content), and the
@@ -1521,6 +1566,23 @@ describe('the language version pin', () => {
     expect(row.language_version).toBe('99');
     expect(row.validity_status).toBe('invalid');
     expect(JSON.stringify(row.validity_reason)).toContain('MOV_LANGUAGE_VERSION_UNSUPPORTED');
+  });
+
+  it('a carried pin saved inside a transaction is refused before its version checks it (its check reads providers)', async () => {
+    const first = await saveMovement({ audience: { for: 'run' }, teamId: TEAM, source: SOURCE_V1 });
+    if (!first.ok) throw new Error('first save failed');
+    db.__tables.movement[0].language_version = '0.15.3';
+    const check = jest.spyOn(jest.requireActual<typeof import('../carried_check')>('../carried_check'), 'validateUnderCarried');
+    contextMock.unsafeCurrentContext.mockReturnValue({ kyselyTrx: {}, onChangesCommitted: (fn: () => unknown) => fn() });
+    try {
+      const teamCatalog = await catalogMock.movementCatalogForTeam();
+      await expect(
+        saveMovement({ audience: { for: 'run' }, teamId: TEAM, id: first.movementId, source: SOURCE_V2, inTransaction: { teamCatalog } }),
+      ).rejects.toThrow('a 0.15.3 save is checked by its carried version, which reads providers: it is never made inside a transaction');
+      expect(check).not.toHaveBeenCalled();
+    } finally {
+      check.mockRestore();
+    }
   });
 });
 

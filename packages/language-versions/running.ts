@@ -449,15 +449,14 @@ export interface RunningLane {
 
 // ── A carried version's half of a delivery ─────────────────────────────────
 
-/** A trigger row as the platform keeps it, with the text its automation
- *  shipped, which only the version reads. */
+/** A trigger row as the platform keeps it, with the pin its automation
+ *  shipped under. */
 export interface ListenRow {
   id: string;
   kind: string;
   credentialsId: string | null;
   config: unknown;
   firedMovementName: string | null;
-  source: string;
   pin: string;
 }
 
@@ -482,11 +481,82 @@ export interface ReadDeliveryRequest {
 
 export interface ReadDeliveryOutcome {
   /** One per listen an arrival fired: the event its run is handed, in the
-   *  version's own shape. */
-  receipts: { triggerId: string; event: Record<string, unknown> }[];
+   *  version's own shape, and what names the arrival it fired on, so a page
+   *  judged again keeps one receipt. */
+  receipts: { triggerId: string; event: Record<string, unknown>; arrivalKey: string }[];
   /** Why an arrival ran nothing, for the log. */
   lines: string[];
+  /** The edges of the arrivals it read, fired or not: an arrival on a listed
+   *  hop's edge whose members' changes are pushed lists its listen again. */
+  edges: string[];
 }
+
+/** A page of arrivals a door built itself (an email, a WhatsApp message, an
+ *  ask's answer, a remote module's push, a page a poll answered), as plain
+ *  data the version reads with its own arrival schema. A page for no
+ *  connection is the module's install's, which serves every connection. */
+export interface JudgePageRequest extends Omit<ReadDeliveryRequest, 'delivery'> {
+  page: readonly unknown[];
+}
+
+/** How a module delivers a listen's last edge, as the version read its
+ *  declaration. */
+export interface WatchedDelivery {
+  kind: 'connection' | 'scope' | 'polled';
+  pollEverySeconds?: number;
+  /** An edge pushed per scope is subscribed per record this earlier edge
+   *  lands on (Airtable's `Changes`, per base). */
+  scopedBy?: string;
+}
+
+/** One traversal a carried listen is watched by: its own, or one member's of
+ *  a union (`member`, its place among them). */
+export interface WatchedTraversal {
+  member?: number;
+  edge: string;
+  /** The part of the last hop's filter the module takes. */
+  taken?: unknown;
+  delivery?: WatchedDelivery;
+  /** Some earlier hop's members the host lists. */
+  resolves: boolean;
+  relistEverySeconds?: number;
+  /** The edges of its listed hops whose members' changes are pushed. */
+  pushedParentEdges: string[];
+}
+
+/** How a carried listen is watched, as its version reads its own plan: what
+ *  the platform's polls, subscriptions and listings share it by. */
+export interface ListenWatch {
+  pipeline: string;
+  adapter: string;
+  movement: string;
+  constructionArgs?: Record<string, string>;
+  traversals: WatchedTraversal[];
+}
+
+/** The install of a module an edge is watched through, and the edge. */
+export interface WatchedEdgeRequest {
+  teamId: string;
+  adapterType: string;
+  credentialsId: string | null;
+  constructionArgs?: Record<string, string>;
+  edge: string;
+  filter?: unknown;
+  scope?: string;
+}
+
+/** A poll's page, as plain data the version's `judgePage` reads back. */
+export interface PolledPage {
+  page: unknown[];
+  cursor?: unknown;
+  /** When the module said the edge is next worth polling, an ISO instant. */
+  pollAgainAt?: string;
+}
+
+export type SubscribeOutcome = { kind: 'unanswered' } | { kind: 'registered'; externalId?: string; secret?: string };
+
+/** What listing a carried listen's members came to. */
+export type ScopeListing = { kind: 'listed'; heads: string[]; members?: { heads: string[] }[] } | { kind: 'over-limit'; recordType: string };
 
 export type GateAnswer = { kind: 'suppress'; reason: string } | { kind: 'proceed' } | { kind: 'needs-actor'; candidates: unknown };
 
@@ -536,6 +606,20 @@ export interface ListeningLane {
    *  own gate. */
   gateFiring(request: { teamId: string; adapterType: string; credentialsId: string | null; config: unknown; event: CarriedEvent }, modules: ModulePlatform): Promise<GateAnswer>;
   readEvent(event: CarriedEvent): CarriedEventReading;
+  /** A page a door built, each arrival read with the version's own arrival
+   *  schema and judged by its own judge against the rows pinned to it. */
+  judgePage(request: JudgePageRequest): ReadDeliveryOutcome;
+  /** How a kept row is watched, read with the version's own plan schema; null
+   *  for a row that is not its listen. */
+  watchOf(row: Pick<ListenRow, 'config'>): ListenWatch | null;
+  /** One poll of an edge by the version's own module. */
+  pollEdge(request: WatchedEdgeRequest & { cursor?: unknown }, modules: ModulePlatform): Promise<PolledPage>;
+  /** An edge's subscription registered by the version's own module. */
+  subscribeEdge(request: WatchedEdgeRequest & { callbackUrl: string; current?: { externalId: string } }, modules: ModulePlatform): Promise<SubscribeOutcome>;
+  /** An edge's subscription withdrawn by the version's own module. */
+  unsubscribeEdge(request: WatchedEdgeRequest & { callbackUrl: string; externalId?: string }, modules: ModulePlatform): Promise<void>;
+  /** A listen's members listed by the version's own module and judge. */
+  listScope(request: { teamId: string; credentialsId: string | null; config: unknown; limit: number }, modules: ModulePlatform): Promise<ScopeListing>;
 }
 
 /** What a remote adapter of this release stores fetched files in, and the

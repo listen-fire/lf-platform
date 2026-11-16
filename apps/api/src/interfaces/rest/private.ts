@@ -10,7 +10,7 @@ import { getQb } from '../../lib/kysely';
 import { TeamId } from '../../generated/kysely/core/Team';
 import type { Arrival } from 'engine-contracts';
 import { deliverArrivals } from '../../services/inbound/listen_door';
-import { withDoorsHeld } from '../../services/inbound/carried_delivery';
+import { judgeCarriedPage, withDoorsHeld } from '../../services/inbound/carried_delivery';
 import { keptPage } from '../../services/inbound/captured_request';
 import { notifyWork } from '../../services/work/drain';
 import {
@@ -113,22 +113,27 @@ const acceptInboundEmail = async (
   let fired: number;
   try {
     const arrivals: Arrival[] = [arrival];
-    // Under the team's doors: an upgrade's move of a listen waits for it.
-    const { kept, fires } = await withDoorsHeld(teamId, async () =>
-      deliverArrivals({
-      teamId,
-      delivered: { adapterType: EMAIL_ADAPTER_TYPE, credentialsId: null },
-      subscriptionId: EMAIL_ADAPTER_TYPE,
-      externalId: messageId !== undefined ? `email:${messageId}` : null,
-      source: 'webhook',
-      arrivals,
-      // The provider's message is read by this door, not a module: a replay
-      // judges the arrival it read again.
-      request: keptPage({ adapterType: EMAIL_ADAPTER_TYPE, credentialsId: null, arrivals }),
-      }),
-    );
-    if (!kept.kept) return res.status(201).send();
-    fired = fires.length;
+    // Under the team's doors: an upgrade's move of a listen waits for it. A
+    // carried version's listens judge the arrival this door built with their
+    // own judge; a failure answers 500, and the redelivery keeps one receipt
+    // per listen, named by the Message-Id.
+    const { kept, fires, carriedFired } = await withDoorsHeld(teamId, async () => {
+      const delivered = await deliverArrivals({
+        teamId,
+        delivered: { adapterType: EMAIL_ADAPTER_TYPE, credentialsId: null },
+        subscriptionId: EMAIL_ADAPTER_TYPE,
+        externalId: messageId !== undefined ? `email:${messageId}` : null,
+        source: 'webhook',
+        arrivals,
+        // The provider's message is read by this door, not a module: a replay
+        // judges the arrival it read again.
+        request: keptPage({ adapterType: EMAIL_ADAPTER_TYPE, credentialsId: null, arrivals }),
+      });
+      const stableKey = messageId !== undefined ? `email:${messageId}` : `email:request:${ctx.id}`;
+      return { ...delivered, carriedFired: await judgeCarriedPage({ teamId, adapterType: EMAIL_ADAPTER_TYPE, credentialsId: null, page: arrivals, stableKey }) };
+    });
+    if (!kept.kept && carriedFired === 0) return res.status(201).send();
+    fired = fires.length + carriedFired;
   } catch (err) {
     logger.error('[InboundEmail] failed to keep the delivery', {
       teamId,

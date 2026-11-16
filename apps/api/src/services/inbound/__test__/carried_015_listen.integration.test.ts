@@ -89,6 +89,20 @@ const SLACK_015_EDITED =
   'function intake(m: <chat-[:Message]->>) {\n  said = m.Message\n  return said\n}\n' +
   'listen to chat-[:Channels]->-[m:Messages WHERE m.Message == "deploy"]-> fire intake\n';
 
+/** Two listens on one connection, each firing its own function. */
+const SLACK_015_TWO =
+  'import { slack } from adapters\nimport { deals } from credentials\nchat = connect slack using deals\n' +
+  'function one(m: <chat-[:Message]->>) {\n  said = m.Message\n  return said\n}\n' +
+  'function two(m: <chat-[:Message]->>) {\n  said = m.Message\n  return said\n}\n' +
+  'listen to chat-[:Channels]->-[m:Messages WHERE m.Message == "one"]-> fire one\n' +
+  'listen to chat-[:Channels]->-[m:Messages WHERE m.Message == "two"]-> fire two\n';
+
+/** A listen on a connection made with `{ dryRun: true }`. */
+const SLACK_015_DRY =
+  'import { slack } from adapters\nimport { deals } from credentials\nchat = connect slack using deals { dryRun: true }\n' +
+  'function rehearse(m: <chat-[:Message]->>) {\n  chat-[ch:Channels]-> {\n    write ch-[:Messages]-> { Message: "seen" }\n  }\n}\n' +
+  'listen to chat-[:Channels]->-[m:Messages WHERE m.Message == "rehearse"]-> fire rehearse\n';
+
 let slack: Server;
 let teamId: TeamId;
 let credentialsId: ExternalServiceCredentialsId;
@@ -310,5 +324,32 @@ describe('one Slack delivery read by the version each listen is pinned to (real 
     const readingsBefore = (await workOf('read_delivery')).length;
     await handleSlackEventsInbound(envelope({ user: 'U2', text: 'deploy', ts: '1700000000.000500' }));
     expect(await workOf('read_delivery')).toHaveLength(readingsBefore);
+  });
+
+  it('a file with two listens on one connection upgrades to this release keeping both trigger ids', async () => {
+    const two = randomUUID() as MovementId;
+    await getAutomationsQb(['movement']).insertInto('movement').values({ id: two, team_id: teamId, name: 'pair', source: SLACK_015_TWO, description: '', language_version: '0.15.3' }).execute();
+    const saved = await saveMovement({ audience: { for: 'run' }, teamId, id: two, source: SLACK_015_TWO });
+    expect(saved).toEqual(expect.objectContaining({ ok: true, listeners: [expect.objectContaining({ movementName: 'one' }), expect.objectContaining({ movementName: 'two' })] }));
+    const before = (await rowsOf(two)).map((row) => row.id).sort();
+    expect(before).toHaveLength(2);
+    expect((await rowsOf(two)).every((row) => lane.isListenRow({ config: row.config }))).toBe(true);
+
+    current016RealModule();
+    const upgraded = await upgradeMovement({ teamId, id: two, acknowledge: true, applyAllFixes: true });
+    current016Module();
+    expect(upgraded).toEqual(expect.objectContaining({ status: 'upgraded' }));
+
+    const after = await rowsOf(two);
+    expect(after.map((row) => row.id).sort()).toEqual(before);
+    expect(after.every((row) => listenConfigSchema.safeParse(row.config).success)).toBe(true);
+  });
+
+  it('a save of a 0.15 listen on a connection made with { dryRun: true } ships its row as dry_run', async () => {
+    const dry = randomUUID() as MovementId;
+    await getAutomationsQb(['movement']).insertInto('movement').values({ id: dry, team_id: teamId, name: 'rehearsal', source: SLACK_015_DRY, description: '', language_version: '0.15.3' }).execute();
+    const saved = await saveMovement({ audience: { for: 'run' }, teamId, id: dry, source: SLACK_015_DRY });
+    expect(saved).toEqual(expect.objectContaining({ ok: true, listeners: [expect.objectContaining({ movementName: 'rehearse', runMode: 'dry_run' })] }));
+    expect((await rowsOf(dry)).map((row) => row.run_mode)).toEqual(['dry_run']);
   });
 });

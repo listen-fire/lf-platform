@@ -20,6 +20,7 @@ import {
   noCredential,
   type AdapterModuleDefinition,
   type InProcessAdapterModule,
+  type PollEdgeInput,
 } from '@listen-fire/module-kit';
 import { randomUUID } from 'node:crypto';
 
@@ -145,6 +146,10 @@ function declarationOf(definition: AdapterModuleDefinition): ModuleDeclaration {
  *  platform hosts it with. */
 export function moduleTable(platform: ModulePlatform): {
   resolve(adapterType: string, install: ModuleInstall): Promise<Adapter>;
+  /** What answers a poll of the install's edges (adapter protocol 2.6): a
+   *  module's own poll, or a unit's or a remote install's adapter. Undefined
+   *  for one that polls none. */
+  poller(adapterType: string, install: ModuleInstall): Promise<((input: PollEdgeInput) => Promise<unknown>) | undefined>;
 } {
   const loaded = new Map<string, AdapterModuleDefinition>();
   const definitionOf = (adapterType: string): AdapterModuleDefinition | undefined => {
@@ -166,7 +171,22 @@ export function moduleTable(platform: ModulePlatform): {
       if (definition === undefined) return remoteAdapterOf(adapterType, install, platform.parts);
       return loadInProcess(definition, adapterType, install, platform).adapter;
     },
+    async poller(adapterType, install) {
+      const unit = unitAdapter(adapterType, install, platform.parts);
+      const definition = unit === undefined ? definitionOf(adapterType) : undefined;
+      if (definition !== undefined) return loadInProcess(definition, adapterType, install, platform).poll;
+      const adapter = unit ?? (await remoteAdapterOf(adapterType, install, platform.parts));
+      return polls(adapter) ? (input) => adapter.poll(input) : undefined;
+    },
   };
+}
+
+interface Polls {
+  poll(input: PollEdgeInput): Promise<unknown>;
+}
+
+function polls(adapter: object): adapter is Polls {
+  return 'poll' in adapter && typeof adapter.poll === 'function';
 }
 
 /** A team's install of a remote adapter, as production built it at 0.15.3

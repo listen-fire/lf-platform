@@ -22,9 +22,10 @@ import { exposeFile } from '../translation_graph/engine/files/expose';
 import { classifyMetaMessage, whatsappInboundArrivals } from '@listen-fire/whatsapp/inbound';
 import { WHATSAPP_ADAPTER_TYPE } from '../translation_graph/adapters/whatsapp';
 import { deliverArrivals } from '../inbound/listen_door';
-import { withDoorsHeld } from '../inbound/carried_delivery';
+import { judgeCarriedPage, withDoorsHeld } from '../inbound/carried_delivery';
 import { keptPage } from '../inbound/captured_request';
 import { notifyWork } from '../work/drain';
+import { teamIdSchema } from '../../lib/team_id';
 import { getMetaWhatsappApi, movementsPhoneNumberId } from './metaApi';
 import { resolveWhatsappRoute } from './route';
 import { isVerifiedLink } from './phone_verification/logic';
@@ -199,32 +200,39 @@ export async function dispatchWhatsappMessage(input: {
         ? { ...arrival, landing: { ...arrival.landing, fields: { ...arrival.landing.fields, ...payload } } }
         : arrival,
     );
-    // Under the team's doors: an upgrade's move of a listen waits for it.
-    const { kept, fires } = await withDoorsHeld(resolved.teamId, async () =>
-      deliverArrivals({
-      teamId: resolved.teamId as TeamId,
-      delivered: { adapterType: WHATSAPP_ADAPTER_TYPE, credentialsId: null },
-      subscriptionId: WHATSAPP_KIND,
-      // The wamid is the DELIVERY id: Meta redelivers anything that was not
-      // acked with a 2xx, and a redelivery under it keeps nothing twice.
-      externalId: `whatsapp:${message.id}`,
-      source: 'webhook',
-      arrivals,
-      // Its media are already the team's documents: a replay judges these
-      // arrivals again rather than reading Meta's delivery afresh.
-      request: keptPage({ adapterType: WHATSAPP_ADAPTER_TYPE, credentialsId: null, arrivals }),
-      }),
-    );
-    if (!kept.kept) return;
+    // Under the team's doors: an upgrade's move of a listen waits for it. A
+    // carried version's listens judge the arrivals this door built with their
+    // own judge; a failure throws, and Meta's retry keeps one receipt per
+    // listen, named by the wamid.
+    const teamId = teamIdSchema.parse(resolved.teamId);
+    const { kept, fires, carriedFired } = await withDoorsHeld(teamId, async () => {
+      const delivered = await deliverArrivals({
+        teamId,
+        delivered: { adapterType: WHATSAPP_ADAPTER_TYPE, credentialsId: null },
+        subscriptionId: WHATSAPP_KIND,
+        // The wamid is the DELIVERY id: Meta redelivers anything that was not
+        // acked with a 2xx, and a redelivery under it keeps nothing twice.
+        externalId: `whatsapp:${message.id}`,
+        source: 'webhook',
+        arrivals,
+        // Its media are already the team's documents: a replay judges these
+        // arrivals again rather than reading Meta's delivery afresh.
+        request: keptPage({ adapterType: WHATSAPP_ADAPTER_TYPE, credentialsId: null, arrivals }),
+      });
+      const carried = await judgeCarriedPage({ teamId, adapterType: WHATSAPP_ADAPTER_TYPE, providerKey: WHATSAPP_KIND, credentialsId: null, page: arrivals, stableKey: `whatsapp:${message.id}` });
+      return { ...delivered, carriedFired: carried };
+    });
+    if (!kept.kept && carriedFired === 0) return;
     notifyWork();
+    const ran = fires.length + carriedFired;
     // Read receipt at preprocess: a message a movement will handle shows blue
     // ticks immediately (ruling 2026-07-07). Fire-and-forget — a receipt
     // failure must never affect dispatch. Messages only; Meta has no receipt
     // for reactions/locations.
-    if (classified.kind === 'message' && fires.length > 0) {
+    if (classified.kind === 'message' && ran > 0) {
       void getMetaWhatsappApi(businessPhoneNumberId).markMessageRead(message.id).catch(() => {});
     }
-    if (fires.length === 0) {
+    if (ran === 0) {
       logger.info('[whatsapp-dispatch] no listen took the message — dropping', { teamId: resolved.teamId, from: message.from });
     }
   });

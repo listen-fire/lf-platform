@@ -19,6 +19,7 @@ jest.mock('../carried_delivery', () => ({
   withDoorsHeld: jest.fn((_teamId: string, body: () => Promise<unknown>) => body()),
   judgedEmpty: jest.fn(async () => undefined),
   receiveJudgedEvent: jest.fn(async () => undefined),
+  judgeCarriedPage: jest.fn(async () => 0),
 }));
 jest.mock('../../../lib/kysely', () => ({ ...jest.requireActual('../../../lib/kysely'), ...require('./fakes').kyselyFake() }));
 jest.mock('../../../lib/recording', () => ({ ...jest.requireActual('../../../lib/recording'), ...require('./fakes').recordingFake() }));

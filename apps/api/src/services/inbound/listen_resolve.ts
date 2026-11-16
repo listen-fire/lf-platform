@@ -34,13 +34,15 @@ import { logger } from 'movement-engine/public/log';
 import { memberPlans, type ListenPlan, type PlanArrival, type PlanHop } from 'engine-contracts';
 
 import type { TeamId } from '../../generated/kysely/core/Team';
-import type { TriggerId } from '../../generated/kysely/automations/Trigger';
 import type { WorkHandler } from '../work/kinds';
 
 import { enqueueWork } from '../work/store';
 import { registerWorkKinds, type WorkKindRegistration } from '../work/drain';
 import { resolveAdapter } from '../translation_graph/adapters/resolve';
 import { claimResolve, saveResolution, states, type Resolution, type MemberResolution } from '../lf_store/listens';
+import { neverAsAny } from 'movement-engine/public/types';
+import { triggerIdSchema } from '../../lib/trigger_id';
+import { carriedListens, type CarriedListen } from './carried_listens';
 import { savedListenOf, type ListenConfig, type ResolvedHop, type SavedListen } from './listen_door';
 
 /** The records a listen's earlier hops may match before it is suspended: no
@@ -112,9 +114,6 @@ export async function withWatchingOne(listen: SavedListen): Promise<SavedListen>
 class OverLimit extends Error {
   constructor(readonly position: string) {
     super('LISTEN_SCOPE_LIMIT');
-  }
-  line(listen: SavedListen): string {
-    return `LISTEN_SCOPE_LIMIT: ${listen.file}:${listen.plan.movement} matched more ${this.position}s than its limit of ${LISTEN_SCOPE_LIMIT}; it is suspended until its filter matches fewer`;
   }
 }
 
@@ -227,40 +226,93 @@ async function listMembers(listen: SavedListen): Promise<Resolution> {
  *  how that listing comes out is not known yet. */
 export const HELD_ELSEWHERE = Symbol('another process is listing this listen');
 
-/** List the listen's members and keep what it comes to, under the store's
- *  hold: over the scope limit it is suspended, watched nowhere; a failed read
- *  keeps the records it had, with the new failure. Another process's live hold
- *  leaves it to that process. Answers the failure listing again may mend, if
- *  any: a suspension is kept in the store and lifts on the listen's own relist
- *  once its filter matches fewer, so it is not one to retry. */
-export async function resolveListen(listen: SavedListen): Promise<string | null | typeof HELD_ELSEWHERE> {
-  const scope = { tenant: listen.teamId };
-  const held = await claimResolve(scope, { pipeline: listen.pipeline, ttlMs: RESOLVE_HOLD_MS });
+/** What listing a listen's members came to: the resolution, or the line a
+ *  hop over the scope limit suspends it with. */
+type Listed = { resolution: Resolution } | { overLimit: string };
+
+/** List a listen's members (`list`) and keep what it comes to, under the
+ *  store's hold: over the scope limit it is suspended, watched nowhere; a
+ *  failed read keeps the records it had, with the new failure. Another
+ *  process's live hold leaves it to that process. Answers the failure listing
+ *  again may mend, if any: a suspension is kept in the store and lifts on the
+ *  listen's own relist once its filter matches fewer, so it is not one to
+ *  retry. Whichever version reads the listen, its listing is kept here. */
+async function resolveListing(subject: { teamId: TeamId; pipeline: string; named: string }, list: () => Promise<Listed>): Promise<string | null | typeof HELD_ELSEWHERE> {
+  const scope = { tenant: subject.teamId };
+  const held = await claimResolve(scope, { pipeline: subject.pipeline, ttlMs: RESOLVE_HOLD_MS });
   if (held === null) return HELD_ELSEWHERE;
-  const before = (await states(scope, { pipelines: [listen.pipeline] }))[listen.pipeline];
+  const before = (await states(scope, { pipelines: [subject.pipeline] }))[subject.pipeline];
   let resolution: Resolution;
   let suspended = false;
   try {
-    resolution = await listMembers(listen);
-  } catch (err) {
-    if (err instanceof OverLimit) {
+    const listed = await list();
+    if ('overLimit' in listed) {
       suspended = true;
-      resolution = { heads: [], resolvedAt: new Date().toISOString(), failure: err.line(listen) };
-    } else {
-      const why = err instanceof Error ? err.message : String(err);
-      resolution = {
-        heads: before?.heads ?? [],
-        resolvedAt: before?.resolvedAt ?? null,
-        failure: `LISTEN_RESOLVE_FAILED: ${listen.file}:${listen.plan.movement} could not list the records it watches: ${why}`,
-        ...(before?.parents !== undefined ? { parents: before.parents } : {}),
-        ...(before?.members !== undefined ? { members: before.members } : {}),
-      };
-    }
+      resolution = { heads: [], resolvedAt: new Date().toISOString(), failure: listed.overLimit };
+    } else resolution = listed.resolution;
+  } catch (err) {
+    const why = err instanceof Error ? err.message : String(err);
+    resolution = {
+      heads: before?.heads ?? [],
+      resolvedAt: before?.resolvedAt ?? null,
+      failure: `LISTEN_RESOLVE_FAILED: ${subject.named} could not list the records it watches: ${why}`,
+      ...(before?.parents !== undefined ? { parents: before.parents } : {}),
+      ...(before?.members !== undefined ? { members: before.members } : {}),
+    };
   }
-  const saved = await saveResolution(scope, { pipeline: listen.pipeline, token: held.token, resolution });
+  const saved = await saveResolution(scope, { pipeline: subject.pipeline, token: held.token, resolution });
   if (!saved) return HELD_ELSEWHERE;
-  if (resolution.failure !== null) logger.warn('[ListenResolve] a listen could not be resolved', { pipeline: listen.pipeline, failure: resolution.failure });
+  if (resolution.failure !== null) logger.warn('[ListenResolve] a listen could not be resolved', { pipeline: subject.pipeline, failure: resolution.failure });
   return suspended ? null : resolution.failure;
+}
+
+function overLimitLine(named: string, recordType: string): string {
+  return `LISTEN_SCOPE_LIMIT: ${named} matched more ${recordType}s than its limit of ${LISTEN_SCOPE_LIMIT}; it is suspended until its filter matches fewer`;
+}
+
+/** List the listen's members and keep what it comes to (`resolveListing`). */
+export async function resolveListen(listen: SavedListen): Promise<string | null | typeof HELD_ELSEWHERE> {
+  const named = `${listen.file}:${listen.plan.movement}`;
+  return resolveListing({ teamId: listen.teamId, pipeline: listen.pipeline, named }, async () => {
+    try {
+      return { resolution: await listMembers(listen) };
+    } catch (err) {
+      if (err instanceof OverLimit) return { overLimit: overLimitLine(named, err.position) };
+      throw err;
+    }
+  });
+}
+
+/** A carried listen's members listed by its own version's module and judge,
+ *  kept as a current listen's are. */
+export async function resolveCarriedListen(listen: CarriedListen): Promise<string | null | typeof HELD_ELSEWHERE> {
+  const named = `${listen.file}:${listen.watch.movement}`;
+  return resolveListing({ teamId: listen.teamId, pipeline: listen.watch.pipeline, named }, async () => {
+    // Loaded when a carried listen is listed: the carried run host reaches the catalog, which reaches this door.
+    const { modulePlatform } = await import('../translation_graph/movement/carried_run');
+    const listed = await listen.lane.listScope({ teamId: listen.teamId, credentialsId: listen.credentialsId, config: listen.row.config, limit: LISTEN_SCOPE_LIMIT }, modulePlatform());
+    switch (listed.kind) {
+      case 'over-limit':
+        return { overLimit: overLimitLine(named, listed.recordType) };
+      case 'listed':
+        return { resolution: { heads: listed.heads, resolvedAt: new Date().toISOString(), failure: null, ...(listed.members !== undefined ? { members: listed.members } : {}) } };
+      default:
+        return neverAsAny(listed);
+    }
+  });
+}
+
+/** Whether a carried listen has a hop the host lists. */
+export function resolvesCarried(listen: CarriedListen): boolean {
+  return listen.watch.traversals.some((traversal) => traversal.resolves);
+}
+
+/** A carried listen listed now, and its next clock relist armed. */
+export async function resolveCarriedAndArm(listen: CarriedListen): Promise<string | null | typeof HELD_ELSEWHERE> {
+  const failure = await resolveCarriedListen(listen);
+  const seconds = listen.watch.traversals.flatMap((traversal) => (traversal.relistEverySeconds !== undefined ? [traversal.relistEverySeconds] : []));
+  if (seconds.length > 0) await armResolve({ teamId: listen.teamId, pipeline: listen.watch.pipeline, triggerId: listen.triggerId }, Math.min(...seconds) * 1000);
+  return failure;
 }
 
 /** The shortest `relistEverySeconds` the listen's resolved hops declare, in
@@ -297,7 +349,7 @@ const resolvePayloadSchema = z.object({ teamId: z.string(), triggerId: z.string(
 
 /** Arm the listen's next list `inMs` from now (now by default): its one work
  *  row, so a clock relist and a pushed one share it, the sooner winning. */
-export async function armResolve(listen: SavedListen, inMs = 0): Promise<void> {
+export async function armResolve(listen: Pick<SavedListen, 'teamId' | 'pipeline' | 'triggerId'>, inMs = 0): Promise<void> {
   await enqueueWork({
     kind: RESOLVE_WORK_KIND,
     key: resolveWorkKey(listen.pipeline),
@@ -328,12 +380,30 @@ export async function armResolveForArrivals(input: { edges: readonly string[]; l
   }
 }
 
+/** Each carried listen whose members' changes were pushed on one of `edges`
+ *  listed again, as `armResolveForArrivals` lists a current one: the edges its
+ *  own version read off the arrivals it judged. */
+export async function armCarriedForArrivals(input: { edges: readonly string[]; listens: readonly CarriedListen[] }): Promise<void> {
+  if (input.edges.length === 0) return;
+  for (const listen of input.listens) {
+    if (!listen.watch.traversals.some((traversal) => traversal.pushedParentEdges.some((edge) => input.edges.includes(edge)))) continue;
+    await armResolve({ teamId: listen.teamId, pipeline: listen.watch.pipeline, triggerId: listen.triggerId });
+  }
+}
+
 const resolveListenHandler: WorkHandler = {
   async run(payload) {
     const { triggerId } = resolvePayloadSchema.parse(payload);
-    const listen = await savedListenOf(triggerId as TriggerId);
-    if (listen === null || !resolvesListen(listen)) return;
-    await resolveAndArm(listen);
+    const id = triggerIdSchema.parse(triggerId);
+    const listen = await savedListenOf(id);
+    if (listen !== null) {
+      if (resolvesListen(listen)) await resolveAndArm(listen);
+      return;
+    }
+    // A row the current version does not read may be a carried version's.
+    for (const carried of await carriedListens({ triggerId: id })) {
+      if (resolvesCarried(carried)) await resolveCarriedAndArm(carried);
+    }
   },
 };
 

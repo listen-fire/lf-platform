@@ -36,6 +36,21 @@ export interface ListenEdgeKey {
    *  sharing would lose what lay between or hear it twice. Undefined for all
    *  others. */
   alone?: string;
+  /** The compatibility key of the carried version whose listens share it:
+   *  each version polls and subscribes through its own modules, so such a key
+   *  is never shared across versions. Undefined for the current version's, and
+   *  for a subscription to a whole connection's edge (`unnarrowed`). */
+  version?: string;
+}
+
+/** Whether a key subscribes to its connection's whole edge: delivered by
+ *  subscription, with no filter the module takes and no scope. Every version
+ *  wants the same of the source there, and a module may register it account
+ *  wide (Affinity's and the knowledge graph's take every change), so it is one
+ *  subscription whichever versions' listens share it, each version reading
+ *  what arrives there for its own listens. */
+export function unnarrowed(key: Pick<ListenEdgeKey, 'taken' | 'scope'>, delivery: ListenDelivery): boolean {
+  return delivery === 'connection' && key.taken === undefined && key.scope === undefined;
 }
 
 /** How the module delivers a listen's last edge, as its saved listen keeps it. */
@@ -74,14 +89,47 @@ export function watchedTraversals(
   }));
 }
 
+/** A listen as its keys are made: its connection, and each traversal it is
+ *  watched by (its last edge, the filter part its module takes, how the edge
+ *  is delivered, and the records an edge pushed per scope is watched under),
+ *  whichever version read its plan. */
+export interface WatchedListen {
+  teamId: TeamId;
+  triggerId: string;
+  adapter: string;
+  credentialsId: string | null;
+  constructionArgs: Record<string, string> | undefined;
+  traversals: ReadonlyArray<{ edge: string; taken: unknown; delivery: SavedListen['delivery']; scopes: readonly string[] | undefined }>;
+  /** It polls on a cursor it brought from a carried version, alone. */
+  pollsAlone?: boolean;
+  /** The carried version that reads it; undefined for the current version. */
+  version?: string;
+}
+
+/** A current listen, as its keys are made. */
+function watchedOf(listen: SavedListen): WatchedListen {
+  return {
+    teamId: listen.teamId,
+    triggerId: listen.triggerId,
+    adapter: listen.plan.adapter,
+    credentialsId: listen.credentialsId,
+    constructionArgs: listen.constructionArgs,
+    traversals: watchedTraversals(listen).flatMap(({ plan, delivery, scopes }) => {
+      const last = plan.hops.at(-1);
+      return last === undefined ? [] : [{ edge: last.edge, taken: last.taken, delivery, scopes }];
+    }),
+    ...(listen.carriedFrom?.pollsAlone === true ? { pollsAlone: true } : {}),
+  };
+}
+
 /** The keys `listen` is delivered under where a traversal's last edge is
  *  delivered as `deliveries` names, each once with how it is delivered. An
  *  edge pushed per scope (`delivery.scopedBy`) is one key per record its
  *  scope hop landed on, so the records the listen's last resolve came to; a
  *  listen not yet resolved to any is watched under none. Two members of a
  *  union may share one key: the listen is one, so it is heard there once. */
-export function listenEdgeKeysOf(
-  listen: SavedListen,
+export function edgeKeysOf(
+  listen: WatchedListen,
   deliveries: readonly ListenDelivery[],
 ): Array<{ key: ListenEdgeKey; digest: string; delivery: NonNullable<SavedListen['delivery']> }> {
   const keys = new Map<string, { key: ListenEdgeKey; digest: string; delivery: NonNullable<SavedListen['delivery']> }>();
@@ -92,17 +140,17 @@ export function listenEdgeKeysOf(
     const sooner = seen !== undefined && (seen.delivery.pollEverySeconds ?? Infinity) <= (delivery.pollEverySeconds ?? Infinity) ? seen.delivery : delivery;
     keys.set(digest, { key, digest, delivery: sooner });
   };
-  for (const { plan, delivery, scopes } of watchedTraversals(listen)) {
-    const last = plan.hops.at(-1);
-    if (last === undefined || delivery === undefined || !deliveries.includes(delivery.kind)) continue;
+  for (const { edge, taken, delivery, scopes } of listen.traversals) {
+    if (delivery === undefined || !deliveries.includes(delivery.kind)) continue;
     const base: ListenEdgeKey = {
       teamId: listen.teamId,
-      adapterType: listen.plan.adapter,
+      adapterType: listen.adapter,
       credentialsId: listen.credentialsId,
       constructionArgs: listen.constructionArgs,
-      edge: last.edge,
-      taken: last.taken,
-      ...(delivery.kind === 'polled' && listen.carriedFrom?.pollsAlone === true ? { alone: listen.triggerId } : {}),
+      edge,
+      taken,
+      ...(delivery.kind === 'polled' && listen.pollsAlone === true ? { alone: listen.triggerId } : {}),
+      ...(listen.version !== undefined && !unnarrowed({ taken }, delivery.kind) ? { version: listen.version } : {}),
     };
     if (delivery.scopedBy === undefined) {
       add(base, delivery);
@@ -111,4 +159,12 @@ export function listenEdgeKeysOf(
     for (const scope of scopes ?? []) add({ ...base, scope }, delivery);
   }
   return [...keys.values()];
+}
+
+/** A current listen's keys (`edgeKeysOf`). */
+export function listenEdgeKeysOf(
+  listen: SavedListen,
+  deliveries: readonly ListenDelivery[],
+): Array<{ key: ListenEdgeKey; digest: string; delivery: NonNullable<SavedListen['delivery']> }> {
+  return edgeKeysOf(watchedOf(listen), deliveries);
 }

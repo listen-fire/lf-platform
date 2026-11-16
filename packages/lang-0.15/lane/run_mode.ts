@@ -311,8 +311,28 @@ export function movementWriteRunMode(input: { program: Program; movement: string
           }
           break;
         }
-        default:
+        // None of these holds a write the scan follows: a write nested in an
+        // expression is outside the platform's scan, as it was at 0.15.3.
+        case 'import':
+        case 'shape':
+        case 'type':
+        case 'movement':
+        case 'listen':
+        case 'match':
+        case 'link':
+        case 'unlink':
+        case 'delete':
+        case 'refresh':
+        case 'await':
+        case 'combinator':
+        case 'collection':
+        case 'return':
+        case 'error':
           break;
+        default: {
+          const unscanned: never = statement;
+          throw new Error(`a statement the run mode scan does not know: ${JSON.stringify(unscanned)}`);
+        }
       }
     }
   };

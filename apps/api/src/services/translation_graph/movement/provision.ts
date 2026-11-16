@@ -157,7 +157,9 @@ import { carriedPauses, listenIdentityOf, type CarriedPause } from './carried_pa
 import { carriedRunTriggerId } from './carried_names';
 import { revokeCallbacksForRuns } from '../../movement_engine/callback_store';
 import { listenConfigSchema, type ListenConfig, type SavedListen } from '../../inbound/listen_door';
-import { resolveAndArm, resolvesListen } from '../../inbound/listen_resolve';
+import { resolveAndArm, resolveCarriedAndArm, resolvesCarried, resolvesListen } from '../../inbound/listen_resolve';
+import { carriedListens } from '../../inbound/carried_listens';
+import { triggerIdSchema } from '../../../lib/trigger_id';
 import { listenPauses, type ListenPause } from '../../inbound/listen_pause';
 
 /** Resource-change hint for a movement save/delete — fired from the
@@ -365,9 +367,12 @@ interface ReconciliationPlan {
  *       inserting/reordering movements can never reassign it.
  *   1b. movement-blind (kind, credentials, config key) → keep the row across a
  *       movement RENAME or adopt a legacy (`fired_movement_name` null) row.
+ *   1c. one unmatched listen and one unmatched row firing the same movement
+ *       on the same (kind, credentials) → the listen re-planned (its filter
+ *       edited, or an upgrade's release planning it): keep that row;
  *   2.  otherwise, when exactly ONE unmatched desired listener and ONE
- *       unmatched row share (kind, credentials), the config changed in an
- *       unambiguous way → update that row in place;
+ *       unmatched row shared (kind, credentials) before pass 1c, the config
+ *       changed in an unambiguous way → update that row in place;
  *   3.  leftover desired listeners → new rows; leftover rows → retired.
  */
 export function planListenerReconciliation(input: {
@@ -422,18 +427,45 @@ export function planListenerReconciliation(input: {
     if (row) claim(i, row);
   }
 
-  // Pass 2 — unambiguous config change within a (kind, credentials) channel.
+  // Pass 2 below decides from the channel's counts as they stand here, before
+  // pass 1c: pass 1c only adds matches, so it never narrows a channel to the
+  // one-and-one that would hand a deleted listen's row (its pause, trigger id,
+  // history) to a new listen firing another movement.
   const unmatchedByChannel = new Map<string, number[]>();
   for (let i = 0; i < input.desired.length; i++) {
     if (matches[i]) continue;
     const key = channelKeyOf(input.desired[i]);
     unmatchedByChannel.set(key, [...(unmatchedByChannel.get(key) ?? []), i]);
   }
+  const rowsByChannel = new Map<string, DerivedTriggerRow[]>();
+  for (const r of remaining) rowsByChannel.set(channelKeyOf(r), [...(rowsByChannel.get(channelKeyOf(r)) ?? []), r]);
+
+  // Pass 1c — the listen that fires one movement on a channel, re-planned: its
+  // pipeline names its plan, and the plan changes with an edit of its filter
+  // or with the release that plans it (an upgrade re-plans every listen), so
+  // one listen per movement and channel on each side keeps its row. Two
+  // listens firing one movement over one channel are left to the passes below.
+  const movementChannelOf = (listener: { movementName: string | null; kind: string; credentialsId: string | null }): string =>
+    `${listener.movementName ?? ''}::${channelKeyOf(listener)}`;
+  const unmatchedByMovement = new Map<string, number[]>();
+  for (let i = 0; i < input.desired.length; i++) {
+    if (matches[i]) continue;
+    const key = movementChannelOf(input.desired[i]);
+    unmatchedByMovement.set(key, [...(unmatchedByMovement.get(key) ?? []), i]);
+  }
+  for (const [key, indexes] of unmatchedByMovement) {
+    const candidates = remaining.filter((r) => r.firedMovementName !== null && movementChannelOf({ movementName: r.firedMovementName, kind: r.kind, credentialsId: r.credentialsId }) === key);
+    const [only] = indexes;
+    if (indexes.length === 1 && only !== undefined && candidates.length === 1 && candidates[0] !== undefined) claim(only, candidates[0]);
+  }
+
+  // Pass 2 — unambiguous config change within a (kind, credentials) channel.
   for (const [channel, indexes] of unmatchedByChannel) {
-    const candidates = remaining.filter((r) => channelKeyOf(r) === channel);
-    if (indexes.length === 1 && candidates.length === 1) {
-      claim(indexes[0], candidates[0]);
-    }
+    const candidates = rowsByChannel.get(channel) ?? [];
+    const [only] = indexes;
+    const [candidate] = candidates;
+    if (indexes.length !== 1 || candidates.length !== 1 || only === undefined || candidate === undefined) continue;
+    if (matches[only] === undefined && remaining.includes(candidate)) claim(only, candidate);
   }
 
   return { matches, retired: remaining };
@@ -800,8 +832,13 @@ async function desiredUnderCarried(input: {
   notes: string[];
   provisionDespiteErrors?: boolean;
   within: <T>(name: string, run: () => Promise<T>) => Promise<T>;
+  /** Inside a caller's open transaction: refused, as the version's planner
+   *  reads the connected systems and no provider is called while it is open.
+   *  Only an upgrade saves inside one, and it saves under this release. */
+  providersLater?: boolean;
 }): Promise<DesiredListeners> {
   const pin = input.movementRow.languageVersion;
+  if (input.providersLater === true) throw new Error(`a ${pin} save is planned by its carried version, which reads providers, so it is never made inside a transaction`);
   const listening = listeningOf(pin);
   let lane: ListeningLane;
   switch (listening.kind) {
@@ -869,7 +906,16 @@ async function provisionListeners(input: {
   const wanted =
     catalog.kind === 'current'
       ? await desiredUnderCurrent({ movementRow: input.movementRow, source: input.source, teamCatalog: catalog.teamCatalog, within, ...despite })
-      : await desiredUnderCarried({ teamId: input.teamId, movementRow: input.movementRow, source: input.source, team: catalog.team, notes: catalog.notes, within, ...despite });
+      : await desiredUnderCarried({
+          teamId: input.teamId,
+          movementRow: input.movementRow,
+          source: input.source,
+          team: catalog.team,
+          notes: catalog.notes,
+          within,
+          ...despite,
+          ...(input.providersLater === true ? { providersLater: true } : {}),
+        });
   if (!wanted.ok) return wanted;
   const { desired, infos } = wanted;
 
@@ -896,6 +942,16 @@ async function provisionListeners(input: {
     // the store, so no listen re-read is owed. A failure keeps the listen saved
     // and surfaces as a note, never blocks the save.
     await within('resolveListens', async () => {
+      if (catalog.kind === 'carried') {
+        // A carried version's listens are listed by its own module and judge,
+        // read off the rows the reconcile just wrote.
+        for (const listener of listeners) {
+          for (const listen of await carriedListens({ triggerId: triggerIdSchema.parse(listener.triggerId) })) {
+            if (resolvesCarried(listen)) await resolveCarriedAndArm(listen);
+          }
+        }
+        return;
+      }
       for (const listener of listeners) {
         const parsed = listenConfigSchema.safeParse(listener.config);
         if (!parsed.success || !resolvesListen(parsed.data.listen)) continue;
@@ -914,10 +970,7 @@ async function provisionListeners(input: {
     return subscriptionSync.notes;
   };
 
-  // This release's member listing and subscription sync read only the rows
-  // pinned to it (listen_resolve.ts, listen_subscriptions.ts): a carried
-  // version's listens reach their providers through its own modules.
-  const subscriptionNotes = input.providersLater === true || catalog.kind === 'carried' ? [] : await reachProviders();
+  const subscriptionNotes = input.providersLater === true ? [] : await reachProviders();
 
   return {
     ok: true,
@@ -1158,9 +1211,14 @@ async function checkForSave({ input, row, timer }: { input: SaveMovementInput; r
   // against its own catalog; this release's catalog is never assembled for it.
   const route = routeOf(row.languageVersion);
   if (route.kind === 'carried') {
+    // Only an upgrade saves inside a transaction, and it saves under this release.
+    if (input.inTransaction !== undefined) throw new Error(`a ${route.pin} save is checked by its carried version, which reads providers: it is never made inside a transaction`);
     // One read of the team for the check and the plan, so the listens are
     // planned against what was checked.
     const team = teamFactsOf(input.teamId, { audience: input.audience });
+    // Awaited below only once the check is made: a check that throws first
+    // must not leave the read's own failure unhandled.
+    void team.catch(() => undefined);
     const checked = await timer.step('diagnose', () =>
       validateUnderCarried({ teamId: input.teamId, source: input.source, pin: route.pin, lane: route.lane, audience: input.audience, team }),
     );
