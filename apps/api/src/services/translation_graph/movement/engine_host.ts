@@ -36,6 +36,7 @@ import {
 import { ledgeredAdapters } from '../../inbound/loop_breaker';
 import { runWriteKeeper } from '../../movement_engine/run_writes';
 import { makeRecorderParks } from '../../movement_engine/park_sink';
+import type { RunParkHost } from 'movement-engine/public/run-host';
 import { runHostAnswers } from '../../movement_engine/host_answers';
 import { hostedRunHost } from '../../movement_engine/run_host';
 import { platformHostAnswers } from '../../inbound/platform_plugin_answers';
@@ -170,21 +171,7 @@ export function productionEngineHost(input: {
       arbitrateEntities: (arbitration) => usage(() => refusingPastBudget(() => meteredArbitration(arbitration))),
     },
     park: {
-      ...(parks !== undefined
-        ? {
-            sink: answers.noting(parks.sink),
-            waits: parks.waits,
-            // The library texts its parks pin, once each by their hash.
-            sources: parkSources(postgresRunHostStore.sources, input.teamId),
-          }
-        : {}),
-      // A `wake_await` row, queued by the park group, so the wake outlives
-      // this process. A dry run never parks, so never asks for one.
-      wake: async (request) => {
-        if (parks === undefined) throw new Error('a run with no durable parks asked for a wake');
-        await parks.wake(request);
-        notifyWork();
-      },
+      ...parkFamilyOf({ teamId: input.teamId, parks, sink: (sink) => answers.noting(sink) }),
       bindings: {
         record: ({ segmentId, from, to }) => recordBinding({ teamId: teamOf(segmentId), from, to }),
         findBoundCounterpart: ({ segmentId, endpoint, counterpart }) =>
@@ -211,6 +198,45 @@ export function productionEngineHost(input: {
 }
 
 // ── What every version's host shares ─────────────────────────────────────────
+
+/** The run host's park family over `parks`: where a segment's parks go, its
+ *  waits, the library texts its parks pin, and the wake it asks for. Every
+ *  version's engine parks through it, so the platform's drains step a run of
+ *  any version. `sink` wraps the sink this release's engine parks through. */
+function parkFamilyOf(input: {
+  teamId: TeamId;
+  parks: RunParkHost | undefined;
+  sink?: (sink: RunParkHost['sink']) => RunParkHost['sink'];
+}): Omit<EngineHost['park'], 'bindings'> {
+  const { parks } = input;
+  return {
+    ...(parks !== undefined
+      ? {
+          sink: input.sink !== undefined ? input.sink(parks.sink) : parks.sink,
+          waits: parks.waits,
+          // The library texts its parks pin, once each by their hash.
+          sources: parkSources(postgresRunHostStore.sources, input.teamId),
+        }
+      : {}),
+    // A `wake_await` row, queued by the park group, so the wake outlives
+    // this process. A dry run never parks, so never asks for one.
+    wake: async (request) => {
+      if (parks === undefined) throw new Error('a run with no durable parks asked for a wake');
+      await parks.wake(request);
+      notifyWork();
+    },
+  };
+}
+
+/** The park family a carried version's segment of `recorder`'s run parks
+ *  through: the run host's own, fenced by the run lease it steps under. The
+ *  waits a 0.15 run opens are this run host's, and judged by it. */
+export function carriedParkFamily(
+  recorder: TriggerRunRecorder,
+  opts: { lease?: { token: string }; resumedLeaf?: string } = {},
+): Omit<EngineHost['park'], 'bindings'> {
+  return parkFamilyOf({ teamId: recorder.teamId, parks: makeRecorderParks(recorder, opts) });
+}
 
 /**
  * The platform's own services a run reaches, whichever release's engine runs

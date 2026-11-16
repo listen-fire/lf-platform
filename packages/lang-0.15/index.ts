@@ -54,6 +54,8 @@ export { LANGUAGE_VERSION } from '@listen-fire/movement-lang';
 export { checkSource, completionsAt, definitionAt, hoverAt } from './lane/check';
 export { outlineOf } from './lane/outline';
 export { storyOf } from './lane/story';
+export { hostedModuleTypes } from './lane/modules';
+export { manualInvocationEvent, manualListens, readEvent, resumeSegment, runSegment } from './lane/run';
 
 /** A parse, as plain data: the program, or where (`loc`) and why (`message`)
  *  it does not parse. */

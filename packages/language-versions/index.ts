@@ -48,7 +48,7 @@ import {
 import { isLegacyLanguageVersion, type StoryIR, type StoryProblem, type StoryValidityStatus } from 'legacy-lang';
 import type { AdapterEventPhraseVocabulary, BrandIcon } from 'movement-engine/public/adapter';
 
-import type { ListeningLane, ModulePlatform, ResumingLane, RunningLane } from './running';
+import type { KeyedAwaitsLane, ListeningLane, ModulePlatform, ResumingLane, RunningLane } from './running';
 
 export * from './running';
 
@@ -330,6 +330,9 @@ export interface CarriedVersion {
   /** The version whose rows a trigger row on this key is: kept across a deploy
    *  whether or not its listens fire yet, and read only by it. */
   readonly listenRows?: () => Promise<ListeningLane>;
+  /** Its rules over the awaits it parks on an adapter identity and the
+   *  callbacks it mints, for a version whose runs park so. */
+  readonly keyedAwaits?: () => Promise<KeyedAwaitsLane>;
 }
 
 const HELD = { kind: 'held' } as const;
@@ -359,12 +362,20 @@ const loadLang015 = () => import('@listen-fire/lang-0.15');
 /** Release 0.15, carried while any 0.15 pin remains (Henry's ruling: every
  *  release keeps the previous language running). Its own checker, against the
  *  catalog its own modules describe, judges its pins: 0.15's checker cannot
- *  read this release's catalog. */
+ *  read this release's catalog. Its own engine runs them, on the platform's
+ *  one run host: a 0.15 run parks in the rows a current run parks in, and the
+ *  platform's drains step it, each segment on 0.15's engine. */
 const VERSION_015: CarriedVersion = {
   key: '0.15',
   release: '0.15.3',
   load: loadLang015,
-  provides: { check: { kind: 'carried', lane: loadLang015 }, help: HELD, run: HELD, resume: HELD, listen: HELD },
+  provides: {
+    check: { kind: 'carried', lane: loadLang015 },
+    help: HELD,
+    run: { kind: 'carried', lane: loadLang015 },
+    resume: { kind: 'carried', lane: loadLang015 },
+    listen: HELD,
+  },
 };
 
 const CARRIED: readonly CarriedVersion[] = [CURRENT_VERSION, VERSION_015];
@@ -455,9 +466,9 @@ export function resumingOf(pin: LanguageVersion): ResumeCapability {
 /** The version that keeps an await correlated to an adapter identity: only a
  *  version whose awaits parked on keys ever wrote one, so a wake naming a key
  *  is its to step. Undefined once no carried version does. */
-export function correlatedAwaitsLane(): (() => Promise<ResumingLane>) | undefined {
+export function correlatedAwaitsLane(): (() => Promise<KeyedAwaitsLane>) | undefined {
   for (const version of CARRIED) {
-    if (version.provides.resume.kind === 'carried') return version.provides.resume.lane;
+    if (version.keyedAwaits !== undefined && version.provides.resume.kind === 'carried') return version.keyedAwaits;
   }
   return undefined;
 }

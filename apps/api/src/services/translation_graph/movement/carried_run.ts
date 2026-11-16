@@ -1,10 +1,11 @@
-// A segment someone started, run by a carried version's own engine and
-// modules (`@listen-fire/language-versions`, its `run` capability). The
+// A segment run by a carried version's own engine and modules
+// (`@listen-fire/language-versions`, its `run` and `resume` capabilities). The
 // platform hands the version the services every version shares (one
 // `RunPlatform`): its billed model calls and file text, its record bindings,
 // its cross-run write locks, its write ledger, its acting-user rules, its
-// cancel and lease, and the hosting of each module install (the stored
-// credential, refreshed under the platform's one lock). The version answers
+// cancel and lease, the hosting of each module install (the stored
+// credential, refreshed under the platform's one lock), and its run host,
+// which the segment parks in as a current one does. The version answers
 // with plain data, which this file turns back into this release's own
 // outcomes: a failure as this release's `MovementRunFailed`, a lost lease as
 // this release's `RunLeaseLost`, so the firing's recorder settles a carried
@@ -17,13 +18,13 @@ import { inProcessValidationDefault } from 'module-kit';
 import {
   runningOf,
   type CarriedEvent,
-  type CarriedParks,
   type ModulePlatform,
   type ResumeRequest,
   type ResumingLane,
   type RunPlatform,
   type RunningLane,
   type SegmentOutcome,
+  type SharedParks,
   type TeamFacts,
 } from '@listen-fire/language-versions';
 
@@ -37,10 +38,6 @@ import type { DbCancelGate } from '../../movement_engine/cancel_gate';
 
 import type { TriggerRunRecorder } from '../runs/trigger_run';
 
-import { callbackUrl } from '../../movement_engine/callback_store';
-import { carriedRunHost } from '../../movement_engine/carried_host';
-import { markRunLimitPaused } from '../../movement_engine/limit_pause';
-import { notifyWork } from '../../work/drain';
 import { recordRunEngineOnRow } from '../../movement_engine/run_engine_record';
 import { RunLeaseLost } from '../../movement_engine/run_lease';
 import { teamCredentials } from '../../credentials/credential_ownership';
@@ -58,7 +55,7 @@ import { resolveActingUser } from '../adapters/acting_user/resolve';
 import { isExposedFileUrl } from '../engine/files/expose';
 import { streamFileRef, withFileOwners } from '../engine/files/retrieve';
 import { teamIdSchema } from '../../../lib/team_id';
-import { loadActingUserTrigger, sharedRunServices } from './engine_host';
+import { carriedParkFamily, loadActingUserTrigger, sharedRunServices } from './engine_host';
 import { teamFactsOf } from './carried_check';
 import type { CatalogAudience } from './audience';
 
@@ -106,7 +103,7 @@ export function runPlatformFor(input: {
   cancel: DbCancelGate;
   lease?: { isLost(): boolean };
   writeSink?: DryRunWriteSink;
-  parks?: CarriedParks;
+  park?: SharedParks;
 }): RunPlatform {
   const shared = sharedRunServices({
     teamId: input.teamId,
@@ -153,22 +150,15 @@ export function runPlatformFor(input: {
     },
     ...(keep !== undefined ? { keepWrite: keep } : {}),
     ...(input.writeSink !== undefined ? { writeSink: input.writeSink } : {}),
-    ...(input.parks !== undefined ? { parks: input.parks } : {}),
+    ...(input.park !== undefined ? { park: input.park } : {}),
   };
 }
 
-/** Where one segment's parks and callbacks go: through its recorder, so the run
- *  row is there first and shows parked, under the lease it holds. */
-export function carriedParksOf(recorder: TriggerRunRecorder, lease?: { token: string }): CarriedParks {
-  return {
-    host: carriedRunHost(),
-    ...(lease !== undefined ? { fence: lease.token } : {}),
-    ensureRun: () => recorder.ensureStarted(),
-    markParked: () => recorder.markParked(),
-    markLimitPaused: (pause) => markRunLimitPaused({ runId: recorder.triggerRunId, teamId: recorder.teamId, triggerId: recorder.triggerId, pause }),
-    callbackUrl,
-    notifyWork,
-  };
+/** Where one segment's parks go: the platform's run host, through its
+ *  recorder, so the run row is there first and shows parked, under the lease
+ *  it holds. `resumedLeaf` is the leaf a resumed segment re-entered. */
+export function carriedParksOf(recorder: TriggerRunRecorder, opts: { lease?: { token: string }; resumedLeaf?: string } = {}): SharedParks {
+  return carriedParkFamily(recorder, opts);
 }
 
 async function withoutLeaseThrow(ask: () => Promise<boolean>): Promise<boolean> {
@@ -271,7 +261,8 @@ export async function runCarriedSegment(input: {
   writeSink?: DryRunWriteSink;
   costCapMicrodollars?: number;
   team?: TeamFacts;
-  parks?: CarriedParks;
+  park?: SharedParks;
+  triggerMark?: number;
 }): Promise<MovementRunResult> {
   const team = input.team ?? (await teamFactsOf(input.teamId, { imports: input.imports, audience: input.audience }));
   const outcome = await input.lane.runSegment(
@@ -287,6 +278,7 @@ export async function runCarriedSegment(input: {
       ...(input.dryRun !== undefined ? { dryRun: input.dryRun } : {}),
       team,
       ...(input.trace !== undefined ? { trace: input.trace } : {}),
+      ...(input.triggerMark !== undefined ? { triggerMark: input.triggerMark } : {}),
     },
     runPlatformFor({
       teamId: input.teamId,
@@ -294,7 +286,7 @@ export async function runCarriedSegment(input: {
       cancel: input.cancel,
       ...(input.lease !== undefined ? { lease: input.lease } : {}),
       ...(input.writeSink !== undefined ? { writeSink: input.writeSink } : {}),
-      ...(input.parks !== undefined ? { parks: input.parks } : {}),
+      ...(input.park !== undefined ? { park: input.park } : {}),
     }),
   );
   return settledOutcome(outcome, { runId: input.triggerRunId ?? 'a test run', movementName: input.movementName ?? '' });
@@ -309,7 +301,7 @@ export async function resumeCarriedSegment(input: {
   triggerRunId: TriggerRunId;
   cancel: DbCancelGate;
   lease?: { isLost(): boolean };
-  parks: CarriedParks;
+  park: SharedParks;
 }): Promise<MovementRunResult> {
   const team = await teamFactsOf(input.teamId, { imports: 'shipped', audience: { for: 'run' } });
   const outcome = await input.lane.resumeSegment(
@@ -319,7 +311,7 @@ export async function resumeCarriedSegment(input: {
       triggerRunId: input.triggerRunId,
       cancel: input.cancel,
       ...(input.lease !== undefined ? { lease: input.lease } : {}),
-      parks: input.parks,
+      park: input.park,
     }),
   );
   return settledOutcome(outcome, { runId: input.triggerRunId, movementName: input.request.movementName ?? '' });

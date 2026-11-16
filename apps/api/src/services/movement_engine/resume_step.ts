@@ -25,7 +25,6 @@ import { CARRIED_RUN_NOW_NAME, carriedRunTriggerId } from '../translation_graph/
 import { resumeMovementFiring, type MovementFiringOutcome } from '../translation_graph/movement/execute';
 import { loadPinnedVersion } from '../translation_graph/movement/version_store';
 import { loadTriggerById } from '../translation_graph/storage/tg_table';
-import { carriedRunHost } from './carried_host';
 import { hostedRunHost } from './run_host';
 
 /** Everything a segment needs to re-enter a run: its pinned source (the
@@ -226,7 +225,8 @@ export async function carriedRunStep(input: { runId: TriggerRunId; lease?: HeldR
   return carriedStepOf(context, input.runId, input.lease);
 }
 
-/** How one parked run's leaves are stepped: by its own version's rules. */
+/** How one parked run's leaves are stepped: by the run host's rules, whichever
+ *  version's engine runs each segment. */
 export interface RunDriver {
   drainDueTimers(input: { dueBy: string }): Promise<'done' | 'leaseLost'>;
   drainLeaves(input: { addresses: readonly string[]; reason: ParkReason; until?: () => Promise<boolean> }): Promise<'done' | 'leaseLost'>;
@@ -235,6 +235,9 @@ export interface RunDriver {
 /**
  * The driver for one parked run; null (logged under `log`) when it cannot be
  * re-entered, so its leaves stay as they are. `onLeaf` hears each leaf stepped.
+ * A run a carried version parked is in the same rows as any other: the run
+ * host's drains step it, and each segment runs on its pin's engine (./
+ * execute.ts).
  */
 export async function parkedRunDriver(input: { runId: TriggerRunId; lease?: HeldRunLease; log: string; onLeaf?: () => void }): Promise<RunDriver | null> {
   const { runId, lease, onLeaf } = input;
@@ -244,18 +247,6 @@ export async function parkedRunDriver(input: { runId: TriggerRunId; lease?: Held
     return null;
   }
   const held = lease !== undefined ? { lease } : {};
-  if (context.carried !== undefined) {
-    const { lane } = context.carried;
-    const stepped = carriedStepOf(context, runId, lease);
-    const step: CarriedStep = (request, settle) => {
-      if (request.kind === 'leaf') onLeaf?.();
-      return stepped(request, settle);
-    };
-    return {
-      drainDueTimers: ({ dueBy }) => lane.drainDueTimers(carriedRunHost(), { runId, dueBy, ...held, step }),
-      drainLeaves: ({ addresses, reason, until }) => lane.drainLeaves(carriedRunHost(), { runId, addresses, reason, ...held, step, ...(until !== undefined ? { until } : {}) }),
-    };
-  }
   const stepped = stepFor(context, runId, lease);
   const step: StepLeaf = (request, settle) => {
     if (request.kind === 'leaf') onLeaf?.();

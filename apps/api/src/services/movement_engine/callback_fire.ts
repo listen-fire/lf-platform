@@ -17,7 +17,7 @@
 import { z } from 'zod';
 import { logger } from 'movement-engine/public/log';
 import { readOnlyByFrozenParser } from '../translation_graph/movement/language_route';
-import { correlatedAwaitsLane, type CarriedBodyOutcome, type CarriedBodyRun, type ResumingLane } from '@listen-fire/language-versions';
+import { correlatedAwaitsLane, type CarriedBodyOutcome, type CarriedBodyRun, type KeyedAwaitsLane } from '@listen-fire/language-versions';
 
 import type { WorkHandler } from '../work/kinds';
 
@@ -43,7 +43,7 @@ const CallbackBodyPayload = z.object({ callbackId: z.string(), teamId: z.string(
 
 /** A callback's call is judged and run by the version that minted it. A callback
  *  outliving every version that mints one has nothing to run its body. */
-async function callbackLane(): Promise<ResumingLane> {
+async function callbackLane(): Promise<KeyedAwaitsLane> {
   const lane = correlatedAwaitsLane();
   if (lane === undefined) throw new Error('no language version this platform carries keeps callbacks');
   return lane();
@@ -260,7 +260,7 @@ export function registerCallbackFireWork(): void {
  * the correlation is gone and this row is a no-op. Coalesced per callback, so a
  * reusable callback tapped many times holds one pending row.
  */
-async function queueWakeBackstop(lane: ResumingLane, callback: CallbackRecord): Promise<void> {
+async function queueWakeBackstop(lane: KeyedAwaitsLane, callback: CallbackRecord): Promise<void> {
   try {
     await lane.queueAwaitWake(
       carriedRunHost(),
@@ -390,7 +390,7 @@ export function callbackAckText(outcome: CallbackFireOutcome): string {
  * (we are already inside it).
  */
 async function executeFire(
-  lane: ResumingLane,
+  lane: KeyedAwaitsLane,
   callback: CallbackRecord,
   callIndex: number,
   lease: HeldRunLease,

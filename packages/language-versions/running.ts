@@ -4,7 +4,8 @@
 // shapes in its own release's terms, and the compiler holds the two to each
 // other where its entry loads it (`index.ts`). The platform builds one
 // `RunPlatform` for every carried version: its model calls, file text, record
-// bindings, write locks, write ledger and module hosting are shared, and each
+// bindings, write locks, write ledger, module hosting and run host (its parks,
+// waits and wakes, and the drains that step a parked run) are shared, and each
 // version brings its own engine, host kit and modules.
 //
 // No error class crosses. A carried version's failure comes back as text and
@@ -139,9 +140,19 @@ export interface RunPlatform {
    *  rehearsal. */
   keepWrite?(write: { adapterType: string; recordType: string; externalId: string; at: string }): Promise<void>;
   writeSink?: DryRunWriteSink;
-  /** Where the segment's parks and callbacks go; absent for a rehearsal. */
-  parks?: CarriedParks;
+  /** Where the segment's parks go: the platform's own run host, which every
+   *  version parks in and resumes from; absent for a rehearsal, which never
+   *  parks. */
+  park?: SharedParks;
 }
+
+/** The platform's park family, which a carried version's segment parks
+ *  through exactly as a current one does: the run host's sink, waits and wake
+ *  over its rows, and the library texts its parks pin. A park's state is the
+ *  engine's own and crosses unread; 0.15's and this release's are one shape
+ *  (`engine-contracts`' park state), which is what lets one run host step
+ *  both. */
+export type SharedParks = Omit<EngineHost['park'], 'bindings'>;
 
 // ── The rows a carried version's run parks in, and its rules over them ─────
 //
@@ -267,18 +278,6 @@ export interface CarriedRunHost {
   };
 }
 
-/** What one segment's parks are written through. */
-export interface CarriedParks {
-  host: CarriedRunHost;
-  /** The run lease the segment steps under: its parks land only under it. */
-  fence?: string;
-  ensureRun(): Promise<void>;
-  markParked(): Promise<void>;
-  markLimitPaused(pause: { limit: 'cost'; capMicrodollars: number; spentMicrodollars: number }): Promise<void>;
-  callbackUrl(id: string): string;
-  notifyWork(): void;
-}
-
 /** A lease held on a run while a carried version steps it. */
 export interface CarriedLease {
   readonly runId: string;
@@ -322,10 +321,13 @@ export interface ResumeRequest extends Omit<SegmentRequest, 'dryRun'> {
   runId: string;
   /** The parked leaf's state as the row holds it: the version reads it. */
   state: unknown;
+  /** The answer an ask resumes with, bound as its result. */
+  answer?: unknown;
   reenter?: boolean;
   deferRaceSettlement?: boolean;
   settleRaceFrameAddress?: string;
-  /** Run this callback's body rather than resuming a leaf. */
+  /** Run this callback's body rather than resuming a leaf: only a version that
+   *  keeps callbacks (`KeyedAwaitsLane`) reads it. */
   callback?: { values: Record<string, unknown>; callIndex: number };
   priorSpentMicrodollars?: number;
   capBaselineMicrodollars?: number;
@@ -333,16 +335,19 @@ export interface ResumeRequest extends Omit<SegmentRequest, 'dryRun'> {
   parkedOnEngine?: 'ts' | 'rust';
 }
 
-/** A carried version's rules over a parked run, and its segments of one. */
+/** A carried version's segments of a run it parked. Which leaves a drain
+ *  steps, and in what order, are the platform's run host's: every version's
+ *  parks are its rows. */
 export interface ResumingLane {
   resumeSegment(request: ResumeRequest, platform: RunPlatform): Promise<SegmentOutcome>;
   readEvent(event: CarriedEvent): CarriedEventReading;
   manualListens(request: { source: string; pin: string }): string[];
-  drainDueTimers(host: CarriedRunHost, input: { runId: string; dueBy: string; lease?: CarriedLease; step: CarriedStep }): Promise<'done' | 'leaseLost'>;
-  drainLeaves(
-    host: CarriedRunHost,
-    input: { runId: string; addresses: readonly string[]; reason: string; lease?: CarriedLease; step: CarriedStep; until?: () => Promise<boolean> },
-  ): Promise<'done' | 'leaseLost'>;
+}
+
+/** A version's own rules over the awaits it parked on an adapter identity (a
+ *  key, not a wait) and the callbacks it minted: rows this run host does not
+ *  step, so only that version does. No version this build carries parks so. */
+export interface KeyedAwaitsLane {
   wakeAwaits(
     host: CarriedRunHost,
     input: {
@@ -407,6 +412,9 @@ export interface SegmentRequest {
   dryRun?: boolean;
   team: TeamFacts;
   trace?: MovementTraceEntry[];
+  /** Where the delivery that started the run was kept in the arrival log:
+   *  the waits it opens on its trigger read from there. */
+  triggerMark?: number;
 }
 
 export type SegmentOutcome =

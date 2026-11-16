@@ -3,6 +3,7 @@ import { LANGUAGE_VERSION, languageVersionDiagnostic } from 'movement-lang';
 import {
   carriedVersions,
   checkingOf,
+  correlatedAwaitsLane,
   currentVersion,
   importKeyOf,
   isCurrent,
@@ -56,15 +57,23 @@ describe('the language versions this build carries', () => {
     }
   });
 
-  it('a 0.15 pin is carried as release 0.15.3: its own checker checks it; it does not yet run, resume or fire', () => {
+  it('a 0.15 pin is carried as release 0.15.3: its own checker checks it and its own engine runs and resumes it; its listens do not yet fire', () => {
     for (const pin of ['0.15.0', '0.15.3']) {
       expect(versionOf(pin)?.release).toBe('0.15.3');
       expect(isCurrent(pin)).toBe(false);
       expect(checkingOf(pin)).toEqual({ kind: 'carried', lane: expect.any(Function) });
-      expect(providedFlagsFor(pin)).toEqual({ check: true, run: false, resume: false, listen: false });
-      for (const needed of ['run', 'resume', 'listen'] as const) expect(refusalOf(pin, needed)).toMatch(/this platform carries 0\.15\.3 to check its automations, but not to/);
+      expect(runningOf(pin)).toEqual({ kind: 'carried', lane: expect.any(Function) });
+      expect(resumingOf(pin)).toEqual({ kind: 'carried', lane: expect.any(Function) });
+      expect(providedFlagsFor(pin)).toEqual({ check: true, run: true, resume: true, listen: false });
+      expect(refusalOf(pin, 'run')).toBeUndefined();
+      expect(refusalOf(pin, 'resume')).toBeUndefined();
+      expect(refusalOf(pin, 'listen')).toMatch(/this platform carries 0\.15\.3 to check, run and resume its automations, but not to fire its listens/);
     }
-    expect(untilUpgraded('0.15.3')).toBe('its listens do not fire, and a run of it that would wait (an ask, a pause) is stopped');
+    expect(untilUpgraded('0.15.3')).toBe('its listens do not fire, and a run of it that waits (an ask, a pause) resumes');
+  });
+
+  it('no carried version parks on keys or mints callbacks: 0.15 parks in the run host every version shares', () => {
+    expect(correlatedAwaitsLane()).toBeUndefined();
   });
 
   it('legacy ids are carried by no entry, so every capability is held; they keep the key of 0.12, which they ran beside, for imports', () => {

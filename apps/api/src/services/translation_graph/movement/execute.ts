@@ -119,7 +119,8 @@ async function interpretMovementFiring(input: {
         ...(input.trace !== undefined ? { trace: input.trace } : {}),
         ...(input.dryRun !== undefined ? { dryRun: input.dryRun } : {}),
         costCapMicrodollars: runCostCapFromEnv(),
-        ...(input.parksInto !== undefined ? { parks: carriedParksOf(input.parksInto, input.lease) } : {}),
+        ...(input.parksInto !== undefined ? { park: carriedParksOf(input.parksInto, input.lease !== undefined ? { lease: input.lease } : {}) } : {}),
+        ...(input.triggerMark !== undefined ? { triggerMark: input.triggerMark } : {}),
       });
     }
   }
@@ -807,7 +808,10 @@ async function resumeMovementFiringInContext(
             triggerRunId: input.runId,
             cancel: cancelGate,
             ...(input.lease !== undefined ? { lease: input.lease } : {}),
-            parks: carriedParksOf(recorder, input.lease),
+            park: carriedParksOf(recorder, {
+              ...(input.lease !== undefined ? { lease: input.lease } : {}),
+              ...(input.resumedLeaf !== undefined ? { resumedLeaf: input.resumedLeaf } : {}),
+            }),
             request: {
               source: input.pinnedSource,
               pin: languageVersion,
@@ -821,7 +825,8 @@ async function resumeMovementFiringInContext(
               capBaselineMicrodollars: recorder.capBaselineMicrodollars,
               limitPaused: recorder.limitPaused,
               ...(recorder.parkedOnEngine !== undefined ? { parkedOnEngine: recorder.parkedOnEngine } : {}),
-              state: input.carriedState,
+              state: input.carriedState ?? input.state,
+              ...(input.answer !== undefined ? { answer: input.answer } : {}),
               ...(input.reenter !== undefined ? { reenter: input.reenter } : {}),
               ...(input.deferRaceSettlement !== undefined ? { deferRaceSettlement: input.deferRaceSettlement } : {}),
               ...(input.settleRaceFrameAddress !== undefined ? { settleRaceFrameAddress: input.settleRaceFrameAddress } : {}),
@@ -991,7 +996,7 @@ export async function fireCallbackFiring(input: {
           triggerRunId: input.runId,
           cancel: cancelGate,
           ...(input.lease !== undefined ? { lease: input.lease } : {}),
-          parks: carriedParksOf(recorder, input.lease),
+          park: carriedParksOf(recorder, input.lease !== undefined ? { lease: input.lease } : {}),
           request: {
             source: input.pinnedSource,
             pin: input.pinnedLanguageVersion,
