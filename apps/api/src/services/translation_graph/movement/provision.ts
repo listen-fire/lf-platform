@@ -1507,7 +1507,8 @@ async function runSave(
     }
     throw error;
   }
-  const played = listenPlayback(input.source);
+  // Only a person's or an agent's save is told what it plays back; a run's save has nobody to tell.
+  const played = saver === undefined ? [] : listenPlayback(input.source);
   const playback = played.length > 0 ? { playback: played } : {};
 
   // The source row is now saved — emit the resource-change hint here (the

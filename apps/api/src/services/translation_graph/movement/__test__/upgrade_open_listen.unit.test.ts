@@ -57,17 +57,16 @@ jest.mock('../save_access', () => ({
 import { LANGUAGE_VERSION, fromCatalogSnapshot, mockCatalogSnapshot, type LanguageVersion } from 'movement-lang';
 
 import { assessMovementValidity } from '../authoring';
-import { getMovementRow, lockMovementRow, type MovementRow } from '../store';
+import { getMovementRow, lockMovementRow, recordUpgradeCheck, recordValidityOutcome, type MovementRow } from '../store';
 import { saveMovement } from '../provision';
 import { upgradeMovement, type ValidateUnder } from '../language_upgrade';
-import { inboundActorGateEnabled } from '../../triggers/actor_gate';
 import { TEAM_MEMBERSHIP_CHECK } from '../../adapters/team/membership_check';
 
 const EMAIL = { kind: 'branded' as const, of: 'text' as const, brands: ['claim:email/address'] };
 
 // Slack as 0.15.3 left it and the platform serves it now: a message carries its
 // sender's address as a claim and says whether the app sent it itself.
-function snapshotWith(plugin: { name: string }) {
+function platformSnapshot() {
   return mockCatalogSnapshot({
     adapters: {
       slack: {
@@ -100,7 +99,7 @@ function snapshotWith(plugin: { name: string }) {
         effects: {},
         output: { kind: 'value', type: 'boolean' },
         package: '@lf-platform/team',
-        name: plugin.name,
+        name: 'is_member',
         pure: true,
         maxAgeSeconds: 60,
       },
@@ -109,7 +108,7 @@ function snapshotWith(plugin: { name: string }) {
 }
 
 const { diagnoseMovementSource } = jest.requireActual<typeof import('../authoring')>('../authoring');
-function validatingOver(snapshot: ReturnType<typeof snapshotWith>): ValidateUnder {
+function validatingOver(snapshot: ReturnType<typeof platformSnapshot>): ValidateUnder {
   const catalog = fromCatalogSnapshot(snapshot);
   return async ({ movement: m, languageVersion, upgradingFrom, source }) => ({
     diagnostics: diagnoseMovementSource(source ?? m.source, {
@@ -122,10 +121,7 @@ function validatingOver(snapshot: ReturnType<typeof snapshotWith>): ValidateUnde
   });
 }
 
-// The spec's name as a program writes it (`team.isMember`), which is what the
-// checker's fix spells; the platform's own spec names the plugin `is_member`
-// (see the failing case at the end).
-const validate = validatingOver(snapshotWith({ name: 'isMember' }));
+const validate = validatingOver(platformSnapshot());
 
 const PREAMBLE = ['import { slack as slack_module } from adapters', 'slack = connect slack_module', 'function intake(m: <slack-[:Message]->>) { return m.Text }', 'function alert(m: <slack-[:Message]->>) { return m.Text }', ''];
 const ONE_OPEN = [...PREAMBLE, 'listen to slack-[m:Messages WHERE m.Channel == "C0DEALS"]-> fire intake', ''].join('\n');
@@ -231,26 +227,31 @@ describe('an open Slack listen, upgraded from an older key', () => {
     const { advanced, run } = upgrading(ONE_OPEN);
     await run();
 
-    // Nothing moved the pin, so the platform still gates the listen as it did.
+    // Nothing moved the pin, so the platform still gates the listen as it did:
+    // the only write is the record of what the check found, and the row's text
+    // and validity are untouched.
     expect(advanced).toEqual([]);
     expect(saveMovement).not.toHaveBeenCalled();
-    expect(row(ONE_OPEN).languageVersion).toBe('0.15.3');
-    expect(inboundActorGateEnabled('slack', '0.15.3')).toBe(true);
-    expect(inboundActorGateEnabled('slack', LANGUAGE_VERSION)).toBe(false);
+    expect(recordValidityOutcome).not.toHaveBeenCalled();
+    expect(recordUpgradeCheck).toHaveBeenCalledTimes(1);
+    expect(jest.mocked(recordUpgradeCheck).mock.calls[0]![0]).toMatchObject({ id: 'deals', checkedAgainst: LANGUAGE_VERSION });
+  });
+
+  it('a_0_15_file_with_no_open_listen_moves_the_pin_with_no_hold', async () => {
+    const { advanced, run } = upgrading(PREAMBLE.join('\n'));
+    const moved = await run();
+
+    expect(moved.status).toBe('upgraded');
+    if (moved.status === 'not_found') throw new Error('unreachable');
+    expect(moved.diagnostics.filter((d) => d.code === 'MOV_LISTEN_NOW_OPEN')).toEqual([]);
+    expect(advanced).toEqual([{ to: LANGUAGE_VERSION, source: PREAMBLE.join('\n') }]);
   });
 });
 
-// KNOWN DEFECT in the 0.16.0 checker, not in this platform: the fix spells the
-// call with the spec's name as it stands (`team.is_member`), where a program
-// writes the camel case form (`team.isMember`), so the rewritten filter is
-// refused as MOV_LISTEN_IMPURE_WHERE. The platform's own spec names the plugin
-// `is_member`. Flips red when listen-fire spells the member as a program does;
-// then this becomes an ordinary case and the stand-in name above goes.
-describe('the platform’s own spelling of the team check', () => {
-  it.failing('accepting the fix writes a call the checker resolves', async () => {
-    const { advanced, run } = upgrading(ONE_OPEN, { applyAllFixes: true, validate: validatingOver(snapshotWith({ name: 'is_member' })) });
-    const moved = await run();
-    expect(moved.status).toBe('upgraded');
-    expect(advanced[0]!.source).toContain('team.isMember(m.`User Email`)');
+describe('text written under this release', () => {
+  it('a_source_checked_with_no_upgrading_from_gets_no_now_open_diagnostic', () => {
+    const snapshot = platformSnapshot();
+    const { diagnostics } = diagnoseMovementSource(ONE_OPEN, { catalog: fromCatalogSnapshot(snapshot), snapshot, languageVersion: LANGUAGE_VERSION });
+    expect(diagnostics.filter((d) => d.code === 'MOV_LISTEN_NOW_OPEN')).toEqual([]);
   });
 });

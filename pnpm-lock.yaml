@@ -3309,7 +3309,7 @@ packages:
     engines: {node: '>=22.23.4 <23'}
 
   '@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz':
-    resolution: {integrity: sha512-W7EIcYVnmcNhCXXJTHXkfZ7pS+MNgAmp8v/NMkW9CsgitK3qiMlFWcy9bPzOLaypTNrth32zf9cXVNyJsh8GqQ==, tarball: file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz}
+    resolution: {integrity: sha512-or7ubeIDKwc9KtdWc4S3DGhgPwkMAspYqgoC5OHKsgWHkMYp05ubhallhaUcu+Rm0abmqXeAIZYJZG2N+BCjMw==, tarball: file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz}
     version: 0.16.0
     engines: {node: '>=22.23.4 <23'}
 
@@ -3485,7 +3485,7 @@ packages:
     engines: {node: '>=22.23.4 <23'}
 
   '@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz':
-    resolution: {integrity: sha512-LaIMyAW6ocX1nnQaxvT2czocXAW5dnBXFxxxfI08RRDFg5Qz8urUlnPgVTS51qxYynaWqCDCv7gkrbSElB6PdQ==, tarball: file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz}
+    resolution: {integrity: sha512-enCrUpYXi+coxgoMQEVbsP7See5xWKxid4eUH36AXdd6KXkfo6ligUTW0Zyg5NGlba38Urr3zNThlOJGn4z4fw==, tarball: file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz}
     version: 0.16.0
     engines: {node: '>=22.23.4 <23'}
 
@@ -19112,7 +19112,7 @@ snapshots:
   extract-pg-schema@5.8.0(@electric-sql/pglite@0.3.14)(better-sqlite3@11.10.0):
     dependencies:
       knex: 3.1.0(better-sqlite3@11.10.0)(pg@8.16.3)
-      knex-pglite: 0.12.1(@electric-sql/pglite@0.3.14)(knex@3.1.0(better-sqlite3@11.10.0)(pg@8.16.3))
+      knex-pglite: 0.12.1(@electric-sql/pglite@0.3.14)(knex@3.1.0(better-sqlite3@11.10.0)(pg@8.12.0))
       pg: 8.16.3
       pg-query-emscripten: 5.1.0
       ramda: 0.31.3
@@ -20770,7 +20770,7 @@ snapshots:
 
   kleur@4.1.5: {}
 
-  knex-pglite@0.12.1(@electric-sql/pglite@0.3.14)(knex@3.1.0(better-sqlite3@11.10.0)(pg@8.16.3)):
+  knex-pglite@0.12.1(@electric-sql/pglite@0.3.14)(knex@3.1.0(better-sqlite3@11.10.0)(pg@8.12.0)):
     dependencies:
       '@electric-sql/pglite': 0.3.14
       knex: 3.1.0(better-sqlite3@11.10.0)(pg@8.16.3)

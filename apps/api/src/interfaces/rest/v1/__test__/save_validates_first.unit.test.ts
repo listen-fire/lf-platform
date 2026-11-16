@@ -157,6 +157,15 @@ describe('saveAutomation validates first', () => {
     expect(res.body?.diagnostics).toEqual([diagnostic('warning')]);
   });
 
+  it('hands the agent what the save plays back, beside the warnings and not inside them', async () => {
+    const playback = ['intake fires on slack-[m:Messages WHERE m.Channel == "C0DEALS"]->'];
+    saveMovementMock.mockResolvedValue({ ...shipped, warnings: ['a name another automation fires'], playback });
+    validateMock.mockResolvedValue(validation({}));
+    const res = await call(saveMovementHandler, { body: { source: 'clean' } });
+    expect(res.body?.playback).toEqual(playback);
+    expect(res.body?.warnings).toEqual(['a name another automation fires']);
+  });
+
   it('records the person saving, so a new automation names its creator', async () => {
     validateMock.mockResolvedValue(validation({}));
     await call(saveMovementHandler, { body: { source: 'clean' } });
