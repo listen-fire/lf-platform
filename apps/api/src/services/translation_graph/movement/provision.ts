@@ -157,6 +157,7 @@ import { carriedPauses, listenIdentityOf, type CarriedPause } from './carried_pa
 import { carriedConfig, heardAnything, keepCarriedPlaces, placesHeardOf, predecessorsOf, type MovedListen, type PlacesHeard } from './carried_cursors';
 import { carriedRunTriggerId } from './carried_names';
 import { listenConfigSchema, type ListenConfig, type SavedListen } from '../../inbound/listen_door';
+import { keepingCarriedFrom } from '../../inbound/listen_edge';
 import { resolveAndArm, resolveCarriedAndArm, resolvesCarried, resolvesListen } from '../../inbound/listen_resolve';
 import { carriedListens } from '../../inbound/carried_listens';
 import { triggerIdSchema } from '../../../lib/trigger_id';
@@ -644,7 +645,7 @@ async function reconcileDerivedTriggers(input: {
     if (came !== null && 'unsure' in came && came.unsure.some((row) => heardAnything(heard.byRow.get(row)))) {
       placesNotCarried.push(`${input.movementRow.name}: ${what} starts from its first poll: it could not be told which of the automation's earlier listens it was, so where that one stood was not carried, and what arrived since its last poll is missed.`);
     }
-    const config = kept !== undefined ? keepingCarriedFrom(input.desired[i].config, kept.config) : input.desired[i].config;
+    const config = kept !== undefined ? keepingCarriedFrom({ config: input.desired[i].config, kept: kept.config, what: `${input.movementRow.name}: ${what}` }) : input.desired[i].config;
     // A listen that never polled brings nothing, and joins its key's poll as a new listen does.
     const desired: DesiredListener =
       input.carrying !== undefined && heardAnything(places) ? { ...input.desired[i], config: carriedConfig(config, input.carrying.movedAt) } : { ...input.desired[i], config };
@@ -743,17 +744,6 @@ async function reconcileDerivedTriggers(input: {
   }
   if (carriedPlaces.length > 0) placesNotCarried.push(...(await keepCarriedPlaces({ teamId: input.teamId, file: input.movementRow.name, moved: carriedPlaces, readByOthers: heard.readByOthers })));
   return { listeners, reconciles, leftPaused, placesNotCarried };
-}
-
-/** A re-save of a listen an upgrade moved from a carried version keeps the mark
- *  of the move, so it keeps polling on the cursor it brought
- *  (inbound/listen_edge.ts). */
-function keepingCarriedFrom(config: Record<string, unknown>, kept: unknown): Record<string, unknown> {
-  const before = listenConfigSchema.safeParse(kept);
-  const carriedFrom = before.success ? before.data.listen.carriedFrom : undefined;
-  const now = listenConfigSchema.safeParse(config);
-  if (carriedFrom === undefined || !now.success) return config;
-  return { ...config, listen: { ...now.data.listen, carriedFrom } };
 }
 
 // ── Provision: check the program, then reconcile the listeners ──────────────

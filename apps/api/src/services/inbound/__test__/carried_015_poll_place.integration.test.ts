@@ -171,6 +171,31 @@ describe('a carried listen keeps its poll’s place across the upgrade (real Pos
     expect((await carriedPollOf(teamId, triggerId)).digest).toBe(poll.digest);
   });
 
+  it('a first poll that fails after the cursor was taken over polls again from it: the old row stays moved, and the next poll fires what was stored after it', async () => {
+    const { teamId, triggerId, poll, ownId, oldId } = await carriedReleaseListen();
+    const old = { releases: { at: minutesAgo(10), version: '' } };
+    await keep(teamId, oldId, old);
+    const at = minutesAgo(5);
+    await released(teamId, '0.16.0', at);
+
+    const failing = jest.spyOn(poll.carried[0]!.lane, 'pollEdge').mockRejectedValueOnce(new Error("0.15's module could not be reached"));
+    try {
+      await expect(pollShared(poll)).rejects.toThrow('could not be reached');
+    } finally {
+      failing.mockRestore();
+    }
+    // Taken over before the module was asked: the place is under the new name, and the old row is gone.
+    expect(await receiptsOf(triggerId)).toEqual([]);
+    expect((await kept(teamId, ownId))?.checkpoint).toEqual(old);
+    expect(await kept(teamId, oldId)).toBeUndefined();
+
+    // The retry polls from the place taken over, so it fires what was stored after it, and does not arm.
+    await pollOnce(poll);
+    expect(await receiptsOf(triggerId)).toEqual([{ status: 'received' }]);
+    expect(releasesOf(await kept(teamId, ownId))).toEqual({ at, version: '0.16.0' });
+    expect(await kept(teamId, oldId)).toBeUndefined();
+  });
+
   it('Project A’s history: a listen polling alone, its row frozen by v0.15.3 and polled on by v0.16.0, takes v0.16.0’s place on its first 0.16.1 poll', async () => {
     const { teamId, triggerId, poll, ownId, oldId } = await carriedReleaseListen({ pollsAlone: true });
     // v0.16.0 polled the carried listen under its key without `alone`.

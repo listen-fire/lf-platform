@@ -22,6 +22,12 @@
 //   - a registration the source refused keeps its row `pending` (no secret
 //     anything verifies against), and the periodic retry asks again
 //     (`retryListenSubscriptions`);
+//   - a key renamed by a release or an upgrade (a carried version's narrowed
+//     key names it; the current version's does not) takes over the row of its
+//     earlier name when nothing wants that name any more, so the webhook the
+//     source already posts to serves it (`takeOverEarlierRows`). Each release's
+//     deploy check queues one sync of every team, which does it without a save
+//     (`syncListenSubscriptionsAfterRelease`);
 //   - a team whose engine is lf wants no subscription at all: a cloud lf
 //     registers its own, so every one is removed, and a switch back to the
 //     platform registers them afresh (lf_engine/switch.ts runs this sync).
@@ -33,6 +39,7 @@
 
 import { randomUUID } from 'node:crypto';
 
+import { sql } from 'kysely';
 import { z } from 'zod';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
@@ -55,8 +62,10 @@ import { carriedVersions, type ListeningLane, type ModulePlatform } from '@liste
 import { savedListens, type SavedListen } from '../../inbound/listen_door';
 import { carriedEdgeKeysOf, carriedListensContained, kindsOf, kindsPinnedTo } from '../../inbound/carried_listens';
 import { neverAsAny } from 'movement-engine/public/types';
-import { listenEdgeKeysOf, watchedTraversals, type ListenEdgeKey } from '../../inbound/listen_edge';
-import { registerWorkHandler } from '../../work/drain';
+import { earlierNamesOf, listenEdgeDigest, listenEdgeKeysOf, watchedTraversals, type ListenEdgeKey } from '../../inbound/listen_edge';
+import { WorkGivesUp, registerWorkHandler } from '../../work/drain';
+import { enqueueWork } from '../../work/store';
+import { teamIdSchema } from '../../../lib/team_id';
 
 export const MOVEMENT_LISTEN_PROVISIONER = 'movement-listen';
 
@@ -276,6 +285,65 @@ async function provisionedRows(teamId: TeamId): Promise<SubscriptionRow[]> {
   }));
 }
 
+/** The names a narrowed subscription's listens were subscribed under before
+ *  the version reading them changed, most recent first, each unlike its own:
+ *  a carried key's, from while its version was current (`earlierNamesOf`); a
+ *  current key's, under each carried version, from before its listens were
+ *  upgraded off it, with that version. One to a whole connection's edge is
+ *  named alike by every version, so it has none. */
+function earlierSubscriptionNamesOf(key: ListenEdgeKey): Array<{ digest: string; version?: string }> {
+  if (key.version !== undefined) return earlierNamesOf(key).map((digest) => ({ digest }));
+  if (key.taken === undefined && key.scope === undefined) return [];
+  return carriedVersions()
+    .filter((version) => version.provides.listen.kind === 'carried')
+    .map((version) => ({ digest: listenEdgeDigest({ ...key, version: version.key }), version: version.key }));
+}
+
+/**
+ * Each wanted subscription with no row of its own takes over the row its
+ * listens were subscribed under by an earlier name (a release that versioned
+ * its key, or an upgrade that unversioned it), when no subscription wants that
+ * name any more: the row is renamed, so the webhook the source already posts
+ * to is this key's, its registration unchanged, as a carried poll moves the
+ * cursor it finds under an earlier name (poll_source/worker.ts). When one
+ * still wants it, the row stays its, and this key is registered on a row of
+ * its own. A name a version whose listens could not be read was subscribed
+ * under is not known unwanted, so it is never taken. Answers the rows as they
+ * now stand.
+ */
+async function takeOverEarlierRows(input: {
+  desired: readonly DesiredSubscription[];
+  existing: readonly SubscriptionRow[];
+  carriedUnread: ReadonlySet<string>;
+}): Promise<SubscriptionRow[]> {
+  const wanted = new Set(input.desired.map((subscription) => subscription.held.digest));
+  const rows = [...input.existing];
+  const onRow = (digest: string, providerKey: string) => rows.findIndex((row) => row.held?.digest === digest && row.provider === providerKey);
+  for (const subscription of input.desired) {
+    if (onRow(subscription.held.digest, subscription.providerKey) !== -1) continue;
+    for (const { digest: earlier, version } of earlierSubscriptionNamesOf(subscription.key)) {
+      if (wanted.has(earlier) || (version !== undefined && input.carriedUnread.has(version))) continue;
+      const at = onRow(earlier, subscription.providerKey);
+      const row = rows[at];
+      if (row === undefined) continue;
+      // Renamed only while it still holds the earlier name: a sync running
+      // beside this one may have taken it over or retired it.
+      const renamed = await getAutomationsQb(['webhook_subscription'])
+        .updateTable('webhook_subscription')
+        .set({ subscriptions: JSON.stringify(subscription.held), updated_at: new Date() })
+        .where('id', '=', row.id as WebhookSubscriptionId)
+        .where('deleted_at', 'is', null)
+        .where(sql<string>`subscriptions->>'digest'`, '=', earlier)
+        .executeTakeFirst();
+      if (renamed.numUpdatedRows === BigInt(0)) continue;
+      logger.info('[ListenSubscriptions] a subscription took over the row of its earlier name', { teamId: subscription.key.teamId, row: row.id, from: earlier, to: subscription.held.digest });
+      rows[at] = { ...row, held: subscription.held };
+      break;
+    }
+  }
+  return rows;
+}
+
 const NO_SECRET_REFUSAL = 'remote adapter returned no secret; deliveries cannot be verified';
 const NO_ISSUED_SECRET_REFUSAL = 'the provider issues the webhook secret but its registration returned none; deliveries cannot be verified';
 
@@ -461,7 +529,7 @@ export async function syncListenSubscriptions(input: { teamId: TeamId }): Promis
   // Read fresh, not through dispatch's copy: this runs right after a switch.
   const lfEngined = (await readTeamEngine(input.teamId)).engine === 'lf';
   const { desired, carriedUnread } = lfEngined ? { desired: [], carriedUnread: new Set<string>() } : await desiredSubscriptions({ teamId: input.teamId, manifestBySlug, remoteDegraded, account });
-  const existing = await provisionedRows(input.teamId);
+  const existing = await takeOverEarlierRows({ desired, existing: await provisionedRows(input.teamId), carriedUnread });
   const rowOf = (subscription: DesiredSubscription) =>
     existing.find((row) => row.held?.digest === subscription.held.digest && row.provider === subscription.providerKey);
 
@@ -543,6 +611,63 @@ export const listenSubscriptionRetryHandler: WorkHandler = {
   },
 };
 
+const RELEASE_SYNC = 'listen_subscription_release_sync';
+
+/** The attempts the release's sync gets before it is given up on and an
+ *  operator is told; each syncs every team again, which changes nothing for
+ *  one already synced. */
+export const RELEASE_SYNC_ATTEMPTS = 10;
+
+const releaseSyncSchema = z.object({ release: z.string() });
+
+/** The release's sync, queued by the deploy check, which runs once per
+ *  release: a release that versions a narrowed key renames its subscription
+ *  (`takeOverEarlierRows`), and nothing else syncs a team until someone saves.
+ *  The api's drain runs it once it is up; the release before never claims it. */
+export async function queueListenSubscriptionSyncAfterRelease(input: { release: string }): Promise<void> {
+  await enqueueWork({ kind: RELEASE_SYNC, key: `${RELEASE_SYNC}:${input.release}`, payload: { release: input.release } });
+}
+
+/** Every team the platform listens for synced once: each with a listen, and
+ *  each with a subscription its listens may no longer want. Answers the teams
+ *  whose sync failed. */
+export async function syncListenSubscriptionsAfterRelease(input: { heartbeat?: () => Promise<void> } = {}): Promise<{ teams: number; failed: TeamId[] }> {
+  const listening = await getAutomationsQb(['trigger']).selectFrom('trigger').select('team_id').distinct().execute();
+  const subscribed = await getAutomationsQb(['webhook_subscription'])
+    .selectFrom('webhook_subscription')
+    .where('provisioned_by', '=', MOVEMENT_LISTEN_PROVISIONER)
+    .where('deleted_at', 'is', null)
+    .select('team_id')
+    .distinct()
+    .execute();
+  const teams = new Set([...listening, ...subscribed].map((row) => teamIdSchema.parse(row.team_id)));
+  const failed: TeamId[] = [];
+  for (const teamId of teams) {
+    try {
+      const { notes } = await syncListenSubscriptions({ teamId });
+      if (notes.length > 0) logger.warn("[ListenSubscriptions] the release's sync left notes", { teamId, notes });
+    } catch (err) {
+      failed.push(teamId);
+      logger.error("[ListenSubscriptions] the release's sync of a team failed", { teamId, error: err instanceof Error ? err.message : String(err) });
+    }
+    await input.heartbeat?.();
+  }
+  return { teams: teams.size, failed };
+}
+
+export const listenSubscriptionReleaseSyncHandler: WorkHandler = {
+  async run(payload, ctx) {
+    const { release } = releaseSyncSchema.parse(payload);
+    const { failed } = await syncListenSubscriptionsAfterRelease({ heartbeat: ctx.heartbeat });
+    if (failed.length === 0) return;
+    const reason = `${release}: the subscriptions of ${failed.length === 1 ? 'one team' : `${failed.length} teams`} could not be synced (${failed.join(', ')})`;
+    if (ctx.attempts < RELEASE_SYNC_ATTEMPTS) throw new Error(reason);
+    logger.error(`[ListenSubscriptions] ${reason} after ${ctx.attempts} attempts: they sync again on their next save`);
+    throw new WorkGivesUp(reason);
+  },
+};
+
 export function registerListenSubscriptionWork(): void {
   registerWorkHandler('listen_subscription_retry', listenSubscriptionRetryHandler);
+  registerWorkHandler(RELEASE_SYNC, listenSubscriptionReleaseSyncHandler);
 }

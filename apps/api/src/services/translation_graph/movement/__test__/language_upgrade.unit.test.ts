@@ -142,6 +142,7 @@ function fakeStore(input: {
   const runs: Array<{ tag: string; languageRelease: string; summary: DeployCheckSummary }> = [];
   const validations: Array<Parameters<ValidateUnder>[0]> = [];
   const unprovisioned: string[] = [];
+  const subscriptionSyncs: string[] = [];
 
   const deps: DeployCheckDeps = {
     release: { tag: 'v0.8.0', language: input.release ?? RELEASE },
@@ -171,9 +172,12 @@ function fakeStore(input: {
     recordRun: async (run) => {
       runs.push(run);
     },
+    queueSubscriptionSync: async ({ tag }) => {
+      subscriptionSyncs.push(tag);
+    },
     now: () => new Date('2026-09-29T12:00:00.000Z'),
   };
-  return { deps, upgradeDiagnostics, validity, events, runs, validations, unprovisioned };
+  return { deps, upgradeDiagnostics, validity, events, runs, validations, unprovisioned, subscriptionSyncs };
 }
 
 /** The check has no seam that moves a pin; this proves it reached for no
@@ -314,6 +318,8 @@ describe('the deploy check', () => {
     expect(await runDeployCheck(store.deps)).toBeNull();
     expect(store.runs).toHaveLength(1);
     expect(store.events).toHaveLength(eventsAfterFirst);
+    // The release's one sync of every team's subscriptions is queued by the first only.
+    expect(store.subscriptionSyncs).toEqual(['v0.8.0']);
   });
 
   it('emits one Release Applied per workspace, carrying the release and that workspace\'s counts', async () => {

@@ -8,7 +8,9 @@
  * It runs in the `migrate` one-shot (deploy/docker-compose.yml; Render's
  * preDeployCommand), which runs exactly once per deployment however many api
  * replicas follow it, and which the api waits on. A second run on the same
- * release does nothing.
+ * release does nothing. Its first run also queues the release's one sync of
+ * every team's listen subscriptions, which the api runs once it is up
+ * (services/translation_graph/movement/listen_subscriptions.ts).
  *
  * It fails the deployment in one case only: a run parked on a version this
  * release does not run (a legacy id, or 0.12, whose engine it dropped), which

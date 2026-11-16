@@ -116,6 +116,7 @@ import { readOnlyByFrozenParser } from './language_route';
 import { DoorsTryAgain } from '../../movement_engine/doors_hold';
 import { notifyWork } from '../../work/drain';
 import { bringUpListensLater } from './listens_up';
+import { queueListenSubscriptionSyncAfterRelease } from './listen_subscriptions';
 import { moveNeverShippedPin, saveMovement } from './provision';
 import {
   getMovementRow,
@@ -432,6 +433,9 @@ export interface DeployCheckDeps {
   unprovision(movement: MovementRow): Promise<void>;
   /** Record the run — what makes a second run on this release a no-op. */
   recordRun(input: { tag: string; languageRelease: string; summary: DeployCheckSummary }): Promise<void>;
+  /** Queue the release's one sync of every team's subscriptions, which the api
+   *  runs once it is up (./listen_subscriptions.ts). */
+  queueSubscriptionSync(input: { tag: string }): Promise<void>;
   now(): Date;
 }
 
@@ -444,6 +448,9 @@ export async function runDeployCheck(deps: DeployCheckDeps): Promise<DeployCheck
   const { release } = deps;
   const languageRelease = languageReleaseKey(release.language);
   if (await deps.alreadyRan({ tag: release.tag, languageRelease })) return null;
+  // Before the sweep, so a check that cannot finish still leaves it queued; a
+  // second check of the release queues it again only if this one recorded nothing.
+  await deps.queueSubscriptionSync({ tag: release.tag });
 
   const at = deps.now().toISOString();
   const current = release.language.current;
@@ -993,6 +1000,7 @@ export function liveDeployCheckDeps(release: DeployCheckRelease): DeployCheckDep
         .onConflict((oc) => oc.columns(['release_tag', 'language_release']).doNothing())
         .execute();
     },
+    queueSubscriptionSync: ({ tag }) => queueListenSubscriptionSyncAfterRelease({ release: tag }),
     now: () => new Date(),
   };
 }

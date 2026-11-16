@@ -14,6 +14,7 @@ export const CORE_WORK_KINDS = [
   'wake_await', // payload: a wait's wake (movement_engine/await_resume.ts)
   'poll_reconcile', // periodic, payload {}
   'listen_subscription_retry', // periodic, payload {} (movement/listen_subscriptions.ts): subscriptions a source refused, asked for again
+  'listen_subscription_release_sync', // payload: { release: string } (movement/listen_subscriptions.ts): every team's subscriptions synced once after a release, queued by the deploy check
   'bring_up_listens', // payload: { teamId: string; movementIds: string[] } (movement/listens_up.ts): what an upgrade owes the providers
   'timer_sweep', // periodic, payload {}
   'run_orphan_sweep', // periodic, payload {}

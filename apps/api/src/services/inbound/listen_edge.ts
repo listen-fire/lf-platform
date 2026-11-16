@@ -69,6 +69,29 @@ export function pollsAloneOf(config: unknown): boolean {
   return read.success && read.data.listen.carriedFrom.pollsAlone === true;
 }
 
+const keptMarkSchema = z.object({ listen: z.object({ carriedFrom: z.unknown().optional() }) });
+const listenRecordSchema = z.object({ listen: z.record(z.string(), z.unknown()) });
+
+/** A re-save of a listen an upgrade moved from a carried version keeps the mark
+ *  of the move, so its keys stay the ones it polls under. Read off the raw rows,
+ *  never through a version's plan schema: a save under a carried version plans
+ *  its listens in that version's shape, which this release's schema need not
+ *  read, and dropping the mark there would change the key with no word said. A
+ *  mark that cannot be read, or a planned row with no listen to keep it on,
+ *  refuses the save, naming the listen (`what`). */
+export function keepingCarriedFrom(input: { config: Record<string, unknown>; kept: unknown; what: string }): Record<string, unknown> {
+  const before = keptMarkSchema.safeParse(input.kept);
+  const mark = before.success ? before.data.listen.carriedFrom : undefined;
+  if (mark === undefined) return input.config;
+  const carriedFrom = carriedFromSchema.safeParse(mark);
+  if (!carriedFrom.success) {
+    throw new Error(`${input.what}: the mark of the upgrade that moved it cannot be read (${carriedFrom.error.message}), so saving it would change the key it polls under`);
+  }
+  const now = listenRecordSchema.safeParse(input.config);
+  if (!now.success) throw new Error(`${input.what}: its planned row has no listen to keep the mark of the upgrade that moved it on, so saving it would change the key it polls under`);
+  return { ...input.config, listen: { ...now.data.listen, carriedFrom: carriedFrom.data } };
+}
+
 /** How the module delivers a listen's last edge, as its saved listen keeps it. */
 export type ListenDelivery = NonNullable<SavedListen['delivery']>['kind'];
 
