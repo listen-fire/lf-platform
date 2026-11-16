@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { SaveRefusalNotice, SaveWarnings, statementReasonSentence, type SaveRefusal, type StatementReason } from "../save-notice";
+import { SavePlayback, SaveRefusalNotice, SaveWarnings, statementReasonSentence, type SaveRefusal, type StatementReason } from "../save-notice";
 
 const notice = (refused: SaveRefusal, options: { choosable: boolean } = { choosable: true }) =>
   renderToStaticMarkup(createElement(SaveRefusalNotice, { refused, ...(options.choosable ? { onChooseAccess: () => {} } : {}) }));
@@ -79,5 +79,15 @@ describe("what a save that went through warns of", () => {
     expect(html).toContain('data-testid="save-warnings"');
     expect(html).toContain("may not use the connection");
     expect(renderToStaticMarkup(createElement(SaveWarnings, { warnings: [] }))).toBe("");
+  });
+});
+
+describe("what a save that went through plays back", () => {
+  it("shows a line per listen as a plain fact, apart from the warnings", () => {
+    const html = renderToStaticMarkup(createElement(SavePlayback, { playback: ["intake fires on slack-[m:Messages]->"] }));
+    expect(html).toContain('data-testid="save-playback"');
+    expect(html).toContain("intake fires on slack-[m:Messages]-&gt;");
+    expect(html).not.toContain("save-warnings");
+    expect(renderToStaticMarkup(createElement(SavePlayback, { playback: [] }))).toBe("");
   });
 });

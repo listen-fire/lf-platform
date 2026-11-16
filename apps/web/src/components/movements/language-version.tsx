@@ -17,6 +17,18 @@ export interface UpgradeDiagnostic {
   severity: "error" | "warning" | "info";
   line: number;
   col: number;
+  /** The rewrite the checker offers: replace each 1-based range with `text`
+   *  (an empty range inserts). Unless `safe`, it changes what the automation
+   *  does, so its author reviews it before an upgrade applies it. */
+  fix?: { edits: UpgradeEdit[]; safe?: true };
+}
+
+export interface UpgradeEdit {
+  line: number;
+  col: number;
+  endLine: number;
+  endCol: number;
+  text: string;
 }
 
 // A legacy id ('1'..'4') is a version from before the language was versioned
@@ -29,15 +41,15 @@ function versionName(version: LanguageVersion): string {
   return isLegacy(version) ? `legacy ${version}` : version;
 }
 
-/** What happens to it until it is upgraded: a legacy id runs on the platform's
- *  own engine; a release pin of an earlier line stopped firing at the deploy
- *  that installed the current version unless its version still fires its
- *  listens, and the panel says exactly what the platform still does with it
- *  when it carries that version (checking edits, running it when someone
- *  starts it, resuming its parked runs). */
+/** What happens to it until it is upgraded: nothing runs a legacy id, and its
+ *  listens stay stopped; a release pin of an earlier line stopped firing at
+ *  the deploy that installed the current version unless its version still
+ *  fires its listens, and the panel says exactly what the platform still does
+ *  with it when it carries that version (checking edits, running it when
+ *  someone starts it, resuming its parked runs). */
 function Meanwhile({ version, route }: { version: LanguageVersion; route: EditorLanguageRoute }) {
   if (isLegacy(version)) {
-    return <>It keeps running as <VersionTag name={versionName(version)} /> until you upgrade it.</>;
+    return <>Nothing runs <VersionTag name={versionName(version)} />, and its listens stay stopped, until you upgrade it.</>;
   }
   const own = <VersionTag name={versionName(version)} />;
   const listens = route.provides?.listen === true;
@@ -54,6 +66,50 @@ function Meanwhile({ version, route }: { version: LanguageVersion; route: Editor
         <> A run of it that would wait (an ask, a pause, a wait for an event) is stopped where it waits.</>
       )}
     </>
+  );
+}
+
+function offsetOf(source: string, at: { line: number; col: number }): number {
+  const lines = source.split("\n");
+  const before = lines.slice(0, at.line - 1).reduce((sum, line) => sum + line.length + 1, 0);
+  return Math.min(before + at.col - 1, source.length);
+}
+
+/** One edit as lines of a diff: what its range holds now (when the text is at
+ *  hand) and what replaces it. */
+function editLines(edit: UpgradeEdit, source: string | undefined): { removed: string[]; added: string[] } {
+  const removed =
+    source === undefined
+      ? []
+      : source.slice(offsetOf(source, edit), offsetOf(source, { line: edit.endLine, col: edit.endCol })).split("\n").filter((line) => line !== "");
+  return { removed, added: edit.text.split("\n").filter((line) => line !== "") };
+}
+
+/** A fix that is not provably meaning preserving, as a diff for its author to
+ *  review. Nothing here applies it: an upgrade applies it only when it is asked
+ *  to apply every fix, after the author has accepted it. */
+function ProposedChange({ fix, source }: { fix: NonNullable<UpgradeDiagnostic["fix"]>; source: string | undefined }) {
+  return (
+    <span className="mt-1.5 block" data-testid="upgrade-fix">
+      <span className="block text-[11px] text-gray-500">
+        Proposed change. Read it, then tell your agent to accept it when it upgrades; nothing applies it before.
+      </span>
+      <span className="mt-1 block overflow-x-auto rounded bg-gray-50 px-2 py-1.5 font-mono text-[11px] leading-relaxed">
+        {fix.edits.map((edit, i) => {
+          const { removed, added } = editLines(edit, source);
+          return (
+            <span key={i} className="block">
+              {removed.map((line, j) => (
+                <span key={`-${j}`} className="block whitespace-pre text-red-700">- {line}</span>
+              ))}
+              {added.map((line, j) => (
+                <span key={`+${j}`} className="block whitespace-pre text-green-700">+ {line}</span>
+              ))}
+            </span>
+          );
+        })}
+      </span>
+    </span>
   );
 }
 
@@ -100,11 +156,14 @@ export function LanguageVersionNotice({
   languageVersion,
   route,
   upgradeDiagnostics,
+  source,
 }: {
   languageVersion: LanguageVersion;
   /** The server's account of the pin. */
   route: EditorLanguageRoute;
   upgradeDiagnostics: UpgradeDiagnostic[] | null;
+  /** The saved text the diagnostics' positions are in, to show what a fix replaces. */
+  source?: string;
 }) {
   const name = versionName(languageVersion);
   const current = versionName(LANGUAGE_VERSION);
@@ -153,6 +212,7 @@ export function LanguageVersionNotice({
                   <span className="mt-0.5 block font-mono text-[11px] text-gray-400">
                     Line {d.line}, column {d.col}
                   </span>
+                  {d.fix !== undefined && d.fix.safe !== true && <ProposedChange fix={d.fix} source={source} />}
                 </span>
               </li>
             ))}

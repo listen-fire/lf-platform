@@ -83,7 +83,7 @@ import { AccessPanel } from "@/components/access/access-panel";
 import { ChooseUseDialog, CreateAutomationDialog } from "@/components/access/creation";
 import type { AutomationVerb, Grantee } from "@/components/access/grantees";
 import { asksForLibraryUse, creationParts, mustChooseFirst, refusesChoice } from "@/components/access/creation-save";
-import { SaveRefusalNotice, SaveWarnings } from "@/components/movements/save-notice";
+import { SavePlayback, SaveRefusalNotice, SaveWarnings } from "@/components/movements/save-notice";
 
 const VIM_PREFERENCE_KEY = "listen-fire.movements.vim";
 const WRAP_PREFERENCE_KEY = "listen-fire.movements.wrap";
@@ -1780,6 +1780,7 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
                     )}
                   </div>
                 )}
+                <SavePlayback playback={result.playback ?? []} />
                 <SaveWarnings warnings={result.warnings} />
               </div>
             ) : "refused" in result && result.refused !== undefined ? (
@@ -1903,6 +1904,7 @@ export function MovementWorkbench(props: MovementWorkbenchProps) {
               languageVersion={props.languageVersion}
               route={languageRoute}
               upgradeDiagnostics={props.upgradeDiagnostics ?? null}
+              {...(props.initialSource !== undefined ? { source: props.initialSource } : {})}
             />
           )}
 

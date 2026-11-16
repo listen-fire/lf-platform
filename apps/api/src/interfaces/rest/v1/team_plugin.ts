@@ -14,24 +14,20 @@
 import { METHODS } from 'engine-contracts';
 import { errorAnswer, errorEnvelope, type CheckedRequest, type ProtocolAnswer } from 'module-kit/server';
 import { logger } from 'movement-engine/public/log';
-import { pluginProgramName } from 'movement-engine/public/plugins';
-import { pluginKey } from 'movement-lang';
-import { IS_MEMBER, TEAM_PLUGINS_PACKAGE } from '@lf-platform/team/plugins';
 
 import type { InProcessPluginModule } from 'module-kit';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { RequestHandler, Request } from 'express';
 
 import { builtinPluginModule } from '../../../services/translation_graph/adapters/builtin_modules';
+import { TEAM_MEMBERSHIP_CHECK } from '../../../services/translation_graph/adapters/team/membership_check';
 import { checkedRequest } from './system_adapter';
-
-const TEAM_PLUGIN_KEY = pluginKey(TEAM_PLUGINS_PACKAGE, pluginProgramName(IS_MEMBER.signature.name));
 
 /** The plugin module for one tenant: the platform's registered line, loaded
  *  (with `pluginsInProcess`) as a run's call loads it. */
 function loadFor(teamId: TeamId): InProcessPluginModule {
-  const loaded = builtinPluginModule(TEAM_PLUGIN_KEY, { teamId });
-  if (loaded === undefined) throw new Error(`the platform has no module line for ${TEAM_PLUGIN_KEY}`);
+  const loaded = builtinPluginModule(TEAM_MEMBERSHIP_CHECK, { teamId });
+  if (loaded === undefined) throw new Error(`the platform has no module line for ${TEAM_MEMBERSHIP_CHECK}`);
   return loaded;
 }
 

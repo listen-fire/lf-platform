@@ -27,7 +27,9 @@ describe("the language version a person sees", () => {
       renderToStaticMarkup(createElement(LanguageVersionNotice, { languageVersion: v, route: { kind }, upgradeDiagnostics: null }));
     expect(notice(LANGUAGE_VERSION, "installed")).toContain("the current version.");
     expect(notice("3", "legacy")).toContain("legacy 3");
-    expect(notice("3", "legacy")).toContain("keeps running");
+    // Nothing runs a legacy id; the panel does not say it keeps running.
+    expect(notice("3", "legacy")).toContain("Nothing runs");
+    expect(notice("3", "legacy")).not.toContain("keeps running");
   });
 
   it("the notice says an automation written for an older release stopped firing", () => {
@@ -69,5 +71,53 @@ describe("the language version a person sees", () => {
     expect(saveGoesLive({ kind: "carried" })).toBe(false);
     expect(saveGoesLive({ kind: "legacy" })).toBe(false);
     expect(saveGoesLive({ kind: "refused" })).toBe(false);
+  });
+
+  it("shows a fix that changes what the automation does as a diff to review, and nothing applies it", () => {
+    const source = 'listen to slack-[m:Messages WHERE m.Channel == "C0DEALS"]-> fire intake\n';
+    const html = renderToStaticMarkup(
+      createElement(LanguageVersionNotice, {
+        languageVersion: "0.15.3",
+        route: { kind: "carried" },
+        source,
+        upgradeDiagnostics: [
+          {
+            message: "before 0.16.0 a host may have let only registered senders set this listen off",
+            severity: "warning",
+            line: 1,
+            col: 11,
+            fix: {
+              edits: [
+                { line: 1, col: 1, endLine: 1, endCol: 1, text: "import { `@lf-platform/team` as team } from plugins\n" },
+                {
+                  line: 1,
+                  col: 11,
+                  endLine: 1,
+                  endCol: 73,
+                  text: 'slack-[m:Messages WHERE m.Channel == "C0DEALS" AND team.isMember(m.`User Email`)]->',
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    );
+    expect(html).toContain('data-testid="upgrade-fix"');
+    expect(html).toContain("+ import");
+    expect(html).toContain("- slack-[m:Messages WHERE m.Channel == &quot;C0DEALS&quot;]-&gt;");
+    expect(html).toContain("nothing applies it before");
+  });
+
+  it("shows no diff for a fix that provably keeps the meaning", () => {
+    const html = renderToStaticMarkup(
+      createElement(LanguageVersionNotice, {
+        languageVersion: "0.15.3",
+        route: { kind: "carried" },
+        upgradeDiagnostics: [
+          { message: "spelling", severity: "warning", line: 1, col: 1, fix: { safe: true, edits: [{ line: 1, col: 1, endLine: 1, endCol: 2, text: "x" }] } },
+        ],
+      }),
+    );
+    expect(html).not.toContain('data-testid="upgrade-fix"');
   });
 });

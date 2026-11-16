@@ -165,6 +165,18 @@ function RefusalBody({ refused, onChooseAccess }: { refused: SaveRefusal; onChoo
   }
 }
 
+/** What each listen of a save that went through fires on, as written. A fact for the author to read, not a warning. */
+export function SavePlayback({ playback }: { playback: readonly string[] }) {
+  if (playback.length === 0) return null;
+  return (
+    <ul className="mt-2.5 space-y-1 border-t border-green-100 pt-2.5 font-mono text-[11px] leading-relaxed text-gray-500" data-testid="save-playback">
+      {playback.map((line, i) => (
+        <li key={i}>{line}</li>
+      ))}
+    </ul>
+  );
+}
+
 /** What a save that went through would surprise its author with. */
 export function SaveWarnings({ warnings }: { warnings: readonly string[] }) {
   if (warnings.length === 0) return null;

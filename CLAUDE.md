@@ -36,7 +36,7 @@ extend the tooling.
 
 ## The language repository
 
-The language (parser, checker, engine, `listen-fire`, the modules, the handbook) is the `listen-fire` repository, in the same GitHub organisation; this repository installs its published `@listen-fire/*` packages. Changing the parser, checker or type model happens there: read its `packages/movement-lang/CLAUDE.md` first. The language serves version 5 and later only; everything that serves language versions 1 to 4 (`@listen-fire/legacy-lang`, `@listen-fire/legacy-engine`, the conformance corpora, `upgradeAutomation`) is this repository's.
+The language (parser, checker, engine, `listen-fire`, the modules, the handbook) is the `listen-fire` repository, in the same GitHub organisation; this repository installs its published `@listen-fire/*` packages. Changing the parser, checker or type model happens there: read its `packages/movement-lang/CLAUDE.md` first. The language serves version 5 and later only; everything that serves language versions 1 to 4 (`@listen-fire/legacy-lang`, the conformance corpora, `upgradeAutomation`) is this repository's, and so is the router that picks an engine for a run (`apps/api/src/services/movement_engine/dispatch`); there is no legacy engine package.
 
 ## Language versions (breaking changes never break a saved movement)
 

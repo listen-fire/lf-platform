@@ -305,7 +305,7 @@ jest.mock('../../storage/tg_table', () => ({ saveTriggerEntriesForTrigger: jest.
 import { getRemoteAdapter } from '../../adapters/remote/store';
 import { accessTo } from '../../../access/decide';
 import { saveMovement, type SaveMovementInput } from '../provision';
-import { STATEMENTS_ON_OVERWRITE_REFUSAL, accessWarnings } from '../save_access';
+import { STATEMENTS_ON_OVERWRITE_REFUSAL } from '../save_access';
 
 const db = jest.requireMock('../../../../lib/kysely') as {
   __tables: Record<string, Array<Record<string, unknown>>>;
@@ -829,23 +829,40 @@ describe('what the checks decided is what the write does', () => {
   });
 });
 
-describe('what a save warns about, never refusing', () => {
-  it('warns when its readers are wider than a connection’s users', async () => {
-    // Bob and Carol may read it; only Alice may use Sales.
+describe('what a save plays back', () => {
+  const twoListens = (connection: string) =>
+    [
+      onLedger(connection),
+      '',
+      'listen to books-[e:Entries WHERE e.Amount > 100',
+      '  AND e.Amount < 900]-> fire deals',
+    ].join('\n');
+
+  it('save_plays_back_what_each_listen_fires_on', async () => {
+    const saved = await asAlice({ source: twoListens('Sales'), statements: STATEMENTS });
+    expect(saved.ok).toBe(true);
+    if (!saved.ok) return;
+    // One plain line per listen, as it is written; no verdict on it.
+    expect(saved.playback).toEqual([
+      'deals fires on books-[:Entries]->',
+      'deals fires on books-[e:Entries WHERE e.Amount > 100 AND e.Amount < 900]->',
+    ]);
+  });
+
+  it('says nothing of who may read the automation against who may use its connections', async () => {
+    // Bob and Carol may read it; only Alice may use Sales. That is the author's to choose, not a warning.
     mockAccess.rows = mockAccess.rows.filter((r) => r.target.id !== SALES);
     stated({ thing: 'connection', id: SALES }, 'use', [user(ALICE)]);
     const saved = await asAlice({ source: onLedger('Sales'), statements: STATEMENTS });
     expect(saved.ok).toBe(true);
     if (!saved.ok) return;
-    expect(saved.warnings).toContain(
-      'Some who may read this automation may not use the connection "Sales": its runs show them what it reads through that connection.',
-    );
+    expect(saved.warnings.filter((w) => w.includes('connection "Sales"'))).toEqual([]);
   });
 
-  it('does not warn when everyone who may read it may use its connections', async () => {
-    const saved = await asAlice({ source: onLedger('Sales'), statements: { ...STATEMENTS, read: [team] } });
+  it('plays back nothing for a file with no listen', async () => {
+    const saved = await asAlice({ source: 'export function tally(t: <text>) {\n  return t\n}', statements: { ...STATEMENTS, use: [team] } });
     expect(saved.ok).toBe(true);
     if (!saved.ok) return;
-    expect(saved.warnings.filter((w) => w.includes('connection "Sales"'))).toEqual([]);
+    expect(saved.playback).toBeUndefined();
   });
 });

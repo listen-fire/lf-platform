@@ -37,6 +37,8 @@ import {
 import { isLegacyLanguageVersion, upgradeWarnings, withUpgradeWarnings } from 'legacy-lang';
 import { checkingOf, type CheckingLane } from '@listen-fire/language-versions';
 
+import { TEAM_MEMBERSHIP_CHECK } from '../adapters/team/membership_check';
+
 export type PinRoute =
   | { kind: 'legacy'; pin: LanguageVersion }
   /** A release this platform no longer runs: judged under legacy-lang's
@@ -111,7 +113,8 @@ export function checkInstalled(input: {
   try {
     checked = checkSourceInRust(source, snapshot, {
       languageVersion: pin,
-      ...(upgradingFrom !== undefined && !fromLegacy ? { upgradingFrom } : {}),
+      // An open listen told so on an upgrade is offered the team's check, for its author to review.
+      ...(upgradingFrom !== undefined && !fromLegacy ? { upgradingFrom, limitingFunction: TEAM_MEMBERSHIP_CHECK } : {}),
     });
   } catch (error) {
     if (!(error instanceof RustCheckRefused)) throw error;

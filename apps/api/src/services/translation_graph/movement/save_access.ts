@@ -13,13 +13,14 @@
 // when a run starts.
 
 import { credentialImportNames } from 'movement-engine/public/catalog';
+import { MovementParseError, parseProgram as parseInstalled, type Program, type Span } from 'movement-lang';
 import { referencedFileImports } from 'legacy-lang';
 
 import type { Principal } from 'principal';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { CatalogAudience } from './audience';
 
-import { accessTo, membersAdmitted, stateAtCreation, type CreationStatements, type StatementRefusal } from '../../access/decide';
+import { accessTo, stateAtCreation, type CreationStatements, type StatementRefusal } from '../../access/decide';
 import { automationLists, automationWithNoPerson, libraryUseWithNoPerson } from '../../access/no_person';
 import { StatementStore, type DirectNames, type StatedVerb, type Target } from '../../access/statement';
 import { hasAdapter, resolveAdapterSlug } from '../adapters/registry';
@@ -321,36 +322,31 @@ export function connectionsRefusal(unusable: readonly NamedConnection[]): { refu
 
 export { inOneTransaction } from '../../context/one_transaction';
 
+/** The text a span covers, on one line. Columns are UTF-16 units from 1, as the checker reports them. */
+function spanText(source: string, span: Span): string {
+  const lines = source.split('\n');
+  const offset = (at: { line: number; col: number }): number =>
+    lines.slice(0, at.line - 1).reduce((sum, line) => sum + line.length + 1, 0) + at.col - 1;
+  return source.slice(offset(span.start), offset(span.end)).replace(/\s+/g, ' ').trim();
+}
+
 /**
- * What a shipped save tells its author about who its statements reach. Never a
- * refusal: who may read the automation and who may use its connections are the
- * author's to choose.
+ * What a shipped save plays back about each listen: what it fires and on
+ * what, as written. A line states a fact and passes no judgement on it; who
+ * may reach what the listen fires is the author's to choose. A text the
+ * installed parser cannot read has no listens to play back.
  */
-export async function accessWarnings(input: {
-  teamId: string;
-  automationId: string;
-  named: readonly NamedConnection[];
-}): Promise<string[]> {
-  const { teamId } = input;
-  const automation: Target<'automation'> = { thing: 'automation', id: input.automationId };
-  const warnings: string[] = [];
-
-  const connections = new Map(input.named.flatMap((c) => (c.id === undefined ? [] : [[c.id, described(c.reach)] as const])));
-  if (connections.size > 0) {
-    const readers = await membersAdmitted(teamId, [
-      { verb: 'read', grantees: await StatementStore.grantsOf(automation, { teamId, verb: 'read' }) },
-      { verb: 'write', grantees: await StatementStore.grantsOf(automation, { teamId, verb: 'write' }) },
-    ]);
-    for (const [id, connection] of connections) {
-      const use = await StatementStore.grantsOf({ thing: 'connection', id }, { teamId, verb: 'use' });
-      const users = await membersAdmitted(teamId, [{ verb: 'use', grantees: use }]);
-      if ([...readers].some((reader) => !users.has(reader))) {
-        warnings.push(
-          `Some who may read this automation may not use the connection "${connection}": its runs show them what it reads through that connection.`,
-        );
-      }
-    }
+export function listenPlayback(source: string): string[] {
+  let program: Program;
+  try {
+    program = parseInstalled(source);
+  } catch (error) {
+    if (error instanceof MovementParseError) return [];
+    throw error;
   }
-
-  return warnings;
+  return program.statements.flatMap((statement) =>
+    statement.kind === 'listen'
+      ? [`${statement.movement} fires on ${statement.path !== undefined ? spanText(source, statement.path.span) : statement.instance}`]
+      : [],
+  );
 }

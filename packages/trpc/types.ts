@@ -1325,6 +1325,10 @@ export interface ProvisionedMovement {
      *  author — listeners retired by a consented unparseable save, a movement
      *  name another automation already fires. Never blocking; always shown. */
     warnings: string[];
+    /** What a person's shipped save plays back, one plain line per listen: what
+     *  it fires and on what, as written. It carries no judgement, so it is not
+     *  among `warnings`. Absent when the file has no listen. */
+    playback?: string[];
     /** A language upgrade's: the listens it left paused because it could not
      *  tell which of the earlier listens a person had paused. Not a warning of
      *  every save, so it is not among `warnings`. */

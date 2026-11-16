@@ -96,7 +96,7 @@ import { checkCreation, checkedList, recomputeLibraryStanding, setStatement, sta
 import {
   READ_ONLY_REFUSAL,
   STATEMENTS_ON_OVERWRITE_REFUSAL,
-  accessWarnings,
+  listenPlayback,
   connectionsNamed,
   connectionsRefusal,
   creationStatements,
@@ -223,6 +223,10 @@ export interface ProvisionedMovement {
    *  author — listeners retired by a consented unparseable save, a movement
    *  name another automation already fires. Never blocking; always shown. */
   warnings: string[];
+  /** What a person's shipped save plays back, one plain line per listen: what
+   *  it fires and on what, as written. It carries no judgement, so it is not
+   *  among `warnings`. Absent when the file has no listen. */
+  playback?: string[];
   /** A language upgrade's: the listens it left paused because it could not
    *  tell which of the earlier listens a person had paused. Not a warning of
    *  every save, so it is not among `warnings`. */
@@ -1503,8 +1507,8 @@ async function runSave(
     }
     throw error;
   }
-  const warned = async (): Promise<string[]> =>
-    saver === undefined ? [] : accessWarnings({ teamId: input.teamId, automationId: row.id, named });
+  const played = listenPlayback(input.source);
+  const playback = played.length > 0 ? { playback: played } : {};
 
   // The source row is now saved — emit the resource-change hint here (the
   // shared service layer), so UI saves and agent saves both propagate
@@ -1643,12 +1647,13 @@ async function runSave(
         listeners: [],
         infos: [],
         catalogNotes: notes,
-        warnings: [...(provisioned.diagnostics ?? []).map((diagnostic) => diagnostic.message), ...(await warned())],
+        warnings: (provisioned.diagnostics ?? []).map((diagnostic) => diagnostic.message),
+        ...playback,
         validity,
       };
     }
     if (!provisioned.ok) return { ...provisioned, movementId: row.id, validity };
-    return { ...provisioned, warnings: [...provisioned.warnings, ...(await warned())], movementId: row.id, validity };
+    return { ...provisioned, ...playback, movementId: row.id, validity };
   }
 
   if (!provisioned.ok && validity.status === 'valid') {
@@ -1677,7 +1682,6 @@ async function runSave(
         declaredNames: declaredNames ?? [],
       }),
     )),
-    ...(await timer.step('accessWarnings', () => warned())),
   ];
 
   if (!provisioned.ok) {
@@ -1708,6 +1712,7 @@ async function runSave(
           'This source could not be read, so no listeners could be derived from it. You saved it anyway, so every listener this automation had has been retired — it will not fire again until a source that reads cleanly restores them.',
           ...shippedWarnings,
         ],
+        ...playback,
         validity,
       };
     }
@@ -1726,6 +1731,7 @@ async function runSave(
         'listeners could not be derived from this source — existing listeners (if any) keep firing it',
       ],
       warnings: shippedWarnings,
+      ...playback,
       validity,
     };
   }
@@ -1740,6 +1746,7 @@ async function runSave(
   return {
     ...provisioned,
     warnings: [...provisioned.warnings, ...shippedWarnings],
+    ...playback,
     movementId: row.id,
     validity,
   };
