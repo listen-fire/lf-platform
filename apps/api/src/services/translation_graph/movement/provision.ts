@@ -154,6 +154,7 @@ import { listeningOf, runningOf, type ListeningLane, type TeamFacts } from '@lis
 import { neverAsAny } from 'movement-engine/public/types';
 import { plannedListensOfSource } from './listen_plans';
 import { carriedPauses, listenIdentityOf, type CarriedPause } from './carried_pauses';
+import { carriedConfig, heardAnything, keepCarriedPlaces, placesHeardOf, predecessorsOf, type MovedListen, type PlacesHeard } from './carried_cursors';
 import { carriedRunTriggerId } from './carried_names';
 import { listenConfigSchema, type ListenConfig, type SavedListen } from '../../inbound/listen_door';
 import { resolveAndArm, resolveCarriedAndArm, resolvesCarried, resolvesListen } from '../../inbound/listen_resolve';
@@ -229,6 +230,9 @@ export interface ProvisionedMovement {
    *  tell which of the earlier listens a person had paused. Not a warning of
    *  every save, so it is not among `warnings`. */
   leftPaused?: string[];
+  /** A language upgrade's: the listens whose poll's place it could not carry,
+   *  which start from their first poll. Not a warning of every save either. */
+  placesNotCarried?: string[];
 }
 
 export interface ProvisionMovementFailure {
@@ -510,8 +514,14 @@ async function reconcileDerivedTriggers(input: {
   /** A language upgrade: it never changes whether anything is live, so every
    *  pause outlasts it, even where the new plan cannot be matched to its row. */
   keepPauses?: boolean;
-}): Promise<{ listeners: ProvisionedListener[]; reconciles: Set<WorkKind>; leftPaused: string[] }> {
+  /** A language upgrade off a carried version, at the instant its move is on
+   *  the far side of: each polled listen's place moves with it
+   *  (./carried_cursors.ts). */
+  carrying?: { movedAt: Date };
+}): Promise<{ listeners: ProvisionedListener[]; reconciles: Set<WorkKind>; leftPaused: string[]; placesNotCarried: string[] }> {
   const qb = getAutomationsQb(['trigger']);
+  // Read before the rows are touched, while its version still reads them.
+  const heard: PlacesHeard = input.carrying !== undefined ? await placesHeardOf({ teamId: input.teamId, movementId: input.movementRow.id as MovementId }) : new Map();
   // The schedule reconciles whose rows this save made stale: a new, changed or
   // retired cron or poll. An unchanged listener is armed already.
   const reconciles = new Set<WorkKind>();
@@ -567,6 +577,16 @@ async function reconcileDerivedTriggers(input: {
     }).map((carry, n) => [freshIndexes[n]!, carry] as const),
   );
   const leftPaused: string[] = [];
+  const placesNotCarried: string[] = [];
+  const identityOfDesired = (d: DesiredListener): string | null => listenIdentityOf({ movementName: d.movementName, kind: d.adapter, credentialsId: d.credentialsId });
+  const predecessors =
+    heard.size > 0
+      ? predecessorsOf({
+          fresh: input.desired.map((d, i) => ({ kept: plan.matches[i]?.id, identity: identityOfDesired(d) })),
+          retired: plan.retired.map((row) => ({ id: row.id, identity: listenIdentityOf({ movementName: row.firedMovementName, kind: row.kind, credentialsId: row.credentialsId }) })),
+        })
+      : [];
+  const carriedPlaces: MovedListen[] = [];
 
   // Retire rows whose listen disappeared: delete the trigger row itself.
   // `trigger_run` history rows reference the trigger id WITHOUT an FK, so
@@ -618,10 +638,17 @@ async function reconcileDerivedTriggers(input: {
   for (let i = 0; i < input.desired.length; i++) {
     const kept = plan.matches[i];
     const rowId = kept?.id ?? randomUUID();
-    const desired: DesiredListener = {
-      ...input.desired[i],
-      config: kept !== undefined ? keepingCarriedFrom(input.desired[i].config, kept.config) : input.desired[i].config,
-    };
+    const came = predecessors[i] ?? null;
+    const places = came !== null && 'row' in came ? heard.get(came.row) : undefined;
+    const what = `the ${input.desired[i].adapter} listen that fires ${input.desired[i].movementName}`;
+    if (came !== null && 'unsure' in came && came.unsure.some((row) => heardAnything(heard.get(row)))) {
+      placesNotCarried.push(`${input.movementRow.name}: ${what} starts from its first poll: it could not be told which of the automation's earlier listens it was, so where that one stood was not carried, and what arrived since its last poll is missed.`);
+    }
+    const config = kept !== undefined ? keepingCarriedFrom(input.desired[i].config, kept.config) : input.desired[i].config;
+    // A listen that never polled brings nothing, and joins its key's poll as a new listen does.
+    const desired: DesiredListener =
+      input.carrying !== undefined && heardAnything(places) ? { ...input.desired[i], config: carriedConfig(config, input.carrying.movedAt) } : { ...input.desired[i], config };
+    if (heardAnything(places)) carriedPlaces.push({ triggerId: rowId, credentialsId: desired.credentialsId, config: desired.config, places, what });
     const name = desired.alias ?? `movement/${input.movementRow.name}/${desired.movementName}`;
 
     // run_mode semantics: the dry_run⇄live axis is TEXT-DERIVED — a listener
@@ -714,11 +741,13 @@ async function reconcileDerivedTriggers(input: {
       reused: kept !== undefined,
     });
   }
-  return { listeners, reconciles, leftPaused };
+  if (carriedPlaces.length > 0) placesNotCarried.push(...(await keepCarriedPlaces({ teamId: input.teamId, file: input.movementRow.name, moved: carriedPlaces })));
+  return { listeners, reconciles, leftPaused, placesNotCarried };
 }
 
-/** A re-save of a listen an upgrade moved from 0.12 keeps the mark of the move,
- *  so it keeps polling on the cursor it brought (inbound/listen_edge.ts). */
+/** A re-save of a listen an upgrade moved from a carried version keeps the mark
+ *  of the move, so it keeps polling on the cursor it brought
+ *  (inbound/listen_edge.ts). */
 function keepingCarriedFrom(config: Record<string, unknown>, kept: unknown): Record<string, unknown> {
   const before = listenConfigSchema.safeParse(kept);
   const carriedFrom = before.success ? before.data.listen.carriedFrom : undefined;
@@ -895,6 +924,8 @@ async function provisionListeners(input: {
   providersLater?: boolean;
   /** A language upgrade: see `reconcileDerivedTriggers`. */
   keepPauses?: boolean;
+  /** A language upgrade off a carried version: see `reconcileDerivedTriggers`. */
+  carrying?: { movedAt: Date };
 }): Promise<ProvisionMovementResult> {
   const { catalog } = input;
   const within = <T>(name: string, run: () => Promise<T>): Promise<T> =>
@@ -918,12 +949,13 @@ async function provisionListeners(input: {
   if (!wanted.ok) return wanted;
   const { desired, infos } = wanted;
 
-  const { listeners, reconciles, leftPaused } = await within('reconcile', () =>
+  const { listeners, reconciles, leftPaused, placesNotCarried } = await within('reconcile', () =>
     reconcileDerivedTriggers({
       teamId: input.teamId,
       movementRow: input.movementRow,
       desired,
       ...(input.keepPauses === true ? { keepPauses: true } : {}),
+      ...(input.carrying !== undefined ? { carrying: input.carrying } : {}),
     }),
   );
 
@@ -981,6 +1013,7 @@ async function provisionListeners(input: {
     // itself has no view of the rest of the team's automations.
     warnings: [],
     ...(leftPaused.length > 0 ? { leftPaused } : {}),
+    ...(placesNotCarried.length > 0 ? { placesNotCarried } : {}),
   };
 }
 
@@ -1049,6 +1082,8 @@ export interface SaveMovementInput {
    *  ordinary save never moves the pin. */
   languageUpgrade?: {
     to: LanguageVersion;
+    /** The instant the upgrade's move is on the far side of (`holdDoorsAlone`). */
+    movedAt: Date;
   };
   /** Set only by the language upgrade: the save joins its open transaction. */
   inTransaction?: SaveInTransaction;
@@ -1610,7 +1645,7 @@ async function runSave(
       catalog,
       timer,
       ...(input.inTransaction !== undefined ? { providersLater: true } : {}),
-      ...(input.languageUpgrade !== undefined ? { keepPauses: true } : {}),
+      ...(input.languageUpgrade !== undefined ? { keepPauses: true, carrying: { movedAt: input.languageUpgrade.movedAt } } : {}),
       // A consented non-valid save ships: derive its declared listens despite
       // check errors so it genuinely fires-and-fails (decision 3b).
       ...(consented ? { provisionDespiteErrors: true } : {}),

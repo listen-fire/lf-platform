@@ -148,3 +148,7 @@ Services restart one at a time, so for a while an old service and a new one shar
 ## Upgrading an automation off 0.12
 
 An upgrade keeps your automation's place: a schedule or a poll carries on from where it stood, so nothing is missed and nothing fires twice. If a listen's place cannot be carried (it cannot be told from a listen just like it, or its place cannot be read), it is never guessed at: the upgrade's answer and the log name that listen, and it starts from its first poll, missing what arrived after its last one. It waits up to 30 seconds for what is still on its way under 0.12, then says so and moves nothing; ask again. A listen on Attio cannot be rewritten for you: the upgrade names what stands in the way.
+
+## Upgrading an automation off 0.15
+
+An upgrade keeps your automation's place here too: each schedule and poll carries on from where its 0.15 listen stood, whatever an earlier release left under the name it polls under on 0.16, so nothing is missed and nothing fires twice. A listen whose place cannot be told from a listen just like it starts from its first poll, and the upgrade's answer names it.
