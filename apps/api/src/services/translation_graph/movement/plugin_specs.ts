@@ -9,9 +9,11 @@
 // Rust checker's and engine's input too, and the installed language refuses a
 // plugin spec with a field it does not know.
 
-import { LANGUAGE_VERSION, pluginKey, type LanguageVersion, type PluginSpec } from 'movement-lang';
+import { LANGUAGE_VERSION, findPlugin, pluginKey, type LanguageVersion, type PluginSpec } from 'movement-lang';
 import { isLegacyLanguageVersion, type EarlierOutput, type LegacyPluginSpec } from 'legacy-lang';
-import { bundledPluginSpecNamed, bundledPluginSpecs } from 'movement-engine/public/plugins';
+import { bundledPluginSpecs, pluginProgramName } from 'movement-engine/public/plugins';
+import { pluginSpecsOf } from 'engine-contracts/plugin_spec';
+import type { PluginModuleDefinition } from 'module-kit';
 
 /** Keyed as the catalog keys a plugin (`@lf/web/vc_url_retrieval`). */
 const EARLIER_OUTPUTS: Readonly<Record<string, readonly EarlierOutput[]>> = {
@@ -25,21 +27,43 @@ function withEarlierOutputs(key: string, spec: PluginSpec): LegacyPluginSpec {
   return earlierOutputs !== undefined ? { ...spec, earlierOutputs } : spec;
 }
 
-/** Every catalog plugin's checker surface, keyed the way a program spells it. */
-export function platformPluginSpecs(): Record<string, LegacyPluginSpec> {
+/** Plugin modules the platform hosts itself, beside the engine package's
+ *  bundled ones. */
+export interface PlatformPluginModules {
+  modules?: readonly PluginModuleDefinition[];
+}
+
+/** What a platform plugin module's declarations are to the checker, keyed and
+ *  tagged as a bundled plugin is (purity and maximum age ride the spec). */
+function platformModuleSpecs(modules: readonly PluginModuleDefinition[]): Record<string, PluginSpec> {
   return Object.fromEntries(
-    Object.entries(bundledPluginSpecs()).map(([key, spec]) => [key, withEarlierOutputs(key, spec)]),
+    modules.flatMap((definition) =>
+      Object.entries(pluginSpecsOf(definition.plugins)).map(([name, spec]): [string, PluginSpec] => [
+        pluginKey(definition.name, name),
+        { ...spec, package: definition.name, name },
+      ]),
+    ),
+  );
+}
+
+/** Every catalog plugin's checker surface, keyed the way a program spells it. */
+export function platformPluginSpecs(options: PlatformPluginModules = {}): Record<string, LegacyPluginSpec> {
+  return Object.fromEntries(
+    Object.entries({ ...bundledPluginSpecs(), ...platformModuleSpecs(options.modules ?? []) }).map(([key, spec]) => [
+      key,
+      withEarlierOutputs(key, spec),
+    ]),
   );
 }
 
 /** A catalog plugin's checker surface by its key or by a bare name only one
  *  package serves. */
-export function platformPluginSpecNamed(name: string): LegacyPluginSpec | undefined {
-  const spec = bundledPluginSpecNamed(name);
-  if (spec === undefined) return undefined;
-  return spec.package !== undefined && spec.name !== undefined
-    ? withEarlierOutputs(pluginKey(spec.package, spec.name), spec)
-    : spec;
+export function platformPluginSpecNamed(name: string, options: PlatformPluginModules = {}): LegacyPluginSpec | undefined {
+  // A key is written as it is (a package name may carry a dash); a bare name is
+  // its program spelling.
+  const specs = platformPluginSpecs(options);
+  const hit = findPlugin(specs, name) ?? findPlugin(specs, pluginProgramName(name));
+  return hit !== undefined && 'found' in hit ? hit.found.spec : undefined;
 }
 
 /** `plugins` as a snapshot built for `languageVersion` carries them (by

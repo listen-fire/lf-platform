@@ -934,6 +934,32 @@ export function builtinModuleWorkKinds(
 
 // ── Plugins ─────────────────────────────────────────────────────────────────
 
+/** The declaration of `definition` that `wanted` (a plugin's key) or `declared`
+ *  (its bare name, when a bundled spec gave one) names. A platform module's
+ *  plugin has no bundled spec, so only its key says which declaration. */
+function declarationServedAs(definition: PluginModuleDefinition, names: { wanted: string; declared: string }) {
+  return (
+    pluginDeclarationNamed(definition.plugins, names.declared) ??
+    definition.plugins.find(
+      (d) => pluginProgramName(pluginKey(definition.name, d.signature.name)) === pluginProgramName(names.wanted),
+    )
+  );
+}
+
+/** The plugin modules on the table that the engine package does not bundle:
+ *  the platform's own, whose declarations the catalog adds to the bundled ones. */
+export function platformPluginModules(table: BuiltinModuleTable = BUILTIN_MODULES): PluginModuleDefinition[] {
+  const bundled = bundledPluginSpecs();
+  const modules = new Set<PluginModuleDefinition>();
+  for (const entry of Object.values(table)) {
+    if (entry.kind !== 'plugin' || entry.line !== 'module') continue;
+    const definition = entry.load();
+    const isBundled = definition.plugins.some((d) => Object.hasOwn(bundled, pluginKey(definition.name, pluginProgramName(d.signature.name))));
+    if (!isBundled) modules.add(definition);
+  }
+  return [...modules];
+}
+
 /**
  * The in-process plugin module that serves `plugin` (either spelling), when a
  * plugin is on a module line whose module declares it; undefined sends the call to the legacy
@@ -954,7 +980,7 @@ export function builtinPluginModule(
     if (entry.kind !== 'plugin' || entry.line !== 'module') continue;
     if (pluginProgramName(name) !== pluginProgramName(wanted)) continue;
     const definition = entry.load();
-    if (pluginDeclarationNamed(definition.plugins, declared) === undefined) continue;
+    if (declarationServedAs(definition, { wanted, declared }) === undefined) continue;
     const loaded = loadedPluginModules.get(definition)?.get(install.teamId);
     if (loaded !== undefined) return loaded;
     const module = pluginsInProcess(definition, {

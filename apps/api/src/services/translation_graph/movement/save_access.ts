@@ -27,7 +27,7 @@ import { getRemoteAdapter } from '../adapters/remote/store';
 import { teamAdapterManifests } from '../adapters/team_manifests';
 import { constructionsOf, loadCredentialRows } from './catalog';
 import { movementFileFacets } from './files';
-import { libraryFaultRecord, librariesInMessage, RUN_CHECK_LINE, withoutLibraryText } from './library_faults';
+import { libraryFaultRecord, librariesOf, RUN_CHECK_LINE, withoutLibraryText } from './library_faults';
 import { getMovementRow, getMovementRowByName, type MovementRow } from './store';
 
 /** Why a creation's statements were refused: the decision's own reasons, and statements given to a save that overwrites. */
@@ -208,7 +208,7 @@ export function librariesRefusal(unusable: readonly NamedLibrary[]): { refused: 
  * own check (no person) reads everything. Every check that reports to a person
  * goes through this: validate, save, the carried route, the upgrade.
  */
-export async function hideUnreadableLibraries<D extends { message: string }>(
+export async function hideUnreadableLibraries<D extends { message: string; file?: string }>(
   diagnostics: readonly D[],
   input: { teamId: string; audience: CatalogAudience },
 ): Promise<D[]> {
@@ -226,7 +226,7 @@ export async function hideUnreadableLibraries<D extends { message: string }>(
   };
   return Promise.all(
     diagnostics.map(async (diagnostic) => {
-      for (const library of librariesInMessage(diagnostic.message)) {
+      for (const library of librariesOf(diagnostic)) {
         if (!(await hidden(library))) continue;
         return withoutLibraryText(
           diagnostic,

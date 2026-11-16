@@ -3,8 +3,9 @@
 // check who may read a library both need it, and neither imports the other.
 
 // How the checker words a fault inside an imported file. This is the one place
-// that knows the wording; the checker's structural field naming the file a
-// diagnostic came from replaces it. A fault in a file that runs is on the
+// that knows the wording, and it is read only where text alone survives (a
+// stored run's failure) and for the levels below the first library: a
+// diagnostic object names the library it came from in its `file` field. A fault in a file that runs is on the
 // importer's import line, in the library's name and with its own line number,
 // one such prefix per level, outermost first. A file that does not parse has
 // no line prefix: the message begins with the library's name and the parser's
@@ -28,6 +29,14 @@ export function librariesInMessage(message: string): string[] {
   }
 }
 
+/** The libraries a diagnostic's fault passes through, outermost first. The
+ *  first is the diagnostic's `file`; the message is read only for the levels
+ *  below it, which no field names. */
+export function librariesOf(diagnostic: { message: string; file?: string }): string[] {
+  const viaText = librariesInMessage(diagnostic.message);
+  return diagnostic.file === undefined ? viaText : [diagnostic.file, ...viaText.slice(1)];
+}
+
 /** A failed run's check line: its code and the importer's line, then the library's words. */
 export const RUN_CHECK_LINE = /^(\s*\S+ \(line \d+\): )"([^"]+)"(?: line \d+: | does not parse).*$/;
 
@@ -49,9 +58,9 @@ export function libraryFaultRecord(library: string): string {
  * will read it, so a fault the check found inside a library names the library
  * and nothing of its lines. The library's readers see the fault by checking it.
  */
-export function withoutLibraryFaults<D extends { message: string }>(diagnostics: readonly D[]): D[] {
+export function withoutLibraryFaults<D extends { message: string; file?: string }>(diagnostics: readonly D[]): D[] {
   return diagnostics.map((diagnostic) => {
-    const [library] = librariesInMessage(diagnostic.message);
+    const [library] = librariesOf(diagnostic);
     return library === undefined ? diagnostic : withoutLibraryText(diagnostic, libraryFaultRecord(library));
   });
 }

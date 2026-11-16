@@ -56,7 +56,7 @@ import { connectMethodForType } from '../../credentials/connect_link';
 import { isLegacyApp } from '../../credentials/app_id';
 import { isCredentialType } from '../adapters/credential_type';
 import { indexManifestsByName, listAdapterManifests } from '../adapters/registry';
-import { adapterKeyNamed, builtinModulePackage, connectWrittenAs } from '../adapters/builtin_modules';
+import { adapterKeyNamed, builtinModulePackage, connectWrittenAs, platformPluginModules } from '../adapters/builtin_modules';
 import { mcpDisabledRefusal } from '../adapters/mcp/enabled';
 import { listRemoteAdapters } from '../adapters/remote/store';
 import { teamAdapterManifests } from '../adapters/team_manifests';
@@ -210,16 +210,21 @@ const UNIT_SCHEMAS: Record<string, InstanceSchema> = {
   [CRON_ADAPTER_TYPE]: unitInstanceSchema(CRON_ADAPTER_TYPE, CRON_SURFACE),
 };
 
+/** The plugin modules the platform hosts beside the engine package's bundled
+ *  ones, whose declarations every catalog lists. */
+const platformModules = (): { modules: ReturnType<typeof platformPluginModules> } => ({ modules: platformPluginModules() });
+
 /** What the checker reads of a module's listens, off its manifest alone, as
  *  the engine's own snapshot projects it: whether anything can fire, what an
  *  author is told to expect, the re-send window, and how a 0.12 settings
  *  listen is rewritten onto an edge. */
-function listenVocabularyOf(manifest: AdapterManifest): Pick<AdapterSpec, 'canFire' | 'triggerExpectation' | 'resendWindowSeconds' | 'listenSettingsBecome'> {
+function listenVocabularyOf(manifest: AdapterManifest): Pick<AdapterSpec, 'canFire' | 'triggerExpectation' | 'resendWindowSeconds' | 'listenSettingsBecome' | 'listensLimitedBefore'> {
   return {
     ...((manifest.supportedTriggers ?? []).length > 0 ? { canFire: true } : {}),
     ...(manifest.triggerExpectation !== undefined ? { triggerExpectation: manifest.triggerExpectation } : {}),
     ...(manifest.resendWindowSeconds !== undefined ? { resendWindowSeconds: manifest.resendWindowSeconds } : {}),
     ...(manifest.listenSettingsBecome !== undefined ? { listenSettingsBecome: manifest.listenSettingsBecome } : {}),
+    ...(manifest.listensLimitedBefore !== undefined ? { listensLimitedBefore: manifest.listensLimitedBefore } : {}),
   };
 }
 
@@ -272,9 +277,9 @@ export function staticCatalogFromManifests(
       return Object.keys(options.credentials ?? {});
     },
     plugin(name): PluginSpec | undefined {
-      return platformPluginSpecNamed(name);
+      return platformPluginSpecNamed(name, platformModules());
     },
-    pluginNames: () => Object.keys(platformPluginSpecs()),
+    pluginNames: () => Object.keys(platformPluginSpecs(platformModules())),
     instantiate(adapterName): InstanceSchema | undefined {
       // STUB — construction arguments are ignored; see module header for
       // the real per-credential seam.
@@ -300,7 +305,7 @@ export function staticCatalogFromManifests(
 export function snapshotOverManifests(catalog: Catalog): CatalogSnapshot {
   const snapshot = catalogSnapshotOf(catalog, {
     adapters: listAdapterManifests().map((m) => m.adapterType),
-    plugins: Object.keys(platformPluginSpecs()),
+    plugins: Object.keys(platformPluginSpecs(platformModules())),
   });
   return { ...snapshot, plugins: snapshotPluginSpecs(snapshot.plugins) };
 }
@@ -1176,9 +1181,9 @@ async function assembleTeamCatalog(
       return Object.keys(credentialsByName);
     },
     plugin(name): PluginSpec | undefined {
-      return platformPluginSpecNamed(name);
+      return platformPluginSpecNamed(name, platformModules());
     },
-    pluginNames: () => Object.keys(platformPluginSpecs()),
+    pluginNames: () => Object.keys(platformPluginSpecs(platformModules())),
     instantiate(adapterName, args): InstanceSchema | undefined {
       const manifest = manifestBySlug.get(adapterName);
       if (!manifest) return undefined;
@@ -1549,7 +1554,7 @@ function runSnapshotOf(
     snapshot: buildCatalogSnapshot({
       adapters: [...adapters.values()],
       credentials,
-      plugins: snapshotPluginSpecs(platformPluginSpecs(), { languageVersion }),
+      plugins: snapshotPluginSpecs(platformPluginSpecs(platformModules()), { languageVersion }),
       files: Object.fromEntries([...fileSources].map(([name, source]) => [name, { source }])),
       models: availableChatModels(),
     }),
@@ -1616,7 +1621,7 @@ export async function movementCatalogSnapshotForTeam(
 
   const { credentials } = credentialsOf(credentialsByName);
 
-  const plugins = snapshotPluginSpecs(platformPluginSpecs());
+  const plugins = snapshotPluginSpecs(platformPluginSpecs(platformModules()));
 
   // Saved movement files — the import-path namespace. Carrying the
   // sources keeps the editor full-fidelity offline: imports resolve,
