@@ -23,7 +23,6 @@ import { ChevronDown, History, Inbox, Loader2 } from "lucide-react";
 
 import { trpc, type RouterOutputs } from "@/lib/trpc";
 import { Badge, EmptyState } from "@/components/ui";
-import { managesTeam } from "@/components/access/grantees";
 import { RecentActivityDetail } from "@/components/automations/recent-activity-detail";
 import { laneShortForm } from "@/lib/trigger-name";
 import { formatRunCostUsd } from "@/lib/run-cost";
@@ -371,13 +370,18 @@ function EventsReceived({
     { refetchInterval: 15_000, refetchOnWindowFocus: true },
   );
 
-  // A kept request is the team admins' to read (each read recorded), so
-  // only they are offered it.
-  const viewer = trpc.views.teamMembers.overview.useQuery();
-  const isAdmin = viewer.data !== undefined && managesTeam(viewer.data.viewer.access);
+  // A kept request is shown to whoever may use the connection it came for
+  // (each read recorded); the server refuses anyone else.
   const shown = trpc.views.triggers.showDeliveryRequest.useMutation();
 
   const replay = trpc.views.triggers.replayDelivery.useMutation({
+    onSuccess: () => {
+      void utils.views.movement.events.invalidate({ movementId });
+      void utils.views.movement.runs.invalidate({ movementId });
+    },
+  });
+
+  const runWith = trpc.views.movement.runWithEvent.useMutation({
     onSuccess: () => {
       void utils.views.movement.events.invalidate({ movementId });
       void utils.views.movement.runs.invalidate({ movementId });
@@ -442,7 +446,7 @@ function EventsReceived({
                       </span>
                     )}
                   </span>
-                  {deliveryId !== null && isAdmin && (
+                  {deliveryId !== null && (
                     <button
                       type="button"
                       disabled={shown.isLoading}
@@ -452,6 +456,24 @@ function EventsReceived({
                       title="Show the request this delivery came as. Your read is recorded."
                     >
                       Show request
+                    </button>
+                  )}
+                  {deliveryId !== null && evt.arrivalIndex !== null && (
+                    <button
+                      type="button"
+                      disabled={runWith.isLoading}
+                      onClick={() =>
+                        runWith.mutate({
+                          id: movementId,
+                          deliveryId,
+                          arrivalIndex: evt.arrivalIndex ?? 0,
+                        })
+                      }
+                      className="shrink-0 rounded-lg border border-gray-200 px-2.5 py-1 text-[12px] font-medium text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      data-testid={`run-with-event-${evt.id}`}
+                      title="Start this automation with this event's data, without its filters."
+                    >
+                      Run with this event
                     </button>
                   )}
                   {deliveryId !== null && (
@@ -515,6 +537,30 @@ function EventsReceived({
               data-testid="replay-outcome"
             >
               {replay.data.lines.join(" ")}
+            </div>
+          )}
+          {runWith.data?.ok === false && (
+            <div
+              className="border-t border-gray-100 px-4 py-2 text-[12px] text-red-600"
+              data-testid="run-with-event-refused"
+            >
+              {runWith.data.errors.join(" ")}
+            </div>
+          )}
+          {runWith.data?.ok === true && (
+            <div
+              className="border-t border-gray-100 px-4 py-2 text-[12px] text-gray-600"
+              data-testid="run-with-event-started"
+            >
+              {runWith.data.runIds.length === 1 ? "One run queued." : `${runWith.data.runIds.length} runs queued.`}
+            </div>
+          )}
+          {runWith.error && (
+            <div
+              className="border-t border-gray-100 px-4 py-2 text-[12px] text-red-600"
+              data-testid="run-with-event-error"
+            >
+              {runWith.error.message}
             </div>
           )}
           {replay.error && (

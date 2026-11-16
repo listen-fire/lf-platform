@@ -660,7 +660,7 @@ function automationConnectorOptions(): McpRouterOptions {
       },
       listArrivals: {
         description:
-          "List what reached an automation's listeners, newest first: each run an arrival started (with its runId) and each arrival a listener could not judge (status \"not_judged\", with the reason — usually a system that did not answer a lookup — and which attempt). Each entry names its `listen` and `deliveryId`: pass both to replayDelivery. Pass the automation id or its exact name.",
+          "List what reached an automation's listeners, newest first: each run an arrival started (with its runId) and each arrival a listener could not judge (status \"not_judged\", with the reason — usually a system that did not answer a lookup — and which attempt). Each entry names its `listen` and `deliveryId`: pass both to replayDelivery; with its `arrivalIndex` (when it has one), pass the automation, `deliveryId` and `arrivalIndex` to runWithEvent. Pass the automation id or its exact name.",
         annotations: { readOnlyHint: true },
         inputSchema: {
           idOrName: z.string().describe('The automation id (from listAutomations) or its exact name.'),
@@ -671,7 +671,7 @@ function automationConnectorOptions(): McpRouterOptions {
       },
       replayDelivery: {
         description:
-          'Put one delivery through one listener again — the way out of an arrival the listener could not judge (listArrivals shows it as "not_judged"), once the system it needed answers again. Only what that delivery brought is judged, by that listener alone. A listener that already ran the arrival runs nothing and says so; `force: true` runs it again, so confirm with the user first. Returns { outcome, runIds, attempt, stillUndecided, lines }: the runs are queued, so poll checkRun with each runId.',
+          'Put one delivery through one listener again — the way out of an arrival the listener could not judge (listArrivals shows it as "not_judged"), once the system it needed answers again. Needs write on the automation the listener belongs to. Only what that delivery brought is judged, by that listener alone, so no other listener of the automation, or of any other, reruns. A listener that already ran the arrival runs nothing and says so; `force: true` runs it again, so confirm with the user first. Returns { outcome, runIds, attempt, stillUndecided, lines }: the runs are queued, so poll checkRun with each runId.',
         annotations: { destructiveHint: true },
         inputSchema: {
           listen: z.string().describe('The listener, as listArrivals names it (`listen`).'),
@@ -681,6 +681,19 @@ function automationConnectorOptions(): McpRouterOptions {
         },
         title: 'Replay a delivery through a listener',
         endpoint: { method: 'POST', path: '/v1/automation/automations/replay-delivery' },
+      },
+      runWithEvent: {
+        description:
+          "Start an automation with a stored event's data, without reading its listeners' filters — as runAutomation skips them. Each listener of the automation that hears the event (its system and connection) starts one run; a listener that ran the event before runs it again. Needs write on the automation (anyone who may write it could change the filter anyway). Pass the automation, and the `deliveryId` and `arrivalIndex` listArrivals shows for the event. Returns { runIds, movementName, hint }: the runs are queued, so poll checkRun with each runId.",
+        annotations: { destructiveHint: true },
+        inputSchema: {
+          automation: z.string().describe('The automation id (from listAutomations) or its exact name.'),
+          deliveryId: z.string().describe('The delivery, as listArrivals names it (`deliveryId`).'),
+          arrivalIndex: z.number().int().min(0).describe('Which event of that delivery, as listArrivals names it (`arrivalIndex`).'),
+          team: z.string().optional().describe('Team id (see instructions); omit to search across your teams.'),
+        },
+        title: 'Run an automation with a stored event',
+        endpoint: { method: 'POST', path: '/v1/automation/automations/run-with-event' },
       },
       resumeListen: {
         description:

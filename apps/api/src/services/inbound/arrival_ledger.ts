@@ -3,10 +3,12 @@
 // and listen a replay takes, never the request a delivery kept (ruling 3).
 
 import { sql } from 'kysely';
+import { arrivalReceiptKey } from 'movement-engine/public/inbound';
 
 import type { TeamId } from '../../generated/kysely/core/Team';
 
 import { getAutomationsQb } from '../../lib/kysely';
+import { readKeptRequest } from './captured_request';
 
 /** How an arrival reached one of a movement's listens: a run it started, or
  *  an `Arrival Not Judged` fact (the listen could not tell). */
@@ -19,6 +21,8 @@ export type MovementEventItem = {
   /** The listen, and the kept delivery it came in: what a replay names. */
   triggerId: string;
   deliveryId: string | null;
+  /** Which of the delivery's events it was, when that is known: what "Run with this event" names. */
+  arrivalIndex: number | null;
   /** The module it came from. */
   adapterType: string;
   status: MovementEventStatus;
@@ -28,6 +32,26 @@ export type MovementEventItem = {
   occurredAt: Date;
   createdAt: Date;
 };
+
+/** The receipt keys of the events each delivery brought, in order; a delivery that kept no request is left out. */
+async function eventKeysOf(teamId: TeamId, deliveryIds: readonly string[]): Promise<Map<string, readonly string[]>> {
+  if (deliveryIds.length === 0) return new Map();
+  const { rows } = await sql<{ id: string; request: unknown }>`
+    select id::text as id, request from automations.delivery
+    where team_id = ${teamId}::uuid and id::text in (${sql.join(deliveryIds)}) and request is not null`.execute(getAutomationsQb(['delivery']));
+  const keys = new Map<string, readonly string[]>();
+  for (const row of rows) {
+    const kept = readKeptRequest(row.request);
+    if (kept === null) continue;
+    keys.set(
+      row.id,
+      'page' in kept
+        ? kept.page.arrivals.flatMap((arrival) => ('gone' in arrival ? [] : [arrivalReceiptKey(arrival)]))
+        : (kept.request.arrivalIds ?? []),
+    );
+  }
+  return keys;
+}
 
 /**
  * The arrival ledger for a movement's listens, newest first: each run an
@@ -72,12 +96,20 @@ export async function movementEventsImpl(params: { teamId: TeamId; movementId: s
     join automations.arrival_unjudged u on u.team_id = t.team_id and u.pipeline = t.config->'listen'->>'pipeline'
     where t.team_id = ${teamId}::uuid and t.movement_id = ${movementId}::uuid
     order by u.noted_at desc limit 50`.execute(exec);
+  const keys = await eventKeysOf(teamId, [...new Set([...runs.map((run) => run.delivery_id), ...facts.flatMap((fact) => (fact.delivery_id === null ? [] : [fact.delivery_id]))])]);
+  // A run does not record which event started it: it is known only of a delivery that brought one.
+  const indexOfRun = (deliveryId: string): number | null => (keys.get(deliveryId)?.length === 1 ? 0 : null);
+  const indexOfFact = (deliveryId: string | null, arrival: string): number | null => {
+    const index = deliveryId === null ? -1 : (keys.get(deliveryId)?.indexOf(arrival) ?? -1);
+    return index === -1 ? null : index;
+  };
   const items: MovementEventItem[] = [
     ...runs.map((run): MovementEventItem => ({
       id: run.id,
       lane: run.lane,
       triggerId: run.trigger_id,
       deliveryId: run.delivery_id,
+      arrivalIndex: indexOfRun(run.delivery_id),
       adapterType: run.kind,
       status: run.status === 'failed' ? 'run_failed' : 'ran',
       failureReason: run.failure_reason,
@@ -90,6 +122,7 @@ export async function movementEventsImpl(params: { teamId: TeamId; movementId: s
       lane: fact.lane,
       triggerId: fact.trigger_id,
       deliveryId: fact.delivery_id,
+      arrivalIndex: indexOfFact(fact.delivery_id, fact.arrival),
       adapterType: fact.kind,
       status: 'not_judged',
       failureReason: fact.reason,

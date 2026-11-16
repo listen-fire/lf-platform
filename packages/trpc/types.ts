@@ -185,6 +185,16 @@ export type MovementVersionId = string & {
     __brand: 'automations.movement_version';
 };
 
+/** Identifier type for automations.trigger_event */
+export type TriggerEventId = string & {
+    __brand: 'automations.trigger_event';
+};
+
+/** Identifier type for automations.trigger_run */
+export type TriggerRunId = string & {
+    __brand: 'automations.trigger_run';
+};
+
 /** What a replay did, said in lines a person reads. */
 export type ReplayOutcome = 
 /** It could not be replayed at all: no such listen or delivery, or no
@@ -253,16 +263,6 @@ export type AutomationStatus = 'live' | 'setting_up' | 'paused' | 'error';
 
 export type TriggerRunMode = 'off' | 'dry_run' | 'live';
 
-/** Identifier type for automations.trigger_event */
-export type TriggerEventId = string & {
-    __brand: 'automations.trigger_event';
-};
-
-/** Identifier type for automations.trigger_run */
-export type TriggerRunId = string & {
-    __brand: 'automations.trigger_run';
-};
-
 /** Which saved version a run executed, against the one that would run
  *  today. A run pins its version at start, so a firing from before the
  *  last save ran OLDER logic than the editor shows — the thing that
@@ -286,6 +286,12 @@ export interface MovementRunAsyncDispatched {
     movementName: string;
 }
 export type MovementRunAsyncResult = MovementRunAsyncDispatched | MovementRunNowFailure;
+export interface RunWithEventStarted {
+    ok: true;
+    /** One run for each listen of the automation the arrival came on. */
+    runIds: string[];
+    movementName: string;
+}
 export interface MovementRunStatus {
     runId: string;
     /** 'running' | 'parked' (waiting on a human ask) | 'success' | 'partial' | 'failed'. */
@@ -757,6 +763,8 @@ export type MovementEventItem = {
     /** The listen, and the kept delivery it came in: what a replay names. */
     triggerId: string;
     deliveryId: string | null;
+    /** Which of the delivery's events it was, when that is known: what "Run with this event" names. */
+    arrivalIndex: number | null;
     /** The module it came from. */
     adapterType: string;
     status: MovementEventStatus;
@@ -9413,6 +9421,36 @@ declare const trpcRouter: _trpc_server.CreateRouterInner<_trpc_server.RootConfig
                 _output_in: typeof _trpc_server.unsetMarker;
                 _output_out: typeof _trpc_server.unsetMarker;
             }, MovementRunAsyncResult>;
+            runWithEvent: _trpc_server.BuildProcedure<"mutation", {
+                _config: _trpc_server.RootConfig<{
+                    ctx: {
+                        authorise: () => Promise<void>;
+                    };
+                    meta: object;
+                    errorShape: {
+                        message: string;
+                        code: _trpc_server_rpc.TRPC_ERROR_CODE_NUMBER;
+                        data: _trpc_server_dist_error_formatter.DefaultErrorData;
+                    };
+                    transformer: _trpc_server.DefaultDataTransformer;
+                }>;
+                _meta: object;
+                _ctx_out: {
+                    authorise: () => Promise<void>;
+                };
+                _input_in: {
+                    id: string;
+                    deliveryId: string;
+                    arrivalIndex: number;
+                };
+                _input_out: {
+                    id: string;
+                    deliveryId: string;
+                    arrivalIndex: number;
+                };
+                _output_in: typeof _trpc_server.unsetMarker;
+                _output_out: typeof _trpc_server.unsetMarker;
+            }, MovementRunNowFailure | RunWithEventStarted>;
             runStatus: _trpc_server.BuildProcedure<"query", {
                 _config: _trpc_server.RootConfig<{
                     ctx: {

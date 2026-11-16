@@ -17,7 +17,7 @@ import { randomUUID } from 'node:crypto';
 
 import { sql } from 'kysely';
 import { z } from 'zod';
-import { listenPlanSchema, type Arrival, type AwaitHead, type AwaitLanding, type ListenPlan } from 'engine-contracts';
+import { lastEdgeOf, listenPlanSchema, type Arrival, type AwaitHead, type AwaitLanding, type ListenPlan, type Verdict } from 'engine-contracts';
 import {
   arrivalReceiptKey,
   arrivalTriggerOf,
@@ -201,6 +201,11 @@ export interface Judged {
   lines: string[];
 }
 
+/** What a vouched arrival is to a listen: it fires when it came on the listen's module and last edge, whatever its filter says. */
+function vouchedVerdict(listen: SavedListen, arrival: Exclude<Arrival, { gone: true }>, adapterType: string): Verdict | null {
+  return listen.plan.adapter === adapterType && lastEdgeOf(listen.plan) === arrival.edge ? { fires: true } : null;
+}
+
 /**
  * Each arrival judged against every listen of `listens` on its edge, in the
  * order the arrivals came. A listen on another connection than the delivery
@@ -215,6 +220,9 @@ export function judgeArrivals(input: {
   now: Date;
   /** A replay judges by one listen alone, and its facts are this attempt. */
   attempt?: number;
+  /** Someone with write on the automation vouches for the arrival: a listen
+   *  on its edge fires without reading its filter, as a Run now's press does. */
+  vouched?: boolean;
 }): Judged {
   const { delivery, now } = input;
   const nowMs = now.getTime();
@@ -232,7 +240,7 @@ export function judgeArrivals(input: {
       // A connection's delivery is its own listens'; an install's is every one's.
       if (delivery.credentialsId !== null && listen.credentialsId !== null && listen.credentialsId !== delivery.credentialsId) continue;
       const heard = namedArrival(arrival, listen.fieldIds as FieldIdsByType);
-      const verdict = listenFires(
+      const verdict = input.vouched === true ? vouchedVerdict(listen, arrival, delivery.adapterType) : listenFires(
         { plan: listen.plan, pipeline: listen.pipeline, ...credentialOf(listen), ...(listen.constructionArgs !== undefined ? { constructionArgs: listen.constructionArgs } : {}) },
         heard,
         { adapterType: delivery.adapterType, ...credentialOf(listen) },

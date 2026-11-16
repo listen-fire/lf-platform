@@ -55,7 +55,7 @@ export type ReplayOutcome =
       lines: string[];
     };
 
-interface KeptDeliveryRow {
+export interface KeptDeliveryRow {
   id: string;
   subscriptionId: string;
   source: string;
@@ -63,7 +63,7 @@ interface KeptDeliveryRow {
   request: unknown;
 }
 
-async function deliveryOf(teamId: TeamId, deliveryId: string): Promise<KeptDeliveryRow | null> {
+export async function deliveryOf(teamId: TeamId, deliveryId: string): Promise<KeptDeliveryRow | null> {
   const { rows } = await sql<{ id: string; subscription_id: string; source: string; replay_of: string | null; request: unknown }>`
     select id::text as id, subscription_id, source, replay_of::text as replay_of, request
     from automations.delivery
@@ -83,7 +83,7 @@ async function adapterTypeOf(triggerId: TriggerId): Promise<string | null> {
  *  connection: a module that checks its own requests is told it is a replay;
  *  any other reads the body as its door handed it. Only the arrivals the
  *  delivery brought, when it named them. */
-async function reread(listen: SavedListen, adapterType: string, request: CapturedRequest): Promise<Arrival[]> {
+export async function reread(listen: SavedListen, adapterType: string, request: CapturedRequest): Promise<Arrival[]> {
   const adapter = await resolveAdapter({
     adapterType,
     teamId: listen.teamId,

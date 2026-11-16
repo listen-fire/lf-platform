@@ -1,7 +1,7 @@
 // What a delivery keeps of how it came in, against a real database: a door
 // that read its own arrivals keeps them as a page, which a replay judges again
-// through a listen on that module only; a kept request is shown only to a team
-// admin, each read recorded (ruling 3); and the prune forgets requests and
+// through a listen on that module only; a kept request is shown to whoever the route lets read it
+// (use on its connection), each read recorded; and the prune forgets requests and
 // deliveries with the runs' retention.
 
 import { randomUUID } from 'node:crypto';
@@ -23,7 +23,7 @@ import { replayThroughListen } from '../listen_replay';
 import { showDeliveryRequest } from '../show_request';
 
 const ADAPTER = 'door_test';
-const ADMIN = { userId: randomUUID(), access: 'admin' as const };
+const READER = { userId: randomUUID() };
 
 let teamId: TeamId;
 let otherTeamId: TeamId;
@@ -100,7 +100,7 @@ describe('a page a door read itself', () => {
   });
 });
 
-describe('showing a kept request (ruling 3)', () => {
+describe('showing a kept request', () => {
   let deliveryId: string;
 
   beforeAll(async () => {
@@ -115,15 +115,8 @@ describe('showing a kept request (ruling 3)', () => {
     });
   });
 
-  it.each(['read', 'write'] as const)('is refused to a %s member who is not an admin, and records nothing', async (access) => {
-    const shown = await showDeliveryRequest({ teamId, deliveryId, reader: { userId: randomUUID(), access } });
-
-    expect(shown).toEqual({ outcome: 'refused', reason: "only the team's admins may read a delivery's request" });
-    expect(await reads(deliveryId)).toEqual([]);
-  });
-
-  it('is shown to an admin as kept (redacted, declared headers only), and the read is recorded', async () => {
-    const shown = await showDeliveryRequest({ teamId, deliveryId, reader: { ...ADMIN, credentialId: 'key-1' } });
+  it('is shown as kept (redacted, declared headers only), and the read is recorded', async () => {
+    const shown = await showDeliveryRequest({ teamId, deliveryId, reader: { ...READER, credentialId: 'key-1' } });
 
     if (shown.outcome !== 'shown') throw new Error(shown.reason);
     expect(shown.kept).toEqual({
@@ -136,11 +129,11 @@ describe('showing a kept request (ruling 3)', () => {
       bodyEncoding: 'utf8',
       arrivalIds: [expect.any(String)],
     });
-    expect(await reads(deliveryId)).toEqual([{ read_by: ADMIN.userId, credential_id: 'key-1' }]);
+    expect(await reads(deliveryId)).toEqual([{ read_by: READER.userId, credential_id: 'key-1' }]);
   });
 
   it("is refused for another team's delivery", async () => {
-    const shown = await showDeliveryRequest({ teamId: otherTeamId, deliveryId, reader: ADMIN });
+    const shown = await showDeliveryRequest({ teamId: otherTeamId, deliveryId, reader: READER });
 
     expect(shown.outcome).toBe('refused');
   });
@@ -148,7 +141,7 @@ describe('showing a kept request (ruling 3)', () => {
   it('shows a page as the arrivals it read', async () => {
     const page = await deliver({ identity: 'mail-2', request: keptPage({ adapterType: ADAPTER, credentialsId: null, arrivals: [arrival('mail-2')] }) });
 
-    const shown = await showDeliveryRequest({ teamId, deliveryId: page, reader: ADMIN });
+    const shown = await showDeliveryRequest({ teamId, deliveryId: page, reader: READER });
 
     if (shown.outcome !== 'shown') throw new Error(shown.reason);
     expect(shown.kept).toEqual({ kind: 'page', adapter: ADAPTER, credential: null, arrivals: [arrival('mail-2')] });

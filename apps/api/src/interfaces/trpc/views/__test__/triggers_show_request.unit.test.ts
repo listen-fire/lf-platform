@@ -1,6 +1,7 @@
-// Reading a delivery's kept request takes admin access on the team: a write
-// member is refused with the same answer a read member gets, before any
-// delivery is looked at, and a team admin reaches the read.
+// Reading a delivery's kept request takes use on the connection the delivery
+// came for: a member who may use it is shown the event whatever their level on
+// the team, one who may not is told the delivery is not there, and a delivery
+// of no connection is the team's. The read is recorded either way it is shown.
 
 import { runWithPrincipal, type Principal } from 'principal';
 
@@ -9,8 +10,20 @@ jest.mock('../../../../services/inbound/show_request', () => ({
   ...jest.requireActual('../../../../services/inbound/show_request'),
   showDeliveryRequest: (...args: unknown[]) => (showDeliveryRequest as (...rest: unknown[]) => unknown)(...args),
 }));
-jest.mock('../../../../services/access/whose', () => ({
-  Whose: { automationsReachedBy: jest.fn(async () => ({ untraced: false, automationIds: [] })) },
+
+const deliveryOriginOf = jest.fn(async (): Promise<{ adapterType: string; credentialsId: string | null } | null> => ({
+  adapterType: 'attio',
+  credentialsId: 'connection-1',
+}));
+jest.mock('../../../../services/inbound/delivery_origin', () => ({
+  deliveryOriginOf: (...args: unknown[]) => (deliveryOriginOf as (...rest: unknown[]) => unknown)(...args),
+}));
+
+const mayUse = jest.fn(async (_connectionId: string) => true);
+jest.mock('../../../../services/access/decide', () => ({
+  ...jest.requireActual('../../../../services/access/decide'),
+  accessTo: async (_principal: unknown, asked: { target: { thing: string; id: string } }) =>
+    asked.target.thing === 'connection' ? mayUse(asked.target.id) : true,
 }));
 
 import { Context } from '../../../../services/context';
@@ -29,21 +42,32 @@ function showAs(access: Principal['access']) {
   return ctx.runAsync(() => runWithPrincipal(principal, () => caller.showDeliveryRequest({ deliveryId: 'delivery-1' })));
 }
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  mayUse.mockResolvedValue(true);
+});
 
 describe("showing a delivery's kept request", () => {
-  it.each(['read', 'write'] as const)('refuses a %s member, and reads nothing', async (access) => {
+  it.each(['read', 'write', 'admin'] as const)('use_on_the_connection_shows_the_event: shows it to a %s member who may use the connection', async (access) => {
+    await expect(showAs(access)).resolves.toEqual({ outcome: 'shown' });
+    expect(mayUse).toHaveBeenCalledWith('connection-1');
+    expect(showDeliveryRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ teamId: 'team-1', deliveryId: 'delivery-1', reader: expect.objectContaining({ userId: 'user-1' }) }),
+    );
+  });
+
+  it.each(['write', 'admin'] as const)('says there is no such delivery to a %s member who may not use the connection, and reads nothing', async (access) => {
+    mayUse.mockResolvedValue(false);
     await expect(showAs(access)).resolves.toEqual({
       outcome: 'refused',
-      reason: "only the team's admins may read a delivery's request",
+      reason: expect.stringMatching(/^no delivery delivery-1 is kept for this team/),
     });
     expect(showDeliveryRequest).not.toHaveBeenCalled();
   });
 
-  it('shows it to a team admin', async () => {
-    await expect(showAs('admin')).resolves.toEqual({ outcome: 'shown' });
-    expect(showDeliveryRequest).toHaveBeenCalledWith(
-      expect.objectContaining({ teamId: 'team-1', deliveryId: 'delivery-1', reader: expect.objectContaining({ access: 'admin' }) }),
-    );
+  it('shows a delivery of no connection to a member of the team', async () => {
+    deliveryOriginOf.mockResolvedValueOnce({ adapterType: 'manual', credentialsId: null });
+    await expect(showAs('read')).resolves.toEqual({ outcome: 'shown' });
+    expect(mayUse).not.toHaveBeenCalled();
   });
 });

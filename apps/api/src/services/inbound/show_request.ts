@@ -1,12 +1,12 @@
-// The one read of a delivery's kept request (ruling 3). A kept request may
-// hold whatever the provider sent (a message's text, a person's address), so
-// no list or replay ever returns it: only this read, asked for one delivery by
-// one of the team's admins, and each read is recorded before it is answered.
+// The one read of a delivery's kept request. A kept request may hold whatever
+// the provider sent (a message's text, a person's address), so no list or
+// replay ever returns it: only this read, asked for one delivery by someone who
+// may use the connection it came for (the route decides that), and each read
+// is recorded before it is answered.
 
 import { TextDecoder } from 'node:util';
 
 import { sql } from 'kysely';
-import { meets, type Access } from 'principal';
 import type { Arrival } from 'engine-contracts';
 
 import type { TeamId } from '../../generated/kysely/core/Team';
@@ -17,7 +17,6 @@ import { readKeptRequest } from './captured_request';
 /** Who asks: a person of the team, and the API key they came through. */
 export interface RequestReader {
   userId: string;
-  access: Access;
   credentialId?: string;
 }
 
@@ -56,13 +55,6 @@ function bodyOf(base64: string): { body: string; bodyEncoding: 'utf8' | 'base64'
   }
 }
 
-/** Refused before any delivery is looked at: to anyone but a team admin. */
-export function adminRefusal(reader: RequestReader): ShownRequest | undefined {
-  return meets(reader.access, 'admin')
-    ? undefined
-    : { outcome: 'refused', reason: "only the team's admins may read a delivery's request" };
-}
-
 /** The answer for a delivery the team does not have. */
 export function noSuchDelivery(deliveryId: string): ShownRequest {
   return { outcome: 'refused', reason: `no delivery ${deliveryId} is kept for this team: a delivery past its retention is forgotten` };
@@ -70,13 +62,11 @@ export function noSuchDelivery(deliveryId: string): ShownRequest {
 
 /**
  * Show `deliveryId`'s kept request to `reader`, recording the read in the
- * same write. Refused, recording nothing, to anyone but a team admin, and for
- * a delivery the team does not have or that kept no request.
+ * same write. Refused, recording nothing, for a delivery the team does not
+ * have or that kept no request.
  */
 export async function showDeliveryRequest(input: { teamId: TeamId; deliveryId: string; reader: RequestReader }): Promise<ShownRequest> {
   const { teamId, deliveryId, reader } = input;
-  const refused = adminRefusal(reader);
-  if (refused !== undefined) return refused;
   return getAutomationsQb(['delivery', 'delivery_request_read']).transaction().execute(async (trx): Promise<ShownRequest> => {
     const { rows } = await sql<{ id: string; received_at: Date; source: string; replay_of: string | null; request: unknown }>`
       select id::text as id, received_at, source, replay_of::text as replay_of, request

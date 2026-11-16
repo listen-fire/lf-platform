@@ -19,7 +19,7 @@ import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { sql } from 'kysely';
 import { TRPCError } from '@trpc/server';
-import { currentPrincipal, runWithPrincipal } from 'principal';
+import { runWithPrincipal } from 'principal';
 import { logger } from 'movement-engine/public/log';
 import { observable } from '@trpc/server/observable';
 
@@ -31,8 +31,8 @@ import type { MovementId } from '../../../generated/kysely/automations/Movement'
 
 import { currentContext } from '../../../services/context';
 import { noSuchListen, replayThroughListen, type ReplayOutcome } from '../../../services/inbound/listen_replay';
+import { deliveryOriginOf } from '../../../services/inbound/delivery_origin';
 import {
-  adminRefusal,
   noSuchDelivery,
   showDeliveryRequest,
   type RequestReader,
@@ -67,7 +67,7 @@ import ExternalServiceType from '../../../generated/kysely/automations/ExternalS
 import { reportedFailureReason } from '../../../services/translation_graph/runs/trigger_run';
 import { UserService } from '../../../services/user';
 import { actingPrincipal, userProcedure as sharedUserProcedure } from '../procedures';
-import { EXEMPT, connectionUnseen, decidesEach, readableAmong, unseen, usableAmong, type Decision } from '../../access_route';
+import { EXEMPT, USE_CONNECTION, connectionUnseen, decidesEach, readableAmong, unseen, usableAmong, type Decision } from '../../access_route';
 import { callerAudience } from '../../../services/translation_graph/movement/audience';
 import { cannotChange } from '../access';
 import { Whose } from '../../../services/access/whose';
@@ -134,17 +134,6 @@ async function readsListen(triggerId: string, teamId: string): Promise<boolean> 
 async function changesListen(triggerId: string, teamId: string): Promise<boolean> {
   const owner = await Whose.automationOfListen({ triggerId, teamIds: [teamId] });
   return owner !== undefined && !(await cannotChange(owner.automationId));
-}
-
-/**
- * Whether the caller may read every automation a delivery of the team reached.
- * One that reached a run whose automation cannot be traced is read by nobody.
- */
-async function readsEverythingReached(deliveryId: string, teamId: string): Promise<boolean> {
-  const reached = await Whose.automationsReachedBy({ deliveryId, teamIds: [teamId] });
-  if (reached.untraced) return false;
-  for (const automationId of reached.automationIds) if (await unseen(automationId)) return false;
-  return true;
 }
 
 const triggersRouter = (procedure: typeof trpc.procedure) => {
@@ -946,8 +935,9 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
       }),
 
     /**
-     * Show one delivery's kept request (ruling 3): only to the team's admins,
-     * each read recorded. A mutation, so nothing refetches it unasked.
+     * Show one delivery's kept request: to anyone who may use the connection
+     * it came for, each read recorded. A mutation, so nothing refetches it
+     * unasked.
      */
     showDeliveryRequest: userProcedure
       .input(z.object({ deliveryId: z.string().min(1) }))
@@ -955,13 +945,10 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
         const { user } = currentContext();
         const reader: RequestReader = {
           userId: user.id,
-          access: currentPrincipal().access,
           ...(user.apiKeyId !== undefined ? { credentialId: user.apiKeyId } : {}),
         };
-        // A kept request is what reached each of those automations' listens.
-        const refused = adminRefusal(reader);
-        if (refused !== undefined) return refused;
-        if (!(await readsEverythingReached(input.deliveryId, user.teamId))) return noSuchDelivery(input.deliveryId);
+        const origin = await deliveryOriginOf({ teamId: user.teamId as TeamId, deliveryId: input.deliveryId });
+        if (origin?.credentialsId != null && (await connectionUnseen(origin.credentialsId))) return noSuchDelivery(input.deliveryId);
         return showDeliveryRequest({ teamId: user.teamId as TeamId, deliveryId: input.deliveryId, reader });
       }),
   });
@@ -1160,8 +1147,7 @@ decidesEach('triggers', {
   createAutomation: { exempt: 'creates a listen of no automation, which only team membership decides' },
   submitWebEvent: WRITES,
   replayDelivery: WRITES,
-  // Besides only the team's admins (ruling 3), only one who may read every automation it reached.
-  showDeliveryRequest: READS,
+  showDeliveryRequest: USE_CONNECTION,
 });
 
 export { triggersRouter };

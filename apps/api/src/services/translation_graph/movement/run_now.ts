@@ -26,6 +26,7 @@ import type { TriggerRunId } from '../../../generated/kysely/automations/Trigger
 import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
 import type { MovementId } from '../../../generated/kysely/automations/Movement';
 import { teamDocumentKeyPrefix } from 'movement-engine/public/files';
+import { arrivalReceiptKey } from 'movement-engine/public/inbound';
 import { services } from '../../../adapters/registry';
 import { getAutomationsQb } from '../../../lib/kysely';
 import { costMicrodollarsToUsd, runCostSummaries } from '../../../lib/llm_usage';
@@ -62,6 +63,11 @@ import { QUEUED_RUN_WORK_KINDS } from '../../work/kinds';
 import { carriedRunLaneOf } from './carried_run';
 import { CARRIED_RUN_NOW_NAME, carriedRunTriggerId, queueCarriedRunNow } from './carried_run_now';
 import { isLegacyLanguageVersion } from 'legacy-lang';
+import type { Arrival } from 'engine-contracts';
+import { logger } from 'movement-engine/public/log';
+import { readKeptRequest } from '../../inbound/captured_request';
+import { deliveryOriginOf } from '../../inbound/delivery_origin';
+import { deliveryOf, reread } from '../../inbound/listen_replay';
 
 export interface MovementRunNowSuccess {
   ok: true;
@@ -218,6 +224,115 @@ export async function runMovementAsync(
   });
   notifyWork();
   return { ok: true, runId: minted[0]!.runId, status: 'running', movementName: listen.file };
+}
+
+// ── Run with this event ─────────────────────────────────────────────────────
+//
+// A stored arrival put through an automation's own listens as if it had passed
+// their filters: someone with write on the automation vouches for it, as a
+// Run now's press does (a writer could change the filter anyway). It is kept
+// as a replay delivery of the one stored, under receipts of its own, so a
+// listen that ran the arrival before runs it again.
+
+export interface RunWithEventInput {
+  teamId: string;
+  automationId: string;
+  deliveryId: string;
+  /** Which of the arrivals the delivery brought, in the order it brought them. */
+  arrivalIndex: number;
+  /** Who vouched for it: a person, or (no `userId`) a machine key. */
+  by: { userId?: string; credentialId?: string };
+}
+
+export interface RunWithEventStarted {
+  ok: true;
+  /** One run for each listen of the automation the arrival came on. */
+  runIds: string[];
+  movementName: string;
+}
+
+/** The module's arrivals in the order the delivery's ledger names them (the order an event's index counts in). */
+function inBroughtOrder(arrivals: readonly Arrival[], brought: readonly string[] | undefined): Arrival[] {
+  if (brought === undefined) return [...arrivals];
+  return brought.flatMap((key) => arrivals.filter((arrival) => !('gone' in arrival) && arrivalReceiptKey(arrival) === key));
+}
+
+const noSuchEvent = (deliveryId: string): MovementRunNowFailure => ({
+  ok: false,
+  errors: [`no delivery ${deliveryId} is kept for this team: a delivery past its retention is forgotten`],
+});
+
+/**
+ * Queue a run of each listen of `automationId` that hears the arrival
+ * `arrivalIndex` of the kept delivery `deliveryId`, without reading the
+ * listen's filter. Does NOT run them; poll each run id.
+ */
+export async function runWithEvent(input: RunWithEventInput): Promise<RunWithEventStarted | MovementRunNowFailure> {
+  const teamId = input.teamId as TeamId;
+  const row = await deliveryOf(teamId, input.deliveryId);
+  if (row === null) return noSuchEvent(input.deliveryId);
+  const movement = await getMovementRow({ teamId: input.teamId, id: input.automationId });
+  if (!movement) return nothingToRun({ movementId: input.automationId });
+  const refusal = heldRunRefusal(movement.languageVersion);
+  if (refusal !== undefined) return { ok: false, errors: [refusal] };
+  if (row.request === null) {
+    return {
+      ok: false,
+      errors: [
+        row.replayOf !== null
+          ? `delivery ${row.id} is a replay of ${row.replayOf}: run with an event of ${row.replayOf} itself`
+          : `delivery ${row.id} kept no request (it was kept before deliveries kept theirs): its events cannot be run again`,
+      ],
+    };
+  }
+  const kept = readKeptRequest(row.request);
+  if (kept === null) return { ok: false, errors: [`delivery ${row.id}'s kept request is not one the platform can read`] };
+  const origin = await deliveryOriginOf({ teamId, deliveryId: row.id });
+  if (origin === null || origin.adapterType === null) {
+    return { ok: false, errors: [`delivery ${row.id} does not say which module delivered it: its events cannot be run again`] };
+  }
+  const { adapterType } = origin;
+  const delivery = { adapterType, credentialsId: origin.credentialsId };
+
+  const listens = (await savedListens({ teamId, adapterType, movementId: movement.id as MovementId })).filter(
+    (listen) => delivery.credentialsId === null || listen.credentialsId === null || listen.credentialsId === delivery.credentialsId,
+  );
+  const [first] = listens;
+  if (first === undefined) {
+    return { ok: false, errors: [`'${movement.name}' has no listen on ${adapterType} that hears the connection delivery ${row.id} came for`] };
+  }
+
+  let arrivals: Arrival[];
+  try {
+    arrivals = 'page' in kept ? kept.page.arrivals : inBroughtOrder(await reread(first, adapterType, kept.request), kept.request.arrivalIds);
+  } catch (error) {
+    return { ok: false, errors: [error instanceof Error ? error.message : String(error)] };
+  }
+  const arrival = arrivals[input.arrivalIndex];
+  if (arrival === undefined || 'gone' in arrival) {
+    return { ok: false, errors: [`delivery ${row.id} brought no event at ${input.arrivalIndex} that can be run (it brought ${arrivals.length})`] };
+  }
+
+  const now = new Date();
+  const judged = judgeArrivals({ listens, delivery, arrivals: [arrival], now, vouched: true });
+  if (judged.minted.length === 0) {
+    return { ok: false, errors: judged.lines.length > 0 ? judged.lines : [`no listen of '${movement.name}' takes an event on ${arrival.edge}: nothing to run`] };
+  }
+  const replay = await keepJudgedDelivery({
+    teamId,
+    subscriptionId: row.subscriptionId,
+    adapterType,
+    externalId: null,
+    source: 'cli',
+    arrivals: [arrival],
+    judged,
+    replayOf: row.id,
+    forced: true,
+    now,
+  });
+  notifyWork();
+  logger.info(`[RunWithEvent] ${input.by.userId ?? 'a machine'}${input.by.credentialId !== undefined ? ` (key ${input.by.credentialId})` : ''} ran event ${input.arrivalIndex} of delivery ${row.id} through '${movement.name}' without its filter: ${replay.deliveryId}`);
+  return { ok: true, runIds: replay.fires.map((fire) => fire.runId), movementName: movement.name };
 }
 
 /** A Run now of a movement whose pin a carried version runs: queued on that

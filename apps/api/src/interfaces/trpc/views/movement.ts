@@ -77,8 +77,11 @@ import {
   getMovementRunStatus,
   nothingToRun,
   runMovementAsync,
+  runWithEvent,
   type MovementRunAsyncResult,
+  type MovementRunNowFailure,
   type MovementRunStatus,
+  type RunWithEventStarted,
 } from '../../../services/translation_graph/movement/run_now';
 import {
   checkMovementDependentsOf,
@@ -816,6 +819,25 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
         });
       }),
 
+    /**
+     * "Run with this event" — start the automation with a stored event's data,
+     * skipping the filter, as Run now does. A write on the automation. Answers
+     * with the run ids at once; `runStatus` follows each.
+     */
+    runWithEvent: userProcedure
+      .input(z.object({ id: z.string().uuid(), deliveryId: z.string().min(1), arrivalIndex: z.number().int().min(0) }))
+      .mutation(async ({ input }): Promise<RunWithEventStarted | MovementRunNowFailure> => {
+        if (await cannotChange(input.id)) return nothingToRun({ movementId: input.id });
+        const { user } = currentContext();
+        return runWithEvent({
+          teamId: user.teamId,
+          automationId: input.id,
+          deliveryId: input.deliveryId,
+          arrivalIndex: input.arrivalIndex,
+          by: { userId: user.id, ...(user.apiKeyId !== undefined ? { credentialId: user.apiKeyId } : {}) },
+        });
+      }),
+
     /** One run's status — what a Run-now press follows until it settles. */
     runStatus: userProcedure
       .input(z.object({ runId: z.string().uuid() }))
@@ -849,6 +871,7 @@ decidesEach('movement', {
   runs: READS,
   events: READS,
   runNow: WRITES,
+  runWithEvent: WRITES,
   runStatus: READS,
 });
 
