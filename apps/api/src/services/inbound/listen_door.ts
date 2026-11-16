@@ -74,6 +74,7 @@ import { resolveAdapter } from '../translation_graph/adapters/resolve';
 import { deliveryRowStore, withListensJudgedAlone } from '../movement_engine/run_host_deliveries';
 import { chainBefore, loopSettings } from './loop_breaker';
 import { armResolveForArrivals, withWatching, withWatchingOne } from './listen_resolve';
+import { carriedFromSchema } from './listen_edge';
 import { platformHostAnswers } from './platform_plugin_answers';
 import { HostFunctionRefused, RETRY_UNJUDGED_EVERY_MS } from './plugin_answers';
 
@@ -133,7 +134,7 @@ export const listenConfigSchema = z.object({
     /** The listen came up from a carried version by an upgrade: when (a delivery
      *  kept before it was that version's), and whether it polls on the cursor it
      *  brought rather than sharing a poll (inbound/listen_edge.ts). */
-    carriedFrom: z.object({ at: z.string(), pollsAlone: z.boolean().optional() }).optional(),
+    carriedFrom: carriedFromSchema.optional(),
   }),
 });
 export type ListenConfig = z.infer<typeof listenConfigSchema>['listen'];

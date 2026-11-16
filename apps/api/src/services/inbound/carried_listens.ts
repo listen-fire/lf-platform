@@ -20,7 +20,7 @@ import { triggerIdSchema } from '../../lib/trigger_id';
 import { parseRunMode, type TriggerRunMode } from '../translation_graph/triggers/run_mode';
 import { states } from '../lf_store/listens';
 import { siblingKindsForAdapter } from '../translation_graph/adapters/registry';
-import { edgeKeysOf, type ListenDelivery, type WatchedListen } from './listen_edge';
+import { edgeKeysOf, pollsAloneOf, type ListenDelivery, type WatchedListen } from './listen_edge';
 
 /** One trigger row a carried version reads as its listen. */
 export interface CarriedListen {
@@ -250,7 +250,9 @@ export async function carriedListensContained(input: RowsWanted): Promise<Carrie
 }
 
 /** One carried listen as its keys are made: each traversal watched under the
- *  records its last listing came to, its own or its member's. */
+ *  records its last listing came to, its own or its member's, and polled alone
+ *  when it brought its own cursor, as a current listen's keys are: dropping its
+ *  version names the key it polled under while its version was current. */
 export function carriedWatched(listen: CarriedListen): WatchedListen {
   return {
     teamId: listen.teamId,
@@ -264,6 +266,7 @@ export function carriedWatched(listen: CarriedListen): WatchedListen {
       delivery: traversal.delivery,
       scopes: traversal.member === undefined ? listen.watching?.heads : listen.watching?.members?.[traversal.member]?.heads,
     })),
+    ...(pollsAloneOf(listen.row.config) ? { pollsAlone: true } : {}),
     version: listen.version.key,
   };
 }

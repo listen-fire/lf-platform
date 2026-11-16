@@ -15,6 +15,7 @@
 import { createHash } from 'node:crypto';
 
 import { memberPlans, type ListenPlan } from 'engine-contracts';
+import { z } from 'zod';
 
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { SavedListen } from './listen_door';
@@ -51,6 +52,21 @@ export interface ListenEdgeKey {
  *  what arrives there for its own listens. */
 export function unnarrowed(key: Pick<ListenEdgeKey, 'taken' | 'scope'>, delivery: ListenDelivery): boolean {
   return delivery === 'connection' && key.taken === undefined && key.scope === undefined;
+}
+
+/** The platform's note on a listen that came up from a carried version by an
+ *  upgrade: when, and whether it polls on the cursor it brought rather than
+ *  sharing a poll. The platform keeps it, not the version, so it is read off a
+ *  row whichever version plans it: the keys of a listen that polls alone name
+ *  it (`alone`) whether its version is current or carried. */
+export const carriedFromSchema = z.object({ at: z.string(), pollsAlone: z.boolean().optional() });
+
+const rowCarriedFromSchema = z.object({ listen: z.object({ carriedFrom: carriedFromSchema }) });
+
+/** Whether a trigger row's listen polls alone on a cursor it brought. */
+export function pollsAloneOf(config: unknown): boolean {
+  const read = rowCarriedFromSchema.safeParse(config);
+  return read.success && read.data.listen.carriedFrom.pollsAlone === true;
 }
 
 /** How the module delivers a listen's last edge, as its saved listen keeps it. */

@@ -69,6 +69,9 @@ export interface SharedPoll {
   listens: SavedListen[];
   carried: CarriedListen[];
   everyMs: number;
+  /** A carried key's name while its version was current, the same key without
+   *  its version, and whether a current listen still polls there. */
+  asCurrent?: { digest: string; polled: boolean };
 }
 
 export function pollWorkKey(digest: string): string {
@@ -136,6 +139,11 @@ async function readSharedPolls(input: { teamId?: TeamId }): Promise<{ polls: Sha
     if (lfTeams.has(listen.teamId)) continue;
     for (const keyed of carriedEdgeKeysOf(listen, ['polled'])) share(keyed, { carried: listen });
   }
+  for (const poll of polls.values()) {
+    if (poll.key.version === undefined) continue;
+    const digest = listenEdgeDigest({ ...poll.key, version: undefined });
+    poll.asCurrent = { digest, polled: (polls.get(digest)?.listens.length ?? 0) > 0 };
+  }
   return { polls: [...polls.values()], carriedUnread: carried.unread };
 }
 
@@ -148,13 +156,40 @@ async function cursorOf(teamId: TeamId, subscriptionId: string): Promise<{ curso
 }
 
 /** A carried key's cursor: its own, else the one its listens kept while their
- *  version was current, under the same key without the version. A version
- *  becomes carried at an upgrade, which renames its keys; taking that cursor
- *  over keeps what arrived between the last poll before the upgrade and the
- *  first after, which a first poll would arm past. Its own row, once kept,
- *  always wins. The old row is left as it is: a current listen may share it. */
-async function carriedCursorOf(key: ListenEdgeKey, subscriptionId: string): Promise<{ cursor: unknown } | null> {
-  return (await cursorOf(key.teamId, subscriptionId)) ?? (await cursorOf(key.teamId, pollSubscriptionId(listenEdgeDigest({ ...key, version: undefined }))));
+ *  version was current (`asCurrent`), taken over. A version becomes carried at
+ *  an upgrade, which renames its keys; taking that cursor over keeps what
+ *  arrived between the last poll before the upgrade and the first after, which
+ *  a first poll would arm past. Its own row, once kept, always wins.
+ *
+ *  It is moved when no current listen polls there: left behind, it would be
+ *  found again when these listens are upgraded and their keys lose their
+ *  version, and replay what the carried key already heard. It is copied when
+ *  one does, which goes on polling from it. Either is written before the poll,
+ *  so a poll that fails after it polls again from the cursor taken over. */
+async function carriedCursorOf(poll: SharedPoll, subscriptionId: string): Promise<{ cursor: unknown } | null> {
+  const { teamId } = poll.key;
+  const own = await cursorOf(teamId, subscriptionId);
+  if (own !== null || poll.asCurrent === undefined) return own;
+  const from = pollSubscriptionId(poll.asCurrent.digest);
+  const db = getAutomationsQb(['inbound_checkpoint']);
+  if (poll.asCurrent.polled) {
+    await sql`
+      insert into automations.inbound_checkpoint (team_id, subscription_id, checkpoint)
+      select team_id, ${subscriptionId}::text, checkpoint from automations.inbound_checkpoint
+      where team_id = ${teamId}::uuid and subscription_id = ${from}::text
+      on conflict (team_id, subscription_id) do nothing`.execute(db);
+  } else {
+    await sql`
+      with moved as (
+        delete from automations.inbound_checkpoint
+        where team_id = ${teamId}::uuid and subscription_id = ${from}::text
+        returning team_id, checkpoint
+      )
+      insert into automations.inbound_checkpoint (team_id, subscription_id, checkpoint)
+      select team_id, ${subscriptionId}::text, checkpoint from moved
+      on conflict (team_id, subscription_id) do nothing`.execute(db);
+  }
+  return cursorOf(teamId, subscriptionId);
 }
 
 async function keepCursor(teamId: TeamId, subscriptionId: string, cursor: unknown): Promise<void> {
@@ -218,7 +253,7 @@ async function pollCarried(poll: SharedPoll): Promise<{ arrivals: number; armed:
   // Loaded when a carried key is polled: the carried run host reaches the catalog, which reaches this worker.
   const [{ modulePlatform }, { judgeCarriedPage }] = await Promise.all([import('../translation_graph/movement/carried_run'), import('../inbound/carried_delivery')]);
   const subscriptionId = pollSubscriptionId(digest);
-  const before = await carriedCursorOf(key, subscriptionId);
+  const before = await carriedCursorOf(poll, subscriptionId);
   const polled = await lane.pollEdge(
     {
       teamId: key.teamId,
