@@ -23,7 +23,7 @@ import { insertTestListen, takenEquals } from '../../../test/harness/listens';
 import { keptPage } from '../captured_request';
 import { explainDeliveryArrival } from '../explain_arrival';
 import { deliverArrivals } from '../listen_door';
-import { startTeamAnswerFeed } from '../platform_plugin_answers';
+import { platformPluginAnswers, startTeamAnswerFeed } from '../platform_plugin_answers';
 
 const ADAPTER = 'why_test';
 const IS_MEMBER = '@lf-platform/team/is_member';
@@ -117,8 +117,18 @@ describe('why_lists_only_readable_listens_and_the_first_failed_term', () => {
   });
 
   it('says so when the delivery brought no event at that place', async () => {
+    const movementId = await newMovement('open-only');
+    await insertTestListen({ teamId, movementId, adapterType: ADAPTER, edge: 'Things', delivery: 'connection', movement: 'open', taken: takenEquals('status', 'open') });
     const deliveryId = await deliver(from('ada@acme.test'));
     expect(await explainDeliveryArrival({ teamId, deliveryId, arrivalIndex: 4 })).toEqual({ ok: false, errors: [expect.stringMatching(/brought no event at 4/)] });
+  });
+
+  it('answers with no listens, not an error, when no listen is readable at all', async () => {
+    const secret = await newMovement('secret');
+    await insertTestListen({ teamId, movementId: secret, adapterType: ADAPTER, edge: 'Things', delivery: 'connection', movement: 'secret', taken: takenEquals('status', 'open') });
+    unreadable.add(secret);
+    const deliveryId = await deliver(from('ada@acme.test'));
+    expect(await explainDeliveryArrival({ teamId, deliveryId, arrivalIndex: 0 })).toMatchObject({ ok: true, listens: [] });
   });
 });
 
@@ -142,6 +152,35 @@ describe('why_says_a_host_answer_is_as_of_now', () => {
     const [entry] = explained.listens;
     expect(entry).toMatchObject({ listen, verdict: 'does_not_fire', firstFailed: expect.stringContaining(IS_MEMBER) });
     expect(entry?.hostAnswers).toMatchObject({ used: true, note: expect.stringMatching(/as of this question/) });
+  });
+});
+
+describe('an explanation asks the host itself, not the cache', () => {
+  it('reports the fresh answer over a kept stale one, and leaves the cache as it found it', async () => {
+    const movementId = await newMovement('team.lf');
+    await insertTestListen({
+      teamId,
+      movementId,
+      adapterType: ADAPTER,
+      edge: 'Things',
+      delivery: 'connection',
+      movement: 'greet',
+      checked: { asksHost: true, checked: { type: 'function', fn: IS_MEMBER, args: [{ type: 'edge_property', propertyTypeId: 'User Email', fieldOnly: true }] } },
+    });
+    const email = 'former@acme.test';
+    const cache = platformPluginAnswers();
+    await cache.answers(teamId, [{ plugin: IS_MEMBER, args: [email] }], async () => ({ value: true }));
+    const kept = cache.keptCount(teamId);
+    expect(kept).toBe(1);
+    const deliveryId = await deliver(from(email));
+
+    const explained = await explainDeliveryArrival({ teamId, deliveryId, arrivalIndex: 0 });
+
+    if (!explained.ok) throw new Error(explained.errors.join('; '));
+    expect(explained.listens[0]).toMatchObject({ verdict: 'does_not_fire' });
+    expect(cache.keptCount(teamId)).toBe(kept);
+    const [stale] = await cache.answers(teamId, [{ plugin: IS_MEMBER, args: [email] }], async () => ({ value: 'asked again' }));
+    expect(stale).toMatchObject({ value: true });
   });
 });
 

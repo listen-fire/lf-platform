@@ -108,3 +108,9 @@ async function askInProcess(teamId: TeamId, question: PluginQuestion): Promise<P
 export function platformHostAnswers(teamId: TeamId, questions: PluginQuestion[]): Promise<PluginAnswers> {
   return platformPluginAnswers().answers(teamId, questions, (question) => askInProcess(teamId, question));
 }
+
+/** The same questions asked of the platform's own modules now, past the kept
+ *  answers and leaving none behind: what an explanation reports as of now. */
+export async function freshHostAnswers(teamId: TeamId, questions: PluginQuestion[]): Promise<PluginAnswers> {
+  return Promise.all(questions.map(async (question): Promise<PluginAnswers[number]> => ({ ...question, ...(await askInProcess(teamId, question)) })));
+}

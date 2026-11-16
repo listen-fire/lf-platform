@@ -23,7 +23,7 @@ import { readKeptRequest } from './captured_request';
 import { deliveryOriginOf } from './delivery_origin';
 import { savedListens, type SavedListen } from './listen_door';
 import { deliveryOf, reread } from './listen_replay';
-import { platformHostAnswers } from './platform_plugin_answers';
+import { freshHostAnswers } from './platform_plugin_answers';
 import { HostFunctionRefused } from './plugin_answers';
 
 /** What the judge makes of the event for one listen, in words a person reads. */
@@ -47,8 +47,8 @@ export interface ExplainedArrival {
   ok: true;
   deliveryId: string;
   arrivalIndex: number;
-  /** The edge the event arrived on. */
-  edge: string;
+  /** The edge the event arrived on; absent when no listen is readable to the asker, so nothing read the event. */
+  edge?: string;
   listens: ExplainedListen[];
 }
 
@@ -104,7 +104,7 @@ async function explained(input: {
     asked = true;
     let answered: PluginAnswers;
     try {
-      answered = await platformHostAnswers(listen.teamId, first.verdict.asks);
+      answered = await freshHostAnswers(listen.teamId, first.verdict.asks);
     } catch (error) {
       if (error instanceof HostFunctionRefused) return { verdict: { undecided: `${error.plugin}, which this listen's filter calls, answered an error (${error.message})` }, asked };
       answered = first.verdict.asks.map((question) => ({ ...question, unreachable: messageOf(error) }));
@@ -173,6 +173,9 @@ export async function explainDeliveryArrival(input: { teamId: string; deliveryId
     }
   }
   const arrival = arrivals[input.arrivalIndex];
+  if (first === undefined) {
+    return { ok: true, deliveryId: row.id, arrivalIndex: input.arrivalIndex, ...(arrival !== undefined && !('gone' in arrival) ? { edge: arrival.edge } : {}), listens: [] };
+  }
   if (arrival === undefined || 'gone' in arrival) {
     return { ok: false, errors: [`delivery ${row.id} brought no event at ${input.arrivalIndex} that can be judged (it brought ${arrivals.length})`] };
   }

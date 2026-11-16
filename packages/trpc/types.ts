@@ -175,8 +175,8 @@ export interface ExplainedArrival {
     ok: true;
     deliveryId: string;
     arrivalIndex: number;
-    /** The edge the event arrived on. */
-    edge: string;
+    /** The edge the event arrived on; absent when no listen is readable to the asker, so nothing read the event. */
+    edge?: string;
     listens: ExplainedListen[];
 }
 export type ExplainArrivalResult = ExplainedArrival | {
