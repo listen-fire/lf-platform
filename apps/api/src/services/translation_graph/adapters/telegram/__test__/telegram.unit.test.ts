@@ -342,7 +342,7 @@ describe('TelegramAdapter.getFieldValue', () => {
   });
 });
 
-describe('TelegramAdapter actor resolution (telegram_user_id → email via the store)', () => {
+describe('TelegramAdapter sender claim (telegram_user_id → email via the store)', () => {
   const TEAM_A = 'team-A' as TeamId;
   const TEAM_B = 'team-B' as TeamId;
   const TG_USER = '123';
@@ -352,8 +352,8 @@ describe('TelegramAdapter actor resolution (telegram_user_id → email via the s
     identityStore.clear();
   });
 
-  // The door names who acted on each arrival (adapter protocol 2.7), and the
-  // run's event carries that arrival: the actor is read back off it.
+  // The door names the sender's bound address on each arrival's landing, and
+  // the run's event carries that arrival: the claim is read back off it.
   async function firedBy(a: TelegramAdapter, from: { id: number; is_bot: boolean; first_name: string; username?: string } | undefined): Promise<TriggerEvent> {
     const { arrivals } = await a.preprocessInbound({
       raw: {
@@ -378,49 +378,21 @@ describe('TelegramAdapter actor resolution (telegram_user_id → email via the s
     };
   }
 
-  // A message from `from.id === 123` with a username/first name (for @actor_*).
+  // A message from `from.id === 123` with a username/first name.
   const BOUND_USER = { id: Number(TG_USER), is_bot: false, first_name: 'Ada', username: 'adas' };
+  const claimOf = (fired: TriggerEvent): unknown => fired.arrival?.landing.fields['Sender Email'];
 
-  it('bound id → email-bearing identity carrying the team-scoped email', async () => {
+  it('bound id → the team-scoped email, as the `Sender Email` claim', async () => {
     // teamA has a binding for tg user 123 → x@a.com.
     identityStore.set(identityKey(TEAM_A, TG_USER), EMAIL_A);
     const a = new TelegramAdapter(TEAM_A, CRED_ID);
-    const fired = await firedBy(a, BOUND_USER);
-
-    const actor = await a.extractActor({ event: fired });
-    expect(actor).toEqual({
-      identifier: TG_USER,
-      scheme: 'email',
-      adapterType: TELEGRAM_ADAPTER_TYPE,
-      email: EMAIL_A,
-      name: 'Ada',
-      label: '@adas',
-      proven: true,
-    });
-
-    const candidates = await a.getActorCandidates({ event: fired });
-    expect(candidates).toEqual([
-      {
-        identity: {
-          identifier: TG_USER,
-          scheme: 'email',
-          adapterType: TELEGRAM_ADAPTER_TYPE,
-          email: EMAIL_A,
-          name: 'Ada',
-          label: '@adas',
-          proven: true,
-        },
-        source: 'originator',
-      },
-    ]);
+    expect(claimOf(await firedBy(a, BOUND_USER))).toBe(EMAIL_A);
   });
 
-  it('unbound id → null actor / no candidates (no row for this sender)', async () => {
+  it('unbound id → no claim (no row for this sender)', async () => {
     // Store empty — no binding for tg user 123 in this team.
     const a = new TelegramAdapter(TEAM_A, CRED_ID);
-    const fired = await firedBy(a, BOUND_USER);
-    expect(await a.extractActor({ event: fired })).toBeNull();
-    expect(await a.getActorCandidates({ event: fired })).toEqual([]);
+    expect(claimOf(await firedBy(a, BOUND_USER))).toBeNull();
   });
 
   // ── CROSS-TEAM ISOLATION (load-bearing security test) ──────────────────
@@ -429,23 +401,17 @@ describe('TelegramAdapter actor resolution (telegram_user_id → email via the s
   it('cross-team: teamB adapter never resolves teamA-owned binding for the same id', async () => {
     identityStore.set(identityKey(TEAM_A, TG_USER), EMAIL_A);
     const teamB = new TelegramAdapter(TEAM_B, CRED_ID);
-    const firedB = await firedBy(teamB, BOUND_USER);
-
-    expect(await teamB.extractActor({ event: firedB })).toBeNull();
-    expect(await teamB.getActorCandidates({ event: firedB })).toEqual([]);
+    expect(claimOf(await firedBy(teamB, BOUND_USER))).toBeNull();
 
     // teamA, by contrast, DOES resolve its own binding for the identical id.
     const teamA = new TelegramAdapter(TEAM_A, CRED_ID);
-    const teamAActor = await teamA.extractActor({ event: await firedBy(teamA, BOUND_USER) });
-    expect(teamAActor?.email).toBe(EMAIL_A);
+    expect(claimOf(await firedBy(teamA, BOUND_USER))).toBe(EMAIL_A);
   });
 
-  it('null actor when there is no sender id at all', async () => {
+  it('no claim when there is no sender id at all', async () => {
     identityStore.set(identityKey(TEAM_A, TG_USER), EMAIL_A);
     const a = new TelegramAdapter(TEAM_A, CRED_ID);
-    const fired = await firedBy(a, undefined);
-    expect(await a.getActorCandidates({ event: fired })).toEqual([]);
-    expect(await a.extractActor({ event: fired })).toBeNull();
+    expect(claimOf(await firedBy(a, undefined))).toBeNull();
   });
 });
 

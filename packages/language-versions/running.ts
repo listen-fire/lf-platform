@@ -11,7 +11,7 @@
 // its code; a lost lease as its own outcome; the platform's cancel and lease
 // go in as answers to questions, never as the platform's classes.
 
-import type { ActingUser, DryRunWriteSink, FileRef, ResolveFileRefResult } from 'movement-engine/public/adapter';
+import type { DryRunWriteSink, FileRef, ResolveFileRefResult } from 'movement-engine/public/adapter';
 import type { CredentialOwnership, EngineHost } from 'movement-engine/public/host';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type { MovementRunResult } from 'movement-engine/public/movement-engine';
@@ -22,6 +22,15 @@ import type { KgStore } from '@listen-fire/kg/store';
 import type { SlackComposeChat } from '@listen-fire/slack/compose';
 
 import type { TeamFacts } from './index';
+
+/** The team member a carried run acts as. 0.16 retired the shape from the
+ *  engine (who acted is a claim), so it is stated here, as a version from
+ *  before 0.16 hands it back. */
+export interface ActingUser {
+  id: string;
+  email: string;
+  name?: string | null;
+}
 
 /** One install of a module a run constructs. */
 export interface ModuleInstall {

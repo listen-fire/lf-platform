@@ -1,5 +1,5 @@
 // The calls recorded parity makes, in order, against one email
-// implementation: the whole adapter surface (schema, walks, fields, actor,
+// implementation: the whole adapter surface (schema, walks, fields,
 // attachment bytes from each provider, refusals), and — where the host is the
 // platform — what the platform calls beside the adapter: the inbound doors'
 // admission (Mailgun's signature, Resend's Svix signature), the parse of each
@@ -12,8 +12,6 @@ import type { Adapter, FileRef } from 'movement-engine/public/adapter';
 import type { SourcePosition } from 'movement-engine/public/catalog';
 
 import { makeMetaPosition, makeStablePosition, makeUnstablePosition } from 'movement-engine/public/catalog';
-import { arrivalTriggerOf } from 'movement-engine/public/inbound';
-import { emailActorOf } from '@listen-fire/email/adapter';
 
 /** The decision a door hands back; the script only reads it as JSON. */
 type Decision = unknown;
@@ -221,28 +219,6 @@ export async function runEmailParityScript(subject: EmailParitySubject, provider
       if (field === 'File' && value !== null && typeof value === 'object') files.push(value as FileRef);
     }
   }
-
-  // ── Actor ──
-  // A webhook delivery's run trigger, as the door builds it: who acted rides
-  // on the arrival, named by the module's own reading of the mail (adapter
-  // protocol 2.7).
-  const event = (payload: Record<string, unknown>) => {
-    const actor = emailActorOf(payload);
-    return arrivalTriggerOf({
-      pipelineInputId: 'pi-parity',
-      adapterType: 'email',
-      now: new Date('2026-10-19T00:00:00.000Z'),
-      arrival: { edge: 'Emails', identity: 'parity', landing: { recordId: 'parity', fields: payload }, ...(actor !== undefined ? { actor } : {}) },
-    });
-  };
-  await step('getActorCandidates mailgun', async () => (await adapter.getActorCandidates?.({ event: event(MAILGUN_PAYLOAD) })) ?? null);
-  await step('getActorCandidates From header only', async () =>
-    (await adapter.getActorCandidates?.({ event: event({ From: 'Cy <cy@acme.com>', 'message-headers': [['X-Original-To', 'orig@acme.com']] }) })) ?? null,
-  );
-  await step('getActorCandidates empty', async () => (await adapter.getActorCandidates?.({ event: event({}) })) ?? null);
-  await step('extractActor mailgun', async () => (await adapter.extractActor?.({ event: event(MAILGUN_PAYLOAD) })) ?? null);
-  await step('extractActor bare address', async () => (await adapter.extractActor?.({ event: event({ sender: 'bare@acme.com' }) })) ?? null);
-  await step('extractActor none', async () => (await adapter.extractActor?.({ event: event({ sender: 'not an address' }) })) ?? null);
 
   // ── Attachment bytes ──
   const redeem = async (ref: FileRef) => {

@@ -13,7 +13,6 @@ import {
   WireTriggerEvent,
   WireRelatedResult,
   WireEdgesFromResult,
-  WireActorCandidate,
   WireFileRef,
   WireResolveEntityResult,
   METHODS,
@@ -186,17 +185,6 @@ describe('wire DTOs', () => {
       }),
     ).toThrow(/must name its type/);
   });
-
-  it('WireActorCandidate validates the source tag', () => {
-    const candidate = {
-      identity: { identifier: 'h@x.com', scheme: 'email', email: 'h@x.com' },
-      source: 'originator',
-    };
-    expect(WireActorCandidate.parse(candidate)).toEqual(candidate);
-    expect(() =>
-      WireActorCandidate.parse({ ...candidate, source: 'terminal' }),
-    ).toThrow();
-  });
 });
 
 describe('METHODS registry', () => {
@@ -218,8 +206,6 @@ describe('METHODS registry', () => {
       'readRecord',
       'translateFilter',
       'getDedupRules',
-      'getActorCandidates',
-      'extractActor',
       'describeOpaqueId',
       'resolveFileRef',
       'invokeFieldFunction',
@@ -258,7 +244,7 @@ describe('METHODS registry', () => {
         traversal: { incoming: false, edgeProperties: false },
         resources: false,
       },
-      methods: ['listEntryPoints', 'describe', 'getRelated', 'getActorCandidates'],
+      methods: ['listEntryPoints', 'describe', 'getRelated', 'getFieldValue'],
     };
     // webhookEventTypeId is optional → a manifest without it round-trips.
     expect(METHODS.manifest.result.parse(result)).toEqual(result);
@@ -273,7 +259,7 @@ describe('METHODS registry', () => {
         traversal: { incoming: false, edgeProperties: false },
         resources: true,
       },
-      methods: ['listEntryPoints', 'describe', 'getActorCandidates'],
+      methods: ['listEntryPoints', 'describe', 'getFieldValue'],
       webhookEventTypeId: 'remote-attio:webhook_event',
     };
     expect(METHODS.manifest.result.parse(result)).toEqual(result);
@@ -354,13 +340,6 @@ describe('METHODS registry', () => {
       candidates: [{ adapterType: 'attio', externalId: 'n1', data: { name: 'Acme' } }],
     };
     expect(METHODS.resolveEntity.result.parse(result)).toEqual(result);
-  });
-
-  it('getActorCandidates: result is an array of candidates', () => {
-    const result = [
-      { identity: { identifier: 'h@x.com', scheme: 'email' }, source: 'originator' },
-    ];
-    expect(METHODS.getActorCandidates.result.parse(result)).toEqual(result);
   });
 
   it('WireFileRef: round-trips a source-bearing ref (the remote handle)', () => {

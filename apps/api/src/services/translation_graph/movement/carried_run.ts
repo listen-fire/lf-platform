@@ -11,7 +11,6 @@
 // run exactly as it settles one of this release's.
 
 import { z } from 'zod';
-import { WireActorCandidate } from 'engine-contracts';
 import { MovementEngineError, MovementRunFailed, type MovementEngineErrorCode } from 'movement-engine/public/errors';
 import { logger } from 'movement-engine/public/log';
 import { inProcessValidationDefault } from 'module-kit';
@@ -54,6 +53,7 @@ import { platformKgStore } from '../adapters/kg_store';
 import { carriedSystemRecords } from '../adapters/system/carried_records';
 import { platformSlackChat, platformSlackFile } from '../adapters/slack/platform';
 import { WHATSAPP_MOVEMENTS_NUMBER } from '../adapters/whatsapp/shared_app';
+import { actorCandidateSchema } from '../adapters/acting_user/actor';
 import { resolveActingUser } from '../adapters/acting_user/resolve';
 import { isExposedFileUrl } from '../engine/files/expose';
 import { streamFileRef, withFileOwners } from '../engine/files/retrieve';
@@ -69,7 +69,7 @@ export async function carriedRunLaneOf(pin: LanguageVersion): Promise<RunningLan
   return running.kind === 'carried' ? running.lane() : undefined;
 }
 
-const actorCandidates = z.array(WireActorCandidate);
+const actorCandidates = z.array(actorCandidateSchema);
 
 /** How the platform hosts a carried version's modules: each install as it
  *  hosts its own release's module for the same adapter type, and the parts
@@ -137,8 +137,8 @@ export function runPlatformFor(input: {
       return resolveActingUser({
         teamId: teamIdSchema.parse(teamId),
         ...(trigger !== undefined ? { trigger } : {}),
-        // A carried module's candidates, checked against this release's
-        // protocol shape rather than trusted.
+        // A carried module's candidates, checked against the shape modules
+        // named who acted in before 0.16 rather than trusted.
         getCandidates: async () => actorCandidates.parse(await candidates()),
       });
     },

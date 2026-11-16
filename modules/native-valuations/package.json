@@ -15,17 +15,17 @@
   "types": "index.ts",
   "type": "commonjs",
   "dependencies": {
-    "@listen-fire/engine": "catalog:",
-    "@listen-fire/engine-contracts": "catalog:",
-    "@listen-fire/module-kit": "0.14.1",
-    "@listen-fire/movement-lang": "catalog:",
+    "@listen-fire/engine": "file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz",
+    "@listen-fire/engine-contracts": "file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz",
+    "@listen-fire/module-kit": "file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz",
+    "@listen-fire/movement-lang": "file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz",
     "zod": "4.1.12"
   },
   "devDependencies": {
     "@types/jest": "29.5.14",
     "@types/node": "20.16.5",
     "engine-contracts": "catalog:",
-    "module-kit": "npm:@listen-fire/module-kit@0.14.1",
+    "module-kit": "file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz",
     "movement-engine": "catalog:",
     "movement-lang": "catalog:",
     "typescript": "5.5.4"

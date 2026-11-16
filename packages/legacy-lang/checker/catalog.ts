@@ -34,6 +34,7 @@ import { slotTrees } from 'movement-lang/expression/slot_trees';
 import { pluginName } from 'movement-lang/parser/surface';
 import { isMapSpread, type At, type MapMember, type MExpr } from 'movement-lang/parser/expression/tree';
 import type { DeclaredEffectRow } from './effects';
+import type { PluginArgType } from 'movement-lang/catalog/types';
 // A record is a value, so `FieldType` names the arrow plane's own type and
 // spells it with the arrow plane's own words. That is a cycle with `typing.ts`
 // and it is the honest one: neither plane is beneath the other, and there is
@@ -707,9 +708,34 @@ export function surfaceTypeOfSchema(declared: SchemaFieldType): SurfaceFieldType
       return 'text';
     case 'record':
       return { kind: 'dict', of: 'json' };
+    // The legacy dialects have no brands: a branded field is its base, which
+    // it fits wherever that base is asked for.
+    case 'branded':
+      return surfaceTypeOfSchema(declared.of);
     default:
       return neverAsAny(declared);
   }
+}
+
+/**
+ * A plugin argument's declared type as a surface: `surfaceTypeOfSchema`, and a
+ * union of them. The surface has no union, so `T | absent` is `T` that may be
+ * absent, a union of one type is that type, and any other union is data.
+ */
+export function pluginArgSurfaceType(declared: PluginArgType): SurfaceFieldType {
+  if (typeof declared === 'string' || declared.kind !== 'union') return surfaceTypeOfSchema(declared);
+  const members = declared.of.map(pluginArgSurfaceType);
+  const present = members.filter(member => member !== 'absent');
+  const [only] = present;
+  if (only === undefined || present.length > 1) return 'json';
+  return present.length < members.length ? { kind: 'maybeAbsent', of: only } : only;
+}
+
+/** `pluginArgSurfaceType` over each argument of a plugin's argument map. */
+export function pluginArgSurfaceTypes(declared: Readonly<Record<string, PluginArgType>>): Record<string, SurfaceFieldType> {
+  const fields: Record<string, SurfaceFieldType> = Object.create(null);
+  for (const [name, type] of Object.entries(declared)) fields[name] = pluginArgSurfaceType(type);
+  return fields;
 }
 
 /** `surfaceTypeOfSchema` over each field of a schema's field map. */
@@ -774,6 +800,8 @@ function convertSchemaFieldType(declared: SchemaFieldType, instance: InstanceSch
       return 'text';
     case 'record':
       return heldRecordFields(declared.position, instance, expanding);
+    case 'branded':
+      return convert(declared.of);
     default:
       return neverAsAny(declared);
   }

@@ -3,7 +3,7 @@
 // describes — every field of every type read, every readable reference
 // walked — from the positions a run would hold: the root, a channel, its
 // history, a thread, a delivered message with files, a reaction. Then the
-// inbound seams, the actor, the awaited `Replies`, the composition field
+// inbound seams, the awaited `Replies`, the composition field
 // function, and every send with its refusals. The transcript is every answer
 // as JSON; two implementations agree when their transcripts and the requests
 // they made are identical.
@@ -15,7 +15,6 @@
 import type { Adapter } from 'movement-engine/public/adapter';
 import type { SourcePosition } from 'movement-engine/public/catalog';
 
-import { arrivalTriggerOf } from 'movement-engine/public/inbound';
 import { makeMetaPosition, makeStablePosition } from 'movement-engine/public/catalog';
 
 export interface SlackParitySubject {
@@ -170,23 +169,6 @@ export async function runSlackParityScript(subject: SlackParitySubject): Promise
   }
   const reaction = await delivered(REACTION_EVENT, 'Reaction');
   if (reaction !== undefined) await walk('Reaction', reaction);
-
-  // ── The actor ──
-  // Who acted rides on the arrival the door made (adapter protocol 2.7); the
-  // run trigger is built from it as the engine builds it.
-  const fired = (arrival: NonNullable<Awaited<ReturnType<typeof arrivalOf>>>) =>
-    arrivalTriggerOf({ pipelineInputId: 'pi-parity', adapterType: 'slack', now: new Date('2026-10-17T00:00:00.000Z'), arrival });
-  for (const [name, raw] of [['message', MESSAGE_EVENT], ['reaction', REACTION_EVENT]] as const) {
-    const arrival = await arrivalOf(raw);
-    if (arrival === undefined) continue;
-    await step(`getActorCandidates ${name}`, async () => (await adapter.getActorCandidates?.({ event: fired(arrival) })) ?? null);
-    await step(`extractActor ${name}`, async () => (await adapter.extractActor?.({ event: fired(arrival) })) ?? null);
-  }
-  const message = await arrivalOf(MESSAGE_EVENT);
-  if (message !== undefined) {
-    const { actor: _actor, ...nobody } = message;
-    await step('getActorCandidates no user', async () => (await adapter.getActorCandidates?.({ event: fired(nobody) })) ?? null);
-  }
 
   // ── The composition field function ──
   if (subject.compose) {

@@ -43,7 +43,7 @@ node Opportunity: "each opportunity this message is about" {
 }
 
 map(extract([m.Body], Opportunity), (o) => {
-  deck = fetchUrl(o.deck_url, { email: @user_email, password: o.deck_password })
+  deck = fetchUrl(o.deck_url, { email: "dealflow@yourfund.com", password: o.deck_password })
   …
 })
 \`\`\`
@@ -115,7 +115,7 @@ node Raise: "the raise the deck describes" {
 
 function \`Intake\`(m: <inbox-[:Email]->>) {
   map(extract([m.Body], Opportunity), (o) => {
-    deck  = fetchUrl(o.deck_url, { email: @user_email, password: o.deck_password })
+    deck  = fetchUrl(o.deck_url, { email: "dealflow@yourfund.com", password: o.deck_password })
     terms = extractOne([m.Body, coalesce(deck, "")], Raise)
     write crm-[:Companies]-> {
       unique by (Name)

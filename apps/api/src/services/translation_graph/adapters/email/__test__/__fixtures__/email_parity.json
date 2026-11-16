@@ -1065,112 +1065,6 @@
         }
       },
       {
-        "step": "getActorCandidates mailgun",
-        "answer": [
-          {
-            "identity": {
-              "identifier": "bo@acme.com",
-              "scheme": "email",
-              "adapterType": "email",
-              "email": "bo@acme.com",
-              "name": "Bo Li",
-              "label": "Bo Li"
-            },
-            "source": "originator"
-          },
-          {
-            "identity": {
-              "identifier": "dealflow@acme.com",
-              "scheme": "email",
-              "adapterType": "email",
-              "email": "dealflow@acme.com"
-            },
-            "source": "relay"
-          },
-          {
-            "identity": {
-              "identifier": "other@acme.com",
-              "scheme": "email",
-              "adapterType": "email",
-              "email": "other@acme.com"
-            },
-            "source": "relay"
-          },
-          {
-            "identity": {
-              "identifier": "list@acme.com",
-              "scheme": "email",
-              "adapterType": "email",
-              "email": "list@acme.com"
-            },
-            "source": "relay"
-          },
-          {
-            "identity": {
-              "identifier": "inbox+deals@example.com",
-              "scheme": "email",
-              "adapterType": "email",
-              "email": "inbox+deals@example.com"
-            },
-            "source": "relay"
-          }
-        ]
-      },
-      {
-        "step": "getActorCandidates From header only",
-        "answer": [
-          {
-            "identity": {
-              "identifier": "cy@acme.com",
-              "scheme": "email",
-              "adapterType": "email",
-              "email": "cy@acme.com",
-              "name": "Cy",
-              "label": "Cy"
-            },
-            "source": "originator"
-          },
-          {
-            "identity": {
-              "identifier": "orig@acme.com",
-              "scheme": "email",
-              "adapterType": "email",
-              "email": "orig@acme.com"
-            },
-            "source": "relay"
-          }
-        ]
-      },
-      {
-        "step": "getActorCandidates empty",
-        "answer": []
-      },
-      {
-        "step": "extractActor mailgun",
-        "answer": {
-          "identifier": "bo@acme.com",
-          "scheme": "email",
-          "adapterType": "email",
-          "email": "bo@acme.com",
-          "name": "Bo Li",
-          "label": "Bo Li"
-        }
-      },
-      {
-        "step": "extractActor bare address",
-        "answer": {
-          "identifier": "bare@acme.com",
-          "scheme": "email",
-          "adapterType": "email",
-          "email": "bare@acme.com",
-          "label": "bare@acme.com"
-        }
-      },
-      {
-        "step": "extractActor none",
-        "answer": null
-      },
-      {
         "step": "resolveFileRef mailgun",
         "answer": {
           "contentType": "application/pdf",
@@ -1733,7 +1627,7 @@
           "headers": {},
           "body": null,
           "status": 200,
-          "response": "{\"data\":[{\"id\":\"att_1\",\"filename\":\"deck.pdf\",\"content_type\":\"application/pdf\",\"size\":15,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_1\",\"expires_at\":\"2026-11-02T18:17:45.875Z\"},{\"id\":\"att_2\",\"filename\":\"notes.txt\",\"content_type\":\"text/plain\",\"size\":10,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_2\",\"expires_at\":\"2026-11-02T18:17:45.875Z\"}],\"has_more\":false}"
+          "response": "{\"data\":[{\"id\":\"att_1\",\"filename\":\"deck.pdf\",\"content_type\":\"application/pdf\",\"size\":15,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_1\",\"expires_at\":\"2026-11-13T22:24:41.319Z\"},{\"id\":\"att_2\",\"filename\":\"notes.txt\",\"content_type\":\"text/plain\",\"size\":10,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_2\",\"expires_at\":\"2026-11-13T22:24:41.319Z\"}],\"has_more\":false}"
         },
         {
           "method": "GET",
@@ -1752,7 +1646,7 @@
           "headers": {},
           "body": null,
           "status": 200,
-          "response": "{\"data\":[{\"id\":\"att_1\",\"filename\":\"deck.pdf\",\"content_type\":\"application/pdf\",\"size\":15,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_1\",\"expires_at\":\"2026-11-02T18:17:45.881Z\"},{\"id\":\"att_2\",\"filename\":\"notes.txt\",\"content_type\":\"text/plain\",\"size\":10,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_2\",\"expires_at\":\"2026-11-02T18:17:45.881Z\"}],\"has_more\":false}"
+          "response": "{\"data\":[{\"id\":\"att_1\",\"filename\":\"deck.pdf\",\"content_type\":\"application/pdf\",\"size\":15,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_1\",\"expires_at\":\"2026-11-13T22:24:41.325Z\"},{\"id\":\"att_2\",\"filename\":\"notes.txt\",\"content_type\":\"text/plain\",\"size\":10,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_2\",\"expires_at\":\"2026-11-13T22:24:41.325Z\"}],\"has_more\":false}"
         },
         {
           "method": "GET",
@@ -1770,7 +1664,7 @@
           "headers": {},
           "body": null,
           "status": 200,
-          "response": "{\"data\":[{\"id\":\"att_1\",\"filename\":\"deck.pdf\",\"content_type\":\"application/pdf\",\"size\":15,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_1\",\"expires_at\":\"2026-11-02T18:17:45.888Z\"},{\"id\":\"att_2\",\"filename\":\"notes.txt\",\"content_type\":\"text/plain\",\"size\":10,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_2\",\"expires_at\":\"2026-11-02T18:17:45.888Z\"}],\"has_more\":false}"
+          "response": "{\"data\":[{\"id\":\"att_1\",\"filename\":\"deck.pdf\",\"content_type\":\"application/pdf\",\"size\":15,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_1\",\"expires_at\":\"2026-11-13T22:24:41.332Z\"},{\"id\":\"att_2\",\"filename\":\"notes.txt\",\"content_type\":\"text/plain\",\"size\":10,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_2\",\"expires_at\":\"2026-11-13T22:24:41.332Z\"}],\"has_more\":false}"
         },
         {
           "method": "GET",
@@ -1861,7 +1755,7 @@
             }
           },
           "status": 200,
-          "response": "{\"data\":{\"id\":\"1\",\"sent_at\":\"2026-11-02T17:17:45.914Z\",\"recipients\":[{\"email\":\"ada@example.com\",\"username\":\"Ada\"}],\"sender\":null,\"cc\":[],\"subject\":\"Fake\",\"data\":\"x\",\"replyToHeader\":null,\"inReplyToHeader\":null,\"hasAttachment\":true,\"attachmentFilename\":\"f.txt\"}}"
+          "response": "{\"data\":{\"id\":\"1\",\"sent_at\":\"2026-11-13T21:24:41.359Z\",\"recipients\":[{\"email\":\"ada@example.com\",\"username\":\"Ada\"}],\"sender\":null,\"cc\":[],\"subject\":\"Fake\",\"data\":\"x\",\"replyToHeader\":null,\"inReplyToHeader\":null,\"hasAttachment\":true,\"attachmentFilename\":\"f.txt\"}}"
         }
       ],
       "mailgun": [
@@ -3060,112 +2954,6 @@
         }
       },
       {
-        "step": "getActorCandidates mailgun",
-        "answer": [
-          {
-            "identity": {
-              "identifier": "bo@acme.com",
-              "scheme": "email",
-              "adapterType": "email",
-              "email": "bo@acme.com",
-              "name": "Bo Li",
-              "label": "Bo Li"
-            },
-            "source": "originator"
-          },
-          {
-            "identity": {
-              "identifier": "dealflow@acme.com",
-              "scheme": "email",
-              "adapterType": "email",
-              "email": "dealflow@acme.com"
-            },
-            "source": "relay"
-          },
-          {
-            "identity": {
-              "identifier": "other@acme.com",
-              "scheme": "email",
-              "adapterType": "email",
-              "email": "other@acme.com"
-            },
-            "source": "relay"
-          },
-          {
-            "identity": {
-              "identifier": "list@acme.com",
-              "scheme": "email",
-              "adapterType": "email",
-              "email": "list@acme.com"
-            },
-            "source": "relay"
-          },
-          {
-            "identity": {
-              "identifier": "inbox+deals@example.com",
-              "scheme": "email",
-              "adapterType": "email",
-              "email": "inbox+deals@example.com"
-            },
-            "source": "relay"
-          }
-        ]
-      },
-      {
-        "step": "getActorCandidates From header only",
-        "answer": [
-          {
-            "identity": {
-              "identifier": "cy@acme.com",
-              "scheme": "email",
-              "adapterType": "email",
-              "email": "cy@acme.com",
-              "name": "Cy",
-              "label": "Cy"
-            },
-            "source": "originator"
-          },
-          {
-            "identity": {
-              "identifier": "orig@acme.com",
-              "scheme": "email",
-              "adapterType": "email",
-              "email": "orig@acme.com"
-            },
-            "source": "relay"
-          }
-        ]
-      },
-      {
-        "step": "getActorCandidates empty",
-        "answer": []
-      },
-      {
-        "step": "extractActor mailgun",
-        "answer": {
-          "identifier": "bo@acme.com",
-          "scheme": "email",
-          "adapterType": "email",
-          "email": "bo@acme.com",
-          "name": "Bo Li",
-          "label": "Bo Li"
-        }
-      },
-      {
-        "step": "extractActor bare address",
-        "answer": {
-          "identifier": "bare@acme.com",
-          "scheme": "email",
-          "adapterType": "email",
-          "email": "bare@acme.com",
-          "label": "bare@acme.com"
-        }
-      },
-      {
-        "step": "extractActor none",
-        "answer": null
-      },
-      {
         "step": "resolveFileRef resend",
         "answer": {
           "contentType": "text/plain",
@@ -3224,7 +3012,7 @@
           "headers": {},
           "body": null,
           "status": 200,
-          "response": "{\"data\":[{\"id\":\"att_1\",\"filename\":\"deck.pdf\",\"content_type\":\"application/pdf\",\"size\":15,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_1\",\"expires_at\":\"2026-11-02T18:17:45.923Z\"},{\"id\":\"att_2\",\"filename\":\"notes.txt\",\"content_type\":\"text/plain\",\"size\":10,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_2\",\"expires_at\":\"2026-11-02T18:17:45.923Z\"}],\"has_more\":false}"
+          "response": "{\"data\":[{\"id\":\"att_1\",\"filename\":\"deck.pdf\",\"content_type\":\"application/pdf\",\"size\":15,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_1\",\"expires_at\":\"2026-11-13T22:24:41.368Z\"},{\"id\":\"att_2\",\"filename\":\"notes.txt\",\"content_type\":\"text/plain\",\"size\":10,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_2\",\"expires_at\":\"2026-11-13T22:24:41.368Z\"}],\"has_more\":false}"
         },
         {
           "method": "GET",
@@ -3243,7 +3031,7 @@
           "headers": {},
           "body": null,
           "status": 200,
-          "response": "{\"data\":[{\"id\":\"att_1\",\"filename\":\"deck.pdf\",\"content_type\":\"application/pdf\",\"size\":15,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_1\",\"expires_at\":\"2026-11-02T18:17:45.926Z\"},{\"id\":\"att_2\",\"filename\":\"notes.txt\",\"content_type\":\"text/plain\",\"size\":10,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_2\",\"expires_at\":\"2026-11-02T18:17:45.926Z\"}],\"has_more\":false}"
+          "response": "{\"data\":[{\"id\":\"att_1\",\"filename\":\"deck.pdf\",\"content_type\":\"application/pdf\",\"size\":15,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_1\",\"expires_at\":\"2026-11-13T22:24:41.371Z\"},{\"id\":\"att_2\",\"filename\":\"notes.txt\",\"content_type\":\"text/plain\",\"size\":10,\"download_url\":\"{{exchange-server}}/_attachments/em_parity/att_2\",\"expires_at\":\"2026-11-13T22:24:41.371Z\"}],\"has_more\":false}"
         }
       ],
       "outbox": [],

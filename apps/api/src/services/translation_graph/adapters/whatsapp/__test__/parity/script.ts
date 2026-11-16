@@ -1,6 +1,6 @@
 // The calls recorded parity makes, in order, against one WhatsApp
 // implementation: the whole adapter surface (schema, inbound, fields on the
-// Meta door's and Twilio's payload shapes, walks, actor, file bytes, and every
+// Meta door's and Twilio's payload shapes, walks, file bytes, and every
 // write with its refusals). The transcript is every answer as JSON, with the
 // provider's base URL (which differs per run) written as `<base>`; two
 // implementations agree when their transcripts and the requests they made are
@@ -11,7 +11,6 @@ import type { SourcePosition } from 'movement-engine/public/catalog';
 
 import { fileValue } from 'movement-engine/public/adapter';
 import { makeMetaPosition, makeStablePosition, makeUnstablePosition } from 'movement-engine/public/catalog';
-import { arrivalTriggerOf } from 'movement-engine/public/inbound';
 import { withFileOwners } from 'movement-engine/public/files';
 
 export interface WhatsappParitySubject {
@@ -183,16 +182,6 @@ export async function runWhatsappParityScript(subject: WhatsappParitySubject): P
   await step('Replies is not read', () => adapter.getRelated({ position: message, fieldId: 'Replies', direction: 'outgoing' }));
   const bare = makeUnstablePosition({ adapterType: 'whatsapp', recordType: 'Attachment', data: { filename: 'x' } });
   await step('Attachment without a key .File', () => adapter.getFieldValue({ position: bare, fieldId: 'File' }));
-
-  // ── Actor ──
-  // Who acted rides on the arrival the door made (adapter protocol 2.7).
-  const fired = (arrival: (typeof arrivals)[number]) =>
-    arrivalTriggerOf({ pipelineInputId: 'parity', adapterType: 'whatsapp', now: new Date('2026-10-17T00:00:00.000Z'), arrival });
-  const { actor: _sender, ...senderless } = arrivals[0] ?? { edge: 'Messages', identity: 'none', landing: { recordId: 'none', fields: {} } };
-  for (const [name, arrival] of [...arrivals.map((arrival, index) => [`arrival ${index}`, arrival] as const), ['no sender', senderless] as const]) {
-    await step(`getActorCandidates ${name}`, async () => (await adapter.getActorCandidates?.({ event: fired(arrival) })) ?? null);
-    await step(`extractActor ${name}`, async () => (await adapter.extractActor?.({ event: fired(arrival) })) ?? null);
-  }
 
   // ── File bytes ──
   if (subject.hostFiles && exposedFile !== undefined) {

@@ -285,6 +285,14 @@ function zodForExpressionType(type: ExpressionType, enumOptions?: string[]): z.Z
       }
       return z.object(shape).nullable();
     }
+    // A brand narrows what a value is, not how the model writes it.
+    case 'branded':
+      return zodForExpressionType(type.of, enumOptions);
+    case 'union': {
+      const [first, second, ...rest] = type.of.map((member) => zodForExpressionType(member));
+      if (first === undefined) return z.unknown();
+      return second === undefined ? first : z.union([first, second, ...rest]);
+    }
   }
 }
 

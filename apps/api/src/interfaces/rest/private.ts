@@ -61,11 +61,10 @@ const acceptInboundEmail = async (
 
   // T5 — sender-auth gate. Run BEFORE plus-key routing because plus-key
   // is a routing signal, not an auth signal (anyone can email a
-  // `<local>+<key>@` address). The email adapter parses sender /
-  // forwarding-recipient candidates (`getActorCandidates`) off the run
-  // trigger the email's arrival makes, as every run of it reads them;
-  // `resolveActingUser` maps them through the sender → service-account
-  // chain. Null means "no Listen-Fire team member is authenticated for this
+  // `<local>+<key>@` address). The platform parses sender /
+  // forwarding-recipient candidates (`emailActorCandidates`) off the email's
+  // arrival, as every run of it reads them; `resolveActingUser` maps them
+  // through the sender → service-account chain. Null means "no Listen-Fire team member is authenticated for this
   // dispatch" and the request is rejected. No trigger context here (this
   // gate runs pre-routing), so neither creator-override nor creator-
   // fallback applies — same behaviour as the prior inline chain.

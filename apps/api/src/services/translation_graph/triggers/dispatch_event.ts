@@ -16,7 +16,6 @@ import type { TriggerEventId } from '../../../generated/kysely/automations/Trigg
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
 import type { DroppedReason } from './dropped_reason';
 
-import { WireActorCandidate } from 'engine-contracts';
 import { logger } from 'movement-engine/public/log';
 import { neverAsAny } from 'movement-engine/public/types';
 import { isWriteEffect } from 'movement-engine/public/trace';
@@ -31,6 +30,7 @@ import { isLfEngineTeam } from '../../lf_engine/team_engine';
 import * as loopGuard from '../../loop_guard';
 import { ORPHAN_AFTER } from '../../movement_engine/run_lease';
 import { settleUnresumableRun } from '../../interaction/run_failure';
+import { actorCandidateSchema } from '../adapters/acting_user/actor';
 import { resolveActingUser } from '../adapters/acting_user/resolve';
 import { modulePlatform } from '../movement/carried_run';
 import { recordMovementFailureIssue } from '../movement/issues';
@@ -100,7 +100,7 @@ type Outcome = { kind: 'fired'; dryRun: boolean; error?: string } | { kind: 'dro
  *  a sender nobody can name does not fire. */
 async function actorPasses(teamId: TeamId, candidates: unknown): Promise<string | null> {
   try {
-    const user = await resolveActingUser({ teamId, getCandidates: async () => z.array(WireActorCandidate).parse(candidates) });
+    const user = await resolveActingUser({ teamId, getCandidates: async () => z.array(actorCandidateSchema).parse(candidates) });
     return user !== null ? null : 'the inbound actor does not resolve to a registered team user: dropped by the ownership gate';
   } catch (err) {
     return `the inbound actor could not be resolved (${err instanceof Error ? err.message : String(err)}): dropped, fail closed`;

@@ -1,7 +1,7 @@
 // The calls Attio's recorded parity makes, in order, against one
 // implementation: the read surface (walkSurface), the record writes an
 // author's movement makes (a company, a person under it, a note, updates,
-// a delete), entity resolution, the inbound mapping and the actor it names,
+// a delete), entity resolution, the inbound mapping,
 // and the webhook subscription lifecycle. No call reads a record that does
 // not exist (the client retries a 404 on a minutes-long backoff), and no
 // file is uploaded (a multipart body carries a random boundary).
@@ -9,7 +9,6 @@
 import type { Adapter } from 'movement-engine/public/adapter';
 
 import { makeMetaPosition } from 'movement-engine/public/catalog';
-import { arrivalTriggerOf } from 'movement-engine/public/inbound';
 
 import { MUTATION, Transcript, cmp, prop, value, walkSurface, type TranscriptEntry } from '../crm_parity/walk';
 
@@ -61,14 +60,7 @@ export async function runAttioParityScript(adapter: Adapter): Promise<Transcript
   }
 
   for (const [name, raw] of INBOUND) {
-    const answer = await t.step(`preprocessInbound ${name}`, () => adapter.preprocessInbound?.({ raw }) ?? null);
-    const arrival = answer?.arrivals?.[0];
-    if (arrival !== undefined && 'landing' in arrival) {
-      // The run trigger the arrival makes; who acted rides on it.
-      const trigger = arrivalTriggerOf({ pipelineInputId: 'pipeline-input-parity', adapterType: 'attio', now: new Date('2026-10-01T09:00:00.000Z'), arrival });
-      await t.step(`extractActor ${name}`, () => adapter.extractActor?.({ event: trigger }) ?? null);
-      await t.step(`getActorCandidates ${name}`, () => adapter.getActorCandidates?.({ event: trigger }) ?? null);
-    }
+    await t.step(`preprocessInbound ${name}`, () => adapter.preprocessInbound?.({ raw }) ?? null);
   }
 
   // One subscription per listenable edge (adapter protocol 2.6).

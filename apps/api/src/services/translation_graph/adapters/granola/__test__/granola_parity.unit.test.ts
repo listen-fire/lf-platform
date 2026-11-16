@@ -163,9 +163,11 @@ const RECORDINGS = [
 
   // Who acted rides on the arrival (adapter protocol 2.7): the run's trigger
   // carries it, and the module reads it from there.
-  it("a polled meeting's actor is its note owner", () => {
+  it("a polled meeting names its note owner as the `Note Owner Email` claim", () => {
     const { transcript } = loadRecording(POLLS);
-    expect(transcript.find((e) => e.step === 'extractActor 0')?.answer).toMatchObject({ scheme: 'email', email: 'priya@fund.com' });
+    expect(transcript.find((e) => e.step === 'poll from a cursor')?.answer).toMatchObject({
+      arrivals: expect.arrayContaining([expect.objectContaining({ landing: expect.objectContaining({ fields: expect.objectContaining({ 'Note Owner Email': 'priya@fund.com' }) }) })]),
+    });
   });
 
   it('the module line is the one the platform loads', () => {

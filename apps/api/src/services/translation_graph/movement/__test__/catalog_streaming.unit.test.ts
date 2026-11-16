@@ -132,9 +132,6 @@ jest.mock('../../adapters/registry', () => ({
       adapterType: 'slack',
       displayName: 'Slack',
       requiredCredentialType: 'SLACK',
-      // Globally-addressable inbound: the identity note must render the
-      // needs-an-account gate from THIS flag alone — no triggerExpectation set.
-      inboundRequiresRegisteredActor: true,
       methods: ['createRecord'],
       supportedTriggers: ['webhook'],
       // A construction-time entry-position arg (like Sheets' `spreadsheet`) —
@@ -394,18 +391,16 @@ describe('describeMovementInstance', () => {
     });
   });
 
-  it('surfaces the identity note derived from the manifest — the needs-an-account gate from the flag alone, no hand-written prose', async () => {
+  it('surfaces the identity note derived from the manifest, no hand-written prose', async () => {
     const result = await describeMovementInstance({
       audience: { for: 'run' },
       teamId: TEAM,
       adapter: 'slack',
       credentialName: 'Dev Loop Slack',
     });
-    // Runs-as (from requiredCredentialType) + the registered-actor gate (from
-    // inboundRequiresRegisteredActor) — neither hand-written on the manifest.
+    // Runs-as, from requiredCredentialType, not hand-written on the manifest.
     expect(result.identity).toContain('runs with the Slack account that connected it');
-    expect(result.identity).toContain('set up on this team');
-    expect(result.identity).toContain('not set up on the team yet');
+    expect(result.identity).not.toContain('set up on this team');
   });
 
   it('credential-free adapters describe without a credential name', async () => {

@@ -7,15 +7,12 @@
 // port (NOT a mocked `fetch`), fetches the manifest over HTTP, constructs a
 // `RemoteAdapter` from it, and asserts deep equality across the source-only
 // surface (`describe`, `listEntryPoints`, the explicit `attachments` edge
-// traversal via `getRelated`, `getActorCandidates`, `extractActor`).
+// traversal via `getRelated`).
 //
 // Why these methods: they are pure transforms / parses with NO Listen-Fire DB
-// access (the email adapter's `getRelated`/`getActorCandidates`/
-// `extractActor` read only the position / event payload;
+// access (the email adapter's `getRelated` reads only the position;
 // `describe`/`listEntryPoints` are hardcoded). The email adapter's writes
-// throw (source-only) and aren't part of the parity surface. `extractActor`
-// is now async (for remoteability) and IS a protocol method, so it
-// round-trips over the wire here.
+// throw (source-only) and aren't part of the parity surface.
 //
 // A second describe block stands up a small synthetic adapter that declares
 // `webhookEventTypeId` (static config) and an async `narrowReferenceType`,
@@ -37,7 +34,6 @@ import type { TeamId } from '../../../../../generated/kysely/core/Team';
 import type { EmailAdapter, EmailPayload } from '../../email';
 import type { Adapter } from 'movement-engine/public/adapter';
 import type { SourcePosition } from 'engine-contracts/catalog';
-import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type { RemoteAdapterConfig } from 'movement-engine/public/modules';
 
 import {
@@ -48,8 +44,6 @@ import {
 import { RESOURCES_REFERENCE_FIELD_ID } from 'movement-engine/public/adapter';
 import { containerAssociation } from 'movement-engine/public/adapter';
 import { makeUnstablePosition, positionData } from 'engine-contracts/catalog';
-import { arrivalTriggerOf } from 'movement-engine/public/inbound';
-import { inboundEmailArrival } from '../../email/arrival';
 
 
 /** Walk the explicit `attachments` edge and read each attachment's payload. */
@@ -96,15 +90,6 @@ const EMAIL_PAYLOAD: EmailPayload & Record<string, unknown> = {
   'X-Forwarded-For': 'dealflow@portfolio.example',
   'Delivered-To': 'inbox+dealflow@example.com',
 };
-
-/** The single inbound `TriggerEvent` both adapters parse for actor candidates. */
-const TRIGGER_EVENT: TriggerEvent = arrivalTriggerOf({
-  pipelineInputId: 'pi-1',
-  adapterType: EMAIL_ADAPTER_TYPE,
-  // As the inbound door names the mail: its sender is who acted.
-  arrival: inboundEmailArrival({ payload: EMAIL_PAYLOAD, fallbackIdentity: 'msg-001' }),
-  now: new Date(),
-});
 
 /** The email source position both adapters extract resources from. */
 const EMAIL_POSITION: SourcePosition = makeUnstablePosition({
@@ -174,7 +159,6 @@ describe('RemoteAdapter ⟷ in-process email adapter parity (over real HTTP)', (
     // source-only surface survives. Resources are reached via the uniform
     // `getRelated` traversal now (no bespoke `getResources` method).
     expect(typeof remote.getRelated).toBe('function');
-    expect(typeof remote.getActorCandidates).toBe('function');
     // Email is source-only → no `readRecord` advertised → pruned.
     expect(remote.readRecord).toBeUndefined();
   });
@@ -235,63 +219,12 @@ describe('RemoteAdapter ⟷ in-process email adapter parity (over real HTTP)', (
     ).rejects.toThrow();
   });
 
-  // ── getActorCandidates (acting-user parse parity) ──────────────────────────
-
-  it('getActorCandidates({ event }) yields the same ordered candidates (originator + relays)', async () => {
-    const [localCandidates, remoteCandidates] = await Promise.all([
-      local.getActorCandidates({ event: TRIGGER_EVENT }),
-      remote.getActorCandidates!({ event: TRIGGER_EVENT }),
-    ]);
-
-    expect(remoteCandidates).toEqual(localCandidates);
-
-    // Sanity: sender is the originator (as the door named them, display name
-    // and all); forwarding hops are relays, in order.
-    expect(remoteCandidates[0]).toEqual({
-      identity: {
-        identifier: 'jane@acme.example',
-        scheme: 'email',
-        adapterType: 'email',
-        email: 'jane@acme.example',
-        name: 'Jane Founder',
-        label: 'Jane Founder',
-      },
-      source: 'originator',
-    });
-    expect(remoteCandidates.slice(1).map((c) => c.source)).toEqual(
-      Array(remoteCandidates.length - 1).fill('relay'),
-    );
-    expect(remoteCandidates.map((c) => c.identity.identifier)).toContain('dealflow@portfolio.example');
-  });
-
-  // ── extractActor (raw-actor parse parity, async over the wire) ─────────────
-
-  it('extractActor({ event }) yields the same ActorIdentity local vs remote', async () => {
-    expect(typeof remote.extractActor).toBe('function');
-    const [localActor, remoteActor] = await Promise.all([
-      local.extractActor({ event: TRIGGER_EVENT }),
-      remote.extractActor!({ event: TRIGGER_EVENT }),
-    ]);
-
-    expect(remoteActor).toEqual(localActor);
-    // Sanity: the raw sender is parsed into an email-kind actor identity.
-    expect(remoteActor).toEqual({
-      identifier: 'jane@acme.example',
-      scheme: 'email',
-      adapterType: 'email',
-      email: 'jane@acme.example',
-      name: 'Jane Founder',
-      label: 'Jane Founder',
-    });
-  });
-
   // ── Proof the remote path went over the wire ───────────────────────────────
 
   it('every remote call traversed the real HTTP server', () => {
-    // manifest (1) + describe + listEntryPoints + getResources +
-    // getActorCandidates + extractActor = 6 requests minimum reached the
-    // socket.
-    expect(requestCount).toBeGreaterThanOrEqual(6);
+    // manifest (1) + describe + listEntryPoints + getRelated = 4 requests
+    // minimum reached the socket.
+    expect(requestCount).toBeGreaterThanOrEqual(4);
   });
 
   // ── Auth gate ──────────────────────────────────────────────────────────────

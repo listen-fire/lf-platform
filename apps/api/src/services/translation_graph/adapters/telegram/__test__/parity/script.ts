@@ -1,6 +1,6 @@
 // The calls recorded parity makes, in order, against one Telegram
 // implementation: the whole adapter surface (schema, inbound, fields, walks,
-// actor, file bytes, sends and their refusals) plus the two calls the
+// file bytes, sends and their refusals) plus the two calls the
 // platform's doors make as the bot (ack a button tap, retire a keyboard).
 // The transcript is every answer as JSON; two implementations agree when
 // their transcripts and the requests they made are identical.
@@ -9,7 +9,6 @@ import type { Adapter, FileRef } from 'movement-engine/public/adapter';
 import type { SourcePosition } from 'movement-engine/public/catalog';
 
 import { makeMetaPosition, makeStablePosition, makeUnstablePosition } from 'movement-engine/public/catalog';
-import { arrivalTriggerOf } from 'movement-engine/public/inbound';
 
 /** The calls the doors make as the bot, beside the adapter's own. */
 export interface TelegramDoorCalls {
@@ -168,16 +167,6 @@ export async function runTelegramParityScript(subject: TelegramParitySubject): P
     linkedUser = users?.[0]?.position;
     await step('Message Sender linked', () => adapter.getRelated({ position: linkedSender, fieldId: 'Sender', direction: 'outgoing' }));
     await step('Message Sender unlinked', () => adapter.getRelated({ position: message, fieldId: 'Sender', direction: 'outgoing' }));
-    // Who acted rides on the arrival the door made (adapter protocol 2.7).
-    const fired = async (raw: unknown) => {
-      const [first] = (await adapter.preprocessInbound?.({ raw }))?.arrivals ?? [];
-      if (first === undefined || !('landing' in first)) throw new Error('the update made no arrival');
-      return arrivalTriggerOf({ pipelineInputId: 'parity', adapterType: 'telegram', now: new Date('2026-10-17T00:00:00.000Z'), arrival: first });
-    };
-    await step('extractActor linked', async () => (await adapter.extractActor?.({ event: await fired(TEXT_UPDATE) })) ?? null);
-    await step('extractActor unlinked', async () => (await adapter.extractActor?.({ event: await fired(MEDIA_UPDATE) })) ?? null);
-    await step('getActorCandidates linked', async () => (await adapter.getActorCandidates?.({ event: await fired(TEXT_UPDATE) })) ?? null);
-    await step('getActorCandidates unlinked', async () => (await adapter.getActorCandidates?.({ event: await fired(MEDIA_UPDATE) })) ?? null);
   }
   await step('meta other edge', () => adapter.getRelated({ position: meta, fieldId: 'Message', direction: 'outgoing' }));
 

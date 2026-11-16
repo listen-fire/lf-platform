@@ -48,13 +48,6 @@
                 "content": "Hello there",
                 "Key": "deals"
               }
-            },
-            "actor": {
-              "identifier": "ada@example.com",
-              "scheme": "email",
-              "adapterType": "email",
-              "email": "ada@example.com",
-              "label": "ada@example.com"
             }
           }
         ]
@@ -113,13 +106,6 @@
                 "content": "Hello there",
                 "Key": "deals"
               }
-            },
-            "actor": {
-              "identifier": "ada@example.com",
-              "scheme": "email",
-              "adapterType": "email",
-              "email": "ada@example.com",
-              "label": "ada@example.com"
             }
           }
         ]
@@ -212,13 +198,6 @@
                 "content": "Hello there",
                 "Key": "deals"
               }
-            },
-            "actor": {
-              "identifier": "ada@example.com",
-              "scheme": "email",
-              "adapterType": "email",
-              "email": "ada@example.com",
-              "label": "ada@example.com"
             }
           }
         ]
@@ -311,13 +290,6 @@
                 "content": "Hello there",
                 "Key": "deals"
               }
-            },
-            "actor": {
-              "identifier": "ada@example.com",
-              "scheme": "email",
-              "adapterType": "email",
-              "email": "ada@example.com",
-              "label": "ada@example.com"
             }
           }
         ]
@@ -487,13 +459,6 @@
                 "content": "Hello there",
                 "Key": "deals"
               }
-            },
-            "actor": {
-              "identifier": "newcomer@example.org",
-              "scheme": "email",
-              "adapterType": "email",
-              "email": "newcomer@example.org",
-              "label": "newcomer@example.org"
             }
           }
         ]
@@ -699,13 +664,6 @@
                 "content": "Hello there",
                 "Key": "deals"
               }
-            },
-            "actor": {
-              "identifier": "ada@example.com",
-              "scheme": "email",
-              "adapterType": "email",
-              "email": "ada@example.com",
-              "label": "ada@example.com"
             }
           }
         ]

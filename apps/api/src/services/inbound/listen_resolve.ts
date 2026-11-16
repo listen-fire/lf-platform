@@ -148,8 +148,9 @@ function fieldsOf(position: Position): Record<string, unknown> {
 
 /** Whether `record` fires `hop`'s WHERE, judged by the engine's own judge: a
  *  one-hop arrival plan of the hop, the record its landing. A record the judge
- *  cannot decide (a field its module could not read) is not kept, as a
- *  listen-fire resolve keeps only records it confirms. */
+ *  cannot decide (a field its module could not read, or a host function the
+ *  platform does not answer yet) is not kept, as a listen-fire resolve keeps
+ *  only records it confirms. */
 function hopFires(listen: SavedListen, hop: PlanHop, record: Position): boolean {
   if (hop.taken === undefined && hop.checked === undefined) return true;
   const plan: ListenPlan = {
@@ -159,7 +160,7 @@ function hopFires(listen: SavedListen, hop: PlanHop, record: Position): boolean 
     hops: [{ ...hop, from: '', judged: 'arrival' }],
   };
   const arrival: PlanArrival = { edge: hop.edge, landing: { recordType: hop.to, fields: fieldsOf(record) } };
-  return 'fires' in judgeArrival(plan, arrival, Date.now());
+  return 'fires' in judgeArrival(plan, arrival, { nowMs: Date.now() });
 }
 
 /** The records one traversal's last edge is subscribed under: the records its

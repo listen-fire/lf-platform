@@ -72,6 +72,18 @@
             "description": "The sender's phone number, digits with the country code first and no plus (`447700900001`): the conversation a message is in, so a listen narrows to one by it."
           },
           {
+            "fieldId": "senderPhone",
+            "displayName": "Sender Phone",
+            "kind": "string",
+            "brands": [
+              "claim:phone/e164"
+            ],
+            "mayBeAbsent": true,
+            "writable": false,
+            "required": false,
+            "description": "The sender's number with its plus (`+447700900001`), a claim WhatsApp vouches for: Meta signs the delivery. A plugin function that accepts `claim:phone/e164` takes it where it refuses plain text."
+          },
+          {
             "fieldId": "to",
             "displayName": "To",
             "kind": "string",
@@ -252,6 +264,18 @@
             "description": "The reactor's phone number."
           },
           {
+            "fieldId": "senderPhone",
+            "displayName": "Sender Phone",
+            "kind": "string",
+            "brands": [
+              "claim:phone/e164"
+            ],
+            "mayBeAbsent": true,
+            "writable": false,
+            "required": false,
+            "description": "The reactor's number with its plus (`+447700900001`), a claim WhatsApp vouches for: Meta signs the delivery. A plugin function that accepts `claim:phone/e164` takes it where it refuses plain text."
+          },
+          {
             "fieldId": "profileName",
             "displayName": "Profile Name",
             "kind": "string",
@@ -320,6 +344,18 @@
             "required": true
           },
           {
+            "fieldId": "senderPhone",
+            "displayName": "Sender Phone",
+            "kind": "string",
+            "brands": [
+              "claim:phone/e164"
+            ],
+            "mayBeAbsent": true,
+            "writable": false,
+            "required": false,
+            "description": "The sender's number with its plus (`+447700900001`), a claim WhatsApp vouches for: Meta signs the delivery. A plugin function that accepts `claim:phone/e164` takes it where it refuses plain text."
+          },
+          {
             "fieldId": "profileName",
             "displayName": "Profile Name",
             "kind": "string",
@@ -369,6 +405,18 @@
             "writable": false,
             "required": true,
             "description": "The sender's phone number, digits with the country code first and no plus (`447700900001`): the conversation a message is in, so a listen narrows to one by it."
+          },
+          {
+            "fieldId": "senderPhone",
+            "displayName": "Sender Phone",
+            "kind": "string",
+            "brands": [
+              "claim:phone/e164"
+            ],
+            "mayBeAbsent": true,
+            "writable": false,
+            "required": false,
+            "description": "The sender's number with its plus (`+447700900001`), a claim WhatsApp vouches for: Meta signs the delivery. A plugin function that accepts `claim:phone/e164` takes it where it refuses plain text."
           },
           {
             "fieldId": "to",
@@ -513,6 +561,18 @@
             "description": "The reactor's phone number."
           },
           {
+            "fieldId": "senderPhone",
+            "displayName": "Sender Phone",
+            "kind": "string",
+            "brands": [
+              "claim:phone/e164"
+            ],
+            "mayBeAbsent": true,
+            "writable": false,
+            "required": false,
+            "description": "The reactor's number with its plus (`+447700900001`), a claim WhatsApp vouches for: Meta signs the delivery. A plugin function that accepts `claim:phone/e164` takes it where it refuses plain text."
+          },
+          {
             "fieldId": "profileName",
             "displayName": "Profile Name",
             "kind": "string",
@@ -624,6 +684,18 @@
                 "description": "The sender's phone number, digits with the country code first and no plus (`447700900001`): the conversation a message is in, so a listen narrows to one by it."
               },
               {
+                "fieldId": "senderPhone",
+                "displayName": "Sender Phone",
+                "kind": "string",
+                "brands": [
+                  "claim:phone/e164"
+                ],
+                "mayBeAbsent": true,
+                "writable": false,
+                "required": false,
+                "description": "The sender's number with its plus (`+447700900001`), a claim WhatsApp vouches for: Meta signs the delivery. A plugin function that accepts `claim:phone/e164` takes it where it refuses plain text."
+              },
+              {
                 "fieldId": "to",
                 "displayName": "To",
                 "kind": "string",
@@ -721,6 +793,18 @@
                 "description": "The reactor's phone number."
               },
               {
+                "fieldId": "senderPhone",
+                "displayName": "Sender Phone",
+                "kind": "string",
+                "brands": [
+                  "claim:phone/e164"
+                ],
+                "mayBeAbsent": true,
+                "writable": false,
+                "required": false,
+                "description": "The reactor's number with its plus (`+447700900001`), a claim WhatsApp vouches for: Meta signs the delivery. A plugin function that accepts `claim:phone/e164` takes it where it refuses plain text."
+              },
+              {
                 "fieldId": "profileName",
                 "displayName": "Profile Name",
                 "kind": "string",
@@ -785,6 +869,18 @@
                 "required": true
               },
               {
+                "fieldId": "senderPhone",
+                "displayName": "Sender Phone",
+                "kind": "string",
+                "brands": [
+                  "claim:phone/e164"
+                ],
+                "mayBeAbsent": true,
+                "writable": false,
+                "required": false,
+                "description": "The sender's number with its plus (`+447700900001`), a claim WhatsApp vouches for: Meta signs the delivery. A plugin function that accepts `claim:phone/e164` takes it where it refuses plain text."
+              },
+              {
                 "fieldId": "profileName",
                 "displayName": "Profile Name",
                 "kind": "string",
@@ -827,6 +923,7 @@
               "fields": {
                 "messageId": "wamid.T1",
                 "from": "447700900001",
+                "senderPhone": "+447700900001",
                 "to": "+44 7700 900000",
                 "body": "Closed the round!",
                 "waId": "447700900001",
@@ -835,20 +932,13 @@
                 "attachments": [],
                 "Message Id": "wamid.T1",
                 "From": "447700900001",
+                "Sender Phone": "+447700900001",
                 "To": "+44 7700 900000",
                 "Body": "Closed the round!",
                 "WhatsApp Id": "447700900001",
                 "Profile Name": "Ada",
                 "Timestamp": "1700000000"
               }
-            },
-            "actor": {
-              "identifier": "447700900001",
-              "scheme": "phone",
-              "adapterType": "whatsapp",
-              "name": "Ada",
-              "label": "Ada",
-              "proven": true
             },
             "occurredAt": "2023-11-14T22:13:20.000Z"
           },
@@ -861,6 +951,7 @@
               "fields": {
                 "messageId": "wamid.I1",
                 "from": "447700900001",
+                "senderPhone": "+447700900001",
                 "to": "+44 7700 900000",
                 "body": "the deck",
                 "waId": "447700900001",
@@ -875,20 +966,13 @@
                 ],
                 "Message Id": "wamid.I1",
                 "From": "447700900001",
+                "Sender Phone": "+447700900001",
                 "To": "+44 7700 900000",
                 "Body": "the deck",
                 "WhatsApp Id": "447700900001",
                 "Profile Name": "Ada",
                 "Timestamp": "1700000001"
               }
-            },
-            "actor": {
-              "identifier": "447700900001",
-              "scheme": "phone",
-              "adapterType": "whatsapp",
-              "name": "Ada",
-              "label": "Ada",
-              "proven": true
             },
             "occurredAt": "2023-11-14T22:13:21.000Z"
           },
@@ -901,6 +985,7 @@
               "fields": {
                 "messageId": "wamid.S1",
                 "from": "447700900001",
+                "senderPhone": "+447700900001",
                 "to": "+44 7700 900000",
                 "body": "",
                 "waId": "447700900001",
@@ -915,20 +1000,13 @@
                 ],
                 "Message Id": "wamid.S1",
                 "From": "447700900001",
+                "Sender Phone": "+447700900001",
                 "To": "+44 7700 900000",
                 "Body": "",
                 "WhatsApp Id": "447700900001",
                 "Profile Name": "Ada",
                 "Timestamp": "1700000002"
               }
-            },
-            "actor": {
-              "identifier": "447700900001",
-              "scheme": "phone",
-              "adapterType": "whatsapp",
-              "name": "Ada",
-              "label": "Ada",
-              "proven": true
             },
             "occurredAt": "2023-11-14T22:13:22.000Z"
           },
@@ -941,6 +1019,7 @@
               "fields": {
                 "messageId": "wamid.R1",
                 "from": "447700900001",
+                "senderPhone": "+447700900001",
                 "waId": "447700900001",
                 "profileName": "Ada",
                 "timestamp": "1700000003",
@@ -950,17 +1029,10 @@
                 "Reacted Message Id": "wamid.T1",
                 "Message Id": "wamid.R1",
                 "From": "447700900001",
+                "Sender Phone": "+447700900001",
                 "Profile Name": "Ada",
                 "Timestamp": "1700000003"
               }
-            },
-            "actor": {
-              "identifier": "447700900001",
-              "scheme": "phone",
-              "adapterType": "whatsapp",
-              "name": "Ada",
-              "label": "Ada",
-              "proven": true
             },
             "about": {
               "recordType": "Message",
@@ -977,6 +1049,7 @@
               "fields": {
                 "messageId": "wamid.L1",
                 "from": "447700900001",
+                "senderPhone": "+447700900001",
                 "waId": "447700900001",
                 "profileName": "Ada",
                 "timestamp": "1700000004",
@@ -990,17 +1063,10 @@
                 "Address": "1 Road",
                 "Message Id": "wamid.L1",
                 "From": "447700900001",
+                "Sender Phone": "+447700900001",
                 "Profile Name": "Ada",
                 "Timestamp": "1700000004"
               }
-            },
-            "actor": {
-              "identifier": "447700900001",
-              "scheme": "phone",
-              "adapterType": "whatsapp",
-              "name": "Ada",
-              "label": "Ada",
-              "proven": true
             },
             "occurredAt": "2023-11-14T22:13:24.000Z"
           }
@@ -1378,134 +1444,6 @@
     },
     {
       "step": "Attachment without a key .File",
-      "answer": null
-    },
-    {
-      "step": "getActorCandidates arrival 0",
-      "answer": [
-        {
-          "identity": {
-            "identifier": "447700900001",
-            "scheme": "phone",
-            "adapterType": "whatsapp"
-          },
-          "source": "originator"
-        }
-      ]
-    },
-    {
-      "step": "extractActor arrival 0",
-      "answer": {
-        "identifier": "447700900001",
-        "scheme": "phone",
-        "adapterType": "whatsapp",
-        "name": "Ada",
-        "label": "Ada",
-        "proven": true
-      }
-    },
-    {
-      "step": "getActorCandidates arrival 1",
-      "answer": [
-        {
-          "identity": {
-            "identifier": "447700900001",
-            "scheme": "phone",
-            "adapterType": "whatsapp"
-          },
-          "source": "originator"
-        }
-      ]
-    },
-    {
-      "step": "extractActor arrival 1",
-      "answer": {
-        "identifier": "447700900001",
-        "scheme": "phone",
-        "adapterType": "whatsapp",
-        "name": "Ada",
-        "label": "Ada",
-        "proven": true
-      }
-    },
-    {
-      "step": "getActorCandidates arrival 2",
-      "answer": [
-        {
-          "identity": {
-            "identifier": "447700900001",
-            "scheme": "phone",
-            "adapterType": "whatsapp"
-          },
-          "source": "originator"
-        }
-      ]
-    },
-    {
-      "step": "extractActor arrival 2",
-      "answer": {
-        "identifier": "447700900001",
-        "scheme": "phone",
-        "adapterType": "whatsapp",
-        "name": "Ada",
-        "label": "Ada",
-        "proven": true
-      }
-    },
-    {
-      "step": "getActorCandidates arrival 3",
-      "answer": [
-        {
-          "identity": {
-            "identifier": "447700900001",
-            "scheme": "phone",
-            "adapterType": "whatsapp"
-          },
-          "source": "originator"
-        }
-      ]
-    },
-    {
-      "step": "extractActor arrival 3",
-      "answer": {
-        "identifier": "447700900001",
-        "scheme": "phone",
-        "adapterType": "whatsapp",
-        "name": "Ada",
-        "label": "Ada",
-        "proven": true
-      }
-    },
-    {
-      "step": "getActorCandidates arrival 4",
-      "answer": [
-        {
-          "identity": {
-            "identifier": "447700900001",
-            "scheme": "phone",
-            "adapterType": "whatsapp"
-          },
-          "source": "originator"
-        }
-      ]
-    },
-    {
-      "step": "extractActor arrival 4",
-      "answer": {
-        "identifier": "447700900001",
-        "scheme": "phone",
-        "adapterType": "whatsapp",
-        "name": "Ada",
-        "label": "Ada",
-        "proven": true
-      }
-    },
-    {
-      "step": "getActorCandidates no sender",
-      "answer": []
-    },
-    {
-      "step": "extractActor no sender",
       "answer": null
     },
     {

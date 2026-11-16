@@ -91,8 +91,7 @@ methods, and mark entry points \`readable: false\`.
   chapter).
 - \`linkRecords\` / \`unlinkRecords\`, \`getDedupRules\`,
   \`translateFilter\`, \`describeOpaqueId\`, \`invokeFieldFunction\`,
-  \`getActorCandidates\`, \`extractActor\`, \`edgesFrom\` (schema
-  chapter).
+  \`edgesFrom\` (schema chapter).
 
 ### The manifest method result
 

@@ -1,17 +1,15 @@
-// T5 — email adapter's `getActorCandidates` + `extractActor`, exercised
-// through Listen-Fire's `resolveActingUser` (the acting-user split, 2026-05-29).
+// T5 — who an inbound email acts as: the platform's own parse of its sender
+// and forwarding inboxes (`emailActorCandidates`, adapters/email/arrival.ts,
+// which the email module made up to 0.13), exercised through Listen-Fire's
+// `resolveActingUser`.
 //
-// The auth chain (now owned by `resolveActingUser`, fed by the adapter's
-// parsed candidates):
+// The auth chain (owned by `resolveActingUser`, fed by the parsed
+// candidates):
 //   1. Sender (`From:`) as `originator` → `user_email WHERE NOT
 //      is_service_email`.
 //   2. Forwarding-header recipients as `relay` → `user_email WHERE
 //      is_service_email = true`.
 //   3. Otherwise → null. Dispatcher rejects.
-//
-// `extractActor` is a pure parse (async only for remoteability): it reads
-// the `From:` header into an `ActorIdentity` regardless of whether the
-// address maps to a Listen-Fire user.
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import { arrivalTriggerOf, type TriggerEvent } from 'movement-engine/public/inbound';
@@ -42,29 +40,27 @@ jest.mock('../../../lib/kysely', () => ({
   getCoreQb: jest.fn(() => mockChainable()),
 }));
 
-import { EmailAdapter } from '../adapters/email';
 import { resolveActingUser } from '../adapters/acting_user/resolve';
-import { inboundEmailArrival } from '../adapters/email/arrival';
+import { emailActorCandidates, inboundEmailArrival } from '../adapters/email/arrival';
 
 const TEAM_ID = 'team-1' as TeamId;
 
-// Drive the full acting-user path: the adapter parses candidates,
-// `resolveActingUser` maps them to a team user.
+// Drive the full acting-user path: the platform parses candidates off what
+// landed, `resolveActingUser` maps them to a team user.
 function identify(input: {
-  adapter: EmailAdapter;
   event: TriggerEvent;
   trigger?: ActingUserTriggerContext;
 }) {
   return resolveActingUser({
     teamId: TEAM_ID,
     trigger: input.trigger,
-    getCandidates: () => input.adapter.getActorCandidates({ event: input.event }),
+    getCandidates: async () => emailActorCandidates(input.event.arrival?.landing.fields ?? {}),
   });
 }
 
 /** The run trigger an inbound email makes: the arrival the platform's door
- *  builds from the provider's payload (its sender as who acted), as a
- *  `fire_event` row hands it to the run. */
+ *  builds from the provider's payload, as a `fire_event` row hands it to the
+ *  run. */
 function makeEvent(payload: Record<string, unknown>): TriggerEvent {
   return arrivalTriggerOf({
     pipelineInputId: 'pi-1',
@@ -78,12 +74,10 @@ beforeEach(() => {
   dbQueue.length = 0;
 });
 
-describe('EmailAdapter acting-user — creator override (T6)', () => {
+describe('email acting-user — creator override (T6)', () => {
   it('overrides to creator when overrideActingUserToCreator is set (skips sender chain)', async () => {
-    const adapter = new EmailAdapter(TEAM_ID);
     setDbRow({ id: 'creator-1', email: 'creator@example.com', username: 'creator' });
     const user = await identify({
-      adapter,
       event: makeEvent({ sender: '"Ext" <ext@other.com>' }),
       trigger: {
         id: 't-1',
@@ -96,9 +90,7 @@ describe('EmailAdapter acting-user — creator override (T6)', () => {
   });
 
   it('rejects when override is on but the trigger has no creator', async () => {
-    const adapter = new EmailAdapter(TEAM_ID);
     const user = await identify({
-      adapter,
       event: makeEvent({ sender: '"Ada" <ada@example.com>' }),
       trigger: {
         id: 't-1',
@@ -111,12 +103,10 @@ describe('EmailAdapter acting-user — creator override (T6)', () => {
   });
 });
 
-describe('EmailAdapter acting-user', () => {
+describe('email acting-user', () => {
   it('authenticates as sender when From matches a non-service user_email', async () => {
-    const adapter = new EmailAdapter(TEAM_ID);
     setDbRow({ id: 'u-1', email: 'ada@example.com', username: 'ada' });
     const user = await identify({
-      adapter,
       event: makeEvent({ sender: '"Ada Okafor" <ada@example.com>' }),
     });
     expect(user).toEqual({
@@ -127,13 +117,11 @@ describe('EmailAdapter acting-user', () => {
   });
 
   it('falls through to service-account when sender is not registered', async () => {
-    const adapter = new EmailAdapter(TEAM_ID);
     // Sender lookup misses.
     setDbRow(null);
     // Intermediate-recipient (service-account) lookup hits.
     setDbRow({ id: 'u-svc-owner', email: 'dealflow@example.com', username: 'ada' });
     const user = await identify({
-      adapter,
       event: makeEvent({
         sender: 'external@example.com',
         recipient: 'inbox+dealflow@example.com',
@@ -148,10 +136,8 @@ describe('EmailAdapter acting-user', () => {
   });
 
   it('rejects when neither sender nor any forwarding header maps to a team user', async () => {
-    const adapter = new EmailAdapter(TEAM_ID);
     // Nothing matches.
     const user = await identify({
-      adapter,
       event: makeEvent({
         sender: 'external@example.com',
         recipient: 'inbox+dealflow@example.com',
@@ -161,12 +147,10 @@ describe('EmailAdapter acting-user', () => {
   });
 
   it('ignores the terminal inbox+ recipient as an auth signal (routing-only)', async () => {
-    const adapter = new EmailAdapter(TEAM_ID);
     // No row matches anywhere — sender external, no forwarding header,
     // and the `recipient` lookup arm requires service-email = true,
     // which `inbox+dealflow@example.com` doesn't satisfy.
     const user = await identify({
-      adapter,
       event: makeEvent({
         sender: 'external@example.com',
         recipient: 'inbox+dealflow@example.com',
@@ -176,16 +160,13 @@ describe('EmailAdapter acting-user', () => {
   });
 
   it('returns null when the payload has no usable headers', async () => {
-    const adapter = new EmailAdapter(TEAM_ID);
-    const user = await identify({ adapter, event: makeEvent({}) });
+    const user = await identify({ event: makeEvent({}) });
     expect(user).toBeNull();
   });
 
   it('parses From from message-headers when not present as a top-level key', async () => {
-    const adapter = new EmailAdapter(TEAM_ID);
     setDbRow({ id: 'u-2', email: 'ada@example.com', username: 'ada' });
     const user = await identify({
-      adapter,
       event: makeEvent({
         'message-headers': [
           ['Subject', 'A subject'],
@@ -202,13 +183,11 @@ describe('EmailAdapter acting-user', () => {
   // whose client adds a plus-tag (e.g. `ada+notes@example.com`) was
   // accepted by the legacy mailgun handler but rejected by the new gate.
   it('authenticates a sender via the plus-stripped fallback when the canonical row accepts plus-addressing', async () => {
-    const adapter = new EmailAdapter(TEAM_ID);
     // Direct lookup misses.
     setDbRow(null);
     // Plus-stripped lookup hits.
     setDbRow({ id: 'u-3', email: 'ada@example.com', username: 'ada' });
     const user = await identify({
-      adapter,
       event: makeEvent({ sender: 'ada+notes@example.com' }),
     });
     expect(user).toEqual({
@@ -219,7 +198,6 @@ describe('EmailAdapter acting-user', () => {
   });
 
   it('falls back to plus-stripped lookup for the intermediate-recipient arm too', async () => {
-    const adapter = new EmailAdapter(TEAM_ID);
     // Sender direct miss + sender plus-strip skipped (no '+' in sender).
     setDbRow(null);
     // Intermediate direct miss.
@@ -227,7 +205,6 @@ describe('EmailAdapter acting-user', () => {
     // Intermediate plus-stripped hit on service email.
     setDbRow({ id: 'u-svc', email: 'dealflow@example.com', username: 'ada' });
     const user = await identify({
-      adapter,
       event: makeEvent({
         sender: 'external@example.com',
         'Delivered-To': 'dealflow+abc@example.com',
@@ -237,39 +214,20 @@ describe('EmailAdapter acting-user', () => {
   });
 });
 
-describe('EmailAdapter.extractActor', () => {
-  it('returns the raw sender even when auth would go through service-account', async () => {
-    const adapter = new EmailAdapter(TEAM_ID);
-    const actor = await adapter.extractActor({
-      event: makeEvent({
-        sender: '"External Sender" <ext@example.com>',
-        recipient: 'dealflow@example.com',
-      }),
-    });
-    expect(actor).toEqual({
-      identifier: 'ext@example.com',
-      scheme: 'email',
-      adapterType: 'email',
-      email: 'ext@example.com',
-      name: 'External Sender',
-      label: 'External Sender',
-    });
+describe('emailActorCandidates', () => {
+  it('names the raw sender as the originator even when auth would go through a service account', () => {
+    expect(emailActorCandidates({ sender: '"External Sender" <ext@example.com>', recipient: 'dealflow@example.com' })).toEqual([
+      { identity: { identifier: 'ext@example.com', scheme: 'email', adapterType: 'email', email: 'ext@example.com' }, source: 'originator' },
+      { identity: { identifier: 'dealflow@example.com', scheme: 'email', adapterType: 'email', email: 'dealflow@example.com' }, source: 'relay' },
+    ]);
   });
 
-  it('reads From from message-headers when sender top-level is missing', async () => {
-    const adapter = new EmailAdapter(TEAM_ID);
-    const actor = await adapter.extractActor({
-      event: makeEvent({
-        'message-headers': [['From', 'plain@example.com']],
-      }),
-    });
-    expect(actor?.identifier).toBe('plain@example.com');
-    expect(actor?.scheme).toBe('email');
+  it('reads From from message-headers when sender top-level is missing', () => {
+    const [sender] = emailActorCandidates({ 'message-headers': JSON.stringify([['From', 'plain@example.com']]) });
+    expect(sender).toEqual({ identity: expect.objectContaining({ identifier: 'plain@example.com', scheme: 'email' }), source: 'originator' });
   });
 
-  it('returns null when the event carries no actor-shaped headers', async () => {
-    const adapter = new EmailAdapter(TEAM_ID);
-    const actor = await adapter.extractActor({ event: makeEvent({}) });
-    expect(actor).toBeNull();
+  it('names nobody when the fields carry no sender or recipient', () => {
+    expect(emailActorCandidates({})).toEqual([]);
   });
 });

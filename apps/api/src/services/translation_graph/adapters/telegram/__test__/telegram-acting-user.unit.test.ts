@@ -1,21 +1,17 @@
-// Integration-flavoured: the email a Telegram binding resolves flows through
-// the SHARED, team-clamped acting-user chain to the right ActingUser — and a
-// same-email user in another team is unreachable from teamA's binding.
+// Who sent a Telegram message is the team-scoped claim its module publishes
+// (`Sender Email`, a `claim:email/address`, listen-fire 0.16): the address the
+// sender bound by handshake on THIS team. A same-email binding in another team
+// is invisible from teamA's arrivals, so a filter's host function that takes
+// the claim can never be handed another team's address.
 //
 // Path under test:
-//   TelegramAdapter.preprocessInbound   (telegram_user_id → email, team-scoped, on the arrival)
-//   TelegramAdapter.getActorCandidates  (the arrival's actor)
-//     → resolveActingUser               (originator → scheme: 'email')
-//       → lookupTeamUserByEmail         (HARD-CLAMPED: u.team_id = teamId)
-//         → ActingUser
+//   TelegramAdapter.preprocessInbound   (telegram_user_id → email, team-scoped, on the landing)
 //
-// Both DB leaves are mocked: `getAutomationsQb` models `telegram_identity`
-// (team-scoped binding store) and `getQb` models the `user_email ⋈ user`
-// lookup WITH the team clamp, so the test exercises the real clamp logic
+// The DB leaf is mocked: `getAutomationsQb` models `telegram_identity` (the
+// team-scoped binding store), so the test exercises the real scope logic
 // rather than asserting it abstractly.
 
 import type { TeamId } from '../../../../../generated/kysely/core/Team';
-import { arrivalTriggerOf, type TriggerEvent } from 'movement-engine/public/inbound';
 
 jest.mock('../../../../../lib/recording', () => ({
   isTestHarnessTeam: () => false,
@@ -25,11 +21,6 @@ jest.mock('../../../../../lib/recording', () => ({
 // ── telegram_identity store: (team_id, telegram_user_id) → email ──────────────
 const identityStore = new Map<string, string>();
 const identityKey = (teamId: string, tgUserId: string) => `${teamId}::${tgUserId}`;
-
-// ── user_email ⋈ user table: (default_team_id, email, is_service_email) → user row ─
-// Models the SHARED lookupTeamUserByEmail query, including its hard team clamp.
-interface UserRow { id: string; email: string; username: string; teamId: string; isService: boolean }
-const userRows: UserRow[] = [];
 
 jest.mock('../../../../../lib/kysely', () => ({
   getAutomationsQb: () => ({
@@ -52,77 +43,18 @@ jest.mock('../../../../../lib/kysely', () => ({
       return builder;
     },
   }),
-  // Models `lookupTeamUserByEmail`'s `runUserEmailLookup` chain:
-  //   selectFrom('user_email as ue').innerJoin('user as u', ...)
-  //     .where('ue.email', '=', email)
-  //     .where('u.default_team_id', '=', teamId)    ← the hard clamp (C-6 rename)
-  //     .where('ue.is_service_email', '=', requireServiceEmail)
-  //     .select(...).executeTakeFirst()
-  getQb: () => ({
-    selectFrom: () => {
-      const filters: Record<string, string | boolean> = {};
-      const builder = {
-        innerJoin: () => builder,
-        where: (column: string, _op: string, value: string | boolean) => {
-          filters[column] = value;
-          return builder;
-        },
-        select: () => ({
-          executeTakeFirst: async () => {
-            const match = userRows.find(
-              (r) =>
-                r.email === filters['ue.email'] &&
-                r.teamId === filters['u.default_team_id'] && // CLAMP
-                r.isService === filters['ue.is_service_email'],
-            );
-            return match
-              ? { id: match.id, email: match.email, username: match.username }
-              : undefined;
-          },
-        }),
-      };
-      return builder;
-    },
-  }),
-  getCoreQb: () => ({
-    selectFrom: () => {
-      const filters: Record<string, string | boolean> = {};
-      const builder = {
-        innerJoin: () => builder,
-        where: (column: string, _op: string, value: string | boolean) => {
-          filters[column] = value;
-          return builder;
-        },
-        select: () => ({
-          executeTakeFirst: async () => {
-            const match = userRows.find(
-              (r) =>
-                r.email === filters['ue.email'] &&
-                r.teamId === filters['u.default_team_id'] && // CLAMP
-                r.isService === filters['ue.is_service_email'],
-            );
-            return match
-              ? { id: match.id, email: match.email, username: match.username }
-              : undefined;
-          },
-        }),
-      };
-      return builder;
-    },
-  }),
 }));
 
-import { TelegramAdapter, TELEGRAM_ADAPTER_TYPE } from '../index';
-import { resolveActingUser } from '../../acting_user/resolve';
+import { TelegramAdapter } from '../index';
 
 const TEAM_A = 'team-A' as TeamId;
 const TEAM_B = 'team-B' as TeamId;
 const TG_USER = '123';
 const EMAIL = 'shared@example.com';
 
-/** The run trigger a message from `TG_USER` makes on `adapter`'s team: the
- *  door looks the sender's binding up and names who acted on the arrival. */
-async function event(adapter: TelegramAdapter): Promise<TriggerEvent> {
+/** What a message from `TG_USER` lands as on `adapter`'s team: the door looks
+ *  the sender's binding up and names the address as the claim. */
+async function senderEmailOf(adapter: TelegramAdapter): Promise<unknown> {
   const { arrivals } = await adapter.preprocessInbound({
     raw: {
       update_id: 1,
@@ -137,58 +69,25 @@ async function event(adapter: TelegramAdapter): Promise<TriggerEvent> {
   });
   const [arrival] = arrivals;
   if (arrival === undefined || 'gone' in arrival) throw new Error('the update made no arrival');
-  return arrivalTriggerOf({ pipelineInputId: 'trigger:t-1', adapterType: TELEGRAM_ADAPTER_TYPE, now: new Date('2026-11-02T12:00:00Z'), arrival });
+  return arrival.landing.fields['Sender Email'];
 }
 
 beforeEach(() => {
   identityStore.clear();
-  userRows.length = 0;
 });
 
-describe('Telegram acting-user chain (resolved email → team-clamped user)', () => {
-  it('bound id resolves to the teamA user with that email', async () => {
+describe('Telegram sender claim (team-scoped binding)', () => {
+  it('a bound id lands with the address it bound on this team', async () => {
     identityStore.set(identityKey(TEAM_A, TG_USER), EMAIL);
-    userRows.push({ id: 'user-A', email: EMAIL, username: 'ada', teamId: TEAM_A, isService: false });
-
-    const adapter = new TelegramAdapter(TEAM_A, 'cred-1');
-    const user = await resolveActingUser({
-      teamId: TEAM_A,
-      getCandidates: async () => adapter.getActorCandidates({ event: await event(adapter) }),
-    });
-
-    expect(user).toEqual({ id: 'user-A', email: EMAIL, name: 'ada' });
+    expect(await senderEmailOf(new TelegramAdapter(TEAM_A, 'cred-1'))).toBe(EMAIL);
   });
 
-  it('teamB user with the SAME email is unreachable from teamA-only binding', async () => {
-    // Binding lives only in teamA; a same-email user exists in teamB.
+  it('a binding held by another team is invisible: no claim', async () => {
     identityStore.set(identityKey(TEAM_A, TG_USER), EMAIL);
-    userRows.push({ id: 'user-B', email: EMAIL, username: 'someoneB', teamId: TEAM_B, isService: false });
-
-    // teamB adapter: no teamB binding for tg user 123 → no candidate → null.
-    const teamBAdapter = new TelegramAdapter(TEAM_B, 'cred-1');
-    const viaTeamB = await resolveActingUser({
-      teamId: TEAM_B,
-      getCandidates: async () => teamBAdapter.getActorCandidates({ event: await event(teamBAdapter) }),
-    });
-    expect(viaTeamB).toBeNull();
-
-    // Even teamA's binding resolves an email, but with teamId=teamA the clamp
-    // keeps it from ever matching the teamB user — no teamA user exists, so null.
-    const teamAAdapter = new TelegramAdapter(TEAM_A, 'cred-1');
-    const viaTeamA = await resolveActingUser({
-      teamId: TEAM_A,
-      getCandidates: async () => teamAAdapter.getActorCandidates({ event: await event(teamAAdapter) }),
-    });
-    expect(viaTeamA).toBeNull();
+    expect(await senderEmailOf(new TelegramAdapter(TEAM_B, 'cred-1'))).toBeNull();
   });
 
-  it('unbound sender → no candidate → no acting user', async () => {
-    userRows.push({ id: 'user-A', email: EMAIL, username: 'ada', teamId: TEAM_A, isService: false });
-    const adapter = new TelegramAdapter(TEAM_A, 'cred-1');
-    const user = await resolveActingUser({
-      teamId: TEAM_A,
-      getCandidates: async () => adapter.getActorCandidates({ event: await event(adapter) }),
-    });
-    expect(user).toBeNull();
+  it('an unbound sender lands with no claim', async () => {
+    expect(await senderEmailOf(new TelegramAdapter(TEAM_A, 'cred-1'))).toBeNull();
   });
 });

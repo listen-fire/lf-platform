@@ -21,17 +21,17 @@
 // only a requester handed in explicitly, on the same team, is kept.
 //
 // An email run acts as the person the message itself resolves to — the sender
-// when they are on the team, or whoever claimed a public inbox's key — by the
-// same resolution the run's `@user_*` reads, so the identity a run's services
-// use and the user it reports are one person, on a fresh firing and on every
-// resume of it (each is handed the run's original event). The engine is handed
-// that event naming the trigger it fired through (`engineEvent`), which is
-// what lets `@user_*` resolve against the same trigger this file does.
+// when they are on the team, or whoever claimed a public inbox's key — on a
+// fresh firing and on every resume of it (each is handed the run's original
+// event). The engine is handed that event naming the trigger it fired through
+// (`engineEvent`): a version from before 0.16 resolves its `@user_*` against
+// that trigger by the same resolution, so the identity a run's services use
+// and the user it reports are one person.
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
-import type { ActingUser } from 'movement-engine/public/adapter';
+import type { ActingUser } from '../adapters/acting_user/actor';
 import type { ActingUserTriggerContext } from '../adapters/acting_user_shared';
 import { isAccess, meets, type Principal } from 'principal';
 
@@ -41,7 +41,8 @@ import { userPrincipal } from '../../principal';
 import { logger } from 'movement-engine/public/log';
 import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
 import { resolveActingUser } from '../adapters/acting_user/resolve';
-import { createEmailAdapter, EMAIL_ADAPTER_TYPE } from '../adapters/email';
+import { EMAIL_ADAPTER_TYPE } from '../adapters/email';
+import { emailActorCandidates } from '../adapters/email/arrival';
 import { resolveAdapterSlug } from '../adapters/registry';
 
 /** What a firing is, as far as who it acts as goes. */
@@ -57,10 +58,10 @@ interface Firing {
 
 /**
  * The event as the engine is handed it: naming the trigger it fired through.
- * The engine's `@user_*` passes that name back when it asks the host who the
- * run acts as, and only with it does the host apply the trigger's own rules —
- * a public inbox's claimant, a creator override. Without it `@user_*` reads
- * the message alone: empty for a stranger whose run executes as the claimant.
+ * A version from before 0.16 passes that name back when its `@user_*` asks the
+ * host who the run acts as, and only with it does the host apply the trigger's
+ * own rules — a public inbox's claimant, a creator override. 0.16 has no
+ * `@user_*` and reads no such name.
  */
 function engineEvent(firing: Firing): TriggerEvent {
   return { ...firing.event, triggerEntryId: firing.triggerId };
@@ -145,9 +146,9 @@ async function firingActor(firing: Firing): Promise<string | undefined> {
 }
 
 /**
- * Who an email listener's run acts as: the resolution the run's `@user_*`
- * reads — the message's sender when they are on the team, else whoever claimed
- * the key as a public inbox. Null for any other listener.
+ * Who an email listener's run acts as: the message's sender when they are on
+ * the team, else whoever claimed the key as a public inbox. Null for any other
+ * listener.
  */
 async function emailActor(input: {
   teamId: TeamId;
@@ -159,7 +160,7 @@ async function emailActor(input: {
     teamId: input.teamId,
     trigger: input.trigger,
     event: input.event,
-    getCandidates: () => createEmailAdapter({ teamId: input.teamId }).getActorCandidates({ event: input.event }),
+    getCandidates: async () => emailActorCandidates(input.event.arrival?.landing.fields ?? {}),
   });
 }
 

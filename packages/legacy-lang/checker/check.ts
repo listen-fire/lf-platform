@@ -198,6 +198,8 @@ import {
   FieldType,
   fieldTypeOfSchema,
   fieldTypesOfSchema,
+  pluginArgSurfaceType,
+  pluginArgSurfaceTypes,
   surfaceTypeOfSchema,
   surfaceTypesOfSchema,
   InstanceSchema,
@@ -4912,6 +4914,9 @@ class Checker {
       }
       case 'closure':
         return this.writtenClosureType(member, scope, report);
+      // No legacy dialect spells a brand; a branded member is its base.
+      case 'branded':
+        return this.valueMemberType(member.of, scope, report);
       default:
         return neverAsAny(member);
     }
@@ -12250,7 +12255,7 @@ class Checker {
       } else if (callee.kind === 'plugin') {
         // One function sort: a plugin is a function whose body isn't visible.
         value = this.checkPluginApplication(statement, callee, scope);
-        pluginArgTypes = { declared: surfaceTypesOfSchema(this.plainPluginSpec(callee.importedName ?? statement.callee)?.argTypes ?? {}) };
+        pluginArgTypes = { declared: pluginArgSurfaceTypes(this.plainPluginSpec(callee.importedName ?? statement.callee)?.argTypes ?? {}) };
       } else if (closure !== undefined) {
         // A closure bound to a name is a function: its signature is its
         // parameters, its value what its body returns, and calling it does
@@ -15178,7 +15183,7 @@ class Checker {
       // Held to what the plugin takes exactly as a plain call's argument is:
       // a stage is the same call, and the engine hands it the same value.
       const declaredArg = spec?.argTypes?.[arg.name];
-      const declared = declaredArg !== undefined ? surfaceTypeOfSchema(declaredArg) : undefined;
+      const declared = declaredArg !== undefined ? pluginArgSurfaceType(declaredArg) : undefined;
       const { valueType, held, mayHold } = this.checkExprSlot(arg.value, scope, { fields, ...pluginArgSlotOptions(declared) });
       this.checkPluginArgValue({
         callee: plugin.plugin,
@@ -15345,7 +15350,7 @@ class Checker {
         plain: true,
       });
       const declaredArg = spec?.argTypes?.[arg.name];
-      this.reportPluginArgType(statement.callee, declaredArg !== undefined ? surfaceTypeOfSchema(declaredArg) : undefined, arg, scope);
+      this.reportPluginArgType(statement.callee, declaredArg !== undefined ? pluginArgSurfaceType(declaredArg) : undefined, arg, scope);
     }
     // The call's value is what the plugin DECLARED it hands back, on the plane
     // that declaration lives on. Undeclared (or refused above) leaves it

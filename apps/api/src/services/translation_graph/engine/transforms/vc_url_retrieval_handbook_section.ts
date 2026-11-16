@@ -43,7 +43,7 @@ A slide deck behind a link comes back as a \`file\`, so the same write that atta
 ### gated-links
 
 \`\`\`
-pages = vcUrlRetrieval(msg.Body, { email: @user_email })
+pages = vcUrlRetrieval(msg.Body, { email: "dealflow@yourfund.com" })
 \`\`\`
 
 \`email\` is typed into a link that demands one before it will show its content. A passcode written next to a link in the text is picked up from the text itself. Without an address, a gated link is skipped rather than guessed at.
@@ -69,7 +69,7 @@ node Company: "each company named in this message" {
 }
 
 function \`Intake\`(m: <inbox-[:Email]->>) {
-  pages   = vcUrlRetrieval(m.Body, { email: @user_email })
+  pages   = vcUrlRetrieval(m.Body, { email: "dealflow@yourfund.com" })
   content = [m.Body, ...map(pages, (p) => coalesce(p.text, ""))]
   map(extract(content, Company), (c) => {
     record = write crm-[:Companies]-> { unique by (Name), Name: c.name, Description: c.summary }

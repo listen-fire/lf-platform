@@ -6,6 +6,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { sql } from 'kysely';
+import { LANGUAGE_VERSION } from 'movement-lang';
 
 import type { Arrival } from 'engine-contracts';
 import type { TeamId } from '../../../generated/kysely/core/Team';
@@ -35,7 +36,7 @@ const open: Arrival = {
 
 async function newMovement(name: string): Promise<MovementId> {
   const id = randomUUID() as MovementId;
-  await getAutomationsQb(['movement']).insertInto('movement').values({ id, team_id: teamId, name, source: '', language_version: '0.15.3' }).execute();
+  await getAutomationsQb(['movement']).insertInto('movement').values({ id, team_id: teamId, name, source: '', language_version: LANGUAGE_VERSION }).execute();
   return id;
 }
 

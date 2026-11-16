@@ -17,7 +17,7 @@ import { randomUUID } from 'node:crypto';
 
 import { sql } from 'kysely';
 import { z } from 'zod';
-import { lastEdgeOf, listenPlanSchema, type Arrival, type AwaitHead, type AwaitLanding, type ListenPlan, type Verdict } from 'engine-contracts';
+import { lastEdgeOf, listenPlanSchema, type Arrival, type AwaitHead, type AwaitLanding, type ListenPlan, type PluginQuestion, type Verdict } from 'engine-contracts';
 import {
   arrivalReceiptKey,
   arrivalTriggerOf,
@@ -206,6 +206,13 @@ function vouchedVerdict(listen: SavedListen, arrival: Exclude<Arrival, { gone: t
   return listen.plan.adapter === adapterType && lastEdgeOf(listen.plan) === arrival.edge ? { fires: true } : null;
 }
 
+/** Why an arrival whose filter asks host functions is kept unjudged: the
+ *  platform answers none yet, so it judges no such filter. */
+function unansweredAsks(asks: readonly PluginQuestion[]): string {
+  const plugins = [...new Set(asks.map((ask) => ask.plugin))];
+  return `its filter asks the host function${plugins.length === 1 ? '' : 's'} ${plugins.join(', ')}, which this platform does not answer yet`;
+}
+
 /**
  * Each arrival judged against every listen of `listens` on its edge, in the
  * order the arrivals came. A listen on another connection than the delivery
@@ -249,9 +256,10 @@ export function judgeArrivals(input: {
       if (verdict === null) continue;
       const named = `${listen.file}:${listen.plan.movement}`;
       if ('skips' in verdict) continue;
-      if ('undecided' in verdict) {
+      const undecided = 'undecided' in verdict ? verdict.undecided : 'asks' in verdict ? unansweredAsks(verdict.asks) : undefined;
+      if (undecided !== undefined) {
         taken = true;
-        say(`${named}: an arrival on ${arrival.edge} cannot be judged (${verdict.undecided}): it runs nothing`);
+        say(`${named}: an arrival on ${arrival.edge} cannot be judged (${undecided}): it runs nothing`);
         unjudged.push({
           listen,
           arrival,
@@ -264,7 +272,7 @@ export function judgeArrivals(input: {
             adapter: delivery.adapterType,
             recordId: arrival.landing.recordId ?? null,
             landing: arrival.landing,
-            reason: verdict.undecided,
+            reason: undecided,
             at: now.toISOString(),
             attempt: input.attempt ?? 0,
           },

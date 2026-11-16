@@ -6,7 +6,7 @@
 // exactly as before: to nobody.
 
 import type { TeamId } from '../../../../../generated/kysely/core/Team';
-import type { ActorCandidate } from 'movement-engine/public/adapter';
+import type { ActorCandidate } from '../../acting_user/actor';
 import type { ActingUserTriggerContext } from '../../acting_user_shared';
 import { arrivalTriggerOf, type TriggerEvent } from 'movement-engine/public/inbound';
 

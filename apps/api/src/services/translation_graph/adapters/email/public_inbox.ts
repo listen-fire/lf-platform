@@ -12,7 +12,7 @@
 // a clash discovered at delivery. Whoever claimed it is who a run acts as when
 // the sender is not on the team, as a Gmail run acts as the mailbox's owner.
 
-import type { ActingUser } from 'movement-engine/public/adapter';
+import type { ActingUser } from '../acting_user/actor';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 
 import { EMAIL_ADAPTER_TYPE, EMAIL_KEY_FIELD, inboundRoutingAddress } from '@listen-fire/email';

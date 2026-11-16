@@ -112,6 +112,18 @@
               "description": "The sender's first name."
             },
             {
+              "fieldId": "sender_email",
+              "displayName": "Sender Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address the sender bound to their Telegram account by the link handshake, lower case; null for a sender who has not linked. A claim Telegram vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
               "fieldId": "date",
               "displayName": "Date",
               "kind": "string",
@@ -325,6 +337,18 @@
               "description": "The sender's first name."
             },
             {
+              "fieldId": "sender_email",
+              "displayName": "Sender Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address the sender bound to their Telegram account by the link handshake, lower case; null for a sender who has not linked. A claim Telegram vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
               "fieldId": "date",
               "displayName": "Date",
               "kind": "string",
@@ -497,6 +521,18 @@
                   "description": "The sender's first name."
                 },
                 {
+                  "fieldId": "sender_email",
+                  "displayName": "Sender Email",
+                  "kind": "string",
+                  "brands": [
+                    "claim:email/address"
+                  ],
+                  "mayBeAbsent": true,
+                  "writable": false,
+                  "required": false,
+                  "description": "The address the sender bound to their Telegram account by the link handshake, lower case; null for a sender who has not linked. A claim Telegram vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+                },
+                {
                   "fieldId": "date",
                   "displayName": "Date",
                   "kind": "string",
@@ -580,19 +616,12 @@
                   "Sender Id": "777",
                   "Sender Username": "adas",
                   "Sender First Name": "Ada",
-                  "Date": "2023-11-14T22:13:20.000Z"
+                  "Date": "2023-11-14T22:13:20.000Z",
+                  "sender_email": "ada@example.com",
+                  "Sender Email": "ada@example.com"
                 }
               },
-              "occurredAt": "2023-11-14T22:13:20.000Z",
-              "actor": {
-                "identifier": "777",
-                "scheme": "email",
-                "adapterType": "telegram",
-                "email": "ada@example.com",
-                "name": "Ada",
-                "label": "@adas",
-                "proven": true
-              }
+              "occurredAt": "2023-11-14T22:13:20.000Z"
             }
           ]
         }
@@ -650,7 +679,9 @@
                   "Chat Type": "supergroup",
                   "Sender Id": "888",
                   "Sender First Name": "Bo",
-                  "Date": "2023-11-14T22:15:00.000Z"
+                  "Date": "2023-11-14T22:15:00.000Z",
+                  "sender_email": null,
+                  "Sender Email": null
                 }
               },
               "occurredAt": "2023-11-14T22:15:00.000Z"
@@ -974,43 +1005,6 @@
         "answer": []
       },
       {
-        "step": "extractActor linked",
-        "answer": {
-          "identifier": "777",
-          "scheme": "email",
-          "adapterType": "telegram",
-          "email": "ada@example.com",
-          "name": "Ada",
-          "label": "@adas",
-          "proven": true
-        }
-      },
-      {
-        "step": "extractActor unlinked",
-        "answer": null
-      },
-      {
-        "step": "getActorCandidates linked",
-        "answer": [
-          {
-            "identity": {
-              "identifier": "777",
-              "scheme": "email",
-              "adapterType": "telegram",
-              "email": "ada@example.com",
-              "name": "Ada",
-              "label": "@adas",
-              "proven": true
-            },
-            "source": "originator"
-          }
-        ]
-      },
-      {
-        "step": "getActorCandidates unlinked",
-        "answer": []
-      },
-      {
         "step": "meta other edge",
         "answer": []
       },
@@ -1146,7 +1140,7 @@
           "text": "Hello Ada"
         },
         "status": 200,
-        "response": "{\"ok\":true,\"result\":{\"message_id\":1,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1793639764,\"text\":\"Hello Ada\"}}"
+        "response": "{\"ok\":true,\"result\":{\"message_id\":1,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1794605205,\"text\":\"Hello Ada\"}}"
       },
       {
         "method": "POST",
@@ -1171,7 +1165,7 @@
           }
         },
         "status": 200,
-        "response": "{\"ok\":true,\"result\":{\"message_id\":2,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1793639764,\"text\":\"Approve?\",\"reply_to_message_id\":42,\"reply_markup\":{\"inline_keyboard\":[[{\"text\":\"Yes\",\"callback_data\":\"cb_1\"}]]}}}"
+        "response": "{\"ok\":true,\"result\":{\"message_id\":2,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1794605205,\"text\":\"Approve?\",\"reply_to_message_id\":42,\"reply_markup\":{\"inline_keyboard\":[[{\"text\":\"Yes\",\"callback_data\":\"cb_1\"}]]}}}"
       },
       {
         "method": "POST",
@@ -1186,7 +1180,7 @@
           "reply_to_message_id": 42
         },
         "status": 200,
-        "response": "{\"ok\":true,\"result\":{\"message_id\":3,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1793639764,\"text\":\"plain\",\"reply_to_message_id\":42}}"
+        "response": "{\"ok\":true,\"result\":{\"message_id\":3,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1794605205,\"text\":\"plain\",\"reply_to_message_id\":42}}"
       },
       {
         "method": "POST",
@@ -1344,6 +1338,18 @@
               "description": "The sender's first name."
             },
             {
+              "fieldId": "sender_email",
+              "displayName": "Sender Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address the sender bound to their Telegram account by the link handshake, lower case; null for a sender who has not linked. A claim Telegram vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
               "fieldId": "date",
               "displayName": "Date",
               "kind": "string",
@@ -1557,6 +1563,18 @@
               "description": "The sender's first name."
             },
             {
+              "fieldId": "sender_email",
+              "displayName": "Sender Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address the sender bound to their Telegram account by the link handshake, lower case; null for a sender who has not linked. A claim Telegram vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
               "fieldId": "date",
               "displayName": "Date",
               "kind": "string",
@@ -1729,6 +1747,18 @@
                   "description": "The sender's first name."
                 },
                 {
+                  "fieldId": "sender_email",
+                  "displayName": "Sender Email",
+                  "kind": "string",
+                  "brands": [
+                    "claim:email/address"
+                  ],
+                  "mayBeAbsent": true,
+                  "writable": false,
+                  "required": false,
+                  "description": "The address the sender bound to their Telegram account by the link handshake, lower case; null for a sender who has not linked. A claim Telegram vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+                },
+                {
                   "fieldId": "date",
                   "displayName": "Date",
                   "kind": "string",
@@ -1812,19 +1842,12 @@
                   "Sender Id": "777",
                   "Sender Username": "adas",
                   "Sender First Name": "Ada",
-                  "Date": "2023-11-14T22:13:20.000Z"
+                  "Date": "2023-11-14T22:13:20.000Z",
+                  "sender_email": "ada@example.com",
+                  "Sender Email": "ada@example.com"
                 }
               },
-              "occurredAt": "2023-11-14T22:13:20.000Z",
-              "actor": {
-                "identifier": "777",
-                "scheme": "email",
-                "adapterType": "telegram",
-                "email": "ada@example.com",
-                "name": "Ada",
-                "label": "@adas",
-                "proven": true
-              }
+              "occurredAt": "2023-11-14T22:13:20.000Z"
             }
           ]
         }
@@ -1882,7 +1905,9 @@
                   "Chat Type": "supergroup",
                   "Sender Id": "888",
                   "Sender First Name": "Bo",
-                  "Date": "2023-11-14T22:15:00.000Z"
+                  "Date": "2023-11-14T22:15:00.000Z",
+                  "sender_email": null,
+                  "Sender Email": null
                 }
               },
               "occurredAt": "2023-11-14T22:15:00.000Z"
@@ -2206,43 +2231,6 @@
         "answer": []
       },
       {
-        "step": "extractActor linked",
-        "answer": {
-          "identifier": "777",
-          "scheme": "email",
-          "adapterType": "telegram",
-          "email": "ada@example.com",
-          "name": "Ada",
-          "label": "@adas",
-          "proven": true
-        }
-      },
-      {
-        "step": "extractActor unlinked",
-        "answer": null
-      },
-      {
-        "step": "getActorCandidates linked",
-        "answer": [
-          {
-            "identity": {
-              "identifier": "777",
-              "scheme": "email",
-              "adapterType": "telegram",
-              "email": "ada@example.com",
-              "name": "Ada",
-              "label": "@adas",
-              "proven": true
-            },
-            "source": "originator"
-          }
-        ]
-      },
-      {
-        "step": "getActorCandidates unlinked",
-        "answer": []
-      },
-      {
         "step": "meta other edge",
         "answer": []
       },
@@ -2378,7 +2366,7 @@
           "text": "Hello Ada"
         },
         "status": 200,
-        "response": "{\"ok\":true,\"result\":{\"message_id\":4,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1793639764,\"text\":\"Hello Ada\"}}"
+        "response": "{\"ok\":true,\"result\":{\"message_id\":4,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1794605205,\"text\":\"Hello Ada\"}}"
       },
       {
         "method": "POST",
@@ -2403,7 +2391,7 @@
           }
         },
         "status": 200,
-        "response": "{\"ok\":true,\"result\":{\"message_id\":5,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1793639764,\"text\":\"Approve?\",\"reply_to_message_id\":42,\"reply_markup\":{\"inline_keyboard\":[[{\"text\":\"Yes\",\"callback_data\":\"cb_1\"}]]}}}"
+        "response": "{\"ok\":true,\"result\":{\"message_id\":5,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1794605205,\"text\":\"Approve?\",\"reply_to_message_id\":42,\"reply_markup\":{\"inline_keyboard\":[[{\"text\":\"Yes\",\"callback_data\":\"cb_1\"}]]}}}"
       },
       {
         "method": "POST",
@@ -2418,7 +2406,7 @@
           "reply_to_message_id": 42
         },
         "status": 200,
-        "response": "{\"ok\":true,\"result\":{\"message_id\":6,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1793639764,\"text\":\"plain\",\"reply_to_message_id\":42}}"
+        "response": "{\"ok\":true,\"result\":{\"message_id\":6,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1794605205,\"text\":\"plain\",\"reply_to_message_id\":42}}"
       },
       {
         "method": "POST",
@@ -2576,6 +2564,18 @@
               "description": "The sender's first name."
             },
             {
+              "fieldId": "sender_email",
+              "displayName": "Sender Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address the sender bound to their Telegram account by the link handshake, lower case; null for a sender who has not linked. A claim Telegram vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
               "fieldId": "date",
               "displayName": "Date",
               "kind": "string",
@@ -2789,6 +2789,18 @@
               "description": "The sender's first name."
             },
             {
+              "fieldId": "sender_email",
+              "displayName": "Sender Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address the sender bound to their Telegram account by the link handshake, lower case; null for a sender who has not linked. A claim Telegram vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
               "fieldId": "date",
               "displayName": "Date",
               "kind": "string",
@@ -2961,6 +2973,18 @@
                   "description": "The sender's first name."
                 },
                 {
+                  "fieldId": "sender_email",
+                  "displayName": "Sender Email",
+                  "kind": "string",
+                  "brands": [
+                    "claim:email/address"
+                  ],
+                  "mayBeAbsent": true,
+                  "writable": false,
+                  "required": false,
+                  "description": "The address the sender bound to their Telegram account by the link handshake, lower case; null for a sender who has not linked. A claim Telegram vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+                },
+                {
                   "fieldId": "date",
                   "displayName": "Date",
                   "kind": "string",
@@ -3044,19 +3068,12 @@
                   "Sender Id": "777",
                   "Sender Username": "adas",
                   "Sender First Name": "Ada",
-                  "Date": "2023-11-14T22:13:20.000Z"
+                  "Date": "2023-11-14T22:13:20.000Z",
+                  "sender_email": "ada@example.com",
+                  "Sender Email": "ada@example.com"
                 }
               },
-              "occurredAt": "2023-11-14T22:13:20.000Z",
-              "actor": {
-                "identifier": "777",
-                "scheme": "email",
-                "adapterType": "telegram",
-                "email": "ada@example.com",
-                "name": "Ada",
-                "label": "@adas",
-                "proven": true
-              }
+              "occurredAt": "2023-11-14T22:13:20.000Z"
             }
           ]
         }
@@ -3114,7 +3131,9 @@
                   "Chat Type": "supergroup",
                   "Sender Id": "888",
                   "Sender First Name": "Bo",
-                  "Date": "2023-11-14T22:15:00.000Z"
+                  "Date": "2023-11-14T22:15:00.000Z",
+                  "sender_email": null,
+                  "Sender Email": null
                 }
               },
               "occurredAt": "2023-11-14T22:15:00.000Z"
@@ -3434,43 +3453,6 @@
         "answer": []
       },
       {
-        "step": "extractActor linked",
-        "answer": {
-          "identifier": "777",
-          "scheme": "email",
-          "adapterType": "telegram",
-          "email": "ada@example.com",
-          "name": "Ada",
-          "label": "@adas",
-          "proven": true
-        }
-      },
-      {
-        "step": "extractActor unlinked",
-        "answer": null
-      },
-      {
-        "step": "getActorCandidates linked",
-        "answer": [
-          {
-            "identity": {
-              "identifier": "777",
-              "scheme": "email",
-              "adapterType": "telegram",
-              "email": "ada@example.com",
-              "name": "Ada",
-              "label": "@adas",
-              "proven": true
-            },
-            "source": "originator"
-          }
-        ]
-      },
-      {
-        "step": "getActorCandidates unlinked",
-        "answer": []
-      },
-      {
         "step": "meta other edge",
         "answer": []
       },
@@ -3606,7 +3588,7 @@
           "text": "Hello Ada"
         },
         "status": 200,
-        "response": "{\"ok\":true,\"result\":{\"message_id\":7,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1793639764,\"text\":\"Hello Ada\"}}"
+        "response": "{\"ok\":true,\"result\":{\"message_id\":7,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1794605205,\"text\":\"Hello Ada\"}}"
       },
       {
         "method": "POST",
@@ -3631,7 +3613,7 @@
           }
         },
         "status": 200,
-        "response": "{\"ok\":true,\"result\":{\"message_id\":8,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1793639764,\"text\":\"Approve?\",\"reply_to_message_id\":42,\"reply_markup\":{\"inline_keyboard\":[[{\"text\":\"Yes\",\"callback_data\":\"cb_1\"}]]}}}"
+        "response": "{\"ok\":true,\"result\":{\"message_id\":8,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1794605205,\"text\":\"Approve?\",\"reply_to_message_id\":42,\"reply_markup\":{\"inline_keyboard\":[[{\"text\":\"Yes\",\"callback_data\":\"cb_1\"}]]}}}"
       },
       {
         "method": "POST",
@@ -3646,7 +3628,7 @@
           "reply_to_message_id": 42
         },
         "status": 200,
-        "response": "{\"ok\":true,\"result\":{\"message_id\":9,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1793639764,\"text\":\"plain\",\"reply_to_message_id\":42}}"
+        "response": "{\"ok\":true,\"result\":{\"message_id\":9,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1794605205,\"text\":\"plain\",\"reply_to_message_id\":42}}"
       },
       {
         "method": "POST",
@@ -3802,6 +3784,18 @@
               "writable": false,
               "required": false,
               "description": "The sender's first name."
+            },
+            {
+              "fieldId": "sender_email",
+              "displayName": "Sender Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address the sender bound to their Telegram account by the link handshake, lower case; null for a sender who has not linked. A claim Telegram vouches for: a plugin function such as a team check accepts it where it refuses plain text."
             },
             {
               "fieldId": "date",
@@ -4017,6 +4011,18 @@
               "description": "The sender's first name."
             },
             {
+              "fieldId": "sender_email",
+              "displayName": "Sender Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address the sender bound to their Telegram account by the link handshake, lower case; null for a sender who has not linked. A claim Telegram vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
               "fieldId": "date",
               "displayName": "Date",
               "kind": "string",
@@ -4189,6 +4195,18 @@
                   "description": "The sender's first name."
                 },
                 {
+                  "fieldId": "sender_email",
+                  "displayName": "Sender Email",
+                  "kind": "string",
+                  "brands": [
+                    "claim:email/address"
+                  ],
+                  "mayBeAbsent": true,
+                  "writable": false,
+                  "required": false,
+                  "description": "The address the sender bound to their Telegram account by the link handshake, lower case; null for a sender who has not linked. A claim Telegram vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+                },
+                {
                   "fieldId": "date",
                   "displayName": "Date",
                   "kind": "string",
@@ -4272,8 +4290,13 @@
                   "Sender Id": "777",
                   "Sender Username": "adas",
                   "Sender First Name": "Ada",
-                  "Date": "2023-11-14T22:13:20.000Z"
-                }
+                  "Date": "2023-11-14T22:13:20.000Z",
+                  "sender_email": null,
+                  "Sender Email": null
+                },
+                "unknown": [
+                  "Sender Email"
+                ]
               },
               "occurredAt": "2023-11-14T22:13:20.000Z"
             }
@@ -4333,8 +4356,13 @@
                   "Chat Type": "supergroup",
                   "Sender Id": "888",
                   "Sender First Name": "Bo",
-                  "Date": "2023-11-14T22:15:00.000Z"
-                }
+                  "Date": "2023-11-14T22:15:00.000Z",
+                  "sender_email": null,
+                  "Sender Email": null
+                },
+                "unknown": [
+                  "Sender Email"
+                ]
               },
               "occurredAt": "2023-11-14T22:15:00.000Z"
             }
@@ -4734,7 +4762,7 @@
           "text": "Hello Ada"
         },
         "status": 200,
-        "response": "{\"ok\":true,\"result\":{\"message_id\":10,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1793639764,\"text\":\"Hello Ada\"}}"
+        "response": "{\"ok\":true,\"result\":{\"message_id\":10,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1794605205,\"text\":\"Hello Ada\"}}"
       },
       {
         "method": "POST",
@@ -4759,7 +4787,7 @@
           }
         },
         "status": 200,
-        "response": "{\"ok\":true,\"result\":{\"message_id\":11,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1793639764,\"text\":\"Approve?\",\"reply_to_message_id\":42,\"reply_markup\":{\"inline_keyboard\":[[{\"text\":\"Yes\",\"callback_data\":\"cb_1\"}]]}}}"
+        "response": "{\"ok\":true,\"result\":{\"message_id\":11,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1794605205,\"text\":\"Approve?\",\"reply_to_message_id\":42,\"reply_markup\":{\"inline_keyboard\":[[{\"text\":\"Yes\",\"callback_data\":\"cb_1\"}]]}}}"
       },
       {
         "method": "POST",
@@ -4774,7 +4802,7 @@
           "reply_to_message_id": 42
         },
         "status": 200,
-        "response": "{\"ok\":true,\"result\":{\"message_id\":12,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1793639764,\"text\":\"plain\",\"reply_to_message_id\":42}}"
+        "response": "{\"ok\":true,\"result\":{\"message_id\":12,\"from\":{\"id\":424242,\"is_bot\":true,\"first_name\":\"Listen-Fire Dev Bot\",\"username\":\"listen_fire_dev_bot\"},\"chat\":{\"id\":777,\"type\":\"private\"},\"date\":1794605205,\"text\":\"plain\",\"reply_to_message_id\":42}}"
       }
     ]
   }

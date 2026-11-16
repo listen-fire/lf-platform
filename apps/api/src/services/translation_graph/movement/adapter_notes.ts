@@ -3,14 +3,15 @@ import type { AdapterManifest } from 'movement-engine/public/adapter';
 // Plain-language notes derived from a manifest, attached to a described
 // connection so an authoring agent learns a system's idiosyncrasies from the
 // manifest itself — not from prose an adapter author remembered to write. Each
-// enforcement fact (the credential the writes run as, the registered-actor gate)
-// renders its own sentence, so a future adapter that sets the flag inherits the
-// behaviour without re-typing another adapter's `triggerExpectation`.
+// enforcement fact (the credential the writes run as) renders its own
+// sentence, so a future adapter that sets the flag inherits the behaviour
+// without re-typing another adapter's `triggerExpectation`. Who sets a listen
+// off is its filter's to say (0.16), so no note speaks for the platform there.
 
 /**
- * Who a movement over this system runs AS, and whose activity triggers it —
- * the two identity axes. Undefined for a system with neither (an intrinsic
- * like the knowledge graph, or a manual/scheduled channel).
+ * Who a movement over this system runs AS. Undefined for a system with no
+ * credential (an intrinsic like the knowledge graph, or a manual/scheduled
+ * channel).
  */
 export function deriveIdentityNote(manifest: AdapterManifest): string | undefined {
   const parts: string[] = [];
@@ -21,15 +22,6 @@ export function deriveIdentityNote(manifest: AdapterManifest): string | undefine
   if (manifest.requiredCredentialType !== undefined) {
     parts.push(
       `It runs with the ${manifest.displayName} account that connected it: whatever it writes acts as that account, not whoever set the run off.`,
-    );
-  }
-
-  // Inbound: a globally-addressable channel (anyone could reach it) only fires
-  // for people the team already knows. The `false`/absent case is either not an
-  // inbound source or gated upstream — the system's own trigger note covers it.
-  if (manifest.inboundRequiresRegisteredActor === true) {
-    parts.push(
-      `A listener on it fires only for activity from people set up on this team; activity from anyone else — a guest, an outside collaborator, a teammate without an account — is dropped before anything runs. So if a teammate's activity isn't triggering it, they are most likely not set up on the team yet: tell the user that rather than promising it works for everyone.`,
     );
   }
 

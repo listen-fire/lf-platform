@@ -1817,18 +1817,18 @@ const runMovementSchema = z.object({
 });
 
 // Run a saved movement on its manual channel, now. The acting team + user come
-// from the MCP session (api-key auth), so the run's actor (`@user_*` / `@actor_*`)
-// resolves to the caller — identical to pressing "Run now" in the app.
+// from the MCP session (api-key auth), so the press names the caller as who ran
+// it (its `Run by` fields) — identical to pressing "Run now" in the app.
 //
 // QUEUED: a non-trivial run (extraction + writes) outlasts the MCP 55s tool-call
 // limit, so we QUEUE it and return immediately with `{ runId, status: 'running' }`.
 // A worker runs it and records the outcome on the run row; the caller polls
 // `getMovementRun(runId)` for the result.
 const runMovementHandler: RequestHandler = jsonHandler(runMovementSchema, 'body', async (input) => {
-  // The actor is attribution: it feeds `@user_*` / `@actor_*` resolution and
-  // the run's "who pressed Run now". A machine principal is nobody in
-  // particular, so the run carries NO actor rather than a fabricated one —
-  // those references simply resolve to nothing, which is the honest answer.
+  // The actor is attribution: the run's "who pressed Run now". A machine
+  // principal is nobody in particular, so the run carries NO actor rather than
+  // a fabricated one — its `Run by` fields are empty, which is the honest
+  // answer.
   const runBy = actingUserId();
   const user = runBy === undefined ? undefined : await UserService.getById(runBy);
   const teamId = await resolveToolTeam(input.team);

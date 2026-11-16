@@ -52,14 +52,6 @@
                 "content": "Hello there",
                 "Key": "deals"
               }
-            },
-            "actor": {
-              "identifier": "ada@example.com",
-              "scheme": "email",
-              "adapterType": "email",
-              "email": "ada@example.com",
-              "name": "Ada",
-              "label": "Ada"
             }
           }
         ]
@@ -122,14 +114,6 @@
                 "content": "Hello there",
                 "Key": "deals"
               }
-            },
-            "actor": {
-              "identifier": "ada@example.com",
-              "scheme": "email",
-              "adapterType": "email",
-              "email": "ada@example.com",
-              "name": "Ada",
-              "label": "Ada"
             }
           }
         ]
@@ -223,14 +207,6 @@
                 "content": "Hello there",
                 "Key": "deals"
               }
-            },
-            "actor": {
-              "identifier": "ada@example.com",
-              "scheme": "email",
-              "adapterType": "email",
-              "email": "ada@example.com",
-              "name": "Ada",
-              "label": "Ada"
             }
           }
         ]

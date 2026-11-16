@@ -109,9 +109,12 @@
             "fieldId": "note_owner_email",
             "displayName": "Note Owner Email",
             "kind": "string",
+            "brands": [
+              "claim:email/address"
+            ],
             "writable": false,
             "required": true,
-            "description": "The Granola user who owns the note."
+            "description": "The Granola user who owns the note, lower case. A claim Granola vouches for: the address is its own answer to the connection's credential, and a plugin function such as a team check accepts it where it refuses plain text."
           },
           {
             "fieldId": "note_owner_name",
@@ -236,9 +239,12 @@
             "fieldId": "note_owner_email",
             "displayName": "Note Owner Email",
             "kind": "string",
+            "brands": [
+              "claim:email/address"
+            ],
             "writable": false,
             "required": true,
-            "description": "The Granola user who owns the note."
+            "description": "The Granola user who owns the note, lower case. A claim Granola vouches for: the address is its own answer to the connection's credential, and a plugin function such as a team check accepts it where it refuses plain text."
           },
           {
             "fieldId": "note_owner_name",
@@ -468,9 +474,12 @@
                 "fieldId": "note_owner_email",
                 "displayName": "Note Owner Email",
                 "kind": "string",
+                "brands": [
+                  "claim:email/address"
+                ],
                 "writable": false,
                 "required": true,
-                "description": "The Granola user who owns the note."
+                "description": "The Granola user who owns the note, lower case. A claim Granola vouches for: the address is its own answer to the connection's credential, and a plugin function such as a team check accepts it where it refuses plain text."
               },
               {
                 "fieldId": "note_owner_name",

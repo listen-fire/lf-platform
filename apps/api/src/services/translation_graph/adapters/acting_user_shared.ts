@@ -5,11 +5,12 @@
 // `trigger.config.fallbackToCreatorIfActorUnregistered` and loads
 // `trigger.created_by_user_id` → user row, and matches actor emails against
 // `user_email`. Centralising these helpers keeps the Listen-Fire DB access in one
-// place — the adapters' `getActorCandidates` never touch them.
+// place — whoever names the candidates (the platform's email parse, a carried
+// version's module) never touches them.
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { UserId } from '../../../generated/kysely/core/User';
-import type { ActingUser } from 'movement-engine/public/adapter';
+import type { ActingUser } from './acting_user/actor';
 
 import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
 import { normalizeWhatsappPhone } from '@listen-fire/whatsapp/phone';

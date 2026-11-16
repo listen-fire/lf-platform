@@ -10,8 +10,8 @@
 // "Run now" (the workbench button, the dev CLI, MCP `runMovement`) injects an
 // invocation event on that channel and the firing flows through NORMAL trigger
 // dispatch — uniform run_mode gating, uniform trigger_run recording. The event
-// carries the initiating actor, so `@user_email` / `@actor_*` resolve to
-// whoever pressed the button (extractActor below).
+// carries who pressed the button (`actorEmail`, `actorName`), as fields a
+// program reads.
 //
 // An invocation OPTIONALLY carries text and/or files — the input a person
 // types or drops straight into the movement when they run it. This folds in
@@ -33,8 +33,6 @@
 
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 import type {
-  ActorCandidate,
-  ActorIdentity,
   Adapter,
   AdapterManifest,
   FileRef,
@@ -48,7 +46,6 @@ import type {
   SchemaTypeDescriptor,
   SourcePosition,
 } from 'movement-engine/public/catalog';
-import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type { Arrival } from 'engine-contracts';
 
 import { streamFileRef } from '../../engine/files/retrieve';
@@ -116,8 +113,7 @@ export interface ManualFile {
 export interface ManualInvocationPayload {
   /** When the run was requested (ISO, UTC). */
   firedAt: string;
-  /** Email of the workspace member who pressed Run now, when known —
-   *  drives `@actor_*` / `@user_*` resolution. */
+  /** Email of the workspace member who pressed Run now, when known. */
   actorEmail?: string;
   /** Display name of the initiating member, when known. */
   actorName?: string;
@@ -147,7 +143,7 @@ export const MANUAL_MANIFEST: AdapterManifest = {
   supportedTriggers: ['webhook'],
   methods: [
     'listEntryPoints', 'describe', 'getFieldValue', 'getRelated',
-    'getActorCandidates', 'extractActor', 'resolveFileRef',
+    'resolveFileRef',
   ],
   // `web`/`WEB` are the legacy slugs of the now-folded web adapter; they alias
   // here so stored web-trigger rows resolve to manual at runtime.
@@ -384,34 +380,6 @@ export class ManualAdapter extends BaseAdapter implements Adapter {
     return [];
   }
 
-  // ── Actor parsing — the initiating member feeds @user_* / @actor_* ──
-
-  async getActorCandidates(input: { event: TriggerEvent }): Promise<ActorCandidate[]> {
-    const payload = invocationOfEvent(input.event);
-    const email = payload.actorEmail?.trim().toLowerCase();
-    if (!email || !email.includes('@')) return [];
-    return [
-      {
-        identity: { identifier: email, scheme: 'email', adapterType: this.adapterType, email },
-        source: 'originator',
-      },
-    ];
-  }
-
-  async extractActor(input: { event: TriggerEvent }): Promise<ActorIdentity | null> {
-    const payload = invocationOfEvent(input.event);
-    const email = payload.actorEmail?.trim().toLowerCase();
-    if (!email || !email.includes('@')) return null;
-    return {
-      identifier: email,
-      scheme: 'email',
-      adapterType: this.adapterType,
-      email,
-      name: payload.actorName ?? undefined,
-      label: payload.actorName ?? email,
-    };
-  }
-
   // ── Byte resolution (owner-side) ─────────────────────────────────────────
   // Manual OWNS the FILE resources it emits: the host redeems their handle
   // here. The handle is the file's storage `objectUri`
@@ -450,13 +418,6 @@ function manualFileRef(file: Partial<ManualFile>): FileRef | null {
     size: file.size,
     source: ownedFileSource({ adapterType: MANUAL_ADAPTER_TYPE, handle: objectUri }),
   };
-}
-
-/** The invocation a run's event carries: its arrival's landing, whose fields
- *  are the payload's by field id (`invocationArrival`). */
-function invocationOfEvent(event: TriggerEvent): Partial<ManualInvocationPayload> {
-  const fields: unknown = event.arrival?.landing.fields ?? event.payload;
-  return fields !== null && typeof fields === 'object' ? (fields as Partial<ManualInvocationPayload>) : {};
 }
 
 /** A Run-now press as the arrival it is on `Invocations`: what the person

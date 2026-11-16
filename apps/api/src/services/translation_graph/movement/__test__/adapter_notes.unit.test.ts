@@ -14,37 +14,15 @@ function manifest(overrides: Partial<AdapterManifest>): AdapterManifest {
 }
 
 describe('deriveIdentityNote', () => {
-  it('a globally-addressable inbound system states BOTH runs-as and the needs-an-account gate', () => {
+  it('a credentialed system states runs-as only: who sets a listen off is its filter`s to say', () => {
     const note = deriveIdentityNote(
-      manifest({
-        displayName: 'Slack',
-        requiredCredentialType: ExternalServiceType.SLACK,
-        inboundRequiresRegisteredActor: true,
-        methods: ['createRecord'],
-      }),
+      manifest({ displayName: 'Slack', requiredCredentialType: ExternalServiceType.SLACK, listensLimitedBefore: '0.16.0', methods: ['createRecord'] }),
     );
-    expect(note).toContain('runs with the Slack account that connected it');
-    expect(note).toContain('set up on this team');
-    expect(note).toContain('not set up on the team yet');
+    expect(note).toBe('It runs with the Slack account that connected it: whatever it writes acts as that account, not whoever set the run off.');
   });
 
-  it('a credentialed system with no registered-actor gate states runs-as only', () => {
-    const note = deriveIdentityNote(
-      manifest({ displayName: 'Attio', requiredCredentialType: ExternalServiceType.ATTIO, methods: ['createRecord', 'updateRecord', 'deleteRecord'] }),
-    );
-    expect(note).toContain('runs with the Attio account that connected it');
-    expect(note).not.toContain('set up on this team');
-  });
-
-  it('an intrinsic (no credential, no gate) has no identity note', () => {
+  it('an intrinsic (no credential) has no identity note', () => {
     expect(deriveIdentityNote(manifest({ displayName: 'Knowledge Graph', methods: ['createRecord'] }))).toBeUndefined();
-  });
-
-  it('the needs-an-account sentence comes from the flag alone — no hand-written prose required', () => {
-    // The regression guarantee: a future gated adapter that only sets the flag
-    // still surfaces the gate, without an author re-typing Slack's triggerExpectation.
-    const note = deriveIdentityNote(manifest({ inboundRequiresRegisteredActor: true, methods: [] }));
-    expect(note).toContain('set up on this team');
   });
 });
 

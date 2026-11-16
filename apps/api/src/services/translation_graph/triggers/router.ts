@@ -21,7 +21,7 @@ import {
   type TriggerRunTriggerType,
 } from '../runs/trigger_run';
 import { runModeGate } from './run_mode';
-import { consultActorGate } from './actor_gate';
+import { consultActorGate, type ActorGateDisposition } from './actor_gate';
 import * as loopGuard from '../../loop_guard';
 import { isWriteEffect } from 'movement-engine/public/trace';
 import { notifyBreach } from '../../loop_guard/notify';
@@ -179,16 +179,22 @@ export async function dispatchTriggerByIdEvent(
       credentialsId: triggerRow.credentialsId ?? undefined,
     });
 
-    // ── OWNERSHIP GATE (§6.4b — registered actors only, where declared) ────
-    // It asks the source adapter "is the sender one of ours". Slack
-    // is the declaring adapter today: its parser forwards every inner event,
-    // bots included, so without this a listen+reply movement replies to its
-    // own replies forever. Fail closed; the delivery stays replayable.
-    const actorGate = await consultActorGate({
-      teamId: input.teamId,
-      sourceAdapter,
-      event: input.event,
-    });
+    // ── OWNERSHIP GATE (§6.4b — registered actors only, below 0.16) ────────
+    // For a pin from before the module's listens stopped being limited
+    // (Slack's, 0.16.0) it asks the source adapter "is the sender one of
+    // ours": Slack's parser forwards every inner event, bots included, so
+    // without this such a listen+reply movement replies to its own replies
+    // forever. From 0.16 the listen's filter alone decided, at the door.
+    // Fail closed; the delivery stays replayable.
+    const actorGate: ActorGateDisposition =
+      fired?.kind === 'shipped'
+        ? await consultActorGate({
+            teamId: input.teamId,
+            pin: fired.movement.version.languageVersion,
+            sourceAdapter,
+            event: input.event,
+          })
+        : { kind: 'proceed' };
     if (actorGate.kind === 'drop') {
       logger.info('[TGRouter] dispatch dropped — inbound actor is not a registered user (ownership gate)', {
         triggerId: input.triggerId,

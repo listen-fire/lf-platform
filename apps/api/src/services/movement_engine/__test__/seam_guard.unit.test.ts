@@ -232,11 +232,10 @@ describe('the engine/host seam carries data', () => {
     expect(JSON.parse(JSON.stringify(calls))).toEqual(calls);
   });
 
-  // The rest of the host's families, as one run uses them: the acting-user
-  // lookup names the source instance and the event (the host asks the source
-  // itself), a timer carries its instant as an ISO string, the
-  // write's cross-run locks go by token, and the trace is appended as data.
-  it('the lookup, timers, locks and trace pass plain data only', async () => {
+  // The rest of the host's families, as one run uses them: a timer carries its
+  // instant as an ISO string, the write's cross-run locks go by token, and the
+  // trace is appended as data.
+  it('the timers, locks and trace pass plain data only', async () => {
     const teamId = '00000000-0000-0000-0000-000000000045' as TeamId;
     const calls: Array<{ call: string; input: unknown; output: unknown }> = [];
     const record = async <T>(call: string, input: unknown, answer: Promise<T>): Promise<T> => {
@@ -271,9 +270,6 @@ describe('the engine/host seam carries data', () => {
     const inner = makeTestHost({
       adapters: { resolve: ({ adapterType }) => (adapterType === 'kg' ? kg : manual) },
       park: { sink: parks.sink },
-      lookup: {
-        resolveActingUser: async () => ({ id: 'user-1', email: 'amy@acme.dev', name: 'Amy' }),
-      },
       trace: [],
     });
     const sink = inner.park.sink!;
@@ -287,10 +283,6 @@ describe('the engine/host seam carries data', () => {
           commitTimerPark: (input) =>
             record('park.sink.commitTimerPark', input, sink.commitTimerPark(input)),
         },
-      },
-      lookup: {
-        resolveActingUser: (input) =>
-          record('lookup.resolveActingUser', input, inner.lookup.resolveActingUser(input)),
       },
       locks: {
         acquire: (input) => record('locks.acquire', input, inner.locks.acquire(input)),
@@ -310,7 +302,7 @@ describe('the engine/host seam carries data', () => {
           'graph = connect kg using kg_cred',
         '',
         'function m(go: <manual-[:`Invocation`]->>) {',
-        '  write graph-[:note]-> { unique by (`body`) body: "by ${@user_email}" }',
+        '  write graph-[:note]-> { unique by (`body`) body: "noted" }',
         '  await sleep(1d)',
         '}',
         'listen to manual-[:Invocations]-> fire m',
@@ -340,23 +332,14 @@ describe('the engine/host seam carries data', () => {
     });
 
     expect(result.parked).toBe(true);
-    expect(result.writes[0]?.writtenValues).toEqual({ body: 'by amy@acme.dev' });
+    expect(result.writes[0]?.writtenValues).toEqual({ body: 'noted' });
     const made = new Set(calls.map((c) => c.call));
     expect([...made].sort()).toEqual([
       'locks.acquire',
       'locks.release',
-      'lookup.resolveActingUser',
       'park.sink.commitTimerPark',
       'trace.append',
     ]);
-    const lookup = calls.find((c) => c.call === 'lookup.resolveActingUser');
-    // The lookup names its segment and the source instance; the team is the
-    // segment's, so it is not repeated.
-    expect(lookup?.input).toMatchObject({
-      segmentId: expect.any(String),
-      instance: expect.any(String),
-    });
-    expect(lookup?.input).not.toHaveProperty('teamId');
     expect(calls.find((c) => c.call === 'park.sink.commitTimerPark')?.input).toMatchObject({
       segmentId: expect.any(String),
       wakeAt: expect.any(String),
@@ -509,7 +492,6 @@ function pagedInbox(): { adapter: Adapter; cursors: unknown[] } {
     getRelated: async () => [],
     iterateRelated: (input) => iterateRelatedPages((cursor) => page(input, cursor)),
     iterateRelatedPage: page,
-    getActorCandidates: async () => [{ identity: { identifier: 'amy@acme.dev', scheme: 'email' }, source: 'originator' }],
     createRecord: async () => {
       throw new Error('test: email is a source');
     },
@@ -651,10 +633,13 @@ function roundTrip(
   };
 }
 
-/** Methods the manifest still declares that only a program of versions 1 to 4
- *  reached (`write … bind`, the extraction keyword's minted ids), and this
- *  platform no longer runs one. */
-const REACHED_BY_NO_PROGRAM = (method: string): boolean => method.startsWith('park.bindings.') || method === 'ids.mint';
+/** Methods the manifest declares that no program here reaches: those only a
+ *  program of versions 1 to 4 reached (`write … bind`, the extraction
+ *  keyword's minted ids), which this platform no longer runs; and the kept
+ *  answer of a pure plugin, which this platform's host does not offer yet, so
+ *  the engine invokes the plugin instead. */
+const REACHED_BY_NO_PROGRAM = (method: string): boolean =>
+  method.startsWith('park.bindings.') || method === 'ids.mint' || method === 'llm.transforms.answer';
 
 describe('the round trip', () => {
   it('names the method and the path of whatever JSON cannot carry', async () => {
@@ -698,10 +683,10 @@ describe('the round trip', () => {
     );
     const sync = roundTripHost({
       ...makeTestHost(),
-      lookup: { resolveActingUser: (() => null) as never },
+      locks: { ...makeTestHost().locks, acquire: (() => null) as never },
     });
-    expect(() => sync.lookup.resolveActingUser({} as never)).toThrow(
-      'lookup.resolveActingUser: answer is answered synchronously',
+    expect(() => sync.locks.acquire({} as never)).toThrow(
+      'locks.acquire: answer is answered synchronously',
     );
     // An undefined field is an absent one on the far side.
     expect(notJsonAt({ a: undefined, b: [null, { c: 'x' }] }, 'value')).toBeUndefined();
@@ -724,10 +709,10 @@ describe('the round trip', () => {
   it('only a void method may answer nothing', async () => {
     const silent = roundTripHost({
       ...makeTestHost(),
-      lookup: { resolveActingUser: async () => undefined as never },
+      locks: { ...makeTestHost().locks, acquire: async () => undefined as never },
     });
-    await expect(silent.lookup.resolveActingUser({} as never)).rejects.toThrow(
-      'lookup.resolveActingUser: answer is undefined',
+    await expect(silent.locks.acquire({} as never)).rejects.toThrow(
+      'locks.acquire: answer is undefined',
     );
     const chatty = roundTripHost({
       ...makeTestHost(),
@@ -745,7 +730,10 @@ describe('the round trip', () => {
 
   it('wraps every method of every family, which are the manifest’s', () => {
     const { sink } = joiningParkSink();
+    const plain = makeTestHost();
     const host = makeTestHost({
+      // Optional: a host that keeps no plugin answers omits it.
+      llm: { ...plain.llm, transforms: { ...plain.llm.transforms, answer: async () => ({ value: true }) } },
       park: {
         sink,
         sources: makeMemoryParkSources().sources,
@@ -910,31 +898,25 @@ describe('every family crosses as JSON', () => {
     expect([...parks.parks.values()].map((p) => p.kind)).toEqual(['suspension']);
   });
 
-  familyRun('adapters, the lookup, locks and the trace: a paged traversal, an identity write, the acting user', async () => {
+  familyRun('adapters, locks and the trace: a paged traversal, an identity write', async () => {
     const inbox = pagedInbox();
     const trace: MovementTraceEntry[] = [];
     const h = roundTrip(
       [
         '  m-[a:files]-> {',
-        '    write crm-[:companies]-> { unique by (`name`) name: a.`filename`, summary: @user_email }',
+        '    write crm-[:companies]-> { unique by (`name`) name: a.`filename`, summary: "from the inbox" }',
         '  }',
       ],
       {
         inbox: inbox.adapter,
         trace,
-        lookup: {
-          resolveActingUser: async ({ getCandidates }) => {
-            const [candidate] = await getCandidates();
-            return { id: 'user-1', email: candidate?.identity.identifier ?? 'nobody', name: 'Amy' };
-          },
-        },
       },
     );
     const result = await h.run();
     expect(inbox.cursors).toEqual([null, { after: 'deck.pdf', page: 2 }]);
     expect(h.crm.creates.map((c) => c.fields)).toEqual([
-      { name: 'deck.pdf', summary: 'amy@acme.dev' },
-      { name: 'cap-table.xlsx', summary: 'amy@acme.dev' },
+      { name: 'deck.pdf', summary: 'from the inbox' },
+      { name: 'cap-table.xlsx', summary: 'from the inbox' },
     ]);
     expect(trace).toEqual(result.trace);
   });

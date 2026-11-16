@@ -3,10 +3,7 @@
 import type { Kysely } from 'kysely';
 import type DB from '../../../generated/kysely/Database';
 import type { TeamId } from '../../../generated/kysely/core/Team';
-import type {
-  ActingUser,
-  Adapter,
-} from 'movement-engine/public/adapter';
+import type { Adapter } from 'movement-engine/public/adapter';
 import type { MutationContext } from 'movement-engine/public/adapter';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type { Expression } from 'movement-engine/public/catalog';
@@ -169,17 +166,6 @@ export interface EvalContext {
    *
    */
   aliases?: Record<string, SourcePosition>;
-
-  /**
-   * Per-evaluation acting-user cache (T4). The meta resolver populates
-   * this on the first `@user_email` / `@user_name` / `@user_id`
-   * resolution so every subsequent reference in the same TG reuses the
-   * adapter call + DB lookup. Shared across the five
-   * `ExpressionEvalContext` construction sites in `evaluate.ts` /
-   * `materialise.ts`.
-   *
-   */
-  actingUserCache?: { value: ActingUser | null };
 }
 
 export interface Diagnostics {

@@ -112,7 +112,21 @@
     "undici@>=6.0.0 <6.28.1": "GHSA-f269-vfmq-vjvj and four more undici advisories (via cheerio)",
     "ws@>=8.0.0 <8.21.0": "GHSA-96hv-2xvq-fx4p",
     "zod@>=4.0.0 <4.6.6": "GHSA-mrhx-c7xc-m3w5 (the anthropic sdk, @modelcontextprotocol/sdk, @listen-fire/engine-contracts, and this repository's own 4.x pins); the 3.x line has no fix, see //pnpm.auditConfig",
-    "@pinecone-database/pinecone>@sinclair/typebox": "pre-existing; not an advisory"
+    "@pinecone-database/pinecone>@sinclair/typebox": "pre-existing; not an advisory",
+    "movement-engine": "the workspace catalog names unpublished 0.16.0 by an alias; the alias resolves to the local tarball. Swapped for npm before push",
+    "engine-contracts": "the workspace catalog names unpublished 0.16.0 by an alias; the alias resolves to the local tarball. Swapped for npm before push",
+    "movement-lang": "the workspace catalog names unpublished 0.16.0 by an alias; the alias resolves to the local tarball. Swapped for npm before push",
+    "@listen-fire/engine@0.16.0>@listen-fire/engine-contracts": "an unpublished 0.16 package asks for another by range; it resolves to the local tarball. Swapped for npm before push",
+    "@listen-fire/engine@0.16.0>@listen-fire/movement-lang": "an unpublished 0.16 package asks for another by range; it resolves to the local tarball. Swapped for npm before push",
+    "@listen-fire/engine-contracts@0.16.0>@listen-fire/movement-lang": "an unpublished 0.16 package asks for another by range; it resolves to the local tarball. Swapped for npm before push",
+    "@listen-fire/attio@0.14.0>@listen-fire/module-kit": "an unpublished 0.16 package asks for another by range; it resolves to the local tarball. Swapped for npm before push",
+    "@listen-fire/email@0.14.0>@listen-fire/module-kit": "an unpublished 0.16 package asks for another by range; it resolves to the local tarball. Swapped for npm before push",
+    "@listen-fire/evertrace@0.14.0>@listen-fire/module-kit": "an unpublished 0.16 package asks for another by range; it resolves to the local tarball. Swapped for npm before push",
+    "@listen-fire/granola@0.14.0>@listen-fire/module-kit": "an unpublished 0.16 package asks for another by range; it resolves to the local tarball. Swapped for npm before push",
+    "@listen-fire/slack@0.14.0>@listen-fire/module-kit": "an unpublished 0.16 package asks for another by range; it resolves to the local tarball. Swapped for npm before push",
+    "@listen-fire/telegram@0.14.0>@listen-fire/module-kit": "an unpublished 0.16 package asks for another by range; it resolves to the local tarball. Swapped for npm before push",
+    "@listen-fire/web@0.13.0>@listen-fire/module-kit": "an unpublished 0.16 package asks for another by range; it resolves to the local tarball. Swapped for npm before push",
+    "@listen-fire/whatsapp@0.14.0>@listen-fire/module-kit": "an unpublished 0.16 package asks for another by range; it resolves to the local tarball. Swapped for npm before push"
   },
   "//pnpm.auditConfig": {
     "CVE-2026-93687": "GHSA-vfj7-8cjw-p6xm, braces <=3.0.3 stack-exhaustion DoS from attacker-supplied nested brace patterns. No patched braces release exists (3.0.3 is the latest). Every path is build tooling (tailwindcss, sass, tsup, prisma internals, the Sentry bundler plugin, fast-glob/micromatch), never a request path. Remove this entry once braces ships a fix.",
@@ -168,7 +182,21 @@
       "tmp@>=0.2.0 <0.2.6": "0.2.7",
       "undici@>=6.0.0 <6.28.1": "6.29.1",
       "ws@>=8.0.0 <8.21.0": "8.22.0",
-      "zod@>=4.0.0 <4.6.6": "4.6.7"
+      "zod@>=4.0.0 <4.6.6": "4.6.7",
+      "movement-engine": "file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz",
+      "engine-contracts": "file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz",
+      "movement-lang": "file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz",
+      "@listen-fire/engine@0.16.0>@listen-fire/engine-contracts": "file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz",
+      "@listen-fire/engine@0.16.0>@listen-fire/movement-lang": "file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz",
+      "@listen-fire/engine-contracts@0.16.0>@listen-fire/movement-lang": "file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz",
+      "@listen-fire/attio@0.14.0>@listen-fire/module-kit": "file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz",
+      "@listen-fire/email@0.14.0>@listen-fire/module-kit": "file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz",
+      "@listen-fire/evertrace@0.14.0>@listen-fire/module-kit": "file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz",
+      "@listen-fire/granola@0.14.0>@listen-fire/module-kit": "file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz",
+      "@listen-fire/slack@0.14.0>@listen-fire/module-kit": "file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz",
+      "@listen-fire/telegram@0.14.0>@listen-fire/module-kit": "file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz",
+      "@listen-fire/web@0.13.0>@listen-fire/module-kit": "file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz",
+      "@listen-fire/whatsapp@0.14.0>@listen-fire/module-kit": "file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz"
     },
     "auditConfig": {
       "ignoreCves": [

@@ -12,7 +12,7 @@
   },
   "type": "commonjs",
   "dependencies": {
-    "@listen-fire/engine": "catalog:",
+    "@listen-fire/engine": "file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz",
     "zod": "4.1.12",
     "@listen-fire/model-providers": "0.12.6"
   },

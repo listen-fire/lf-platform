@@ -1,6 +1,6 @@
 // Manual adapter — the unified on-demand trigger. Covers the actor-only run
 // AND the folded-in web surface: schema introspection, field reads (text +
-// `content` alias), reference traversal (files + #resources), actor parsing,
+// `content` alias), reference traversal (files + #resources), the press as an arrival,
 // and owner-side byte resolution. Manual is now the closest twin of the email
 // adapter — a stateless inbound source whose invocation OPTIONALLY carries text
 // + uploaded files, fanning out one TEXT resource for the text and one FILE
@@ -9,7 +9,6 @@
 import { Readable } from 'node:stream';
 
 import type { TeamId } from '../../../../../generated/kysely/core/Team';
-import type { TriggerEvent } from 'movement-engine/public/inbound';
 
 import { RESOURCES_REFERENCE_FIELD_ID } from 'movement-engine/public/adapter';
 import { makeUnstablePosition, positionData } from 'engine-contracts/catalog';
@@ -257,68 +256,13 @@ describe('ManualAdapter.getRelated', () => {
   });
 });
 
-describe('ManualAdapter actor parsing', () => {
-  function event(payload: Partial<ManualInvocationPayload>): TriggerEvent {
-    return {
-      pipelineInputId: 'trigger:t-1',
-      adapterType: MANUAL_ADAPTER_TYPE,
-      triggerType: 'webhook',
-      payload,
-    };
-  }
-
-  it('parses the actor email as a single originator candidate (normalised)', async () => {
-    const adapter = new ManualAdapter(TEAM_ID);
-    const candidates = await adapter.getActorCandidates({ event: event(SAMPLE) });
-    expect(candidates).toEqual([
-      {
-        identity: {
-          identifier: 'ada@example.com',
-          scheme: 'email',
-          adapterType: MANUAL_ADAPTER_TYPE,
-          email: 'ada@example.com',
-        },
-        source: 'originator',
-      },
-    ]);
-  });
-
-  it('extractActor surfaces the actor identity', async () => {
-    const adapter = new ManualAdapter(TEAM_ID);
-    const actor = await adapter.extractActor({ event: event(SAMPLE) });
-    expect(actor).toEqual({
-      identifier: 'ada@example.com',
-      scheme: 'email',
-      adapterType: MANUAL_ADAPTER_TYPE,
-      email: 'ada@example.com',
-      name: 'Ada',
-      label: 'Ada',
-    });
-  });
-
-  it('reads the actor off a run`s arrival, where a Run-now press puts it', async () => {
-    const adapter = new ManualAdapter(TEAM_ID);
-    const arrival = invocationArrival({ ...SAMPLE, submissionId: 'inv-1' });
-    const fired: TriggerEvent = {
-      pipelineInputId: 'listen:backfill:backfill:6761be48',
-      adapterType: MANUAL_ADAPTER_TYPE,
-      triggerType: 'arrival',
-      arrival: { adapterType: MANUAL_ADAPTER_TYPE, edge: arrival.edge, landing: arrival.landing },
-      occurredAt: SAMPLE.firedAt,
-    };
-    expect(arrival).toEqual({
+describe('a Run-now press', () => {
+  it('is an arrival whose fields carry who pressed it, for a program to read', () => {
+    expect(invocationArrival({ ...SAMPLE, submissionId: 'inv-1' })).toEqual({
       edge: 'Invocations',
       identity: 'invocation:inv-1',
       landing: { recordType: 'Invocation', fields: { ...SAMPLE } },
     });
-    expect(await adapter.extractActor({ event: fired })).toEqual(expect.objectContaining({ email: 'ada@example.com', name: 'Ada' }));
-  });
-
-  it('yields no candidates / null actor when no actor email is present', async () => {
-    const adapter = new ManualAdapter(TEAM_ID);
-    const e = event({ firedAt: SAMPLE.firedAt, files: [] });
-    expect(await adapter.getActorCandidates({ event: e })).toEqual([]);
-    expect(await adapter.extractActor({ event: e })).toBeNull();
   });
 });
 

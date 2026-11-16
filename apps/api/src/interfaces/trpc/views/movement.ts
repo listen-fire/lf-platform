@@ -778,7 +778,7 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
      * channel (`go = manual()` + `listen to go {} fire <movement>`), through
      * normal trigger dispatch, and answer with the run's id at once; the run
      * happens on a worker and `runStatus` follows it. The event carries the
-     * pressing member, so `@user_*` / `@actor_*` resolve to them; a listener
+     * pressing member (its `Run by` fields); a listener
      * whose written instances are all `dry_run: true` rehearses (writes
      * captured, not committed). Real writes otherwise.
      */

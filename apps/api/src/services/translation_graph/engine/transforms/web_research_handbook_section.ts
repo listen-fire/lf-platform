@@ -75,7 +75,7 @@ node Profile: "the company" {
 function \`Intake\`(m: <inbox-[:Email]->>) {
   content = [m.Body]
   map(extract(content, Company), (c) => {
-    page    = fetchUrl(c.website, { email: @user_email })
+    page    = fetchUrl(c.website, { email: "dealflow@yourfund.com" })
     site    = webResearch(c.name, { context: c.description, website: c.website, linkedin: c.linkedin })
     profile = extractOne([...content, Json.stringify(c), coalesce(page, site.text, "")], Profile)
     write crm-[:Companies]-> {

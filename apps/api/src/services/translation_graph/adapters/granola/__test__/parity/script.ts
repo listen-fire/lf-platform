@@ -3,8 +3,7 @@
 // so the script walks the seeded notes the way a run would: describe the
 // types, pull past meetings (bounded and not), read every field and the
 // attendees of a landed note. The poll script polls the `Meetings` edge as the
-// platform's shared poll does (adapter protocol 2.6) and derives each
-// arrival's actor from the trigger event the platform builds for its run. The
+// platform's shared poll does (adapter protocol 2.6). The
 // transcript is every answer, as JSON; two implementations agree when their
 // transcripts and the requests they made are identical.
 
@@ -13,7 +12,6 @@ import type { Adapter } from 'movement-engine/public/adapter';
 import type { EdgePoller } from '../../../../../poll_source/edge_poller';
 
 import { makeMetaPosition } from 'movement-engine/public/catalog';
-import { arrivalTriggerOf } from 'movement-engine/public/inbound';
 
 export interface ParitySubject {
   adapter: Adapter;
@@ -113,18 +111,5 @@ export async function runPollScript(subject: ParitySubject): Promise<TranscriptE
   await step('poll past the newest', () => subject.poll({ edge: EDGE, cursor: { updatedAfter: '2026-09-01T00:00:00.000Z' } }));
   await step('poll an edge that is not polled', () => subject.poll({ edge: 'Attendees', cursor: POLL_CURSOR }));
 
-  // The actor, from the trigger event the platform starts each arrival's run
-  // with (inbound/fire_event.ts).
-  const delivered = await subject.poll({ edge: EDGE, cursor: POLL_CURSOR });
-  for (const [index, arrival] of delivered.arrivals.flatMap((a) => ('gone' in a ? [] : [a])).entries()) {
-    const event = arrivalTriggerOf({
-      pipelineInputId: `parity-${index}`,
-      adapterType: 'granola',
-      arrival,
-      now: new Date('2026-01-01T00:00:00.000Z'),
-    });
-    await step(`extractActor ${index}`, async () => (await adapter.extractActor?.({ event })) ?? null);
-    await step(`getActorCandidates ${index}`, async () => (await adapter.getActorCandidates?.({ event })) ?? null);
-  }
   return transcript;
 }

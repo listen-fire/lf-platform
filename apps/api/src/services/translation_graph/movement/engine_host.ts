@@ -1,8 +1,7 @@
 // The production `EngineHost`: the world a movement run reaches, wired to the
 // real systems — the adapter registry behind each segment's scope, Anthropic
 // and the plugin registry, the trigger-run recorder's durable parks, Postgres
-// record bindings, file text and rendering, cross-run write locks, and
-// Listen-Fire's acting-user resolution.
+// record bindings, file text and rendering, and cross-run write locks.
 
 import type { TriggerId } from '../../../generated/kysely/automations/Trigger';
 import type { TriggerRunId } from '../../../generated/kysely/automations/TriggerRun';
@@ -18,8 +17,6 @@ import type {
   ResolveFileText,
 } from 'movement-engine/public/host';
 import type { CancelGate } from 'movement-engine/public/movement-engine';
-import type { ActingUser } from 'movement-engine/public/adapter';
-import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type { ActingUserTriggerContext } from '../adapters/acting_user_shared';
 import type { LlmClient } from '../engine/batched_extraction';
 import type { DryRunWriteSink } from 'movement-engine/public/adapter';
@@ -28,7 +25,6 @@ import type { TriggerRunRecorder } from '../runs/trigger_run';
 import { getAutomationsQb } from '../../../lib/kysely';
 import { LlmUsageContext } from '../../../lib/llm_usage';
 import {
-  actingPrincipalOf,
   appendingInto,
   closeSegmentWith,
   NEVER_CANCELLED,
@@ -36,7 +32,6 @@ import {
   WALL_CLOCK,
   openSegmentWith,
   SegmentDirectory,
-  type ActingUserLookup,
 } from 'movement-engine/public/host';
 import { ledgeredAdapters } from '../../inbound/loop_breaker';
 import { runWriteKeeper } from '../../movement_engine/run_writes';
@@ -51,7 +46,6 @@ import {
   WRITE_LOCK_TIMEOUT_ENV_VAR,
   type WriteLocks,
 } from 'movement-engine/public/write-locks';
-import { resolveActingUser } from '../adapters/acting_user/resolve';
 import { resolveAdapter } from '../adapters/resolve';
 import { meteredArbitration } from '../engine/entity_match';
 import { adapterTable, type CredentialOwnership, type LiveAdapterResolver } from 'movement-engine/public/host';
@@ -195,28 +189,6 @@ export function productionEngineHost(input: {
       resolveFileText: (request) => withFileOwners(adapters.fileOwners(request.segmentId), () => fileText(request)),
       render: renderFileArtifactFor(input.teamId),
     },
-    lookup: {
-      // The source instance's parse of the event's actors, asked of it inside
-      // its segment, only when the trigger does not already decide the user.
-      resolveActingUser: async ({ triggerId, segmentId, instance, event }) =>
-        actingPrincipalOf(
-          await resolveTeamActingUser({
-            teamId: tenantOf(segmentId),
-            ...(triggerId !== undefined ? { triggerId } : {}),
-            event,
-            // The module's own candidates where it offers them; else who
-            // acted on the arrival, as its module said at the door (adapter
-            // protocol 2.7), as the one originator.
-            getCandidates: async () => {
-              if (adapters.offers({ segmentId, instance, method: 'getActorCandidates' })) {
-                return adapters.answer({ segmentId, instance, method: 'getActorCandidates', args: { event } });
-              }
-              const actor = event.arrival?.actor;
-              return actor === undefined ? [] : [{ identity: actor, source: 'originator' as const }];
-            },
-          }),
-        ),
-    },
     locks: { acquire: (request) => locks.acquire(request), release: (request) => locks.release(request) },
     ...(input.trace !== undefined ? { trace: appendingInto(input.trace) } : {}),
     clock: WALL_CLOCK,
@@ -346,19 +318,10 @@ function lockDatabaseUrl(): string {
 
 // ── Acting-user resolution ──────────────────────────────────────────────────
 
-/** The trigger the event dispatched through decides first (its creator
- *  override and creator fallback); then the source adapter's candidates. A
- *  trigger that is gone reads as none. */
-async function resolveTeamActingUser(input: ActingUserLookup & { event: TriggerEvent }): Promise<ActingUser | null> {
-  const trigger = input.triggerId !== undefined ? await loadActingUserTrigger(input.triggerId) : undefined;
-  return resolveActingUser({
-    teamId: teamOfTenant(input.teamId),
-    ...(trigger !== undefined ? { trigger } : {}),
-    event: input.event,
-    getCandidates: input.getCandidates,
-  });
-}
-
+/** The trigger a carried run's acting user is resolved against (its creator
+ *  override and creator fallback, ./carried_run.ts); a trigger that is gone
+ *  reads as none. This release's own engine asks nobody who acted (0.16
+ *  retired host families' `lookup`). */
 export async function loadActingUserTrigger(triggerId: string): Promise<ActingUserTriggerContext | undefined> {
   const row = await getAutomationsQb(['trigger'])
     .selectFrom('trigger')

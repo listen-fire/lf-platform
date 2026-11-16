@@ -1,9 +1,11 @@
 // Listen-Fire-side acting-user resolution — the half of the acting-user split
 // that owns Listen-Fire DB access.
 //
-// Adapters parse `ActorCandidate[]` from the event (`getActorCandidates`,
-// NO Listen-Fire DB). This module runs the identical resolution chain that the
-// per-adapter `identifyActingUser` methods used to run inline:
+// Who acted arrives as `ActorCandidate[]`, parsed with NO Listen-Fire DB: the
+// platform's own parse of an email (adapters/email/arrival.ts), or a module
+// from before 0.16 (`getActorCandidates`, its arrival's actor). This module
+// runs the resolution chain that the per-adapter `identifyActingUser` methods
+// used to run inline:
 //
 //   1. Creator override (T6) — `trigger.config.overrideActingUserToCreator`
 //      short-circuits to the trigger creator (rejects if no creator). Never
@@ -24,7 +26,7 @@
 // so an override-on dispatch never pays the Slack/Attio actor-email API
 // round-trip.
 
-import type { ActingUser, ActorCandidate } from 'movement-engine/public/adapter';
+import type { ActingUser, ActorCandidate } from './actor';
 import type { TriggerEvent } from 'movement-engine/public/inbound';
 import type { TeamId } from '../../../../generated/kysely/core/Team';
 

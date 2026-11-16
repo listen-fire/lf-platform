@@ -110,5 +110,8 @@ for (const [key, version] of others.map((other) => [other.key, other] as const))
 });
 
 it('carries exactly these versions besides the current one, so the checks above ran for each', () => {
+  // 0.16 is current and nothing beside it is carried yet: 0.15's lane waits on
+  // what crosses into it, and `packages/lang-0.15` is not registered.
+  expect(currentVersion().key).toBe('0.16');
   expect(others.map((version) => version.key)).toEqual([]);
 });

@@ -58,7 +58,10 @@ jest.mock('../../../../../lib/kysely', () => {
           return typeof id === 'string' && storedCredentials.has(id) ? [{ id, credentials: Buffer.from('x') }] : [];
         }
         if (table === 'telegram_identity') {
-          if (!identities.kept) return [];
+          // A host that keeps no linked identities cannot be asked one, as a
+          // module served by lf finds no identities door: the sender's claim is
+          // unknown there, never "no address".
+          if (!identities.kept) throw new Error('this host keeps no linked identities');
           const all = [{ team_id: filters.team_id, telegram_user_id: '777', email: 'Ada@Example.com ', linked_at: LINKED_AT }];
           return all.filter((row) => filters.telegram_user_id === undefined || row.telegram_user_id === filters.telegram_user_id);
         }

@@ -1612,6 +1612,19 @@
             "required": true,
             "cardinality": "one",
             "description": "The company's record id."
+          },
+          {
+            "fieldId": "Changed By",
+            "displayName": "Changed By",
+            "kind": "string",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "brands": [
+              "claim:attio/user_id"
+            ],
+            "mayBeAbsent": true,
+            "description": "The workspace member who made the change, by their Attio member id; null for a change by an api token or Attio itself. A claim Attio vouches for: a plugin function that accepts `claim:attio/user_id` takes it where it refuses plain text."
           }
         ],
         "references": [
@@ -1680,6 +1693,19 @@
             "required": true,
             "cardinality": "one",
             "description": "The person's record id."
+          },
+          {
+            "fieldId": "Changed By",
+            "displayName": "Changed By",
+            "kind": "string",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "brands": [
+              "claim:attio/user_id"
+            ],
+            "mayBeAbsent": true,
+            "description": "The workspace member who made the change, by their Attio member id; null for a change by an api token or Attio itself. A claim Attio vouches for: a plugin function that accepts `claim:attio/user_id` takes it where it refuses plain text."
           }
         ],
         "references": [
@@ -1748,6 +1774,19 @@
             "required": true,
             "cardinality": "one",
             "description": "The deal's record id."
+          },
+          {
+            "fieldId": "Changed By",
+            "displayName": "Changed By",
+            "kind": "string",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "brands": [
+              "claim:attio/user_id"
+            ],
+            "mayBeAbsent": true,
+            "description": "The workspace member who made the change, by their Attio member id; null for a change by an api token or Attio itself. A claim Attio vouches for: a plugin function that accepts `claim:attio/user_id` takes it where it refuses plain text."
           }
         ],
         "references": [
@@ -1816,6 +1855,19 @@
             "required": true,
             "cardinality": "one",
             "description": "The fund's record id."
+          },
+          {
+            "fieldId": "Changed By",
+            "displayName": "Changed By",
+            "kind": "string",
+            "writable": false,
+            "required": false,
+            "cardinality": "one",
+            "brands": [
+              "claim:attio/user_id"
+            ],
+            "mayBeAbsent": true,
+            "description": "The workspace member who made the change, by their Attio member id; null for a change by an api token or Attio itself. A claim Attio vouches for: a plugin function that accepts `claim:attio/user_id` takes it where it refuses plain text."
           }
         ],
         "references": [
@@ -2661,6 +2713,19 @@
                 "required": true,
                 "cardinality": "one",
                 "description": "The company's record id."
+              },
+              {
+                "fieldId": "Changed By",
+                "displayName": "Changed By",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "cardinality": "one",
+                "brands": [
+                  "claim:attio/user_id"
+                ],
+                "mayBeAbsent": true,
+                "description": "The workspace member who made the change, by their Attio member id; null for a change by an api token or Attio itself. A claim Attio vouches for: a plugin function that accepts `claim:attio/user_id` takes it where it refuses plain text."
               }
             ]
           },
@@ -3454,6 +3519,19 @@
                 "required": true,
                 "cardinality": "one",
                 "description": "The person's record id."
+              },
+              {
+                "fieldId": "Changed By",
+                "displayName": "Changed By",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "cardinality": "one",
+                "brands": [
+                  "claim:attio/user_id"
+                ],
+                "mayBeAbsent": true,
+                "description": "The workspace member who made the change, by their Attio member id; null for a change by an api token or Attio itself. A claim Attio vouches for: a plugin function that accepts `claim:attio/user_id` takes it where it refuses plain text."
               }
             ]
           },
@@ -4105,6 +4183,19 @@
                 "required": true,
                 "cardinality": "one",
                 "description": "The fund's record id."
+              },
+              {
+                "fieldId": "Changed By",
+                "displayName": "Changed By",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "cardinality": "one",
+                "brands": [
+                  "claim:attio/user_id"
+                ],
+                "mayBeAbsent": true,
+                "description": "The workspace member who made the change, by their Attio member id; null for a change by an api token or Attio itself. A claim Attio vouches for: a plugin function that accepts `claim:attio/user_id` takes it where it refuses plain text."
               }
             ]
           },
@@ -4787,6 +4878,19 @@
                 "required": true,
                 "cardinality": "one",
                 "description": "The person's record id."
+              },
+              {
+                "fieldId": "Changed By",
+                "displayName": "Changed By",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "cardinality": "one",
+                "brands": [
+                  "claim:attio/user_id"
+                ],
+                "mayBeAbsent": true,
+                "description": "The workspace member who made the change, by their Attio member id; null for a change by an api token or Attio itself. A claim Attio vouches for: a plugin function that accepts `claim:attio/user_id` takes it where it refuses plain text."
               }
             ]
           },
@@ -5495,6 +5599,19 @@
                 "required": true,
                 "cardinality": "one",
                 "description": "The person's record id."
+              },
+              {
+                "fieldId": "Changed By",
+                "displayName": "Changed By",
+                "kind": "string",
+                "writable": false,
+                "required": false,
+                "cardinality": "one",
+                "brands": [
+                  "claim:attio/user_id"
+                ],
+                "mayBeAbsent": true,
+                "description": "The workspace member who made the change, by their Attio member id; null for a change by an api token or Attio itself. A claim Attio vouches for: a plugin function that accepts `claim:attio/user_id` takes it where it refuses plain text."
               }
             ]
           },
@@ -5697,13 +5814,13 @@
         "name": [
           {
             "value": "Parity Labs",
-            "active_from": "2026-11-02T17:22:45.721Z"
+            "active_from": "2026-11-13T21:24:37.992Z"
           }
         ],
         "domains": [
           {
             "domain": "paritylabs.example",
-            "active_from": "2026-11-02T17:22:45.721Z"
+            "active_from": "2026-11-13T21:24:37.992Z"
           }
         ]
       }
@@ -5751,13 +5868,13 @@
         "name": [
           {
             "value": "Paula Parity",
-            "active_from": "2026-11-02T17:22:45.730Z"
+            "active_from": "2026-11-13T21:24:38.001Z"
           }
         ],
         "email_addresses": [
           {
             "email_address": "paula@paritylabs.example",
-            "active_from": "2026-11-02T17:22:45.730Z"
+            "active_from": "2026-11-13T21:24:38.001Z"
           }
         ]
       }
@@ -5788,10 +5905,7 @@
                 "Id": "companies:company-northwind:created",
                 "Kind": "created",
                 "Record": "company-northwind",
-                "actor": {
-                  "id": "1",
-                  "type": "workspace-member"
-                }
+                "Changed By": "1"
               }
             },
             "parents": [
@@ -5808,41 +5922,10 @@
             "about": {
               "recordType": "Companies",
               "externalId": "company-northwind"
-            },
-            "actor": {
-              "identifier": "1",
-              "scheme": "opaque",
-              "adapterType": "attio",
-              "label": "1",
-              "proven": true
             }
           }
         ]
       }
-    },
-    {
-      "step": "extractActor record.created by a member",
-      "answer": {
-        "identifier": "1",
-        "scheme": "opaque",
-        "adapterType": "attio",
-        "label": "1",
-        "proven": true
-      }
-    },
-    {
-      "step": "getActorCandidates record.created by a member",
-      "answer": [
-        {
-          "identity": {
-            "identifier": "1",
-            "scheme": "email",
-            "adapterType": "attio",
-            "email": "test@example.com"
-          },
-          "source": "originator"
-        }
-      ]
     },
     {
       "step": "preprocessInbound record.updated by the api",
@@ -5860,10 +5943,7 @@
                 "Id": "companies:company-northwind:updated:attr-1:6fbdb52d0f7e56a7",
                 "Kind": "updated",
                 "Record": "company-northwind",
-                "actor": {
-                  "id": "token-1",
-                  "type": "api-token"
-                }
+                "Changed By": null
               }
             },
             "parents": [
@@ -5880,31 +5960,10 @@
             "about": {
               "recordType": "Companies",
               "externalId": "company-northwind"
-            },
-            "actor": {
-              "identifier": "token-1",
-              "scheme": "opaque",
-              "adapterType": "attio",
-              "label": "token-1",
-              "proven": true
             }
           }
         ]
       }
-    },
-    {
-      "step": "extractActor record.updated by the api",
-      "answer": {
-        "identifier": "token-1",
-        "scheme": "opaque",
-        "adapterType": "attio",
-        "label": "token-1",
-        "proven": true
-      }
-    },
-    {
-      "step": "getActorCandidates record.updated by the api",
-      "answer": []
     },
     {
       "step": "preprocessInbound not a delivery",
@@ -5917,7 +5976,7 @@
       "step": "ensureEventSubscription create",
       "answer": {
         "externalId": "fake-webhook-1",
-        "secret": "54b632b39b847ff887b750b472b4b9dee3eeba59bda7b2cf"
+        "secret": "5e29a9d7d4c9800ffcdfc840f887c9fc5fa64496999db9c9"
       }
     },
     {
@@ -6573,7 +6632,7 @@
         }
       },
       "status": 200,
-      "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"record_id\":\"1\"},\"created_at\":\"2026-11-02T17:22:45.721Z\",\"values\":{\"name\":[{\"value\":\"Parity Labs\",\"active_from\":\"2026-11-02T17:22:45.721Z\"}],\"domains\":[{\"domain\":\"paritylabs.example\",\"active_from\":\"2026-11-02T17:22:45.721Z\"}]}}}"
+      "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"record_id\":\"1\"},\"created_at\":\"2026-11-13T21:24:37.992Z\",\"values\":{\"name\":[{\"value\":\"Parity Labs\",\"active_from\":\"2026-11-13T21:24:37.992Z\"}],\"domains\":[{\"domain\":\"paritylabs.example\",\"active_from\":\"2026-11-13T21:24:37.992Z\"}]}}}"
     },
     {
       "method": "GET",
@@ -6581,7 +6640,7 @@
       "authorization": "Bearer dev-loop-attio-token",
       "body": null,
       "status": 200,
-      "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"record_id\":\"1\"},\"created_at\":\"2026-11-02T17:22:45.721Z\",\"values\":{\"name\":[{\"value\":\"Parity Labs\",\"active_from\":\"2026-11-02T17:22:45.721Z\"}],\"domains\":[{\"domain\":\"paritylabs.example\",\"active_from\":\"2026-11-02T17:22:45.721Z\"}]}}}"
+      "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"record_id\":\"1\"},\"created_at\":\"2026-11-13T21:24:37.992Z\",\"values\":{\"name\":[{\"value\":\"Parity Labs\",\"active_from\":\"2026-11-13T21:24:37.992Z\"}],\"domains\":[{\"domain\":\"paritylabs.example\",\"active_from\":\"2026-11-13T21:24:37.992Z\"}]}}}"
     },
     {
       "method": "GET",
@@ -6603,7 +6662,7 @@
         }
       },
       "status": 200,
-      "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"record_id\":\"1\"},\"created_at\":\"2026-11-02T17:22:45.721Z\",\"values\":{\"name\":[{\"value\":\"Parity Labs\",\"active_from\":\"2026-11-02T17:22:45.721Z\"}],\"domains\":[{\"domain\":\"paritylabs.example\",\"active_from\":\"2026-11-02T17:22:45.721Z\"}],\"description\":[{\"value\":\"Made by recorded parity\",\"active_from\":\"2026-11-02T17:22:45.725Z\"}]}}}"
+      "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"record_id\":\"1\"},\"created_at\":\"2026-11-13T21:24:37.992Z\",\"values\":{\"name\":[{\"value\":\"Parity Labs\",\"active_from\":\"2026-11-13T21:24:37.992Z\"}],\"domains\":[{\"domain\":\"paritylabs.example\",\"active_from\":\"2026-11-13T21:24:37.992Z\"}],\"description\":[{\"value\":\"Made by recorded parity\",\"active_from\":\"2026-11-13T21:24:37.996Z\"}]}}}"
     },
     {
       "method": "GET",
@@ -6644,7 +6703,7 @@
         }
       },
       "status": 200,
-      "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"record_id\":\"1\"},\"created_at\":\"2026-11-02T17:22:45.730Z\",\"values\":{\"name\":[{\"value\":\"Paula Parity\",\"active_from\":\"2026-11-02T17:22:45.730Z\"}],\"email_addresses\":[{\"email_address\":\"paula@paritylabs.example\",\"active_from\":\"2026-11-02T17:22:45.730Z\"}]}}}"
+      "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"record_id\":\"1\"},\"created_at\":\"2026-11-13T21:24:38.001Z\",\"values\":{\"name\":[{\"value\":\"Paula Parity\",\"active_from\":\"2026-11-13T21:24:38.001Z\"}],\"email_addresses\":[{\"email_address\":\"paula@paritylabs.example\",\"active_from\":\"2026-11-13T21:24:38.001Z\"}]}}}"
     },
     {
       "method": "POST",
@@ -6668,7 +6727,7 @@
       "authorization": "Bearer dev-loop-attio-token",
       "body": null,
       "status": 200,
-      "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"record_id\":\"1\"},\"created_at\":\"2026-11-02T17:22:45.730Z\",\"values\":{\"name\":[{\"value\":\"Paula Parity\",\"active_from\":\"2026-11-02T17:22:45.730Z\"}],\"email_addresses\":[{\"email_address\":\"paula@paritylabs.example\",\"active_from\":\"2026-11-02T17:22:45.730Z\"}]}}}"
+      "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"people\",\"record_id\":\"1\"},\"created_at\":\"2026-11-13T21:24:38.001Z\",\"values\":{\"name\":[{\"value\":\"Paula Parity\",\"active_from\":\"2026-11-13T21:24:38.001Z\"}],\"email_addresses\":[{\"email_address\":\"paula@paritylabs.example\",\"active_from\":\"2026-11-13T21:24:38.001Z\"}]}}}"
     },
     {
       "method": "DELETE",
@@ -6693,14 +6752,6 @@
       "body": null,
       "status": 200,
       "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"object_id\":\"companies\",\"record_id\":\"company-northwind\"},\"values\":{\"name\":[{\"value\":\"Northwind Advisory\"}],\"domains\":[{\"domain\":\"northwind.test\"}],\"description\":[{\"value\":\"Advises the fund on structuring.\"}]}}}"
-    },
-    {
-      "method": "GET",
-      "path": "/v2/workspace_members/1",
-      "authorization": "Bearer dev-loop-attio-token",
-      "body": null,
-      "status": 200,
-      "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"workspace_member_id\":\"1\"},\"first_name\":\"Test\",\"last_name\":\"User\",\"email_address\":\"test@example.com\",\"avatar_url\":null}}"
     },
     {
       "method": "GET",
@@ -6742,7 +6793,7 @@
         }
       },
       "status": 200,
-      "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"webhook_id\":\"fake-webhook-1\"},\"target_url\":\"https://example.test/api/public/webhook-sync/attio/sub-1\",\"subscriptions\":[{\"event_type\":\"record.created\",\"filter\":null},{\"event_type\":\"record.updated\",\"filter\":null},{\"event_type\":\"record.deleted\",\"filter\":null}],\"status\":\"active\",\"secret\":\"54b632b39b847ff887b750b472b4b9dee3eeba59bda7b2cf\",\"created_at\":\"2026-11-02T17:22:45.743Z\"}}"
+      "response": "{\"data\":{\"id\":{\"workspace_id\":\"test\",\"webhook_id\":\"fake-webhook-1\"},\"target_url\":\"https://example.test/api/public/webhook-sync/attio/sub-1\",\"subscriptions\":[{\"event_type\":\"record.created\",\"filter\":null},{\"event_type\":\"record.updated\",\"filter\":null},{\"event_type\":\"record.deleted\",\"filter\":null}],\"status\":\"active\",\"secret\":\"5e29a9d7d4c9800ffcdfc840f887c9fc5fa64496999db9c9\",\"created_at\":\"2026-11-13T21:24:38.013Z\"}}"
     },
     {
       "method": "DELETE",

@@ -138,6 +138,7 @@ const RAW_TWILIO = {
 const TG_PAYLOAD: WhatsappPayload = {
   messageId: 'SM123',
   from: '+15551234567',
+  senderPhone: '+15551234567',
   to: '+14155550000',
   body: 'hello from whatsapp',
   waId: '15551234567',

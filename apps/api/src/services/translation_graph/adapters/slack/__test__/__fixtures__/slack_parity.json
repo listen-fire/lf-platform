@@ -174,6 +174,26 @@
               "writable": false,
               "required": false,
               "description": "Whether the message @-mentions the connected app: `listen to chat-[:Channels]->-[m:Messages WHERE m.`Mentions App` == true]->` runs when somebody asks it something."
+            },
+            {
+              "fieldId": "user_email",
+              "displayName": "User Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address Slack holds for the member who sent the message, lower case; null for a member with none and for a bot. A claim Slack vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
+              "fieldId": "sent_by_this_app",
+              "displayName": "Sent By This App",
+              "kind": "boolean",
+              "writable": false,
+              "required": false,
+              "description": "Whether this app itself sent the message. A listen that should not hear the app's own posts filters on NOT Sent By This App. False when Slack does not say who the app is."
             }
           ],
           "references": [
@@ -361,6 +381,18 @@
               "writable": false,
               "required": false,
               "description": "When the press was made."
+            },
+            {
+              "fieldId": "pressed_by_email",
+              "displayName": "Pressed By Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address Slack holds for the member who pressed, lower case; null for a member with none. A claim Slack vouches for: a plugin function such as a team check accepts it where it refuses plain text."
             }
           ],
           "references": [
@@ -452,6 +484,26 @@
               "writable": false,
               "required": false,
               "description": "The U… id of the user who added the reaction (read-only — walk the `Reactor` edge for the User node)."
+            },
+            {
+              "fieldId": "user_email",
+              "displayName": "User Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address Slack holds for the member who sent the reaction, lower case; null for a member with none and for a bot. A claim Slack vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
+              "fieldId": "sent_by_this_app",
+              "displayName": "Sent By This App",
+              "kind": "boolean",
+              "writable": false,
+              "required": false,
+              "description": "Whether this app itself sent the reaction. A listen that should not hear the app's own posts filters on NOT Sent By This App. False when Slack does not say who the app is."
             }
           ],
           "references": [
@@ -719,6 +771,26 @@
               "writable": false,
               "required": false,
               "description": "Whether the message @-mentions the connected app: `listen to chat-[:Channels]->-[m:Messages WHERE m.`Mentions App` == true]->` runs when somebody asks it something."
+            },
+            {
+              "fieldId": "user_email",
+              "displayName": "User Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address Slack holds for the member who sent the message, lower case; null for a member with none and for a bot. A claim Slack vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
+              "fieldId": "sent_by_this_app",
+              "displayName": "Sent By This App",
+              "kind": "boolean",
+              "writable": false,
+              "required": false,
+              "description": "Whether this app itself sent the message. A listen that should not hear the app's own posts filters on NOT Sent By This App. False when Slack does not say who the app is."
             }
           ],
           "references": [
@@ -862,6 +934,26 @@
               "writable": false,
               "required": false,
               "description": "The U… id of the user who added the reaction (read-only — walk the `Reactor` edge for the User node)."
+            },
+            {
+              "fieldId": "user_email",
+              "displayName": "User Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address Slack holds for the member who sent the reaction, lower case; null for a member with none and for a bot. A claim Slack vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
+              "fieldId": "sent_by_this_app",
+              "displayName": "Sent By This App",
+              "kind": "boolean",
+              "writable": false,
+              "required": false,
+              "description": "Whether this app itself sent the reaction. A listen that should not hear the app's own posts filters on NOT Sent By This App. False when Slack does not say who the app is."
             }
           ],
           "references": [
@@ -1065,6 +1157,26 @@
               "writable": false,
               "required": false,
               "description": "Whether the message @-mentions the connected app: `listen to chat-[:Channels]->-[m:Messages WHERE m.`Mentions App` == true]->` runs when somebody asks it something."
+            },
+            {
+              "fieldId": "user_email",
+              "displayName": "User Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address Slack holds for the member who sent the message, lower case; null for a member with none and for a bot. A claim Slack vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
+              "fieldId": "sent_by_this_app",
+              "displayName": "Sent By This App",
+              "kind": "boolean",
+              "writable": false,
+              "required": false,
+              "description": "Whether this app itself sent the message. A listen that should not hear the app's own posts filters on NOT Sent By This App. False when Slack does not say who the app is."
             }
           ],
           "references": [
@@ -1761,6 +1873,26 @@
               "writable": false,
               "required": false,
               "description": "Whether the message @-mentions the connected app: `listen to chat-[:Channels]->-[m:Messages WHERE m.`Mentions App` == true]->` runs when somebody asks it something."
+            },
+            {
+              "fieldId": "user_email",
+              "displayName": "User Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address Slack holds for the member who sent the message, lower case; null for a member with none and for a bot. A claim Slack vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
+              "fieldId": "sent_by_this_app",
+              "displayName": "Sent By This App",
+              "kind": "boolean",
+              "writable": false,
+              "required": false,
+              "description": "Whether this app itself sent the message. A listen that should not hear the app's own posts filters on NOT Sent By This App. False when Slack does not say who the app is."
             }
           ],
           "references": [
@@ -1912,6 +2044,14 @@
       },
       {
         "step": "Message.Mentions App",
+        "answer": false
+      },
+      {
+        "step": "Message.User Email",
+        "answer": "ada@example.com"
+      },
+      {
+        "step": "Message.Sent By This App",
         "answer": false
       },
       {
@@ -2077,7 +2217,9 @@
                   "Timestamp": "2025-07-04T03:33:20.000Z",
                   "timestamp": "2025-07-04T03:33:20.000Z",
                   "Topic": null,
-                  "Mentions App": false
+                  "Mentions App": false,
+                  "User Email": "ada@example.com",
+                  "Sent By This App": false
                 }
               },
               "parents": [
@@ -2092,13 +2234,6 @@
                   }
                 }
               ],
-              "actor": {
-                "identifier": "U001",
-                "scheme": "opaque",
-                "adapterType": "slack",
-                "label": "U001",
-                "proven": true
-              },
               "occurredAt": "2025-07-04T03:33:20.000Z"
             }
           ]
@@ -2129,7 +2264,9 @@
                   "Timestamp": "2025-07-04T03:35:00.000Z",
                   "timestamp": "2025-07-04T03:35:00.000Z",
                   "Topic": null,
-                  "Mentions App": true
+                  "Mentions App": true,
+                  "User Email": "priya@example.com",
+                  "Sent By This App": false
                 }
               },
               "parents": [
@@ -2144,13 +2281,6 @@
                   }
                 }
               ],
-              "actor": {
-                "identifier": "U002",
-                "scheme": "opaque",
-                "adapterType": "slack",
-                "label": "U002",
-                "proven": true
-              },
               "occurredAt": "2025-07-04T03:35:00.000Z"
             }
           ]
@@ -2182,7 +2312,9 @@
                   "Timestamp": "2025-07-04T03:36:40.000Z",
                   "timestamp": "2025-07-04T03:36:40.000Z",
                   "Topic": null,
-                  "Mentions App": false
+                  "Mentions App": false,
+                  "User Email": "priya@example.com",
+                  "Sent By This App": false
                 }
               },
               "parents": [
@@ -2197,13 +2329,6 @@
                   }
                 }
               ],
-              "actor": {
-                "identifier": "U002",
-                "scheme": "opaque",
-                "adapterType": "slack",
-                "label": "U002",
-                "proven": true
-              },
               "occurredAt": "2025-07-04T03:36:40.000Z"
             }
           ]
@@ -2233,7 +2358,9 @@
                   },
                   "Emoji": "rocket",
                   "Channel": "C002",
-                  "Reactor": "U001"
+                  "Reactor": "U001",
+                  "User Email": "ada@example.com",
+                  "Sent By This App": false
                 }
               },
               "parents": [
@@ -2251,13 +2378,6 @@
               "about": {
                 "recordType": "Message",
                 "externalId": "C002:1751500000.000100"
-              },
-              "actor": {
-                "identifier": "U001",
-                "scheme": "opaque",
-                "adapterType": "slack",
-                "label": "U001",
-                "proven": true
               },
               "occurredAt": "2025-07-04T03:38:20.000Z"
             }
@@ -2406,6 +2526,26 @@
               "writable": false,
               "required": false,
               "description": "Whether the message @-mentions the connected app: `listen to chat-[:Channels]->-[m:Messages WHERE m.`Mentions App` == true]->` runs when somebody asks it something."
+            },
+            {
+              "fieldId": "user_email",
+              "displayName": "User Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address Slack holds for the member who sent the message, lower case; null for a member with none and for a bot. A claim Slack vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
+              "fieldId": "sent_by_this_app",
+              "displayName": "Sent By This App",
+              "kind": "boolean",
+              "writable": false,
+              "required": false,
+              "description": "Whether this app itself sent the message. A listen that should not hear the app's own posts filters on NOT Sent By This App. False when Slack does not say who the app is."
             }
           ],
           "references": [
@@ -2557,6 +2697,14 @@
       },
       {
         "step": "Delivered message.Mentions App",
+        "answer": false
+      },
+      {
+        "step": "Delivered message.User Email",
+        "answer": "ada@example.com"
+      },
+      {
+        "step": "Delivered message.Sent By This App",
         "answer": false
       },
       {
@@ -2878,6 +3026,26 @@
               "writable": false,
               "required": false,
               "description": "The U… id of the user who added the reaction (read-only — walk the `Reactor` edge for the User node)."
+            },
+            {
+              "fieldId": "user_email",
+              "displayName": "User Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address Slack holds for the member who sent the reaction, lower case; null for a member with none and for a bot. A claim Slack vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
+              "fieldId": "sent_by_this_app",
+              "displayName": "Sent By This App",
+              "kind": "boolean",
+              "writable": false,
+              "required": false,
+              "description": "Whether this app itself sent the reaction. A listen that should not hear the app's own posts filters on NOT Sent By This App. False when Slack does not say who the app is."
             }
           ],
           "references": [
@@ -2916,6 +3084,14 @@
       {
         "step": "Reaction.Reactor",
         "answer": "U001"
+      },
+      {
+        "step": "Reaction.User Email",
+        "answer": "ada@example.com"
+      },
+      {
+        "step": "Reaction.Sent By This App",
+        "answer": false
       },
       {
         "step": "Reaction -[Message]->",
@@ -2981,58 +3157,6 @@
         ]
       },
       {
-        "step": "getActorCandidates message",
-        "answer": [
-          {
-            "identity": {
-              "identifier": "U001",
-              "scheme": "email",
-              "adapterType": "slack",
-              "email": "ada@example.com"
-            },
-            "source": "originator"
-          }
-        ]
-      },
-      {
-        "step": "extractActor message",
-        "answer": {
-          "identifier": "U001",
-          "scheme": "opaque",
-          "adapterType": "slack",
-          "label": "U001",
-          "proven": true
-        }
-      },
-      {
-        "step": "getActorCandidates reaction",
-        "answer": [
-          {
-            "identity": {
-              "identifier": "U001",
-              "scheme": "email",
-              "adapterType": "slack",
-              "email": "ada@example.com"
-            },
-            "source": "originator"
-          }
-        ]
-      },
-      {
-        "step": "extractActor reaction",
-        "answer": {
-          "identifier": "U001",
-          "scheme": "opaque",
-          "adapterType": "slack",
-          "label": "U001",
-          "proven": true
-        }
-      },
-      {
-        "step": "getActorCandidates no user",
-        "answer": []
-      },
-      {
         "step": "invokeFieldFunction SLACK_MESSAGE",
         "answer": "composed(claude-sonnet-5, slack_message_compose, 713): Say hi to @[Ada Okafor]\n\nData you can use:\n- deal: Acme\n- 3"
       },
@@ -3046,12 +3170,12 @@
         "step": "post with a mention",
         "answer": {
           "adapterType": "slack",
-          "externalId": "C002:1794407524.551499",
+          "externalId": "C002:1794605053.093766",
           "data": {
             "channelId": "C002",
-            "ts": "1794407524.551499",
+            "ts": "1794605053.093766",
             "name": "Hi <@U001>, see the deck",
-            "url": "slack://archives/C002/p1794407524551499"
+            "url": "slack://archives/C002/p1794605053093766"
           }
         }
       },
@@ -3059,13 +3183,13 @@
         "step": "reply in the thread",
         "answer": {
           "adapterType": "slack",
-          "externalId": "C002:1794407524.554409",
+          "externalId": "C002:1794605053.095566",
           "data": {
             "channelId": "C002",
-            "ts": "1794407524.554409",
+            "ts": "1794605053.095566",
             "threadTs": "1751500000.000100",
             "name": "On it",
-            "url": "slack://archives/C002/p1794407524554409"
+            "url": "slack://archives/C002/p1794605053095566"
           }
         }
       },
@@ -3073,13 +3197,13 @@
         "step": "reply to a composite id",
         "answer": {
           "adapterType": "slack",
-          "externalId": "C002:1794407524.555934",
+          "externalId": "C002:1794605053.096589",
           "data": {
             "channelId": "C002",
-            "ts": "1794407524.555934",
+            "ts": "1794605053.096589",
             "threadTs": "1751500000.000100",
             "name": "composite",
-            "url": "slack://archives/C002/p1794407524555934"
+            "url": "slack://archives/C002/p1794605053096589"
           }
         }
       },
@@ -3087,10 +3211,10 @@
         "step": "post blocks",
         "answer": {
           "adapterType": "slack",
-          "externalId": "C002:1794407524.557008",
+          "externalId": "C002:1794605053.098719",
           "data": {
             "channelId": "C002",
-            "ts": "1794407524.557008",
+            "ts": "1794605053.098719",
             "blocks": [
               {
                 "type": "section",
@@ -3101,7 +3225,7 @@
               }
             ],
             "name": "fallback",
-            "url": "slack://archives/C002/p1794407524557008"
+            "url": "slack://archives/C002/p1794605053098719"
           }
         }
       },
@@ -3297,6 +3421,17 @@
       },
       {
         "method": "POST",
+        "path": "/users.info",
+        "authorization": "Bearer xoxb-parity",
+        "headers": {
+          "content-type": "application/x-www-form-urlencoded"
+        },
+        "body": "user=U001",
+        "status": 200,
+        "response": "{\"ok\":true,\"user\":{\"id\":\"U001\",\"name\":\"ada\",\"real_name\":\"Ada Okafor\",\"deleted\":false,\"profile\":{\"display_name\":\"ada\",\"real_name\":\"Ada Okafor\",\"email\":\"ada@example.com\"}}}"
+      },
+      {
+        "method": "POST",
         "path": "/conversations.replies",
         "authorization": "Bearer xoxb-parity",
         "headers": {
@@ -3341,6 +3476,17 @@
       },
       {
         "method": "POST",
+        "path": "/users.info",
+        "authorization": "Bearer xoxb-parity",
+        "headers": {
+          "content-type": "application/x-www-form-urlencoded"
+        },
+        "body": "user=U002",
+        "status": 200,
+        "response": "{\"ok\":true,\"user\":{\"id\":\"U002\",\"name\":\"priya\",\"real_name\":\"Priya Ops\",\"deleted\":false,\"profile\":{\"display_name\":\"priya\",\"real_name\":\"Priya Ops\",\"email\":\"priya@example.com\"}}}"
+      },
+      {
+        "method": "POST",
         "path": "/conversations.replies",
         "authorization": "Bearer xoxb-parity",
         "headers": {
@@ -3374,17 +3520,6 @@
       },
       {
         "method": "POST",
-        "path": "/users.info",
-        "authorization": "Bearer xoxb-parity",
-        "headers": {
-          "content-type": "application/x-www-form-urlencoded"
-        },
-        "body": "user=U001",
-        "status": 200,
-        "response": "{\"ok\":true,\"user\":{\"id\":\"U001\",\"name\":\"ada\",\"real_name\":\"Ada Okafor\",\"deleted\":false,\"profile\":{\"display_name\":\"ada\",\"real_name\":\"Ada Okafor\",\"email\":\"ada@example.com\"}}}"
-      },
-      {
-        "method": "POST",
         "path": "/users.list",
         "authorization": "Bearer xoxb-parity",
         "headers": {
@@ -3403,7 +3538,7 @@
         },
         "body": "channel=C002&text=Hi%20%3C%40U001%3E%2C%20see%20the%20deck&unfurl_links=false&unfurl_media=false",
         "status": 200,
-        "response": "{\"ok\":true,\"ts\":\"1794407524.551499\"}"
+        "response": "{\"ok\":true,\"ts\":\"1794605053.093766\"}"
       },
       {
         "method": "POST",
@@ -3414,7 +3549,7 @@
         },
         "body": "channel=C002&thread_ts=1751500000.000100&text=On%20it&unfurl_links=false&unfurl_media=false",
         "status": 200,
-        "response": "{\"ok\":true,\"ts\":\"1794407524.554409\"}"
+        "response": "{\"ok\":true,\"ts\":\"1794605053.095566\"}"
       },
       {
         "method": "POST",
@@ -3425,7 +3560,7 @@
         },
         "body": "channel=C002&thread_ts=1751500000.000100&text=composite&unfurl_links=false&unfurl_media=false",
         "status": 200,
-        "response": "{\"ok\":true,\"ts\":\"1794407524.555934\"}"
+        "response": "{\"ok\":true,\"ts\":\"1794605053.096589\"}"
       },
       {
         "method": "POST",
@@ -3436,7 +3571,7 @@
         },
         "body": "channel=C002&text=fallback&blocks=%5B%7B%22type%22%3A%22section%22%2C%22text%22%3A%7B%22type%22%3A%22mrkdwn%22%2C%22text%22%3A%22*hi*%22%7D%7D%5D&unfurl_links=false&unfurl_media=false",
         "status": 200,
-        "response": "{\"ok\":true,\"ts\":\"1794407524.557008\"}"
+        "response": "{\"ok\":true,\"ts\":\"1794605053.098719\"}"
       },
       {
         "method": "POST",
@@ -3637,6 +3772,26 @@
               "writable": false,
               "required": false,
               "description": "Whether the message @-mentions the connected app: `listen to chat-[:Channels]->-[m:Messages WHERE m.`Mentions App` == true]->` runs when somebody asks it something."
+            },
+            {
+              "fieldId": "user_email",
+              "displayName": "User Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address Slack holds for the member who sent the message, lower case; null for a member with none and for a bot. A claim Slack vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
+              "fieldId": "sent_by_this_app",
+              "displayName": "Sent By This App",
+              "kind": "boolean",
+              "writable": false,
+              "required": false,
+              "description": "Whether this app itself sent the message. A listen that should not hear the app's own posts filters on NOT Sent By This App. False when Slack does not say who the app is."
             }
           ],
           "references": [
@@ -3824,6 +3979,18 @@
               "writable": false,
               "required": false,
               "description": "When the press was made."
+            },
+            {
+              "fieldId": "pressed_by_email",
+              "displayName": "Pressed By Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address Slack holds for the member who pressed, lower case; null for a member with none. A claim Slack vouches for: a plugin function such as a team check accepts it where it refuses plain text."
             }
           ],
           "references": [
@@ -3915,6 +4082,26 @@
               "writable": false,
               "required": false,
               "description": "The U… id of the user who added the reaction (read-only — walk the `Reactor` edge for the User node)."
+            },
+            {
+              "fieldId": "user_email",
+              "displayName": "User Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address Slack holds for the member who sent the reaction, lower case; null for a member with none and for a bot. A claim Slack vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
+              "fieldId": "sent_by_this_app",
+              "displayName": "Sent By This App",
+              "kind": "boolean",
+              "writable": false,
+              "required": false,
+              "description": "Whether this app itself sent the reaction. A listen that should not hear the app's own posts filters on NOT Sent By This App. False when Slack does not say who the app is."
             }
           ],
           "references": [
@@ -4182,6 +4369,26 @@
               "writable": false,
               "required": false,
               "description": "Whether the message @-mentions the connected app: `listen to chat-[:Channels]->-[m:Messages WHERE m.`Mentions App` == true]->` runs when somebody asks it something."
+            },
+            {
+              "fieldId": "user_email",
+              "displayName": "User Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address Slack holds for the member who sent the message, lower case; null for a member with none and for a bot. A claim Slack vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
+              "fieldId": "sent_by_this_app",
+              "displayName": "Sent By This App",
+              "kind": "boolean",
+              "writable": false,
+              "required": false,
+              "description": "Whether this app itself sent the message. A listen that should not hear the app's own posts filters on NOT Sent By This App. False when Slack does not say who the app is."
             }
           ],
           "references": [
@@ -4325,6 +4532,26 @@
               "writable": false,
               "required": false,
               "description": "The U… id of the user who added the reaction (read-only — walk the `Reactor` edge for the User node)."
+            },
+            {
+              "fieldId": "user_email",
+              "displayName": "User Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address Slack holds for the member who sent the reaction, lower case; null for a member with none and for a bot. A claim Slack vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
+              "fieldId": "sent_by_this_app",
+              "displayName": "Sent By This App",
+              "kind": "boolean",
+              "writable": false,
+              "required": false,
+              "description": "Whether this app itself sent the reaction. A listen that should not hear the app's own posts filters on NOT Sent By This App. False when Slack does not say who the app is."
             }
           ],
           "references": [
@@ -4528,6 +4755,26 @@
               "writable": false,
               "required": false,
               "description": "Whether the message @-mentions the connected app: `listen to chat-[:Channels]->-[m:Messages WHERE m.`Mentions App` == true]->` runs when somebody asks it something."
+            },
+            {
+              "fieldId": "user_email",
+              "displayName": "User Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address Slack holds for the member who sent the message, lower case; null for a member with none and for a bot. A claim Slack vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
+              "fieldId": "sent_by_this_app",
+              "displayName": "Sent By This App",
+              "kind": "boolean",
+              "writable": false,
+              "required": false,
+              "description": "Whether this app itself sent the message. A listen that should not hear the app's own posts filters on NOT Sent By This App. False when Slack does not say who the app is."
             }
           ],
           "references": [
@@ -4998,7 +5245,7 @@
               "recordType": "Message",
               "identity": {
                 "kind": "stable",
-                "recordId": "C002:1794407524.557008",
+                "recordId": "C002:1794605053.098719",
                 "data": {
                   "channel": "C002",
                   "text": "fallback",
@@ -5012,7 +5259,7 @@
                     }
                   ],
                   "thread_ts": null,
-                  "ts": "1794407524.557008",
+                  "ts": "1794605053.098719",
                   "user": "bot",
                   "unfurl_links": "false",
                   "unfurl_media": "false"
@@ -5026,13 +5273,13 @@
               "recordType": "Message",
               "identity": {
                 "kind": "stable",
-                "recordId": "C002:1794407524.551499",
+                "recordId": "C002:1794605053.093766",
                 "data": {
                   "channel": "C002",
                   "text": "Hi <@U001>, see the deck",
                   "blocks": null,
                   "thread_ts": null,
-                  "ts": "1794407524.551499",
+                  "ts": "1794605053.093766",
                   "user": "bot",
                   "unfurl_links": "false",
                   "unfurl_media": "false"
@@ -5145,7 +5392,7 @@
               "recordType": "Message",
               "identity": {
                 "kind": "stable",
-                "recordId": "C002:1794407524.557008",
+                "recordId": "C002:1794605053.098719",
                 "data": {
                   "channel": "C002",
                   "text": "fallback",
@@ -5159,7 +5406,7 @@
                     }
                   ],
                   "thread_ts": null,
-                  "ts": "1794407524.557008",
+                  "ts": "1794605053.098719",
                   "user": "bot",
                   "unfurl_links": "false",
                   "unfurl_media": "false"
@@ -5293,6 +5540,26 @@
               "writable": false,
               "required": false,
               "description": "Whether the message @-mentions the connected app: `listen to chat-[:Channels]->-[m:Messages WHERE m.`Mentions App` == true]->` runs when somebody asks it something."
+            },
+            {
+              "fieldId": "user_email",
+              "displayName": "User Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address Slack holds for the member who sent the message, lower case; null for a member with none and for a bot. A claim Slack vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
+              "fieldId": "sent_by_this_app",
+              "displayName": "Sent By This App",
+              "kind": "boolean",
+              "writable": false,
+              "required": false,
+              "description": "Whether this app itself sent the message. A listen that should not hear the app's own posts filters on NOT Sent By This App. False when Slack does not say who the app is."
             }
           ],
           "references": [
@@ -5447,6 +5714,14 @@
         "answer": false
       },
       {
+        "step": "Message.User Email",
+        "answer": "ada@example.com"
+      },
+      {
+        "step": "Message.Sent By This App",
+        "answer": false
+      },
+      {
         "step": "Message -[Files]->",
         "answer": []
       },
@@ -5476,13 +5751,13 @@
               "recordType": "Message",
               "identity": {
                 "kind": "stable",
-                "recordId": "C002:1794407524.554409",
+                "recordId": "C002:1794605053.095566",
                 "data": {
                   "channel": "C002",
                   "text": "On it",
                   "blocks": null,
                   "thread_ts": "1751500000.000100",
-                  "ts": "1794407524.554409",
+                  "ts": "1794605053.095566",
                   "user": "bot",
                   "unfurl_links": "false",
                   "unfurl_media": "false"
@@ -5496,13 +5771,13 @@
               "recordType": "Message",
               "identity": {
                 "kind": "stable",
-                "recordId": "C002:1794407524.555934",
+                "recordId": "C002:1794605053.096589",
                 "data": {
                   "channel": "C002",
                   "text": "composite",
                   "blocks": null,
                   "thread_ts": "1751500000.000100",
-                  "ts": "1794407524.555934",
+                  "ts": "1794605053.096589",
                   "user": "bot",
                   "unfurl_links": "false",
                   "unfurl_media": "false"
@@ -5649,7 +5924,9 @@
                   "Timestamp": "2025-07-04T03:33:20.000Z",
                   "timestamp": "2025-07-04T03:33:20.000Z",
                   "Topic": null,
-                  "Mentions App": false
+                  "Mentions App": false,
+                  "User Email": "ada@example.com",
+                  "Sent By This App": false
                 }
               },
               "parents": [
@@ -5664,13 +5941,6 @@
                   }
                 }
               ],
-              "actor": {
-                "identifier": "U001",
-                "scheme": "opaque",
-                "adapterType": "slack",
-                "label": "U001",
-                "proven": true
-              },
               "occurredAt": "2025-07-04T03:33:20.000Z"
             }
           ]
@@ -5701,7 +5971,9 @@
                   "Timestamp": "2025-07-04T03:35:00.000Z",
                   "timestamp": "2025-07-04T03:35:00.000Z",
                   "Topic": null,
-                  "Mentions App": true
+                  "Mentions App": true,
+                  "User Email": "priya@example.com",
+                  "Sent By This App": false
                 }
               },
               "parents": [
@@ -5716,13 +5988,6 @@
                   }
                 }
               ],
-              "actor": {
-                "identifier": "U002",
-                "scheme": "opaque",
-                "adapterType": "slack",
-                "label": "U002",
-                "proven": true
-              },
               "occurredAt": "2025-07-04T03:35:00.000Z"
             }
           ]
@@ -5754,7 +6019,9 @@
                   "Timestamp": "2025-07-04T03:36:40.000Z",
                   "timestamp": "2025-07-04T03:36:40.000Z",
                   "Topic": null,
-                  "Mentions App": false
+                  "Mentions App": false,
+                  "User Email": "priya@example.com",
+                  "Sent By This App": false
                 }
               },
               "parents": [
@@ -5769,13 +6036,6 @@
                   }
                 }
               ],
-              "actor": {
-                "identifier": "U002",
-                "scheme": "opaque",
-                "adapterType": "slack",
-                "label": "U002",
-                "proven": true
-              },
               "occurredAt": "2025-07-04T03:36:40.000Z"
             }
           ]
@@ -5805,7 +6065,9 @@
                   },
                   "Emoji": "rocket",
                   "Channel": "C002",
-                  "Reactor": "U001"
+                  "Reactor": "U001",
+                  "User Email": "ada@example.com",
+                  "Sent By This App": false
                 }
               },
               "parents": [
@@ -5823,13 +6085,6 @@
               "about": {
                 "recordType": "Message",
                 "externalId": "C002:1751500000.000100"
-              },
-              "actor": {
-                "identifier": "U001",
-                "scheme": "opaque",
-                "adapterType": "slack",
-                "label": "U001",
-                "proven": true
               },
               "occurredAt": "2025-07-04T03:38:20.000Z"
             }
@@ -5978,6 +6233,26 @@
               "writable": false,
               "required": false,
               "description": "Whether the message @-mentions the connected app: `listen to chat-[:Channels]->-[m:Messages WHERE m.`Mentions App` == true]->` runs when somebody asks it something."
+            },
+            {
+              "fieldId": "user_email",
+              "displayName": "User Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address Slack holds for the member who sent the message, lower case; null for a member with none and for a bot. A claim Slack vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
+              "fieldId": "sent_by_this_app",
+              "displayName": "Sent By This App",
+              "kind": "boolean",
+              "writable": false,
+              "required": false,
+              "description": "Whether this app itself sent the message. A listen that should not hear the app's own posts filters on NOT Sent By This App. False when Slack does not say who the app is."
             }
           ],
           "references": [
@@ -6129,6 +6404,14 @@
       },
       {
         "step": "Delivered message.Mentions App",
+        "answer": false
+      },
+      {
+        "step": "Delivered message.User Email",
+        "answer": "ada@example.com"
+      },
+      {
+        "step": "Delivered message.Sent By This App",
         "answer": false
       },
       {
@@ -6450,6 +6733,26 @@
               "writable": false,
               "required": false,
               "description": "The U… id of the user who added the reaction (read-only — walk the `Reactor` edge for the User node)."
+            },
+            {
+              "fieldId": "user_email",
+              "displayName": "User Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address Slack holds for the member who sent the reaction, lower case; null for a member with none and for a bot. A claim Slack vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
+              "fieldId": "sent_by_this_app",
+              "displayName": "Sent By This App",
+              "kind": "boolean",
+              "writable": false,
+              "required": false,
+              "description": "Whether this app itself sent the reaction. A listen that should not hear the app's own posts filters on NOT Sent By This App. False when Slack does not say who the app is."
             }
           ],
           "references": [
@@ -6488,6 +6791,14 @@
       {
         "step": "Reaction.Reactor",
         "answer": "U001"
+      },
+      {
+        "step": "Reaction.User Email",
+        "answer": "ada@example.com"
+      },
+      {
+        "step": "Reaction.Sent By This App",
+        "answer": false
       },
       {
         "step": "Reaction -[Message]->",
@@ -6562,58 +6873,6 @@
         ]
       },
       {
-        "step": "getActorCandidates message",
-        "answer": [
-          {
-            "identity": {
-              "identifier": "U001",
-              "scheme": "email",
-              "adapterType": "slack",
-              "email": "ada@example.com"
-            },
-            "source": "originator"
-          }
-        ]
-      },
-      {
-        "step": "extractActor message",
-        "answer": {
-          "identifier": "U001",
-          "scheme": "opaque",
-          "adapterType": "slack",
-          "label": "U001",
-          "proven": true
-        }
-      },
-      {
-        "step": "getActorCandidates reaction",
-        "answer": [
-          {
-            "identity": {
-              "identifier": "U001",
-              "scheme": "email",
-              "adapterType": "slack",
-              "email": "ada@example.com"
-            },
-            "source": "originator"
-          }
-        ]
-      },
-      {
-        "step": "extractActor reaction",
-        "answer": {
-          "identifier": "U001",
-          "scheme": "opaque",
-          "adapterType": "slack",
-          "label": "U001",
-          "proven": true
-        }
-      },
-      {
-        "step": "getActorCandidates no user",
-        "answer": []
-      },
-      {
         "step": "invokeFieldFunction SLACK_MESSAGE",
         "answer": "composed(claude-sonnet-5, slack_message_compose, 713): Say hi to @[Ada Okafor]\n\nData you can use:\n- deal: Acme\n- 3"
       },
@@ -6627,12 +6886,12 @@
         "step": "post with a mention",
         "answer": {
           "adapterType": "slack",
-          "externalId": "C002:1794407524.596708",
+          "externalId": "C002:1794605053.136204",
           "data": {
             "channelId": "C002",
-            "ts": "1794407524.596708",
+            "ts": "1794605053.136204",
             "name": "Hi <@U001>, see the deck",
-            "url": "slack://archives/C002/p1794407524596708"
+            "url": "slack://archives/C002/p1794605053136204"
           }
         }
       },
@@ -6640,13 +6899,13 @@
         "step": "reply in the thread",
         "answer": {
           "adapterType": "slack",
-          "externalId": "C002:1794407524.597260",
+          "externalId": "C002:1794605053.137865",
           "data": {
             "channelId": "C002",
-            "ts": "1794407524.597260",
+            "ts": "1794605053.137865",
             "threadTs": "1751500000.000100",
             "name": "On it",
-            "url": "slack://archives/C002/p1794407524597260"
+            "url": "slack://archives/C002/p1794605053137865"
           }
         }
       },
@@ -6654,13 +6913,13 @@
         "step": "reply to a composite id",
         "answer": {
           "adapterType": "slack",
-          "externalId": "C002:1794407524.599098",
+          "externalId": "C002:1794605053.139545",
           "data": {
             "channelId": "C002",
-            "ts": "1794407524.599098",
+            "ts": "1794605053.139545",
             "threadTs": "1751500000.000100",
             "name": "composite",
-            "url": "slack://archives/C002/p1794407524599098"
+            "url": "slack://archives/C002/p1794605053139545"
           }
         }
       },
@@ -6668,10 +6927,10 @@
         "step": "post blocks",
         "answer": {
           "adapterType": "slack",
-          "externalId": "C002:1794407524.600468",
+          "externalId": "C002:1794605053.140154",
           "data": {
             "channelId": "C002",
-            "ts": "1794407524.600468",
+            "ts": "1794605053.140154",
             "blocks": [
               {
                 "type": "section",
@@ -6682,7 +6941,7 @@
               }
             ],
             "name": "fallback",
-            "url": "slack://archives/C002/p1794407524600468"
+            "url": "slack://archives/C002/p1794605053140154"
           }
         }
       },
@@ -6841,7 +7100,7 @@
         },
         "body": "channel=C002&limit=200",
         "status": 200,
-        "response": "{\"ok\":true,\"messages\":[{\"channel\":\"C002\",\"text\":\"fallback\",\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*hi*\"}}],\"thread_ts\":null,\"ts\":\"1794407524.557008\",\"user\":\"bot\",\"unfurl_links\":\"false\",\"unfurl_media\":\"false\"},{\"channel\":\"C002\",\"text\":\"Hi <@U001>, see the deck\",\"blocks\":null,\"thread_ts\":null,\"ts\":\"1794407524.551499\",\"user\":\"bot\",\"unfurl_links\":\"false\",\"unfurl_media\":\"false\"},{\"channel\":\"C002\",\"ts\":\"1751500100.000200\",\"user\":\"U002\",\"text\":\"Metrics deck attached for Foo Corp\"},{\"channel\":\"C002\",\"ts\":\"1751500000.000100\",\"user\":\"U001\",\"text\":\"New deal: Acme wants a term sheet\",\"reactions\":[{\"name\":\"rocket\",\"users\":[\"bot\"],\"count\":1}]}],\"has_more\":false,\"response_metadata\":{\"next_cursor\":\"\"}}"
+        "response": "{\"ok\":true,\"messages\":[{\"channel\":\"C002\",\"text\":\"fallback\",\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*hi*\"}}],\"thread_ts\":null,\"ts\":\"1794605053.098719\",\"user\":\"bot\",\"unfurl_links\":\"false\",\"unfurl_media\":\"false\"},{\"channel\":\"C002\",\"text\":\"Hi <@U001>, see the deck\",\"blocks\":null,\"thread_ts\":null,\"ts\":\"1794605053.093766\",\"user\":\"bot\",\"unfurl_links\":\"false\",\"unfurl_media\":\"false\"},{\"channel\":\"C002\",\"ts\":\"1751500100.000200\",\"user\":\"U002\",\"text\":\"Metrics deck attached for Foo Corp\"},{\"channel\":\"C002\",\"ts\":\"1751500000.000100\",\"user\":\"U001\",\"text\":\"New deal: Acme wants a term sheet\",\"reactions\":[{\"name\":\"rocket\",\"users\":[\"bot\"],\"count\":1}]}],\"has_more\":false,\"response_metadata\":{\"next_cursor\":\"\"}}"
       },
       {
         "method": "POST",
@@ -6863,7 +7122,7 @@
         },
         "body": "channel=C002&limit=200",
         "status": 200,
-        "response": "{\"ok\":true,\"messages\":[{\"channel\":\"C002\",\"text\":\"fallback\",\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*hi*\"}}],\"thread_ts\":null,\"ts\":\"1794407524.557008\",\"user\":\"bot\",\"unfurl_links\":\"false\",\"unfurl_media\":\"false\"},{\"channel\":\"C002\",\"text\":\"Hi <@U001>, see the deck\",\"blocks\":null,\"thread_ts\":null,\"ts\":\"1794407524.551499\",\"user\":\"bot\",\"unfurl_links\":\"false\",\"unfurl_media\":\"false\"},{\"channel\":\"C002\",\"ts\":\"1751500100.000200\",\"user\":\"U002\",\"text\":\"Metrics deck attached for Foo Corp\"},{\"channel\":\"C002\",\"ts\":\"1751500000.000100\",\"user\":\"U001\",\"text\":\"New deal: Acme wants a term sheet\",\"reactions\":[{\"name\":\"rocket\",\"users\":[\"bot\"],\"count\":1}]}],\"has_more\":false,\"response_metadata\":{\"next_cursor\":\"\"}}"
+        "response": "{\"ok\":true,\"messages\":[{\"channel\":\"C002\",\"text\":\"fallback\",\"blocks\":[{\"type\":\"section\",\"text\":{\"type\":\"mrkdwn\",\"text\":\"*hi*\"}}],\"thread_ts\":null,\"ts\":\"1794605053.098719\",\"user\":\"bot\",\"unfurl_links\":\"false\",\"unfurl_media\":\"false\"},{\"channel\":\"C002\",\"text\":\"Hi <@U001>, see the deck\",\"blocks\":null,\"thread_ts\":null,\"ts\":\"1794605053.093766\",\"user\":\"bot\",\"unfurl_links\":\"false\",\"unfurl_media\":\"false\"},{\"channel\":\"C002\",\"ts\":\"1751500100.000200\",\"user\":\"U002\",\"text\":\"Metrics deck attached for Foo Corp\"},{\"channel\":\"C002\",\"ts\":\"1751500000.000100\",\"user\":\"U001\",\"text\":\"New deal: Acme wants a term sheet\",\"reactions\":[{\"name\":\"rocket\",\"users\":[\"bot\"],\"count\":1}]}],\"has_more\":false,\"response_metadata\":{\"next_cursor\":\"\"}}"
       },
       {
         "method": "POST",
@@ -6878,6 +7137,17 @@
       },
       {
         "method": "POST",
+        "path": "/users.info",
+        "authorization": "Bearer xoxb-harness",
+        "headers": {
+          "content-type": "application/x-www-form-urlencoded"
+        },
+        "body": "user=U001",
+        "status": 200,
+        "response": "{\"ok\":true,\"user\":{\"id\":\"U001\",\"name\":\"ada\",\"real_name\":\"Ada Okafor\",\"deleted\":false,\"profile\":{\"display_name\":\"ada\",\"real_name\":\"Ada Okafor\",\"email\":\"ada@example.com\"}}}"
+      },
+      {
+        "method": "POST",
         "path": "/conversations.replies",
         "authorization": "Bearer xoxb-harness",
         "headers": {
@@ -6885,7 +7155,7 @@
         },
         "body": "channel=C002&ts=1751500000.000100&limit=200",
         "status": 200,
-        "response": "{\"ok\":true,\"messages\":[{\"channel\":\"C002\",\"ts\":\"1751500000.000100\",\"user\":\"U001\",\"text\":\"New deal: Acme wants a term sheet\",\"reactions\":[{\"name\":\"rocket\",\"users\":[\"bot\"],\"count\":1}]},{\"channel\":\"C002\",\"ts\":\"1751500200.000300\",\"user\":\"U002\",\"text\":\"Acme follow-up: revenue is 1.2M ARR\",\"thread_ts\":\"1751500000.000100\"},{\"channel\":\"C002\",\"text\":\"On it\",\"blocks\":null,\"thread_ts\":\"1751500000.000100\",\"ts\":\"1794407524.554409\",\"user\":\"bot\",\"unfurl_links\":\"false\",\"unfurl_media\":\"false\"},{\"channel\":\"C002\",\"text\":\"composite\",\"blocks\":null,\"thread_ts\":\"1751500000.000100\",\"ts\":\"1794407524.555934\",\"user\":\"bot\",\"unfurl_links\":\"false\",\"unfurl_media\":\"false\"}]}"
+        "response": "{\"ok\":true,\"messages\":[{\"channel\":\"C002\",\"ts\":\"1751500000.000100\",\"user\":\"U001\",\"text\":\"New deal: Acme wants a term sheet\",\"reactions\":[{\"name\":\"rocket\",\"users\":[\"bot\"],\"count\":1}]},{\"channel\":\"C002\",\"ts\":\"1751500200.000300\",\"user\":\"U002\",\"text\":\"Acme follow-up: revenue is 1.2M ARR\",\"thread_ts\":\"1751500000.000100\"},{\"channel\":\"C002\",\"text\":\"On it\",\"blocks\":null,\"thread_ts\":\"1751500000.000100\",\"ts\":\"1794605053.095566\",\"user\":\"bot\",\"unfurl_links\":\"false\",\"unfurl_media\":\"false\"},{\"channel\":\"C002\",\"text\":\"composite\",\"blocks\":null,\"thread_ts\":\"1751500000.000100\",\"ts\":\"1794605053.096589\",\"user\":\"bot\",\"unfurl_links\":\"false\",\"unfurl_media\":\"false\"}]}"
       },
       {
         "method": "POST",
@@ -6919,6 +7189,17 @@
         "body": "channel=C002",
         "status": 200,
         "response": "{\"ok\":true,\"channel\":{\"id\":\"C002\",\"name\":\"dealflow\",\"is_private\":false,\"is_member\":true,\"num_members\":5}}"
+      },
+      {
+        "method": "POST",
+        "path": "/users.info",
+        "authorization": "Bearer xoxb-harness",
+        "headers": {
+          "content-type": "application/x-www-form-urlencoded"
+        },
+        "body": "user=U002",
+        "status": 200,
+        "response": "{\"ok\":true,\"user\":{\"id\":\"U002\",\"name\":\"priya\",\"real_name\":\"Priya Ops\",\"deleted\":false,\"profile\":{\"display_name\":\"priya\",\"real_name\":\"Priya Ops\",\"email\":\"priya@example.com\"}}}"
       },
       {
         "method": "POST",
@@ -6955,17 +7236,6 @@
       },
       {
         "method": "POST",
-        "path": "/users.info",
-        "authorization": "Bearer xoxb-harness",
-        "headers": {
-          "content-type": "application/x-www-form-urlencoded"
-        },
-        "body": "user=U001",
-        "status": 200,
-        "response": "{\"ok\":true,\"user\":{\"id\":\"U001\",\"name\":\"ada\",\"real_name\":\"Ada Okafor\",\"deleted\":false,\"profile\":{\"display_name\":\"ada\",\"real_name\":\"Ada Okafor\",\"email\":\"ada@example.com\"}}}"
-      },
-      {
-        "method": "POST",
         "path": "/users.list",
         "authorization": "Bearer xoxb-harness",
         "headers": {
@@ -6984,7 +7254,7 @@
         },
         "body": "channel=C002&text=Hi%20%3C%40U001%3E%2C%20see%20the%20deck&unfurl_links=false&unfurl_media=false",
         "status": 200,
-        "response": "{\"ok\":true,\"ts\":\"1794407524.596708\"}"
+        "response": "{\"ok\":true,\"ts\":\"1794605053.136204\"}"
       },
       {
         "method": "POST",
@@ -6995,7 +7265,7 @@
         },
         "body": "channel=C002&thread_ts=1751500000.000100&text=On%20it&unfurl_links=false&unfurl_media=false",
         "status": 200,
-        "response": "{\"ok\":true,\"ts\":\"1794407524.597260\"}"
+        "response": "{\"ok\":true,\"ts\":\"1794605053.137865\"}"
       },
       {
         "method": "POST",
@@ -7006,7 +7276,7 @@
         },
         "body": "channel=C002&thread_ts=1751500000.000100&text=composite&unfurl_links=false&unfurl_media=false",
         "status": 200,
-        "response": "{\"ok\":true,\"ts\":\"1794407524.599098\"}"
+        "response": "{\"ok\":true,\"ts\":\"1794605053.139545\"}"
       },
       {
         "method": "POST",
@@ -7017,7 +7287,7 @@
         },
         "body": "channel=C002&text=fallback&blocks=%5B%7B%22type%22%3A%22section%22%2C%22text%22%3A%7B%22type%22%3A%22mrkdwn%22%2C%22text%22%3A%22*hi*%22%7D%7D%5D&unfurl_links=false&unfurl_media=false",
         "status": 200,
-        "response": "{\"ok\":true,\"ts\":\"1794407524.600468\"}"
+        "response": "{\"ok\":true,\"ts\":\"1794605053.140154\"}"
       },
       {
         "method": "POST",
@@ -7218,6 +7488,26 @@
               "writable": false,
               "required": false,
               "description": "Whether the message @-mentions the connected app: `listen to chat-[:Channels]->-[m:Messages WHERE m.`Mentions App` == true]->` runs when somebody asks it something."
+            },
+            {
+              "fieldId": "user_email",
+              "displayName": "User Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address Slack holds for the member who sent the message, lower case; null for a member with none and for a bot. A claim Slack vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
+              "fieldId": "sent_by_this_app",
+              "displayName": "Sent By This App",
+              "kind": "boolean",
+              "writable": false,
+              "required": false,
+              "description": "Whether this app itself sent the message. A listen that should not hear the app's own posts filters on NOT Sent By This App. False when Slack does not say who the app is."
             }
           ],
           "references": [
@@ -7405,6 +7695,18 @@
               "writable": false,
               "required": false,
               "description": "When the press was made."
+            },
+            {
+              "fieldId": "pressed_by_email",
+              "displayName": "Pressed By Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address Slack holds for the member who pressed, lower case; null for a member with none. A claim Slack vouches for: a plugin function such as a team check accepts it where it refuses plain text."
             }
           ],
           "references": [
@@ -7496,6 +7798,26 @@
               "writable": false,
               "required": false,
               "description": "The U… id of the user who added the reaction (read-only — walk the `Reactor` edge for the User node)."
+            },
+            {
+              "fieldId": "user_email",
+              "displayName": "User Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address Slack holds for the member who sent the reaction, lower case; null for a member with none and for a bot. A claim Slack vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
+              "fieldId": "sent_by_this_app",
+              "displayName": "Sent By This App",
+              "kind": "boolean",
+              "writable": false,
+              "required": false,
+              "description": "Whether this app itself sent the reaction. A listen that should not hear the app's own posts filters on NOT Sent By This App. False when Slack does not say who the app is."
             }
           ],
           "references": [
@@ -7757,6 +8079,26 @@
               "writable": false,
               "required": false,
               "description": "Whether the message @-mentions the connected app: `listen to chat-[:Channels]->-[m:Messages WHERE m.`Mentions App` == true]->` runs when somebody asks it something."
+            },
+            {
+              "fieldId": "user_email",
+              "displayName": "User Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address Slack holds for the member who sent the message, lower case; null for a member with none and for a bot. A claim Slack vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
+              "fieldId": "sent_by_this_app",
+              "displayName": "Sent By This App",
+              "kind": "boolean",
+              "writable": false,
+              "required": false,
+              "description": "Whether this app itself sent the message. A listen that should not hear the app's own posts filters on NOT Sent By This App. False when Slack does not say who the app is."
             }
           ],
           "references": [
@@ -7900,6 +8242,26 @@
               "writable": false,
               "required": false,
               "description": "The U… id of the user who added the reaction (read-only — walk the `Reactor` edge for the User node)."
+            },
+            {
+              "fieldId": "user_email",
+              "displayName": "User Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address Slack holds for the member who sent the reaction, lower case; null for a member with none and for a bot. A claim Slack vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
+              "fieldId": "sent_by_this_app",
+              "displayName": "Sent By This App",
+              "kind": "boolean",
+              "writable": false,
+              "required": false,
+              "description": "Whether this app itself sent the reaction. A listen that should not hear the app's own posts filters on NOT Sent By This App. False when Slack does not say who the app is."
             }
           ],
           "references": [
@@ -8103,6 +8465,26 @@
               "writable": false,
               "required": false,
               "description": "Whether the message @-mentions the connected app: `listen to chat-[:Channels]->-[m:Messages WHERE m.`Mentions App` == true]->` runs when somebody asks it something."
+            },
+            {
+              "fieldId": "user_email",
+              "displayName": "User Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address Slack holds for the member who sent the message, lower case; null for a member with none and for a bot. A claim Slack vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
+              "fieldId": "sent_by_this_app",
+              "displayName": "Sent By This App",
+              "kind": "boolean",
+              "writable": false,
+              "required": false,
+              "description": "Whether this app itself sent the message. A listen that should not hear the app's own posts filters on NOT Sent By This App. False when Slack does not say who the app is."
             }
           ],
           "references": [
@@ -8411,10 +8793,13 @@
                   "Timestamp": "2025-07-04T03:33:20.000Z",
                   "timestamp": "2025-07-04T03:33:20.000Z",
                   "Topic": null,
-                  "Mentions App": null
+                  "Mentions App": null,
+                  "User Email": null,
+                  "Sent By This App": false
                 },
                 "unknown": [
-                  "Mentions App"
+                  "Mentions App",
+                  "User Email"
                 ]
               },
               "parents": [
@@ -8432,13 +8817,6 @@
                   ]
                 }
               ],
-              "actor": {
-                "identifier": "U001",
-                "scheme": "opaque",
-                "adapterType": "slack",
-                "label": "U001",
-                "proven": true
-              },
               "occurredAt": "2025-07-04T03:33:20.000Z"
             }
           ]
@@ -8469,8 +8847,13 @@
                   "Timestamp": "2025-07-04T03:35:00.000Z",
                   "timestamp": "2025-07-04T03:35:00.000Z",
                   "Topic": null,
-                  "Mentions App": true
-                }
+                  "Mentions App": true,
+                  "User Email": null,
+                  "Sent By This App": false
+                },
+                "unknown": [
+                  "User Email"
+                ]
               },
               "parents": [
                 {
@@ -8487,13 +8870,6 @@
                   ]
                 }
               ],
-              "actor": {
-                "identifier": "U002",
-                "scheme": "opaque",
-                "adapterType": "slack",
-                "label": "U002",
-                "proven": true
-              },
               "occurredAt": "2025-07-04T03:35:00.000Z"
             }
           ]
@@ -8525,10 +8901,13 @@
                   "Timestamp": "2025-07-04T03:36:40.000Z",
                   "timestamp": "2025-07-04T03:36:40.000Z",
                   "Topic": null,
-                  "Mentions App": null
+                  "Mentions App": null,
+                  "User Email": null,
+                  "Sent By This App": false
                 },
                 "unknown": [
-                  "Mentions App"
+                  "Mentions App",
+                  "User Email"
                 ]
               },
               "parents": [
@@ -8546,13 +8925,6 @@
                   ]
                 }
               ],
-              "actor": {
-                "identifier": "U002",
-                "scheme": "opaque",
-                "adapterType": "slack",
-                "label": "U002",
-                "proven": true
-              },
               "occurredAt": "2025-07-04T03:36:40.000Z"
             }
           ]
@@ -8582,8 +8954,13 @@
                   },
                   "Emoji": "rocket",
                   "Channel": "C002",
-                  "Reactor": "U001"
-                }
+                  "Reactor": "U001",
+                  "User Email": null,
+                  "Sent By This App": false
+                },
+                "unknown": [
+                  "User Email"
+                ]
               },
               "parents": [
                 {
@@ -8603,13 +8980,6 @@
               "about": {
                 "recordType": "Message",
                 "externalId": "C002:1751500000.000100"
-              },
-              "actor": {
-                "identifier": "U001",
-                "scheme": "opaque",
-                "adapterType": "slack",
-                "label": "U001",
-                "proven": true
               },
               "occurredAt": "2025-07-04T03:38:20.000Z"
             }
@@ -8758,6 +9128,26 @@
               "writable": false,
               "required": false,
               "description": "Whether the message @-mentions the connected app: `listen to chat-[:Channels]->-[m:Messages WHERE m.`Mentions App` == true]->` runs when somebody asks it something."
+            },
+            {
+              "fieldId": "user_email",
+              "displayName": "User Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address Slack holds for the member who sent the message, lower case; null for a member with none and for a bot. A claim Slack vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
+              "fieldId": "sent_by_this_app",
+              "displayName": "Sent By This App",
+              "kind": "boolean",
+              "writable": false,
+              "required": false,
+              "description": "Whether this app itself sent the message. A listen that should not hear the app's own posts filters on NOT Sent By This App. False when Slack does not say who the app is."
             }
           ],
           "references": [
@@ -8910,6 +9300,14 @@
       {
         "step": "Delivered message.Mentions App",
         "answer": null
+      },
+      {
+        "step": "Delivered message.User Email",
+        "answer": null
+      },
+      {
+        "step": "Delivered message.Sent By This App",
+        "answer": false
       },
       {
         "step": "Delivered message -[Files]->",
@@ -9196,6 +9594,26 @@
               "writable": false,
               "required": false,
               "description": "The U… id of the user who added the reaction (read-only — walk the `Reactor` edge for the User node)."
+            },
+            {
+              "fieldId": "user_email",
+              "displayName": "User Email",
+              "kind": "string",
+              "brands": [
+                "claim:email/address"
+              ],
+              "mayBeAbsent": true,
+              "writable": false,
+              "required": false,
+              "description": "The address Slack holds for the member who sent the reaction, lower case; null for a member with none and for a bot. A claim Slack vouches for: a plugin function such as a team check accepts it where it refuses plain text."
+            },
+            {
+              "fieldId": "sent_by_this_app",
+              "displayName": "Sent By This App",
+              "kind": "boolean",
+              "writable": false,
+              "required": false,
+              "description": "Whether this app itself sent the reaction. A listen that should not hear the app's own posts filters on NOT Sent By This App. False when Slack does not say who the app is."
             }
           ],
           "references": [
@@ -9236,6 +9654,14 @@
         "answer": "U001"
       },
       {
+        "step": "Reaction.User Email",
+        "answer": null
+      },
+      {
+        "step": "Reaction.Sent By This App",
+        "answer": false
+      },
+      {
         "step": "Reaction -[Message]->",
         "answer": []
       },
@@ -9248,42 +9674,6 @@
         "answer": {
           "error": "SlackAdapter.getRelated(author): no usable Slack credential for team team-parity (credentialsId=unset). Connect Slack."
         }
-      },
-      {
-        "step": "getActorCandidates message",
-        "answer": {
-          "error": "slack: who acted could not be looked up, the connection has no usable Slack client"
-        }
-      },
-      {
-        "step": "extractActor message",
-        "answer": {
-          "identifier": "U001",
-          "scheme": "opaque",
-          "adapterType": "slack",
-          "label": "U001",
-          "proven": true
-        }
-      },
-      {
-        "step": "getActorCandidates reaction",
-        "answer": {
-          "error": "slack: who acted could not be looked up, the connection has no usable Slack client"
-        }
-      },
-      {
-        "step": "extractActor reaction",
-        "answer": {
-          "identifier": "U001",
-          "scheme": "opaque",
-          "adapterType": "slack",
-          "label": "U001",
-          "proven": true
-        }
-      },
-      {
-        "step": "getActorCandidates no user",
-        "answer": []
       },
       {
         "step": "invokeFieldFunction SLACK_MESSAGE",
