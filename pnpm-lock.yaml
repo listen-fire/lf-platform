@@ -4,6 +4,27 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+catalogs:
+  default:
+    '@listen-fire/engine':
+      specifier: 0.16.0
+      version: 0.16.0
+    '@listen-fire/engine-contracts':
+      specifier: 0.16.0
+      version: 0.16.0
+    '@listen-fire/movement-lang':
+      specifier: 0.16.0
+      version: 0.16.0
+    engine-contracts:
+      specifier: npm:@listen-fire/engine-contracts@0.16.0
+      version: 0.16.0
+    movement-engine:
+      specifier: npm:@listen-fire/engine@0.16.0
+      version: 0.16.0
+    movement-lang:
+      specifier: npm:@listen-fire/movement-lang@0.16.0
+      version: 0.16.0
+
 overrides:
   '@pinecone-database/pinecone>@sinclair/typebox': 0.32.30
   '@grpc/grpc-js@>=1.14.0 <1.14.5': 1.14.6
@@ -54,20 +75,6 @@ overrides:
   undici@>=6.0.0 <6.28.1: 6.29.1
   ws@>=8.0.0 <8.21.0: 8.22.0
   zod@>=4.0.0 <4.6.6: 4.6.7
-  movement-engine: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-  engine-contracts: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-  movement-lang: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
-  '@listen-fire/engine@0.16.0>@listen-fire/engine-contracts': file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-  '@listen-fire/engine@0.16.0>@listen-fire/movement-lang': file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
-  '@listen-fire/engine-contracts@0.16.0>@listen-fire/movement-lang': file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
-  '@listen-fire/attio@0.14.0>@listen-fire/module-kit': file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz
-  '@listen-fire/email@0.14.0>@listen-fire/module-kit': file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz
-  '@listen-fire/evertrace@0.14.0>@listen-fire/module-kit': file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz
-  '@listen-fire/granola@0.14.0>@listen-fire/module-kit': file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz
-  '@listen-fire/slack@0.14.0>@listen-fire/module-kit': file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz
-  '@listen-fire/telegram@0.14.0>@listen-fire/module-kit': file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz
-  '@listen-fire/web@0.13.0>@listen-fire/module-kit': file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz
-  '@listen-fire/whatsapp@0.14.0>@listen-fire/module-kit': file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz
 
 importers:
 
@@ -182,55 +189,55 @@ importers:
         version: link:../../modules/team
       '@listen-fire/affinity':
         specifier: 0.14.2
-        version: 0.14.2(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+        version: 0.14.2(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
       '@listen-fire/airtable':
         specifier: 0.14.0
-        version: 0.14.0(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+        version: 0.14.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
       '@listen-fire/anthropic':
         specifier: 0.12.7
-        version: 0.12.7(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)
+        version: 0.12.7(@listen-fire/engine@0.16.0)
       '@listen-fire/ask':
         specifier: workspace:*
         version: link:../../modules/ask
       '@listen-fire/attio':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-attio-0.14.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-attio-0.14.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+        specifier: 0.14.0
+        version: 0.14.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
       '@listen-fire/dealroom':
         specifier: 0.13.2
-        version: 0.13.2(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+        version: 0.13.2(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
       '@listen-fire/dropbox':
         specifier: 0.12.8
-        version: 0.12.8(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+        version: 0.12.8(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
       '@listen-fire/email':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-email-0.14.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-email-0.14.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+        specifier: 0.14.0
+        version: 0.14.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
       '@listen-fire/engine':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
+        specifier: 'catalog:'
+        version: 0.16.0
       '@listen-fire/engine-contracts':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
+        specifier: 'catalog:'
+        version: 0.16.0
       '@listen-fire/evertrace':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-evertrace-0.14.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-evertrace-0.14.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+        specifier: 0.14.0
+        version: 0.14.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
       '@listen-fire/gmail':
         specifier: 0.13.3
-        version: 0.13.3(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+        version: 0.13.3(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
       '@listen-fire/google-drive':
         specifier: 0.12.10
-        version: 0.12.10(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+        version: 0.12.10(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
       '@listen-fire/google-sheets':
         specifier: 0.13.0
-        version: 0.13.0(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+        version: 0.13.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
       '@listen-fire/granola':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-granola-0.14.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-granola-0.14.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+        specifier: 0.14.0
+        version: 0.14.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
       '@listen-fire/handbook':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-handbook-0.16.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-handbook-0.16.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)
+        specifier: 0.16.0
+        version: 0.16.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)
       '@listen-fire/judge-llm':
         specifier: 0.12.9
-        version: 0.12.9(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+        version: 0.12.9(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
       '@listen-fire/kg':
         specifier: workspace:*
         version: link:../../modules/kg
@@ -242,37 +249,37 @@ importers:
         version: link:../../packages/language-versions
       '@listen-fire/mcp':
         specifier: 0.12.14
-        version: 0.12.14(@cfworker/json-schema@4.1.1)(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)(zod@4.6.7)
+        version: 0.12.14(@cfworker/json-schema@4.1.1)(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)(zod@4.6.7)
       '@listen-fire/movement-lang':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
+        specifier: 'catalog:'
+        version: 0.16.0
       '@listen-fire/native-valuations':
         specifier: workspace:*
         version: link:../../modules/native-valuations
       '@listen-fire/pdf':
         specifier: 0.12.8
-        version: 0.12.8(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+        version: 0.12.8(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
       '@listen-fire/postgres-limiter':
         specifier: 0.12.7
-        version: 0.12.7(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)
+        version: 0.12.7(@listen-fire/engine@0.16.0)
       '@listen-fire/slack':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-slack-0.14.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-slack-0.14.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+        specifier: 0.14.0
+        version: 0.14.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
       '@listen-fire/system':
         specifier: workspace:*
         version: link:../../modules/system
       '@listen-fire/telegram':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-telegram-0.14.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-telegram-0.14.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+        specifier: 0.14.0
+        version: 0.14.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
       '@listen-fire/wake-cloud-tasks':
         specifier: 0.12.7
-        version: 0.12.7(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)
+        version: 0.12.7(@listen-fire/engine-contracts@0.16.0)
       '@listen-fire/web':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-web-0.13.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-web-0.13.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+        specifier: 0.13.0
+        version: 0.13.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
       '@listen-fire/whatsapp':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-whatsapp-0.14.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-whatsapp-0.14.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+        specifier: 0.14.0
+        version: 0.14.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
       '@modelcontextprotocol/sdk':
         specifier: ^1.32.1
         version: 1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7)
@@ -427,8 +434,8 @@ importers:
         specifier: workspace:@listen-fire/embedding-providers@*
         version: link:../../packages/embedding-providers
       engine-contracts:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-        version: '@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz'
+        specifier: 'catalog:'
+        version: '@listen-fire/engine-contracts@0.16.0'
       exceljs:
         specifier: ^4.4.0
         version: 4.4.0
@@ -515,19 +522,19 @@ importers:
         version: 4.0.3
       model-providers:
         specifier: npm:@listen-fire/model-providers@0.12.6
-        version: '@listen-fire/model-providers@0.12.6(@anthropic-ai/sdk@0.126.0(zod@4.6.7))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.6.7))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7)))(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.6.7))'
+        version: '@listen-fire/model-providers@0.12.6(@anthropic-ai/sdk@0.126.0(zod@4.6.7))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.6.7))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7)))(@listen-fire/engine@0.16.0)(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.6.7))'
       module-kit:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz
-        version: '@listen-fire/module-kit@file:../lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)'
+        specifier: npm:@listen-fire/module-kit@0.15.0
+        version: '@listen-fire/module-kit@0.15.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)'
       module-runtime:
         specifier: npm:@listen-fire/module-runtime@0.12.8
-        version: '@listen-fire/module-runtime@0.12.8(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)'
+        version: '@listen-fire/module-runtime@0.12.8(@listen-fire/engine-contracts@0.16.0)'
       movement-engine:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-        version: '@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz'
+        specifier: 'catalog:'
+        version: '@listen-fire/engine@0.16.0'
       movement-lang:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
-        version: '@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz'
+        specifier: 'catalog:'
+        version: '@listen-fire/movement-lang@0.16.0'
       mustache:
         specifier: 4.2.0
         version: 4.2.0
@@ -639,10 +646,10 @@ importers:
     optionalDependencies:
       files-s3:
         specifier: npm:@listen-fire/files-s3@0.12.8
-        version: '@listen-fire/files-s3@0.12.8(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)'
+        version: '@listen-fire/files-s3@0.12.8(@listen-fire/engine-contracts@0.16.0)'
       ocr-google:
         specifier: npm:@listen-fire/ocr-google@0.12.6
-        version: '@listen-fire/ocr-google@0.12.6(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(encoding@0.1.13)'
+        version: '@listen-fire/ocr-google@0.12.6(@listen-fire/engine@0.16.0)(encoding@0.1.13)'
     devDependencies:
       '@babel/core':
         specifier: 7.24.5
@@ -661,7 +668,7 @@ importers:
         version: 9.2.0
       '@listen-fire/fake-channels':
         specifier: 0.13.2
-        version: 0.13.2(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)
+        version: 0.13.2(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)
       '@swc-node/register':
         specifier: 1.9.1
         version: 1.9.1(@swc/core@1.3.101(@swc/helpers@0.5.15))(@swc/types@0.1.12)(typescript@5.5.4)
@@ -801,8 +808,8 @@ importers:
         specifier: ^0.574.0
         version: 0.574.0(react@18.3.1)
       movement-lang:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
-        version: '@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz'
+        specifier: 'catalog:'
+        version: '@listen-fire/movement-lang@0.16.0'
       next:
         specifier: 15.5.28
         version: 15.5.28(@babel/core@7.24.5)(@opentelemetry/api@1.9.0)(@types/node@20.12.12)(babel-plugin-macros@3.1.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(sass@1.77.1)
@@ -892,17 +899,17 @@ importers:
   modules/ask:
     dependencies:
       '@listen-fire/engine':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
+        specifier: 'catalog:'
+        version: 0.16.0
       '@listen-fire/engine-contracts':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
+        specifier: 'catalog:'
+        version: 0.16.0
       '@listen-fire/module-kit':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+        specifier: 0.15.0
+        version: 0.15.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
       '@listen-fire/movement-lang':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
+        specifier: 'catalog:'
+        version: 0.16.0
       zod:
         specifier: 4.6.7
         version: 4.6.7
@@ -914,14 +921,14 @@ importers:
         specifier: 20.16.5
         version: 20.16.5
       engine-contracts:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-        version: '@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz'
+        specifier: 'catalog:'
+        version: '@listen-fire/engine-contracts@0.16.0'
       module-kit:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz
-        version: '@listen-fire/module-kit@file:../lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)'
+        specifier: npm:@listen-fire/module-kit@0.15.0
+        version: '@listen-fire/module-kit@0.15.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)'
       movement-engine:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-        version: '@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz'
+        specifier: 'catalog:'
+        version: '@listen-fire/engine@0.16.0'
       typescript:
         specifier: 5.5.4
         version: 5.5.4
@@ -929,17 +936,17 @@ importers:
   modules/kg:
     dependencies:
       '@listen-fire/engine':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
+        specifier: 'catalog:'
+        version: 0.16.0
       '@listen-fire/engine-contracts':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
+        specifier: 'catalog:'
+        version: 0.16.0
       '@listen-fire/module-kit':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+        specifier: 0.15.0
+        version: 0.15.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
       '@listen-fire/movement-lang':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
+        specifier: 'catalog:'
+        version: 0.16.0
       zod:
         specifier: 4.6.7
         version: 4.6.7
@@ -951,17 +958,17 @@ importers:
         specifier: 20.16.5
         version: 20.16.5
       engine-contracts:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-        version: '@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz'
+        specifier: 'catalog:'
+        version: '@listen-fire/engine-contracts@0.16.0'
       module-kit:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz
-        version: '@listen-fire/module-kit@file:../lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)'
+        specifier: npm:@listen-fire/module-kit@0.15.0
+        version: '@listen-fire/module-kit@0.15.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)'
       movement-engine:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-        version: '@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz'
+        specifier: 'catalog:'
+        version: '@listen-fire/engine@0.16.0'
       movement-lang:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
-        version: '@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz'
+        specifier: 'catalog:'
+        version: '@listen-fire/movement-lang@0.16.0'
       typescript:
         specifier: 5.5.4
         version: 5.5.4
@@ -969,17 +976,17 @@ importers:
   modules/native-valuations:
     dependencies:
       '@listen-fire/engine':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
+        specifier: 'catalog:'
+        version: 0.16.0
       '@listen-fire/engine-contracts':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
+        specifier: 'catalog:'
+        version: 0.16.0
       '@listen-fire/module-kit':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+        specifier: 0.15.0
+        version: 0.15.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
       '@listen-fire/movement-lang':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
+        specifier: 'catalog:'
+        version: 0.16.0
       zod:
         specifier: 4.6.7
         version: 4.6.7
@@ -991,17 +998,17 @@ importers:
         specifier: 20.16.5
         version: 20.16.5
       engine-contracts:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-        version: '@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz'
+        specifier: 'catalog:'
+        version: '@listen-fire/engine-contracts@0.16.0'
       module-kit:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz
-        version: '@listen-fire/module-kit@file:../lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)'
+        specifier: npm:@listen-fire/module-kit@0.15.0
+        version: '@listen-fire/module-kit@0.15.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)'
       movement-engine:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-        version: '@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz'
+        specifier: 'catalog:'
+        version: '@listen-fire/engine@0.16.0'
       movement-lang:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
-        version: '@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz'
+        specifier: 'catalog:'
+        version: '@listen-fire/movement-lang@0.16.0'
       typescript:
         specifier: 5.5.4
         version: 5.5.4
@@ -1009,17 +1016,17 @@ importers:
   modules/system:
     dependencies:
       '@listen-fire/engine':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
+        specifier: 'catalog:'
+        version: 0.16.0
       '@listen-fire/engine-contracts':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
+        specifier: 'catalog:'
+        version: 0.16.0
       '@listen-fire/module-kit':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+        specifier: 0.15.0
+        version: 0.15.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
       '@listen-fire/movement-lang':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
+        specifier: 'catalog:'
+        version: 0.16.0
     devDependencies:
       '@types/jest':
         specifier: 29.5.14
@@ -1028,11 +1035,11 @@ importers:
         specifier: 20.16.5
         version: 20.16.5
       module-kit:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz
-        version: '@listen-fire/module-kit@file:../lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)'
+        specifier: npm:@listen-fire/module-kit@0.15.0
+        version: '@listen-fire/module-kit@0.15.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)'
       movement-engine:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-        version: '@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz'
+        specifier: 'catalog:'
+        version: '@listen-fire/engine@0.16.0'
       typescript:
         specifier: 5.5.4
         version: 5.5.4
@@ -1040,17 +1047,17 @@ importers:
   modules/team:
     dependencies:
       '@listen-fire/engine':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
+        specifier: 'catalog:'
+        version: 0.16.0
       '@listen-fire/engine-contracts':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
+        specifier: 'catalog:'
+        version: 0.16.0
       '@listen-fire/module-kit':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+        specifier: 0.15.0
+        version: 0.15.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
       '@listen-fire/movement-lang':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
+        specifier: 'catalog:'
+        version: 0.16.0
     devDependencies:
       '@types/jest':
         specifier: 29.5.14
@@ -1059,11 +1066,11 @@ importers:
         specifier: 20.16.5
         version: 20.16.5
       module-kit:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz
-        version: '@listen-fire/module-kit@file:../lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)'
+        specifier: npm:@listen-fire/module-kit@0.15.0
+        version: '@listen-fire/module-kit@0.15.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)'
       movement-engine:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-        version: '@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz'
+        specifier: 'catalog:'
+        version: '@listen-fire/engine@0.16.0'
       typescript:
         specifier: 5.5.4
         version: 5.5.4
@@ -1071,11 +1078,11 @@ importers:
   packages/embedding-providers:
     dependencies:
       '@listen-fire/engine':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
+        specifier: 'catalog:'
+        version: 0.16.0
       '@listen-fire/model-providers':
         specifier: 0.12.6
-        version: 0.12.6(@anthropic-ai/sdk@0.126.0(zod@4.6.7))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.6.7))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7)))(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.6.7))
+        version: 0.12.6(@anthropic-ai/sdk@0.126.0(zod@4.6.7))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.6.7))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7)))(@listen-fire/engine@0.16.0)(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.6.7))
       zod:
         specifier: 4.6.7
         version: 4.6.7
@@ -1091,10 +1098,10 @@ importers:
         version: 20.16.5
       model-providers:
         specifier: npm:@listen-fire/model-providers@0.12.6
-        version: '@listen-fire/model-providers@0.12.6(@anthropic-ai/sdk@0.126.0(zod@4.6.7))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.6.7))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7)))(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.6.7))'
+        version: '@listen-fire/model-providers@0.12.6(@anthropic-ai/sdk@0.126.0(zod@4.6.7))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.6.7))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7)))(@listen-fire/engine@0.16.0)(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.6.7))'
       movement-engine:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-        version: '@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz'
+        specifier: 'catalog:'
+        version: '@listen-fire/engine@0.16.0'
       openai:
         specifier: 5.22.0
         version: 5.22.0(ws@8.22.0)(zod@4.6.7)
@@ -1105,11 +1112,11 @@ importers:
   packages/image-providers:
     dependencies:
       '@listen-fire/engine':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
+        specifier: 'catalog:'
+        version: 0.16.0
       '@listen-fire/model-providers':
         specifier: 0.12.6
-        version: 0.12.6(@anthropic-ai/sdk@0.126.0(zod@4.6.7))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.6.7))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7)))(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.6.7))
+        version: 0.12.6(@anthropic-ai/sdk@0.126.0(zod@4.6.7))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.6.7))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7)))(@listen-fire/engine@0.16.0)(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.6.7))
       zod:
         specifier: 4.6.7
         version: 4.6.7
@@ -1125,10 +1132,10 @@ importers:
         version: 20.16.5
       model-providers:
         specifier: npm:@listen-fire/model-providers@0.12.6
-        version: '@listen-fire/model-providers@0.12.6(@anthropic-ai/sdk@0.126.0(zod@4.6.7))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.6.7))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7)))(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.6.7))'
+        version: '@listen-fire/model-providers@0.12.6(@anthropic-ai/sdk@0.126.0(zod@4.6.7))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.6.7))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7)))(@listen-fire/engine@0.16.0)(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.6.7))'
       movement-engine:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-        version: '@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz'
+        specifier: 'catalog:'
+        version: '@listen-fire/engine@0.16.0'
       openai:
         specifier: 5.22.0
         version: 5.22.0(ws@8.22.0)(zod@4.6.7)
@@ -1245,11 +1252,11 @@ importers:
   packages/language-versions:
     dependencies:
       '@listen-fire/engine':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
+        specifier: 'catalog:'
+        version: 0.16.0
       '@listen-fire/engine-contracts':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
+        specifier: 'catalog:'
+        version: 0.16.0
       '@listen-fire/kg':
         specifier: workspace:*
         version: link:../../modules/kg
@@ -1257,11 +1264,11 @@ importers:
         specifier: workspace:*
         version: link:../lang-0.15
       '@listen-fire/movement-lang':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
+        specifier: 'catalog:'
+        version: 0.16.0
       '@listen-fire/slack':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-slack-0.14.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-slack-0.14.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+        specifier: 0.14.0
+        version: 0.14.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
       '@listen-fire/system':
         specifier: workspace:*
         version: link:../../modules/system
@@ -1269,18 +1276,18 @@ importers:
         specifier: workspace:@listen-fire/legacy-lang@*
         version: link:../legacy-lang
       module-kit:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz
-        version: '@listen-fire/module-kit@file:../lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)'
+        specifier: npm:@listen-fire/module-kit@0.15.0
+        version: '@listen-fire/module-kit@0.15.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)'
       movement-engine:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-        version: '@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz'
+        specifier: 'catalog:'
+        version: '@listen-fire/engine@0.16.0'
       movement-lang:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
-        version: '@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz'
+        specifier: 'catalog:'
+        version: '@listen-fire/movement-lang@0.16.0'
     devDependencies:
       '@listen-fire/affinity':
         specifier: 0.14.2
-        version: 0.14.2(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+        version: 0.14.2(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
       '@types/jest':
         specifier: 29.5.14
         version: 29.5.14
@@ -1300,8 +1307,8 @@ importers:
   packages/legacy-lang:
     dependencies:
       movement-lang:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
-        version: '@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz'
+        specifier: 'catalog:'
+        version: '@listen-fire/movement-lang@0.16.0'
       typescript:
         specifier: 5.5.4
         version: 5.5.4
@@ -1346,8 +1353,8 @@ importers:
         specifier: ^0.574.0
         version: 0.574.0(react@18.3.1)
       movement-lang:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
-        version: '@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz'
+        specifier: 'catalog:'
+        version: '@listen-fire/movement-lang@0.16.0'
       platform-constants:
         specifier: workspace:@listen-fire/platform-constants@*
         version: link:../platform-constants
@@ -1374,11 +1381,11 @@ importers:
   packages/transcription-providers:
     dependencies:
       '@listen-fire/engine':
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-        version: file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
+        specifier: 'catalog:'
+        version: 0.16.0
       '@listen-fire/model-providers':
         specifier: 0.12.6
-        version: 0.12.6(@anthropic-ai/sdk@0.126.0(zod@4.6.7))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.6.7))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7)))(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.6.7))
+        version: 0.12.6(@anthropic-ai/sdk@0.126.0(zod@4.6.7))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.6.7))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7)))(@listen-fire/engine@0.16.0)(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.6.7))
       zod:
         specifier: 4.6.7
         version: 4.6.7
@@ -1394,10 +1401,10 @@ importers:
         version: 20.16.5
       model-providers:
         specifier: npm:@listen-fire/model-providers@0.12.6
-        version: '@listen-fire/model-providers@0.12.6(@anthropic-ai/sdk@0.126.0(zod@4.6.7))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.6.7))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7)))(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.6.7))'
+        version: '@listen-fire/model-providers@0.12.6(@anthropic-ai/sdk@0.126.0(zod@4.6.7))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.6.7))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7)))(@listen-fire/engine@0.16.0)(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.6.7))'
       movement-engine:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-        version: '@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz'
+        specifier: 'catalog:'
+        version: '@listen-fire/engine@0.16.0'
       openai:
         specifier: 5.22.0
         version: 5.22.0(ws@8.22.0)(zod@4.6.7)
@@ -1414,8 +1421,8 @@ importers:
         specifier: 5.22.0
         version: 5.22.0(prisma@5.22.0)
       engine-contracts:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-        version: '@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz'
+        specifier: 'catalog:'
+        version: '@listen-fire/engine-contracts@0.16.0'
       kysely:
         specifier: 0.28.18
         version: 0.28.18
@@ -1423,11 +1430,11 @@ importers:
         specifier: workspace:@listen-fire/legacy-lang@*
         version: link:../legacy-lang
       movement-engine:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-        version: '@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz'
+        specifier: 'catalog:'
+        version: '@listen-fire/engine@0.16.0'
       movement-lang:
-        specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
-        version: '@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz'
+        specifier: 'catalog:'
+        version: '@listen-fire/movement-lang@0.16.0'
       story-view:
         specifier: workspace:*
         version: link:../story-view
@@ -3225,7 +3232,6 @@ packages:
 
   '@listen-fire/affinity@0.14.2':
     resolution: {integrity: sha512-Yfxn8GnZC9jvWG1LKuoZz7iVyZjastECGRMDbKdblynKevzFr9wA9yRQ5EIqv0de1rXDCawiELQtLxfOj0FLow==}
-    version: 0.14.2
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@listen-fire/engine': '>=0.13.0 <1.0.0'
@@ -3234,7 +3240,6 @@ packages:
 
   '@listen-fire/airtable@0.14.0':
     resolution: {integrity: sha512-BxGfgZ+ZJ9cSifkBXIcJDXaW9lQGsp8jk3TjMpTMnnHZQ8pOPujxiYYYxfHwgG8wUWcYGkB8eJ6KmmmlZCnyWA==}
-    version: 0.14.0
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@listen-fire/engine': '>=0.13.0 <1.0.0'
@@ -3243,7 +3248,6 @@ packages:
 
   '@listen-fire/anthropic@0.12.7':
     resolution: {integrity: sha512-aefGpfdPR5KLbNDrMPWdZn5Vj+h5vtiZZ/B6uxkHNHYXnAUP6eyS8bdqV2PDLLBrxBja1VAEkBoAx70y9KaVkw==}
-    version: 0.12.7
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@listen-fire/engine': '>=0.12.0 <1.0.0'
@@ -3256,9 +3260,8 @@ packages:
       '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
       '@listen-fire/movement-lang': '>=0.12.0 <1.0.0'
 
-  '@listen-fire/attio@file:../lf-dev-tarballs/0.16.0/listen-fire-attio-0.14.0.tgz':
-    resolution: {integrity: sha512-tzhhuc9ITGvXvgx8+ajJMyY9Co3tgxGS40adWsgCB9ckWCHybpqLf7s4/357YneUXmxaSzN5PresIPusmyZ9LQ==, tarball: file:../lf-dev-tarballs/0.16.0/listen-fire-attio-0.14.0.tgz}
-    version: 0.14.0
+  '@listen-fire/attio@0.14.0':
+    resolution: {integrity: sha512-nLWpXgm3sJisnhd3OUa9O62AbUP+mHf5yLpBwbruRg6/R6rfv+BV7ddm5BpG3kojkdGfKezBqDiFA4d2/ofulA==}
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@listen-fire/engine': '>=0.16.0 <1.0.0'
@@ -3267,7 +3270,6 @@ packages:
 
   '@listen-fire/dealroom@0.13.2':
     resolution: {integrity: sha512-FWPfzej8wcE+MHv7gakgfxPoIpyjKSQVhUi8ZLkel1YW8ntvd+xcH7PdzwL/hCK+lyYBZWU9r52cPSy405MtYw==}
-    version: 0.13.2
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@listen-fire/engine': '>=0.13.0 <1.0.0'
@@ -3276,7 +3278,6 @@ packages:
 
   '@listen-fire/dropbox@0.12.8':
     resolution: {integrity: sha512-09j+csq7XRez9ysAaxkx4fMJ/vY+kPL6KVI2yqS/rIWyB8Gv/ZcEZioAfuUjRvM2RVxQ3dEz1J7Ys8bkKLai3A==}
-    version: 0.12.8
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@listen-fire/engine': '>=0.12.0 <1.0.0'
@@ -3290,9 +3291,8 @@ packages:
       '@listen-fire/engine': '>=0.12.0 <1.0.0'
       '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
 
-  '@listen-fire/email@file:../lf-dev-tarballs/0.16.0/listen-fire-email-0.14.0.tgz':
-    resolution: {integrity: sha512-6HWew28kLEy/FWr7/J0/7li35mo0bnwovle1XNcTC4+m4RfcIqzwLspLaKhwVJdUSWf6qywDmMbwf54hTlj1CA==, tarball: file:../lf-dev-tarballs/0.16.0/listen-fire-email-0.14.0.tgz}
-    version: 0.14.0
+  '@listen-fire/email@0.14.0':
+    resolution: {integrity: sha512-7CGKk2nc1iXZCaD+jZk886dY6RJQQEY06VoB7rvsqBmqoEhEl7Oe62vq+yiHE3ig0tsf8wuTZDtrwwXNntNAxg==}
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@listen-fire/engine': '>=0.12.0 <1.0.0'
@@ -3302,18 +3302,16 @@ packages:
     resolution: {integrity: sha512-BnY0RYQkOJy4vG1Y1qZsSp4wR9f0Yn0C6j+sUwdJ6nFMpAS4bB3LmCUnSUTBzaGoBgFTs8Lfr0wxqe41eODy1w==}
     engines: {node: '>=22.23.4 <23'}
 
-  '@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz':
-    resolution: {integrity: sha512-AVyowIU3v61OeWci/9IGF/WVmhu9It/LLQ4b9QnJBRPmc88UtnUkvIbYxThCKtiQqmLeNEDtiLk++EAoUESt4A==, tarball: file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz}
-    version: 0.16.0
+  '@listen-fire/engine-contracts@0.16.0':
+    resolution: {integrity: sha512-/DqIVRu7I2XK3UemXoL4jddd2YEXnPbkYmEGXWuyjoC/LGacQ1/M3Ilkhp0xa8pJ1uawcD8NroNoM85E9WQI4Q==}
     engines: {node: '>=22.23.4 <23'}
 
   '@listen-fire/engine@0.15.3':
     resolution: {integrity: sha512-nFF5AEWi3ZlnZZhGVRf1jYc3sZFv7SNj/wwbaVwK/xO8JaLak4E5ZhVDfuEJ6lx7WQlp+ZsKvKo/AWeL8Bj+zQ==}
     engines: {node: '>=22.23.4 <23'}
 
-  '@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz':
-    resolution: {integrity: sha512-or7ubeIDKwc9KtdWc4S3DGhgPwkMAspYqgoC5OHKsgWHkMYp05ubhallhaUcu+Rm0abmqXeAIZYJZG2N+BCjMw==, tarball: file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz}
-    version: 0.16.0
+  '@listen-fire/engine@0.16.0':
+    resolution: {integrity: sha512-88EUJvufZSDI7h1wzqnug76tlxhXYPd5jSi2t3t3oeqAuyBtPofkRllrKpevmesWhQP+t3qoXTpK4wdsPM7V3Q==}
     engines: {node: '>=22.23.4 <23'}
 
   '@listen-fire/evertrace@0.13.2':
@@ -3324,9 +3322,8 @@ packages:
       '@listen-fire/engine-contracts': '>=0.13.0 <1.0.0'
       '@listen-fire/movement-lang': '>=0.13.0 <1.0.0'
 
-  '@listen-fire/evertrace@file:../lf-dev-tarballs/0.16.0/listen-fire-evertrace-0.14.0.tgz':
-    resolution: {integrity: sha512-VMrCNT9+T7K1Sa0wNSG8+Bv/DNuIphIrXrIVNmoZjRUOM5obfRzZWtQRnE/g72hXayNyJc6CypRMds2FHcI4Iw==, tarball: file:../lf-dev-tarballs/0.16.0/listen-fire-evertrace-0.14.0.tgz}
-    version: 0.14.0
+  '@listen-fire/evertrace@0.14.0':
+    resolution: {integrity: sha512-H8R5BMLwYCduid57Jfk/7tb99K0uXksyPKAP5bqPrWq/5819KBMlQCAkWJkENA/R0Nc10pxuYY7Cg6Gl9XNCoQ==}
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@listen-fire/engine': '>=0.13.0 <1.0.0'
@@ -3335,7 +3332,6 @@ packages:
 
   '@listen-fire/fake-channels@0.13.2':
     resolution: {integrity: sha512-rQ47KhuB802ll9MX/njunGCadKtiz1tb7vhKIwTxR6bcxMl7Gna+14QEqH9YI81PMxEpINiCKwjieqxiQnAhqg==}
-    version: 0.13.2
     engines: {node: '>=22.23.4 <23'}
     hasBin: true
     peerDependencies:
@@ -3347,12 +3343,10 @@ packages:
 
   '@listen-fire/files-s3@0.12.8':
     resolution: {integrity: sha512-V91p8MzaxOsnA+bGNrVRXoZ4rw/K4K/8eJOZmDyi6TSnjgozg7YCgYAhPjhKN4gm0g3Thafij6zIvcGl2S6Hsw==}
-    version: 0.12.8
     engines: {node: '>=22.23.4 <23'}
 
   '@listen-fire/gmail@0.13.3':
     resolution: {integrity: sha512-x7vnFuzYXDDRMg+X0Bw72nFpHTYwtxrHcyI6Ii+a5evBDwyI4MKGG9weJhE3Ev0k4wyySrd3tN2bFHhjPhPCgg==}
-    version: 0.13.3
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@listen-fire/engine': '>=0.13.0 <1.0.0'
@@ -3361,14 +3355,12 @@ packages:
 
   '@listen-fire/google-drive@0.12.10':
     resolution: {integrity: sha512-r6MVzgI2xOnKhAnlk9SGwxzKIQYt2R3NZ64wRWBEcE8tIiwIfFz5zh78mVs96tCrGL6YKpZoW2dO+LctoTfOcg==}
-    version: 0.12.10
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@listen-fire/engine': '>=0.12.0 <1.0.0'
 
   '@listen-fire/google-sheets@0.13.0':
     resolution: {integrity: sha512-MSkKx9n8cavI74rIur6Pgcyy+LBIwA2MSI2xdl4AYvzUHzh3ly4qE2qTJ9AKqAQZxQEuoKswE/ixAng3Xq1gwA==}
-    version: 0.13.0
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@listen-fire/engine': '>=0.12.0 <1.0.0'
@@ -3383,9 +3375,8 @@ packages:
       '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
       '@listen-fire/movement-lang': '>=0.12.0 <1.0.0'
 
-  '@listen-fire/granola@file:../lf-dev-tarballs/0.16.0/listen-fire-granola-0.14.0.tgz':
-    resolution: {integrity: sha512-beahIET8uQdlCxj70RWF7CCDoM1hDlbYrmYMMQhQcoYb4ggszx2+azGcxfSnVsMcS0oG//OjJvT1gLhQJxzsmA==, tarball: file:../lf-dev-tarballs/0.16.0/listen-fire-granola-0.14.0.tgz}
-    version: 0.14.0
+  '@listen-fire/granola@0.14.0':
+    resolution: {integrity: sha512-A970iYpJAlaUF+SNeKeNtamuAo3adOBcmXFj4BLpiKl/gOVJFDZ8WsBG5j5Cb9h9Zwba55sRjTYNWCIjKvV37w==}
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@listen-fire/engine': '>=0.16.0 <1.0.0'
@@ -3400,9 +3391,8 @@ packages:
       '@listen-fire/engine-contracts': '>=0.15.0 <1.0.0'
       '@listen-fire/movement-lang': '>=0.15.0 <1.0.0'
 
-  '@listen-fire/handbook@file:../lf-dev-tarballs/0.16.0/listen-fire-handbook-0.16.0.tgz':
-    resolution: {integrity: sha512-btFviTbOtkleiWnlfjaYpJDgFosbeKwsrxGCLRRhhKJRUcpxyhkUH5GVT9lSqAurfJ0BxrFkXvCzDYFxW0D60w==, tarball: file:../lf-dev-tarballs/0.16.0/listen-fire-handbook-0.16.0.tgz}
-    version: 0.16.0
+  '@listen-fire/handbook@0.16.0':
+    resolution: {integrity: sha512-Bp5WgmPmvG3pO71PYGvCvy+Ml76rPkJf385R6t6u21FJvohUkGOs3dFJDUwXPB58kTWwAUlc57MvPCthJGjPTw==}
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@listen-fire/engine': '>=0.16.0 <1.0.0'
@@ -3411,7 +3401,6 @@ packages:
 
   '@listen-fire/judge-llm@0.12.9':
     resolution: {integrity: sha512-U2Go92TgkHeNS/D3z9M7TMev9eke/NDds+GMu1RxrA+tH/uqI8RA1AF+9Pud/PiLnw9eHQBJxZpqIk7ifD4C8A==}
-    version: 0.12.9
     engines: {node: '>=22.23.4 <23'}
     hasBin: true
     peerDependencies:
@@ -3420,7 +3409,6 @@ packages:
 
   '@listen-fire/mcp@0.12.14':
     resolution: {integrity: sha512-yI2JiJd4qx7EkLNTCbOxxZMy4hIDzqvxA2vHBt5dDIcgrGtYSWI0tVk1EdffgFhN+6a3ITE3xjdc3AN1YRy3Mw==}
-    version: 0.12.14
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@listen-fire/engine': '>=0.13.1 <1.0.0'
@@ -3429,7 +3417,6 @@ packages:
 
   '@listen-fire/model-providers@0.12.6':
     resolution: {integrity: sha512-8xzjmzupok0adfVXwUgIPzaq5Gee4jCDAS22muvPhlhfbDQYoQZKweXyZh8SKyqLZVtY2117RYcI78fObdaqgQ==}
-    version: 0.12.6
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@anthropic-ai/sdk': ^0.126.0
@@ -3452,7 +3439,6 @@ packages:
 
   '@listen-fire/module-kit@0.14.1':
     resolution: {integrity: sha512-PoNO28IMTgTiBIQIx8dwOnIQP9zu53VlZMHoWZP/8jjOlL+x+27VJ2IqM1BOsnR3hpsKE+6Lr0rELS8TO7lE2w==}
-    version: 0.14.1
     engines: {node: '>=22.23.4 <23'}
     hasBin: true
     peerDependencies:
@@ -3463,9 +3449,8 @@ packages:
       tsx:
         optional: true
 
-  '@listen-fire/module-kit@file:../lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz':
-    resolution: {integrity: sha512-FXXf7iPPmVRzASgknBCwg47xEh6fLKAORPsbla22LaU5ytk/qZyG6H4HgsWg4+4zTbQlnFyjFXZ5lK4+coOeVg==, tarball: file:../lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz}
-    version: 0.15.0
+  '@listen-fire/module-kit@0.15.0':
+    resolution: {integrity: sha512-JayR2IVq5WLswzJ/GmYdnVAVuG80WEj4iWdaFQE4Pv7NLwr6wBFlfuE1VU0WZNUpz1EcUASLL3y0QaLgyofbpw==}
     engines: {node: '>=22.23.4 <23'}
     hasBin: true
     peerDependencies:
@@ -3478,7 +3463,6 @@ packages:
 
   '@listen-fire/module-runtime@0.12.8':
     resolution: {integrity: sha512-2ejmYvdTwgj4ySYTeI7hZ4fwyf5IPcY1BOwJCRPGZu7cp9tyaKEFbYIDb7PQZZ+KyEU8YO1difauzloHDbOewg==}
-    version: 0.12.8
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
@@ -3487,21 +3471,18 @@ packages:
     resolution: {integrity: sha512-o3e1iV6kz5rXNMbSGJWecUYKDCW0l2m6LhNqMZpg5Y/AIOCnuUKLpALBAleUz0NSh5QSVXEbW18NQsLpEo0CJA==}
     engines: {node: '>=22.23.4 <23'}
 
-  '@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz':
-    resolution: {integrity: sha512-sQ369cGiZ7eoqiGzJ0bwHML6jxTF26n4DZAIYjJ7XkNV+WsHLA6SIHRL89ciFzI2PXs026HRxttyrET5VI/YoA==, tarball: file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz}
-    version: 0.16.0
+  '@listen-fire/movement-lang@0.16.0':
+    resolution: {integrity: sha512-nzb6Y0DSlp/8QoWCQdku4IkZUz9N5PPFdEhsfmJa1HJDnAuA/sHSYV1ZHs80dowP4WmBAqseTj/xIf6MmhGLew==}
     engines: {node: '>=22.23.4 <23'}
 
   '@listen-fire/ocr-google@0.12.6':
     resolution: {integrity: sha512-liCKNNzQA44DXosn0dnrX8+yamqVmDehRm1lz1/e3CGaItmJWaCiP3IvngI6iVomCjLEl+BudhctA/Yj4GpGiA==}
-    version: 0.12.6
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@listen-fire/engine': '>=0.12.0 <1.0.0'
 
   '@listen-fire/pdf@0.12.8':
     resolution: {integrity: sha512-rjiLkrQWTxNVJQpUAWp3E4oJCYnEJvVMzb9gmD/rqWewHqK8alRwOpEnTOKNNozw75aWugu6d0j3s4VmvXb9dg==}
-    version: 0.12.8
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@listen-fire/engine': '>=0.12.0 <1.0.0'
@@ -3509,7 +3490,6 @@ packages:
 
   '@listen-fire/postgres-limiter@0.12.7':
     resolution: {integrity: sha512-QhzADCPvX+Q1O5ucADwn5lNxYBOO4dBD1ZB9KZXs/xfK4+7oGAM6JAKWg8AQb/NtQg/LEj5SkxEkZDGHjQZ2fQ==}
-    version: 0.12.7
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@listen-fire/engine': '>=0.12.0 <1.0.0'
@@ -3522,9 +3502,8 @@ packages:
       '@listen-fire/engine-contracts': '>=0.14.0 <1.0.0'
       '@listen-fire/movement-lang': '>=0.14.0 <1.0.0'
 
-  '@listen-fire/slack@file:../lf-dev-tarballs/0.16.0/listen-fire-slack-0.14.0.tgz':
-    resolution: {integrity: sha512-MKzmdHxzOUBxIeYMuNguZ8D/oqU1Lnr56kScxYRBzhm7BzaQL4ZHBbSy1kzHLCl/TZbYl560tVl3oPBY0evaQg==, tarball: file:../lf-dev-tarballs/0.16.0/listen-fire-slack-0.14.0.tgz}
-    version: 0.14.0
+  '@listen-fire/slack@0.14.0':
+    resolution: {integrity: sha512-6LFul3vhEamLyL4ep9/UAfPkO7Ox6lwMXJOSgOX3uQ7gOYO5fXnDq4yOSs6c0bSo952RNIsXYFxRIBY/8W4QDg==}
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@listen-fire/engine': '>=0.16.0 <1.0.0'
@@ -3539,9 +3518,8 @@ packages:
       '@listen-fire/engine-contracts': '>=0.13.1 <1.0.0'
       '@listen-fire/movement-lang': '>=0.13.1 <1.0.0'
 
-  '@listen-fire/telegram@file:../lf-dev-tarballs/0.16.0/listen-fire-telegram-0.14.0.tgz':
-    resolution: {integrity: sha512-wE5HXbvyP3xbn27zkzZTbKucNA3pj48zsMvS7lbp0CHg6cmLKrTAodOr9ZTkDKPqKGvoFIGgc/PXS0TTYhHGcQ==, tarball: file:../lf-dev-tarballs/0.16.0/listen-fire-telegram-0.14.0.tgz}
-    version: 0.14.0
+  '@listen-fire/telegram@0.14.0':
+    resolution: {integrity: sha512-R56GxdM5t2BcMEeKExUBo7S73g4IjTd4uA2Vv0AkHreHQZIivU4BnW2ftuAhlj4IM0HRe+B74dJmzBHjl0sJcQ==}
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@listen-fire/engine': '>=0.16.0 <1.0.0'
@@ -3550,7 +3528,6 @@ packages:
 
   '@listen-fire/wake-cloud-tasks@0.12.7':
     resolution: {integrity: sha512-Zx8zIfTgYLzka/fl7WiHewVWZzUKxjnSNDHD9p9XTxwHXTudCU1qNuAYlSEG9QuHCAHnPuqANHW0PjOIJ0GmEg==}
-    version: 0.12.7
     engines: {node: '>=22.23.4 <23'}
     hasBin: true
     peerDependencies:
@@ -3564,9 +3541,8 @@ packages:
       '@listen-fire/engine-contracts': '>=0.12.0 <1.0.0'
       '@listen-fire/movement-lang': '>=0.15.2 <1.0.0'
 
-  '@listen-fire/web@file:../lf-dev-tarballs/0.16.0/listen-fire-web-0.13.0.tgz':
-    resolution: {integrity: sha512-dsEMiLsxLZECuYm71XCjpqmQblia4tlw41iNPsp/ywArFhiWsuEOpp+mdJTaUTyQnifE0xT/B9yGjH8tbUUDwg==, tarball: file:../lf-dev-tarballs/0.16.0/listen-fire-web-0.13.0.tgz}
-    version: 0.13.0
+  '@listen-fire/web@0.13.0':
+    resolution: {integrity: sha512-6eK6YnP2C7uf9XLhCdNe7HO6hG4M3Q2tKHWBMxAQXBGMUuQKGAqISOD9yTNks8C4t7AyZav3PJXtBz/m5yZ98A==}
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@listen-fire/engine': '>=0.15.2 <1.0.0'
@@ -3581,9 +3557,8 @@ packages:
       '@listen-fire/engine-contracts': '>=0.13.1 <1.0.0'
       '@listen-fire/movement-lang': '>=0.13.1 <1.0.0'
 
-  '@listen-fire/whatsapp@file:../lf-dev-tarballs/0.16.0/listen-fire-whatsapp-0.14.0.tgz':
-    resolution: {integrity: sha512-JN+S9+MVWeEs2b1clmcymToovHKVXvjHJw8Bdg90JoM2zumukbf4OdmcfurXtMARMul44gOH3lYBbJZev1iyTA==, tarball: file:../lf-dev-tarballs/0.16.0/listen-fire-whatsapp-0.14.0.tgz}
-    version: 0.14.0
+  '@listen-fire/whatsapp@0.14.0':
+    resolution: {integrity: sha512-WlsADeprNE9B9YiqGFPSZC/q/JwymHcTKCvH4u6uGysBnEup8220DxesgXJCxlLty31gVIYHNItmjQ4SjsGbdQ==}
     engines: {node: '>=22.23.4 <23'}
     peerDependencies:
       '@listen-fire/engine': '>=0.16.0 <1.0.0'
@@ -13932,13 +13907,13 @@ snapshots:
     transitivePeerDependencies:
       - tsx
 
-  '@listen-fire/affinity@0.14.2(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)':
+  '@listen-fire/affinity@0.14.2(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)':
     dependencies:
-      '@listen-fire/anthropic': 0.12.7(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)
-      '@listen-fire/engine': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-      '@listen-fire/engine-contracts': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-      '@listen-fire/module-kit': 0.14.1(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
-      '@listen-fire/movement-lang': file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
+      '@listen-fire/anthropic': 0.12.7(@listen-fire/engine@0.16.0)
+      '@listen-fire/engine': 0.16.0
+      '@listen-fire/engine-contracts': 0.16.0
+      '@listen-fire/module-kit': 0.14.1(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
+      '@listen-fire/movement-lang': 0.16.0
       date-fns: 3.6.0
       exponential-backoff: 3.1.1
       lodash: 4.18.1
@@ -13958,12 +13933,12 @@ snapshots:
     transitivePeerDependencies:
       - tsx
 
-  '@listen-fire/airtable@0.14.0(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)':
+  '@listen-fire/airtable@0.14.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)':
     dependencies:
-      '@listen-fire/engine': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-      '@listen-fire/engine-contracts': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-      '@listen-fire/module-kit': 0.14.1(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
-      '@listen-fire/movement-lang': file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
+      '@listen-fire/engine': 0.16.0
+      '@listen-fire/engine-contracts': 0.16.0
+      '@listen-fire/module-kit': 0.14.1(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
+      '@listen-fire/movement-lang': 0.16.0
       lru-cache: 10.4.3
       zod: 4.6.7
     transitivePeerDependencies:
@@ -13977,10 +13952,10 @@ snapshots:
       jsonrepair: 3.8.0
       zod: 4.6.7
 
-  '@listen-fire/anthropic@0.12.7(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)':
+  '@listen-fire/anthropic@0.12.7(@listen-fire/engine@0.16.0)':
     dependencies:
       '@anthropic-ai/sdk': 0.126.0(zod@4.6.7)
-      '@listen-fire/engine': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
+      '@listen-fire/engine': 0.16.0
       exponential-backoff: 3.1.1
       jsonrepair: 3.8.0
       zod: 4.6.7
@@ -13997,12 +13972,12 @@ snapshots:
     transitivePeerDependencies:
       - tsx
 
-  '@listen-fire/attio@file:../lf-dev-tarballs/0.16.0/listen-fire-attio-0.14.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)':
+  '@listen-fire/attio@0.14.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)':
     dependencies:
-      '@listen-fire/engine': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-      '@listen-fire/engine-contracts': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-      '@listen-fire/module-kit': file:../lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
-      '@listen-fire/movement-lang': file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
+      '@listen-fire/engine': 0.16.0
+      '@listen-fire/engine-contracts': 0.16.0
+      '@listen-fire/module-kit': 0.15.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
+      '@listen-fire/movement-lang': 0.16.0
       exponential-backoff: 3.1.1
       lru-cache: 10.4.3
       zod: 4.6.7
@@ -14019,12 +13994,12 @@ snapshots:
     transitivePeerDependencies:
       - tsx
 
-  '@listen-fire/dealroom@0.13.2(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)':
+  '@listen-fire/dealroom@0.13.2(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)':
     dependencies:
-      '@listen-fire/engine': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-      '@listen-fire/engine-contracts': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-      '@listen-fire/module-kit': 0.14.1(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
-      '@listen-fire/movement-lang': file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
+      '@listen-fire/engine': 0.16.0
+      '@listen-fire/engine-contracts': 0.16.0
+      '@listen-fire/module-kit': 0.14.1(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
+      '@listen-fire/movement-lang': 0.16.0
       zod: 4.6.7
     transitivePeerDependencies:
       - tsx
@@ -14039,12 +14014,12 @@ snapshots:
     transitivePeerDependencies:
       - tsx
 
-  '@listen-fire/dropbox@0.12.8(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)':
+  '@listen-fire/dropbox@0.12.8(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)':
     dependencies:
-      '@listen-fire/engine': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-      '@listen-fire/engine-contracts': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-      '@listen-fire/module-kit': 0.14.1(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
-      '@listen-fire/movement-lang': file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
+      '@listen-fire/engine': 0.16.0
+      '@listen-fire/engine-contracts': 0.16.0
+      '@listen-fire/module-kit': 0.14.1(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
+      '@listen-fire/movement-lang': 0.16.0
       zod: 4.6.7
     transitivePeerDependencies:
       - tsx
@@ -14064,11 +14039,11 @@ snapshots:
       - supports-color
       - tsx
 
-  '@listen-fire/email@file:../lf-dev-tarballs/0.16.0/listen-fire-email-0.14.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)':
+  '@listen-fire/email@0.14.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)':
     dependencies:
-      '@listen-fire/engine': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-      '@listen-fire/engine-contracts': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-      '@listen-fire/module-kit': file:../lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+      '@listen-fire/engine': 0.16.0
+      '@listen-fire/engine-contracts': 0.16.0
+      '@listen-fire/module-kit': 0.15.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
       form-data: 4.0.6
       html-to-text: 9.0.5
       mailgun.js: 10.2.3
@@ -14084,9 +14059,9 @@ snapshots:
       '@listen-fire/movement-lang': 0.15.3
       zod: 4.6.7
 
-  '@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz':
+  '@listen-fire/engine-contracts@0.16.0':
     dependencies:
-      '@listen-fire/movement-lang': file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
+      '@listen-fire/movement-lang': 0.16.0
       zod: 4.6.7
 
   '@listen-fire/engine@0.15.3':
@@ -14097,11 +14072,11 @@ snapshots:
       safe-stable-stringify: 2.5.0
       zod: 4.6.7
 
-  '@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz':
+  '@listen-fire/engine@0.16.0':
     dependencies:
-      '@listen-fire/engine-contracts': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-      '@listen-fire/module-runtime': 0.12.8(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)
-      '@listen-fire/movement-lang': file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
+      '@listen-fire/engine-contracts': 0.16.0
+      '@listen-fire/module-runtime': 0.12.8(@listen-fire/engine-contracts@0.16.0)
+      '@listen-fire/movement-lang': 0.16.0
       safe-stable-stringify: 2.5.0
       zod: 4.6.7
 
@@ -14115,12 +14090,12 @@ snapshots:
     transitivePeerDependencies:
       - tsx
 
-  '@listen-fire/evertrace@file:../lf-dev-tarballs/0.16.0/listen-fire-evertrace-0.14.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)':
+  '@listen-fire/evertrace@0.14.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)':
     dependencies:
-      '@listen-fire/engine': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-      '@listen-fire/engine-contracts': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-      '@listen-fire/module-kit': file:../lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
-      '@listen-fire/movement-lang': file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
+      '@listen-fire/engine': 0.16.0
+      '@listen-fire/engine-contracts': 0.16.0
+      '@listen-fire/module-kit': 0.15.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
+      '@listen-fire/movement-lang': 0.16.0
       zod: 4.6.7
     transitivePeerDependencies:
       - tsx
@@ -14138,10 +14113,10 @@ snapshots:
       - '@listen-fire/movement-lang'
       - supports-color
 
-  '@listen-fire/fake-channels@0.13.2(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)':
+  '@listen-fire/fake-channels@0.13.2(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)':
     dependencies:
-      '@listen-fire/engine': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-      '@listen-fire/module-kit': 0.14.1(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+      '@listen-fire/engine': 0.16.0
+      '@listen-fire/module-kit': 0.14.1(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
       better-sqlite3: 11.10.0
       express: 4.22.1
       tsx: 4.21.0
@@ -14162,11 +14137,11 @@ snapshots:
     transitivePeerDependencies:
       - '@napi-rs/canvas'
 
-  '@listen-fire/files-s3@0.12.8(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)':
+  '@listen-fire/files-s3@0.12.8(@listen-fire/engine-contracts@0.16.0)':
     dependencies:
       '@aws-sdk/client-s3': 3.649.0
       '@aws-sdk/s3-request-presigner': 3.649.0
-      '@listen-fire/module-runtime': 0.12.8(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)
+      '@listen-fire/module-runtime': 0.12.8(@listen-fire/engine-contracts@0.16.0)
     transitivePeerDependencies:
       - '@listen-fire/engine-contracts'
       - aws-crt
@@ -14186,13 +14161,13 @@ snapshots:
       - supports-color
       - tsx
 
-  '@listen-fire/gmail@0.13.3(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)':
+  '@listen-fire/gmail@0.13.3(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)':
     dependencies:
-      '@listen-fire/engine': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-      '@listen-fire/engine-contracts': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-      '@listen-fire/google-sheets': 0.13.0(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
-      '@listen-fire/module-kit': 0.14.1(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
-      '@listen-fire/movement-lang': file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
+      '@listen-fire/engine': 0.16.0
+      '@listen-fire/engine-contracts': 0.16.0
+      '@listen-fire/google-sheets': 0.13.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
+      '@listen-fire/module-kit': 0.14.1(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
+      '@listen-fire/movement-lang': 0.16.0
       googleapis: 164.1.0
       html-to-text: 9.0.5
       zod: 4.6.7
@@ -14213,11 +14188,11 @@ snapshots:
       - supports-color
       - tsx
 
-  '@listen-fire/google-drive@0.12.10(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)':
+  '@listen-fire/google-drive@0.12.10(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)':
     dependencies:
-      '@listen-fire/engine': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-      '@listen-fire/google-sheets': 0.13.0(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
-      '@listen-fire/module-kit': 0.14.1(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+      '@listen-fire/engine': 0.16.0
+      '@listen-fire/google-sheets': 0.13.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
+      '@listen-fire/module-kit': 0.14.1(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
       googleapis: 164.1.0
       zod: 4.6.7
     transitivePeerDependencies:
@@ -14237,12 +14212,12 @@ snapshots:
     transitivePeerDependencies:
       - tsx
 
-  '@listen-fire/google-sheets@0.13.0(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)':
+  '@listen-fire/google-sheets@0.13.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)':
     dependencies:
-      '@listen-fire/engine': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-      '@listen-fire/engine-contracts': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-      '@listen-fire/module-kit': 0.14.1(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
-      '@listen-fire/movement-lang': file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
+      '@listen-fire/engine': 0.16.0
+      '@listen-fire/engine-contracts': 0.16.0
+      '@listen-fire/module-kit': 0.14.1(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
+      '@listen-fire/movement-lang': 0.16.0
       exponential-backoff: 3.1.1
       zod: 4.6.7
     transitivePeerDependencies:
@@ -14258,12 +14233,12 @@ snapshots:
     transitivePeerDependencies:
       - tsx
 
-  '@listen-fire/granola@file:../lf-dev-tarballs/0.16.0/listen-fire-granola-0.14.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)':
+  '@listen-fire/granola@0.14.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)':
     dependencies:
-      '@listen-fire/engine': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-      '@listen-fire/engine-contracts': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-      '@listen-fire/module-kit': file:../lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
-      '@listen-fire/movement-lang': file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
+      '@listen-fire/engine': 0.16.0
+      '@listen-fire/engine-contracts': 0.16.0
+      '@listen-fire/module-kit': 0.15.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
+      '@listen-fire/movement-lang': 0.16.0
       zod: 4.6.7
     transitivePeerDependencies:
       - tsx
@@ -14274,11 +14249,11 @@ snapshots:
       '@listen-fire/engine-contracts': 0.15.3
       '@listen-fire/movement-lang': 0.15.3
 
-  '@listen-fire/handbook@file:../lf-dev-tarballs/0.16.0/listen-fire-handbook-0.16.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)':
+  '@listen-fire/handbook@0.16.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)':
     dependencies:
-      '@listen-fire/engine': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-      '@listen-fire/engine-contracts': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-      '@listen-fire/movement-lang': file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
+      '@listen-fire/engine': 0.16.0
+      '@listen-fire/engine-contracts': 0.16.0
+      '@listen-fire/movement-lang': 0.16.0
 
   '@listen-fire/judge-llm@0.12.9(@listen-fire/engine-contracts@0.15.3)(@listen-fire/engine@0.15.3)(@listen-fire/movement-lang@0.15.3)(tsx@4.21.0)':
     dependencies:
@@ -14291,12 +14266,12 @@ snapshots:
       - '@listen-fire/movement-lang'
       - tsx
 
-  '@listen-fire/judge-llm@0.12.9(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)':
+  '@listen-fire/judge-llm@0.12.9(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)':
     dependencies:
-      '@listen-fire/engine': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-      '@listen-fire/engine-contracts': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-      '@listen-fire/module-kit': 0.14.1(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
-      '@listen-fire/module-runtime': 0.12.8(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)
+      '@listen-fire/engine': 0.16.0
+      '@listen-fire/engine-contracts': 0.16.0
+      '@listen-fire/module-kit': 0.14.1(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
+      '@listen-fire/module-runtime': 0.12.8(@listen-fire/engine-contracts@0.16.0)
       zod: 4.6.7
     transitivePeerDependencies:
       - '@listen-fire/movement-lang'
@@ -14315,12 +14290,12 @@ snapshots:
       - tsx
       - zod
 
-  '@listen-fire/mcp@0.12.14(@cfworker/json-schema@4.1.1)(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)(zod@4.6.7)':
+  '@listen-fire/mcp@0.12.14(@cfworker/json-schema@4.1.1)(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)(zod@4.6.7)':
     dependencies:
-      '@listen-fire/engine': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-      '@listen-fire/engine-contracts': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-      '@listen-fire/module-kit': 0.14.1(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
-      '@listen-fire/movement-lang': file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
+      '@listen-fire/engine': 0.16.0
+      '@listen-fire/engine-contracts': 0.16.0
+      '@listen-fire/module-kit': 0.14.1(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
+      '@listen-fire/movement-lang': 0.16.0
       '@modelcontextprotocol/sdk': 1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7)
     transitivePeerDependencies:
       - '@cfworker/json-schema'
@@ -14328,10 +14303,10 @@ snapshots:
       - tsx
       - zod
 
-  '@listen-fire/model-providers@0.12.6(@anthropic-ai/sdk@0.126.0(zod@4.6.7))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.6.7))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7)))(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.6.7))':
+  '@listen-fire/model-providers@0.12.6(@anthropic-ai/sdk@0.126.0(zod@4.6.7))(@anthropic-ai/vertex-sdk@0.19.10(zod@4.6.7))(@google/genai@2.24.0(@modelcontextprotocol/sdk@1.32.1(@cfworker/json-schema@4.1.1)(zod@4.6.7)))(@listen-fire/engine@0.16.0)(google-auth-library@10.3.0)(openai@5.22.0(ws@8.22.0)(zod@4.6.7))':
     dependencies:
-      '@listen-fire/anthropic': 0.12.7(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)
-      '@listen-fire/engine': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
+      '@listen-fire/anthropic': 0.12.7(@listen-fire/engine@0.16.0)
+      '@listen-fire/engine': 0.16.0
       zod: 4.6.7
     optionalDependencies:
       '@anthropic-ai/sdk': 0.126.0(zod@4.6.7)
@@ -14349,20 +14324,20 @@ snapshots:
     optionalDependencies:
       tsx: 4.21.0
 
-  '@listen-fire/module-kit@0.14.1(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)':
+  '@listen-fire/module-kit@0.14.1(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)':
     dependencies:
-      '@listen-fire/engine-contracts': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-      '@listen-fire/module-runtime': 0.12.8(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)
-      '@listen-fire/movement-lang': file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
+      '@listen-fire/engine-contracts': 0.16.0
+      '@listen-fire/module-runtime': 0.12.8(@listen-fire/engine-contracts@0.16.0)
+      '@listen-fire/movement-lang': 0.16.0
       zod: 4.6.7
     optionalDependencies:
       tsx: 4.21.0
 
-  '@listen-fire/module-kit@file:../lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)':
+  '@listen-fire/module-kit@0.15.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)':
     dependencies:
-      '@listen-fire/engine-contracts': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-      '@listen-fire/module-runtime': 0.12.8(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)
-      '@listen-fire/movement-lang': file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
+      '@listen-fire/engine-contracts': 0.16.0
+      '@listen-fire/module-runtime': 0.12.8(@listen-fire/engine-contracts@0.16.0)
+      '@listen-fire/movement-lang': 0.16.0
       zod: 4.6.7
     optionalDependencies:
       tsx: 4.21.0
@@ -14372,24 +14347,24 @@ snapshots:
       '@listen-fire/engine-contracts': 0.15.3
       zod: 4.6.7
 
-  '@listen-fire/module-runtime@0.12.8(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)':
+  '@listen-fire/module-runtime@0.12.8(@listen-fire/engine-contracts@0.16.0)':
     dependencies:
-      '@listen-fire/engine-contracts': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
+      '@listen-fire/engine-contracts': 0.16.0
       zod: 4.6.7
 
   '@listen-fire/movement-lang@0.15.3':
     dependencies:
       typescript: 5.5.4
 
-  '@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz':
+  '@listen-fire/movement-lang@0.16.0':
     dependencies:
       typescript: 5.5.4
 
-  '@listen-fire/ocr-google@0.12.6(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(encoding@0.1.13)':
+  '@listen-fire/ocr-google@0.12.6(@listen-fire/engine@0.16.0)(encoding@0.1.13)':
     dependencies:
       '@google-cloud/documentai': 9.4.0
       '@google-cloud/storage': 7.12.1(encoding@0.1.13)
-      '@listen-fire/engine': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
+      '@listen-fire/engine': 0.16.0
       exponential-backoff: 3.1.1
     transitivePeerDependencies:
       - encoding
@@ -14405,11 +14380,11 @@ snapshots:
       - '@listen-fire/movement-lang'
       - tsx
 
-  '@listen-fire/pdf@0.12.8(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)':
+  '@listen-fire/pdf@0.12.8(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)':
     dependencies:
-      '@listen-fire/engine': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-      '@listen-fire/engine-contracts': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-      '@listen-fire/module-kit': 0.14.1(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+      '@listen-fire/engine': 0.16.0
+      '@listen-fire/engine-contracts': 0.16.0
+      '@listen-fire/module-kit': 0.14.1(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
     transitivePeerDependencies:
       - '@listen-fire/movement-lang'
       - tsx
@@ -14422,9 +14397,9 @@ snapshots:
     transitivePeerDependencies:
       - pg-native
 
-  '@listen-fire/postgres-limiter@0.12.7(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)':
+  '@listen-fire/postgres-limiter@0.12.7(@listen-fire/engine@0.16.0)':
     dependencies:
-      '@listen-fire/engine': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
+      '@listen-fire/engine': 0.16.0
       pg: 8.12.0
       zod: 4.6.7
     transitivePeerDependencies:
@@ -14443,12 +14418,12 @@ snapshots:
       - supports-color
       - tsx
 
-  '@listen-fire/slack@file:../lf-dev-tarballs/0.16.0/listen-fire-slack-0.14.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)':
+  '@listen-fire/slack@0.14.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)':
     dependencies:
-      '@listen-fire/engine': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-      '@listen-fire/engine-contracts': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-      '@listen-fire/module-kit': file:../lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
-      '@listen-fire/movement-lang': file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
+      '@listen-fire/engine': 0.16.0
+      '@listen-fire/engine-contracts': 0.16.0
+      '@listen-fire/module-kit': 0.15.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
+      '@listen-fire/movement-lang': 0.16.0
       '@slack/web-api': 7.11.0
       zod: 4.6.7
     transitivePeerDependencies:
@@ -14466,12 +14441,12 @@ snapshots:
     transitivePeerDependencies:
       - tsx
 
-  '@listen-fire/telegram@file:../lf-dev-tarballs/0.16.0/listen-fire-telegram-0.14.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)':
+  '@listen-fire/telegram@0.14.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)':
     dependencies:
-      '@listen-fire/engine': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-      '@listen-fire/engine-contracts': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-      '@listen-fire/module-kit': file:../lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
-      '@listen-fire/movement-lang': file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
+      '@listen-fire/engine': 0.16.0
+      '@listen-fire/engine-contracts': 0.16.0
+      '@listen-fire/module-kit': 0.15.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
+      '@listen-fire/movement-lang': 0.16.0
       zod: 4.6.7
     transitivePeerDependencies:
       - tsx
@@ -14484,10 +14459,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@listen-fire/wake-cloud-tasks@0.12.7(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)':
+  '@listen-fire/wake-cloud-tasks@0.12.7(@listen-fire/engine-contracts@0.16.0)':
     dependencies:
-      '@listen-fire/engine-contracts': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-      '@listen-fire/module-runtime': 0.12.8(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)
+      '@listen-fire/engine-contracts': 0.16.0
+      '@listen-fire/module-runtime': 0.12.8(@listen-fire/engine-contracts@0.16.0)
       google-auth-library: 10.3.0
     transitivePeerDependencies:
       - supports-color
@@ -14507,14 +14482,14 @@ snapshots:
       - '@napi-rs/canvas'
       - tsx
 
-  '@listen-fire/web@file:../lf-dev-tarballs/0.16.0/listen-fire-web-0.13.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)':
+  '@listen-fire/web@0.13.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)':
     dependencies:
-      '@listen-fire/anthropic': 0.12.7(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)
-      '@listen-fire/engine': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-      '@listen-fire/engine-contracts': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
+      '@listen-fire/anthropic': 0.12.7(@listen-fire/engine@0.16.0)
+      '@listen-fire/engine': 0.16.0
+      '@listen-fire/engine-contracts': 0.16.0
       '@listen-fire/file-text': 0.12.7
-      '@listen-fire/module-kit': file:../lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
-      '@listen-fire/movement-lang': file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
+      '@listen-fire/module-kit': 0.15.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
+      '@listen-fire/movement-lang': 0.16.0
       html-to-text: 9.0.5
       jspdf: 4.2.1
       zod: 4.6.7
@@ -14533,12 +14508,12 @@ snapshots:
     transitivePeerDependencies:
       - tsx
 
-  '@listen-fire/whatsapp@file:../lf-dev-tarballs/0.16.0/listen-fire-whatsapp-0.14.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)':
+  '@listen-fire/whatsapp@0.14.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/engine@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)':
     dependencies:
-      '@listen-fire/engine': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz
-      '@listen-fire/engine-contracts': file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz
-      '@listen-fire/module-kit': file:../lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
-      '@listen-fire/movement-lang': file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz
+      '@listen-fire/engine': 0.16.0
+      '@listen-fire/engine-contracts': 0.16.0
+      '@listen-fire/module-kit': 0.15.0(@listen-fire/engine-contracts@0.16.0)(@listen-fire/movement-lang@0.16.0)(tsx@4.21.0)
+      '@listen-fire/movement-lang': 0.16.0
       mime: 4.0.3
       zod: 4.6.7
     transitivePeerDependencies:
