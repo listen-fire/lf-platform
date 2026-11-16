@@ -7,6 +7,10 @@
 // `fire_event` row per run and the waits each run opens on its trigger, and
 // each listen that could not judge an arrival kept as an `Arrival Not Judged`
 // fact. The `fire_event` row then starts its run under the listen's receipt.
+// A filter that calls a host function (`team.isMember`) asks the platform's
+// kept answers; one the host could not reach keeps its arrival, and each
+// later one its listen would run, waiting in order for a retry
+// (unjudged_retry.ts).
 //
 // The sequence is @listen-fire/embed's `dispatch` (its order, not its
 // package): the platform keeps its own run rows, catalogs and engine host.
@@ -17,7 +21,20 @@ import { randomUUID } from 'node:crypto';
 
 import { sql } from 'kysely';
 import { z } from 'zod';
-import { lastEdgeOf, listenPlanSchema, type Arrival, type AwaitHead, type AwaitLanding, type ListenPlan, type PluginQuestion, type Verdict } from 'engine-contracts';
+import {
+  lastEdgeOf,
+  listenPlanSchema,
+  memberPlans,
+  type Arrival,
+  type AwaitHead,
+  type AwaitLanding,
+  type Judgement,
+  type ListenAsks,
+  type ListenPlan,
+  type PluginAnswers,
+  type PluginQuestion,
+  type Verdict,
+} from 'engine-contracts';
 import {
   arrivalReceiptKey,
   arrivalTriggerOf,
@@ -44,14 +61,20 @@ import type { TriggerId } from '../../generated/kysely/automations/Trigger';
 import type { MovementId } from '../../generated/kysely/automations/Movement';
 import type { TriggerRunId } from '../../generated/kysely/automations/TriggerRun';
 import type { UnjudgedArrival } from '../lf_store/records_door';
+import type { CoreWorkKind } from '../work/kinds';
 import type { Resolution } from '../lf_store/listens';
 
+import { SECOND } from '../../constants';
 import { getAutomationsQb } from '../../lib/kysely';
+import { teamIdSchema } from '../../lib/team_id';
+import { waitingListens } from '../lf_store/records_door';
 import { getAdapterManifest } from '../translation_graph/adapters/registry';
 import { resolveAdapter } from '../translation_graph/adapters/resolve';
 import { deliveryRowStore } from '../movement_engine/run_host_deliveries';
 import { chainBefore, loopSettings } from './loop_breaker';
 import { armResolveForArrivals, withWatching, withWatchingOne } from './listen_resolve';
+import { platformHostAnswers } from './platform_plugin_answers';
+import { HostFunctionRefused } from './plugin_answers';
 
 // ── A saved listen, as its trigger row keeps it ─────────────────────────────
 
@@ -190,7 +213,7 @@ export interface DeliveredBy {
 export interface Undecided {
   listen: SavedListen;
   arrival: Exclude<Arrival, { gone: true }>;
-  fact: Omit<UnjudgedArrival, 'deliveryId' | 'cause'>;
+  fact: Omit<UnjudgedArrival, 'deliveryId' | 'cause'> & { waiting: boolean };
 }
 
 export interface Judged {
@@ -201,16 +224,87 @@ export interface Judged {
   lines: string[];
 }
 
+/** What the door asks of its host while it judges. */
+export interface JudgeHost {
+  /** The answers to a filter's host-function questions for `teamId`. Rejects
+   *  with `HostFunctionRefused` when a function's module answered an error;
+   *  any other rejection means none could be asked. */
+  answers(teamId: TeamId, questions: PluginQuestion[]): Promise<PluginAnswers>;
+  /** Which of `pipelines` wait on an arrival they could not judge yet. */
+  waiting(teamId: TeamId, pipelines: readonly string[]): Promise<ReadonlySet<string>>;
+}
+
+export const platformJudgeHost: JudgeHost = {
+  answers: (teamId, questions) => platformHostAnswers(teamId, questions),
+  waiting: (teamId, pipelines) => waitingListens({ tenant: teamId }, pipelines),
+};
+
+/** The reason an arrival is kept while an earlier one of its listen waits. */
+export const WAITING_BEHIND = 'waiting behind an earlier arrival';
+
+/** How often a listen's retry judges again what it waits on. */
+export const RETRY_UNJUDGED_EVERY_MS = 30 * SECOND;
+
 /** What a vouched arrival is to a listen: it fires when it came on the listen's module and last edge, whatever its filter says. */
 function vouchedVerdict(listen: SavedListen, arrival: Exclude<Arrival, { gone: true }>, adapterType: string): Verdict | null {
   return listen.plan.adapter === adapterType && lastEdgeOf(listen.plan) === arrival.edge ? { fires: true } : null;
 }
 
-/** Why an arrival whose filter asks host functions is kept unjudged: the
- *  platform answers none yet, so it judges no such filter. */
-function unansweredAsks(asks: readonly PluginQuestion[]): string {
-  const plugins = [...new Set(asks.map((ask) => ask.plugin))];
-  return `its filter asks the host function${plugins.length === 1 ? '' : 's'} ${plugins.join(', ')}, which this platform does not answer yet`;
+/** Whether `plan`'s filter calls a host function: only such a listen keeps
+ *  arrivals waiting in order. */
+function asksItsHost(plan: ListenPlan): boolean {
+  return memberPlans(plan).some((member) => member.hops.some((hop) => hop.asksHost === true));
+}
+
+/** How many calls a filter holds where it asks its host. The judge asks at
+ *  least one more question per judgement, so a host that answers each reaches
+ *  a verdict within one judgement more than this. A built-in's call in such a
+ *  filter counts too, which only loosens the bound. */
+function hostCallsOf(plan: ListenPlan): number {
+  const callsIn = (node: unknown): number => {
+    if (Array.isArray(node)) return node.reduce((sum: number, item: unknown) => sum + callsIn(item), 0);
+    if (typeof node !== 'object' || node === null) return 0;
+    const own = 'type' in node && node.type === 'function' ? 1 : 0;
+    return own + Object.values(node).reduce((sum: number, value: unknown) => sum + callsIn(value), 0);
+  };
+  return memberPlans(plan)
+    .flatMap((member) => member.hops)
+    .filter((hop) => hop.asksHost === true)
+    .reduce((sum, hop) => sum + callsIn(hop.checked), 0);
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * A filter's questions asked and the arrival judged again with every answer
+ * so far, until the judge asks nothing more, at most once per host call the
+ * filter holds and once more. A question its host could not reach is
+ * answered `unreachable`, which the judge reads as undecided, naming it. A
+ * module that answered an error leaves the arrival undecided, not waiting.
+ */
+async function judgedAsking(input: {
+  teamId: TeamId;
+  plan: ListenPlan;
+  judge: (answers: PluginAnswers) => Judgement | null;
+  asked: ListenAsks;
+  host: JudgeHost;
+}): Promise<Verdict | null> {
+  const bound = hostCallsOf(input.plan) + 1;
+  const answers: PluginAnswers = [];
+  let judgement: Judgement | null = input.asked;
+  for (let judgements = 1; judgement !== null && 'asks' in judgement; judgements++) {
+    if (judgements >= bound) return { undecided: `its filter still asks its host after ${judgements} judgements, more than the ${bound - 1} host calls it holds` };
+    try {
+      answers.push(...(await input.host.answers(input.teamId, judgement.asks)));
+    } catch (error) {
+      if (error instanceof HostFunctionRefused) return { undecided: `${error.plugin}, which this listen's filter calls, answered an error (${error.message})` };
+      answers.push(...judgement.asks.map((question) => ({ ...question, unreachable: messageOf(error) })));
+    }
+    judgement = input.judge(answers);
+  }
+  return judgement;
 }
 
 /**
@@ -219,8 +313,15 @@ function unansweredAsks(asks: readonly PluginQuestion[]): string {
  * names hears nothing of it. An undecided verdict runs nothing and is kept
  * as a fact; an arrival that does not fit the node its listen states runs
  * nothing, said when no other listen took it.
+ *
+ * A filter that calls a host function asks it, through the host's kept
+ * answers. One its host could not reach keeps the arrival waiting, and while
+ * a listen waits on an arrival, each later one it would run (or would ask
+ * about) waits behind it, asking nothing, so the listen runs them in the
+ * order they came once its retry judges them. One a local term skips settles
+ * at once: it runs nothing, so it has no place to keep.
  */
-export function judgeArrivals(input: {
+export async function judgeArrivals(input: {
   listens: readonly SavedListen[];
   delivery: DeliveredBy;
   arrivals: readonly Arrival[];
@@ -230,8 +331,12 @@ export function judgeArrivals(input: {
   /** Someone with write on the automation vouches for the arrival: a listen
    *  on its edge fires without reading its filter, as a Run now's press does. */
   vouched?: boolean;
-}): Judged {
+  /** A replay, or a retry: each arrival judged as it stands, never behind another. */
+  replaying?: boolean;
+  host?: JudgeHost;
+}): Promise<Judged> {
   const { delivery, now } = input;
+  const host = input.host ?? platformJudgeHost;
   const nowMs = now.getTime();
   const lines: string[] = [];
   const say = (line: string): void => {
@@ -239,6 +344,11 @@ export function judgeArrivals(input: {
   };
   const minted: MintedRun[] = [];
   const unjudged: Judged['unjudged'] = [];
+  const heldInLine = (listen: SavedListen): boolean => input.vouched !== true && input.replaying !== true && asksItsHost(listen.plan);
+  // A delivery is judged for the one team it came to, by that team's listens.
+  const teamId = input.listens[0]?.teamId;
+  const lined = input.listens.filter(heldInLine);
+  const waiting = new Set(teamId === undefined || lined.length === 0 ? [] : await host.waiting(teamId, lined.map((listen) => listen.pipeline)));
   for (const [index, arrival] of input.arrivals.entries()) {
     if ('gone' in arrival) continue;
     let taken = false;
@@ -247,19 +357,17 @@ export function judgeArrivals(input: {
       // A connection's delivery is its own listens'; an install's is every one's.
       if (delivery.credentialsId !== null && listen.credentialsId !== null && listen.credentialsId !== delivery.credentialsId) continue;
       const heard = namedArrival(arrival, listen.fieldIds as FieldIdsByType);
-      const verdict = input.vouched === true ? vouchedVerdict(listen, arrival, delivery.adapterType) : listenFires(
-        { plan: listen.plan, pipeline: listen.pipeline, ...credentialOf(listen), ...(listen.constructionArgs !== undefined ? { constructionArgs: listen.constructionArgs } : {}) },
-        heard,
-        { adapterType: delivery.adapterType, ...credentialOf(listen) },
-        nowMs,
-      );
-      if (verdict === null) continue;
+      const judge = (answers?: PluginAnswers): Judgement | null =>
+        listenFires(
+          { plan: listen.plan, pipeline: listen.pipeline, ...credentialOf(listen), ...(listen.constructionArgs !== undefined ? { constructionArgs: listen.constructionArgs } : {}) },
+          heard,
+          { adapterType: delivery.adapterType, ...credentialOf(listen) },
+          nowMs,
+          answers,
+        );
       const named = `${listen.file}:${listen.plan.movement}`;
-      if ('skips' in verdict) continue;
-      const undecided = 'undecided' in verdict ? verdict.undecided : 'asks' in verdict ? unansweredAsks(verdict.asks) : undefined;
-      if (undecided !== undefined) {
+      const keep = (reason: string, kept: { waiting: boolean }): void => {
         taken = true;
-        say(`${named}: an arrival on ${arrival.edge} cannot be judged (${undecided}): it runs nothing`);
         unjudged.push({
           listen,
           arrival,
@@ -272,11 +380,31 @@ export function judgeArrivals(input: {
             adapter: delivery.adapterType,
             recordId: arrival.landing.recordId ?? null,
             landing: arrival.landing,
-            reason: undecided,
+            reason,
             at: now.toISOString(),
             attempt: input.attempt ?? 0,
+            waiting: kept.waiting,
           },
         });
+        if (kept.waiting) waiting.add(listen.pipeline);
+      };
+      const first = input.vouched === true ? vouchedVerdict(listen, arrival, delivery.adapterType) : judge();
+      if (first === null || 'skips' in first) continue;
+      if (waiting.has(listen.pipeline) && heldInLine(listen) && !('undecided' in first)) {
+        say(`${named}: an arrival on ${arrival.edge} waits behind an earlier arrival its host could not judge yet: it runs nothing yet`);
+        keep(WAITING_BEHIND, { waiting: true });
+        continue;
+      }
+      const verdict = 'asks' in first ? await judgedAsking({ teamId: listen.teamId, plan: listen.plan, judge, asked: first, host }) : first;
+      if (verdict === null || 'skips' in verdict) continue;
+      if ('undecided' in verdict) {
+        const waitsForHost = verdict.unreachable !== undefined;
+        say(
+          waitsForHost
+            ? `${named}: an arrival on ${arrival.edge} waits for its host (${verdict.undecided}): it runs nothing yet`
+            : `${named}: an arrival on ${arrival.edge} cannot be judged (${verdict.undecided}): it runs nothing`,
+        );
+        keep(verdict.undecided, { waiting: waitsForHost });
         continue;
       }
       if (listen.landing !== undefined) {
@@ -424,6 +552,32 @@ export function fireKeyOf(runId: string): string {
   return `fire_event:${runId}`;
 }
 
+/** A `retry_unjudged` row's payload: the listen whose waiting arrivals it judges again. */
+export const retryRowSchema = z.object({ teamId: teamIdSchema, triggerId: z.string(), pipeline: z.string() });
+export type RetryRow = z.infer<typeof retryRowSchema>;
+
+export const RETRY_UNJUDGED_WORK_KIND = 'retry_unjudged' satisfies CoreWorkKind;
+
+/** The row that judges again what a listen waits on, one per listen, so a
+ *  listen whose retry keeps failing holds back no other's. Due a retry
+ *  interval after `now`. */
+export function retryRowOf(input: { teamId: TeamId; listen: Pick<SavedListen, 'triggerId' | 'pipeline'>; now: Date }): NewWorkRow {
+  const payload: RetryRow = { teamId: input.teamId, triggerId: input.listen.triggerId, pipeline: input.listen.pipeline };
+  return {
+    kind: RETRY_UNJUDGED_WORK_KIND,
+    key: `${RETRY_UNJUDGED_WORK_KIND}:${input.teamId}:${input.listen.pipeline}`,
+    payload,
+    teamId: input.teamId,
+    dueAt: new Date(input.now.getTime() + RETRY_UNJUDGED_EVERY_MS).toISOString(),
+  };
+}
+
+/** One retry row for each listen `undecided` keeps waiting. */
+export function retryRowsFor(input: { teamId: TeamId; undecided: readonly Undecided[]; now: Date }): NewWorkRow[] {
+  const waiting = new Map(input.undecided.filter((u) => u.fact.waiting).map((u) => [u.listen.pipeline, u.listen]));
+  return [...waiting.values()].map((listen) => retryRowOf({ teamId: input.teamId, listen, now: input.now }));
+}
+
 /**
  * Keep a delivery whose arrivals were judged, in one write: its receipt
  * (a redelivery under the same external id keeps nothing), its arrivals
@@ -486,7 +640,10 @@ export async function keepJudgedDelivery(input: {
       ...(input.replayOf !== undefined ? { replayOf: input.replayOf } : {}),
       ...(input.request !== undefined ? { request: input.request } : {}),
     },
-    work: fires.map((fire): NewWorkRow => ({ kind: FIRE_EVENT_WORK_KIND, key: fireKeyOf(fire.runId), payload: fire, teamId })),
+    work: [
+      ...fires.map((fire): NewWorkRow => ({ kind: FIRE_EVENT_WORK_KIND, key: fireKeyOf(fire.runId), payload: fire, teamId })),
+      ...retryRowsFor({ teamId, undecided: judged.unjudged, now }),
+    ],
     arrivals: {
       teamId,
       adapterType: input.adapterType,
@@ -599,12 +756,13 @@ export async function deliverArrivals(input: {
   /** When that row was kept: a listen an upgrade moved here since was its earlier
    *  version's for this delivery, and that version read it. */
   keptAt?: Date;
+  host?: JudgeHost;
 }): Promise<{ kept: KeptDelivery; deliveryId: string; fires: FireRow[] }> {
   const now = new Date();
   const all = input.listens ?? (await savedListens({ teamId: input.teamId, adapterType: input.delivered.adapterType }));
   const { keptAt } = input;
   const listens = keptAt === undefined ? all : all.filter((listen) => listen.carriedFrom === undefined || Date.parse(listen.carriedFrom.at) <= keptAt.getTime());
-  const judged = judgeArrivals({ listens, delivery: input.delivered, arrivals: input.arrivals, now });
+  const judged = await judgeArrivals({ listens, delivery: input.delivered, arrivals: input.arrivals, now, ...(input.host !== undefined ? { host: input.host } : {}) });
   const result = await keepJudgedDelivery({
     teamId: input.teamId,
     subscriptionId: input.subscriptionId,

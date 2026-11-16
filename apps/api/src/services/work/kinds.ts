@@ -7,6 +7,7 @@ export const CORE_WORK_KINDS = [
   'read_delivery', // payload: ReadDeliveryRow (inbound/carried_delivery.ts): one carried version's reading of a kept delivery
   'dispatch_event', // payload: CapturedTriggerEvent (triggers/dispatch_event.ts): one event a carried version judged, or one a 0.12.13 door queued
   'fire_event', // payload: FireRow (inbound/listen_door.ts): one run a kept delivery queued
+  'retry_unjudged', // payload: RetryRow (inbound/listen_door.ts): what one listen waits on, judged again oldest first (inbound/unjudged_retry.ts)
   'run_carried', // payload: CarriedRunRow (movement/carried_run_now.ts): one run of a carried version someone started
   'resume_timer', // payload: { runId: string }
   'poll_edge', // payload: { teamId: string; digest: string } (poll_source/worker.ts): one shared poll of a listenable edge

@@ -194,7 +194,7 @@ export async function runMovementAsync(
   const invocation = await buildInvocation(input);
   const arrival = invocationArrival(invocation);
   const now = new Date();
-  const judged = judgeArrivals({
+  const judged = await judgeArrivals({
     listens: [listen],
     delivery: { adapterType: MANUAL_ADAPTER_TYPE, credentialsId: null },
     arrivals: [arrival],
@@ -305,7 +305,12 @@ export async function runWithEvent(input: RunWithEventInput): Promise<RunWithEve
 
   let arrivals: Arrival[];
   try {
-    arrivals = 'page' in kept ? kept.page.arrivals : inBroughtOrder(await reread(first, adapterType, kept.request), kept.request.arrivalIds);
+    if ('page' in kept) arrivals = kept.page.arrivals;
+    else {
+      const read = await reread(first, adapterType, kept.request);
+      if ('refused' in read) return { ok: false, errors: [read.refused] };
+      arrivals = inBroughtOrder(read.arrivals, kept.request.arrivalIds);
+    }
   } catch (error) {
     return { ok: false, errors: [error instanceof Error ? error.message : String(error)] };
   }
@@ -315,7 +320,7 @@ export async function runWithEvent(input: RunWithEventInput): Promise<RunWithEve
   }
 
   const now = new Date();
-  const judged = judgeArrivals({ listens, delivery, arrivals: [arrival], now, vouched: true });
+  const judged = await judgeArrivals({ listens, delivery, arrivals: [arrival], now, vouched: true });
   if (judged.minted.length === 0) {
     return { ok: false, errors: judged.lines.length > 0 ? judged.lines : [`no listen of '${movement.name}' takes an event on ${arrival.edge}: nothing to run`] };
   }

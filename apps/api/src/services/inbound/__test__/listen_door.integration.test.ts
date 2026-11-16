@@ -158,6 +158,7 @@ describe('keepJudgedDelivery: a judged delivery in one write', () => {
               reason: 'the arrival carries no Messages record',
               at: now.toISOString(),
               attempt: 0,
+              waiting: false,
             },
           },
         ],
@@ -196,7 +197,7 @@ describe('keepJudgedDelivery: a judged delivery in one write', () => {
     const undecided = (arrival: Exclude<Arrival, { gone: true }>): Undecided => ({
       listen: saved,
       arrival,
-      fact: { pipeline: PIPELINE, arrival: arrivalReceiptKey(arrival), file: 'polls.lf', movement: 'tally', edge: 'Interactions', adapter: 'chat', recordId: arrival.landing.recordId ?? null, landing: arrival.landing, reason: 'a lookup failed', at: now.toISOString(), attempt: 0 },
+      fact: { pipeline: PIPELINE, arrival: arrivalReceiptKey(arrival), file: 'polls.lf', movement: 'tally', edge: 'Interactions', adapter: 'chat', recordId: arrival.landing.recordId ?? null, landing: arrival.landing, reason: 'a lookup failed', at: now.toISOString(), attempt: 0, waiting: false },
     });
     const elsewhere: Exclude<Arrival, { gone: true }> = { ...ARRIVAL, identity: 'press-2', landing: { recordId: 't2', recordType: 'Interaction', fields: { Id: 't2' } } };
 

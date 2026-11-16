@@ -348,6 +348,7 @@ const ARRIVAL_LABEL: Record<
   ran: { label: "Ran", tone: "emerald" },
   run_failed: { label: "Failed", tone: "red" },
   not_judged: { label: "Not judged", tone: "amber" },
+  waiting_for_host: { label: "Waiting for the host", tone: "gray" },
 };
 
 /**

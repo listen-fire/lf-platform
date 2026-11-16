@@ -755,7 +755,7 @@ export type OpsEventId = string & {
 
 /** How an arrival reached one of a movement's listens: a run it started, or
  *  an `Arrival Not Judged` fact (the listen could not tell). */
-export type MovementEventStatus = 'ran' | 'run_failed' | 'not_judged';
+export type MovementEventStatus = 'ran' | 'run_failed' | 'not_judged' | 'waiting_for_host';
 export type MovementEventItem = {
     id: string;
     /** The lane (trigger name) of the listen it reached. */

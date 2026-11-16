@@ -15,6 +15,7 @@ export function replayForces(status: ArrivalStatus): boolean {
     case "run_failed":
       return true;
     case "not_judged":
+    case "waiting_for_host":
       return false;
     default:
       return neverAsAny(status);

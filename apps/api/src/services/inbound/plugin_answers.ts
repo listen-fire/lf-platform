@@ -14,6 +14,19 @@ import type { PluginAnswers, PluginQuestion } from 'engine-contracts';
 /** What one question is answered: the plugin's value, or why it could not be. */
 export type PluginAnswer = { value: unknown } | { unreachable: string };
 
+/** A host function's module answered an error of its own, or an answer that
+ *  is none: asking again would answer the same, so its arrival is not kept
+ *  waiting for it. */
+export class HostFunctionRefused extends Error {
+  constructor(
+    readonly plugin: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'HostFunctionRefused';
+  }
+}
+
 interface Kept {
   value: unknown;
   keptAtMs: number;

@@ -6,14 +6,17 @@
 
 import { logger } from 'movement-engine/public/log';
 
+import type { PluginAnswers, PluginQuestion } from 'engine-contracts';
+import type { TeamId } from '../../generated/kysely/core/Team';
 import type { UserId } from '../../generated/kysely/core/User';
+
 import { getCoreQb } from '../../lib/kysely';
 import { getDatabaseUrl } from '../../prisma';
 import { recomputeLibraryStanding } from '../access/decide';
 import { postgresTeamAnswerFeed, type TeamAnswerFeed } from '../lf_movements/team_answer_changes';
-import { platformPluginModules } from '../translation_graph/adapters/builtin_modules';
+import { builtinPluginModule, platformPluginModules } from '../translation_graph/adapters/builtin_modules';
 import { platformPluginSpecNamed } from '../translation_graph/movement/plugin_specs';
-import { PluginAnswerCache } from './plugin_answers';
+import { HostFunctionRefused, PluginAnswerCache, type PluginAnswer } from './plugin_answers';
 
 async function teamsOf(userId: UserId): Promise<string[]> {
   const rows = await getCoreQb(['team_membership'])
@@ -75,4 +78,44 @@ export function startTeamAnswerFeed(): () => Promise<void> {
     }),
   );
   return () => feed.close();
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** One question asked of the module that serves its plugin, in process: its
+ *  arguments bound to the plugin's parameters in the order it declares them,
+ *  as a program's call binds them, and its value read off `data.value`. A
+ *  module that cannot be loaded could not be reached; one that throws, or
+ *  answers no value, refused. */
+async function askInProcess(teamId: TeamId, question: PluginQuestion): Promise<PluginAnswer> {
+  const { plugin, args } = question;
+  let loaded;
+  try {
+    loaded = builtinPluginModule(plugin, { teamId });
+  } catch (error) {
+    return { unreachable: `its module could not be loaded (${messageOf(error)})` };
+  }
+  const spec = platformPluginSpecNamed(plugin, { modules: platformPluginModules() });
+  if (loaded === undefined || spec === undefined) throw new HostFunctionRefused(plugin, 'no module of this platform serves it');
+  if (args.length > spec.args.length) throw new HostFunctionRefused(plugin, `it takes ${spec.args.length} arguments, and was asked with ${args.length}`);
+  const config = Object.fromEntries(args.map((value, place) => [spec.args[place], value]));
+  let answered;
+  try {
+    answered = await loaded.invoke({ name: spec.name ?? plugin, config, extractedContext: {} });
+  } catch (error) {
+    throw new HostFunctionRefused(plugin, messageOf(error));
+  }
+  const data = answered.data;
+  if (data === undefined || !Object.hasOwn(data, 'value')) throw new HostFunctionRefused(plugin, 'it answered no value');
+  return { value: data.value };
+}
+
+/** The answers to a listen's questions for `teamId`, kept ones at no cost.
+ *  Rejects with `HostFunctionRefused` when a module answered an error; any
+ *  other rejection (the change feed is not listening) means none could be
+ *  asked. */
+export function platformHostAnswers(teamId: TeamId, questions: PluginQuestion[]): Promise<PluginAnswers> {
+  return platformPluginAnswers().answers(teamId, questions, (question) => askInProcess(teamId, question));
 }

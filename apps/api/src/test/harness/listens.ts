@@ -25,6 +25,8 @@ export interface TestListen {
   pollEverySeconds?: number;
   /** The part of the filter the module takes. */
   taken?: PlanHop['taken'];
+  /** The part the host checks, and whether it calls a host function there. */
+  checked?: Pick<PlanHop, 'checked' | 'asksHost'>;
   credentialsId?: string | null;
   movement?: string;
 }
@@ -43,7 +45,7 @@ export function testListenConfig(input: Omit<TestListen, 'teamId' | 'movementId'
       movement,
       connection: 'source',
       adapter: input.adapterType,
-      hops: [{ edge: input.edge, from: '', to: 'Thing', judged: 'arrival', ...(input.taken !== undefined ? { taken: input.taken } : {}) }],
+      hops: [{ edge: input.edge, from: '', to: 'Thing', judged: 'arrival', ...(input.taken !== undefined ? { taken: input.taken } : {}), ...input.checked }],
     },
     awaits: { own: [], carried: {} },
     fieldIds: {},

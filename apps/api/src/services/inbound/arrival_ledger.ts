@@ -10,9 +10,11 @@ import type { TeamId } from '../../generated/kysely/core/Team';
 import { getAutomationsQb } from '../../lib/kysely';
 import { readKeptRequest } from './captured_request';
 
-/** How an arrival reached one of a movement's listens: a run it started, or
- *  an `Arrival Not Judged` fact (the listen could not tell). */
-export type MovementEventStatus = 'ran' | 'run_failed' | 'not_judged';
+/** How an arrival reached one of a movement's listens: a run it started, an
+ *  `Arrival Not Judged` fact (the listen could not tell), or one the listen
+ *  waits on (its host function could not be reached, or an earlier arrival
+ *  waits), which its retry judges again. */
+export type MovementEventStatus = 'ran' | 'run_failed' | 'not_judged' | 'waiting_for_host';
 
 export type MovementEventItem = {
   id: string;
@@ -90,8 +92,9 @@ export async function movementEventsImpl(params: { teamId: TeamId; movementId: s
     delivery_id: string | null;
     reason: string;
     noted_at: Date;
+    waiting: boolean;
   }>`
-    select t.id::text as trigger_id, t.name as lane, t.kind, u.pipeline, u.arrival, u.attempt, u.delivery_id, u.reason, u.noted_at
+    select t.id::text as trigger_id, t.name as lane, t.kind, u.pipeline, u.arrival, u.attempt, u.delivery_id, u.reason, u.noted_at, u.waiting
     from automations.trigger t
     join automations.arrival_unjudged u on u.team_id = t.team_id and u.pipeline = t.config->'listen'->>'pipeline'
     where t.team_id = ${teamId}::uuid and t.movement_id = ${movementId}::uuid
@@ -124,7 +127,7 @@ export async function movementEventsImpl(params: { teamId: TeamId; movementId: s
       deliveryId: fact.delivery_id,
       arrivalIndex: indexOfFact(fact.delivery_id, fact.arrival),
       adapterType: fact.kind,
-      status: 'not_judged',
+      status: fact.waiting ? 'waiting_for_host' : 'not_judged',
       failureReason: fact.reason,
       attempt: fact.attempt,
       occurredAt: fact.noted_at,

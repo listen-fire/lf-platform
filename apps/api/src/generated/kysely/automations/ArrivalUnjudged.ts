@@ -44,6 +44,10 @@ export default interface ArrivalUnjudgedTable {
   adapter: ColumnType<string | null, string | null, string | null>;
 
   landing: ColumnType<unknown | null, unknown | null, unknown | null>;
+
+  waiting: ColumnType<boolean, boolean | undefined, boolean>;
+
+  kept_order: ColumnType<string, never, never>;
 }
 
 export type ArrivalUnjudged = Selectable<ArrivalUnjudgedTable>;

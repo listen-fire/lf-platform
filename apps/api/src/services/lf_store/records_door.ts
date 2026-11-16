@@ -53,17 +53,20 @@ export interface UnjudgedArrival {
   at: string;
   /** 0 as delivered, one more for each replay of it through the listen. */
   attempt: number;
+  /** Its listen waits on it: the host function its filter asks could not be
+   *  reached, or an earlier arrival waits. Absent: it does not. */
+  waiting?: boolean;
 }
 
 /** Kept once per listen, arrival and attempt: whether this is the first. */
 export async function keepUnjudgedIn(exec: Exec, scope: LfTenant, fact: UnjudgedArrival): Promise<boolean> {
   const { rows } = await sql`
     insert into automations.arrival_unjudged
-      (team_id, pipeline, arrival, file, movement, delivery_id, edge, adapter, record_id, landing, reason, cause, noted_at, attempt)
+      (team_id, pipeline, arrival, file, movement, delivery_id, edge, adapter, record_id, landing, reason, cause, noted_at, attempt, waiting)
     values (${scope.tenant}::uuid, ${fact.pipeline}::text, ${fact.arrival}::text, ${fact.file}::text, ${fact.movement}::text,
             ${fact.deliveryId}::text, ${fact.edge}::text, ${fact.adapter}::text, ${fact.recordId}::text,
             ${fact.landing === null || fact.landing === undefined ? null : JSON.stringify(fact.landing)}::text::jsonb, ${fact.reason}::text, ${fact.cause}::text,
-            date_trunc('milliseconds', ${fact.at}::timestamptz), ${fact.attempt}::int4)
+            date_trunc('milliseconds', ${fact.at}::timestamptz), ${fact.attempt}::int4, ${fact.waiting === true}::bool)
     on conflict do nothing returning 1`.execute(exec);
   return rows.length === 1;
 }
@@ -124,4 +127,70 @@ export async function unjudged(
     at: r.at,
     attempt: r.attempt,
   }));
+}
+
+// ── What a listen waits on ──────────────────────────────────────────────────
+
+/** Which of `pipelines` wait on an arrival they could not judge yet. */
+export async function waitingListens(scope: LfTenant, pipelines: readonly string[]): Promise<Set<string>> {
+  if (pipelines.length === 0) return new Set();
+  const { rows } = await sql<{ pipeline: string }>`
+    select distinct u.pipeline from automations.arrival_unjudged u
+    where u.team_id = ${scope.tenant}::uuid and u.pipeline = any(${[...pipelines]}::text[]) and u.waiting`.execute(pool());
+  return new Set(rows.map((row) => row.pipeline));
+}
+
+/** What the listen `pipeline` waits on, oldest first: each arrival once, by
+ *  the first fact that waits on it, in the order the facts were kept. */
+export async function waitingLine(scope: LfTenant, pipeline: string): Promise<UnjudgedArrival[]> {
+  const { rows } = await sql<{
+    pipeline: string;
+    arrival: string;
+    file: string;
+    movement: string;
+    delivery_id: string | null;
+    edge: string;
+    adapter: string | null;
+    record_id: string | null;
+    landing: unknown;
+    reason: string;
+    cause: string | null;
+    at: string;
+    attempt: number;
+  }>`
+    select f.pipeline, f.arrival, f.file, f.movement, f.delivery_id, f.edge, f.adapter, f.record_id, f.landing, f.reason, f.cause, ${iso('f.noted_at')} as at, f.attempt
+    from (
+      select distinct on (u.arrival) u.*
+      from automations.arrival_unjudged u
+      where u.team_id = ${scope.tenant}::uuid and u.pipeline = ${pipeline}::text and u.waiting
+      order by u.arrival, u.noted_at, u.kept_order
+    ) f
+    order by f.noted_at, f.kept_order`.execute(pool());
+  return rows.map((r) => ({
+    pipeline: r.pipeline,
+    arrival: r.arrival,
+    file: r.file,
+    movement: r.movement,
+    deliveryId: r.delivery_id,
+    edge: r.edge,
+    adapter: r.adapter,
+    recordId: r.record_id,
+    landing: r.landing ?? null,
+    reason: r.reason,
+    cause: r.cause,
+    at: r.at,
+    attempt: r.attempt,
+    waiting: true,
+  }));
+}
+
+/** The listen `pipeline` no longer waits on `arrivals` (each judged, or let
+ *  go); none named, on anything. */
+export async function stopWaiting(exec: Exec, scope: LfTenant, input: { pipeline: string; arrivals?: readonly string[] }): Promise<void> {
+  const { arrivals } = input;
+  if (arrivals !== undefined && arrivals.length === 0) return;
+  await sql`
+    update automations.arrival_unjudged set waiting = false
+    where team_id = ${scope.tenant}::uuid and pipeline = ${input.pipeline}::text and waiting
+      and (${arrivals === undefined}::bool or arrival = any(${arrivals === undefined ? [] : [...arrivals]}::text[]))`.execute(exec);
 }

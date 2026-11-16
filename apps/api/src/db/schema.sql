@@ -3803,7 +3803,10 @@ CREATE INDEX release_seen_at_idx ON automations.release_seen (team_id, seen_at, 
 
 -- arrival_unjudged — each listen that could not judge an arrival, once per
 -- listen, arrival (its receipt key) and attempt (0 as delivered, one more per
--- replay), read oldest first by the records door (`Arrival Not Judged`).
+-- replay), read oldest first by the records door (`Arrival Not Judged`). A
+-- listen whose host function could not be reached waits on the arrival
+-- (`waiting`), and on each later arrival it would run, until its retry judges
+-- them oldest first (`kept_order` orders the facts of one instant).
 CREATE TABLE automations.arrival_unjudged (
     team_id uuid NOT NULL,
     pipeline text NOT NULL,
@@ -3819,9 +3822,12 @@ CREATE TABLE automations.arrival_unjudged (
     reason text NOT NULL,
     cause text,
     noted_at timestamptz NOT NULL,
+    waiting boolean NOT NULL DEFAULT false,  -- its listen waits on it: its host function could not be reached, or an earlier arrival waits
+    kept_order bigint GENERATED ALWAYS AS IDENTITY,
     PRIMARY KEY (team_id, pipeline, arrival, attempt)
 );
 CREATE INDEX arrival_unjudged_at_idx ON automations.arrival_unjudged (team_id, noted_at, pipeline, arrival, attempt);
+CREATE INDEX arrival_unjudged_waiting_idx ON automations.arrival_unjudged (team_id, pipeline, noted_at, kept_order) WHERE waiting;
 
 -- join_pending — the per-frame PENDING-COUNT (§5.4): for each parallel / fan-out
 -- JOIN frame with ≥1 parked descendant, the number of its child branches still

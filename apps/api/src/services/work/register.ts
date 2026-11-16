@@ -17,6 +17,7 @@ import { registerFireEventWork } from '../inbound/fire_event';
 import { registerCarriedRunWork } from '../translation_graph/movement/carried_run_now';
 import { registerDispatchWork } from '../translation_graph/triggers/dispatch_event';
 import { registerReadDeliveryWork } from '../inbound/carried_delivery';
+import { registerRetryUnjudgedWork } from '../inbound/unjudged_retry';
 import { periodicUnitWorkKinds, type CoreWorkKind } from './kinds';
 import { ensurePeriodicWork, removeRetiredWork } from './store';
 
@@ -58,6 +59,7 @@ function registerCoreWork(): void {
   registerListenSubscriptionWork();
   registerBringUpListensWork();
   registerFireEventWork();
+  registerRetryUnjudgedWork();
   registerCarriedRunWork();
   registerDispatchWork();
   registerReadDeliveryWork();

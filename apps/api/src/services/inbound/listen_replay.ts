@@ -19,6 +19,8 @@
 //   nothing and says so. `force` runs it again under a receipt of its own.
 // - A listen that still cannot judge it is kept as the next attempt, its
 //   delivery still the one replayed.
+// - It judges each arrival as it stands, never behind another the listen
+//   waits on; one it judges, the listen no longer waits on.
 
 import { sql } from 'kysely';
 import type { Arrival } from 'engine-contracts';
@@ -29,13 +31,14 @@ import type { TriggerId } from '../../generated/kysely/automations/Trigger';
 
 import { getAutomationsQb } from '../../lib/kysely';
 import { resolveAdapter } from '../translation_graph/adapters/resolve';
-import { keepUnjudgedIn } from '../lf_store/records_door';
+import { keepUnjudgedIn, stopWaiting } from '../lf_store/records_door';
 import { inTransaction } from '../lf_store/scope';
+import { announceQueued, queueRow } from '../movement_engine/run_host_queue';
 import { notifyWork } from '../work/drain';
 import { pollSubscriptionId } from '../poll_source/worker';
 import { readKeptRequest, type CapturedRequest } from './captured_request';
 import { listenEdgeKeysOf } from './listen_edge';
-import { judgeArrivals, keepJudgedDelivery, savedListenOf, unjudgedFacts, type SavedListen } from './listen_door';
+import { judgeArrivals, keepJudgedDelivery, retryRowsFor, savedListenOf, unjudgedFacts, type Judged, type JudgeHost, type SavedListen } from './listen_door';
 
 /** What a replay did, said in lines a person reads. */
 export type ReplayOutcome =
@@ -76,16 +79,21 @@ export async function deliveryOf(teamId: TeamId, deliveryId: string): Promise<Ke
     : { id: row.id, subscriptionId: row.subscription_id, source: row.source, replayOf: row.replay_of, request: row.request, credentialsId: row.credentials_id };
 }
 
-async function adapterTypeOf(triggerId: TriggerId): Promise<string | null> {
+export async function adapterTypeOf(triggerId: TriggerId): Promise<string | null> {
   const row = await getAutomationsQb(['trigger']).selectFrom('trigger').where('id', '=', triggerId).select('kind').executeTakeFirst();
   return row?.kind ?? null;
 }
+
+/** What a kept delivery brings a listen again, or why it cannot: its module
+ *  refused to read it, or it is not the listen's to read. A module that
+ *  could not be reached throws. */
+export type KeptArrivals = { arrivals: Arrival[]; credentialsId: string | null } | { refused: string };
 
 /** The kept request read again by the listen's module, with the listen's
  *  connection: a module that checks its own requests is told it is a replay;
  *  any other reads the body as its door handed it. Only the arrivals the
  *  delivery brought, when it named them. */
-export async function reread(listen: SavedListen, adapterType: string, request: CapturedRequest): Promise<Arrival[]> {
+export async function reread(listen: SavedListen, adapterType: string, request: CapturedRequest): Promise<{ arrivals: Arrival[] } | { refused: string }> {
   const adapter = await resolveAdapter({
     adapterType,
     teamId: listen.teamId,
@@ -99,34 +107,76 @@ export async function reread(listen: SavedListen, adapterType: string, request: 
   } else if (adapter.checkInbound !== undefined) {
     const { method, path, query, headers, body } = request;
     const checked = await adapter.checkInbound({ request: { method, path, query, headers, body }, ...checkpoint, replayed: true });
-    if (checked.outcome !== 'accepted') throw new Error(`${adapterType} did not accept its own kept request on replay (${checked.outcome})`);
+    if (checked.outcome !== 'accepted') return { refused: `${adapterType} did not accept its own kept request on replay (${checked.outcome})` };
     arrivals = checked.arrivals ?? [];
   } else {
-    throw new Error(`${adapterType} reads no inbound requests: its delivery cannot be read again`);
+    return { refused: `${adapterType} reads no inbound requests: its delivery cannot be read again` };
   }
   const brought = request.arrivalIds;
-  if (brought === undefined) return arrivals;
-  return arrivals.filter((arrival) => !('gone' in arrival) && brought.includes(arrivalReceiptKey(arrival)));
+  if (brought === undefined) return { arrivals };
+  return { arrivals: arrivals.filter((arrival) => !('gone' in arrival) && brought.includes(arrivalReceiptKey(arrival))) };
 }
 
 /** One more than the latest attempt kept for any of `arrivals` by the
  *  listen; the first replay is 1 (the delivery's own judging is 0). */
 async function nextAttempt(teamId: TeamId, pipeline: string, arrivals: readonly Arrival[]): Promise<number> {
-  const keys = arrivals.flatMap((arrival) => ('gone' in arrival ? [] : [arrivalReceiptKey(arrival)]));
+  return nextAttemptFor(teamId, pipeline, arrivals.flatMap((arrival) => ('gone' in arrival ? [] : [arrivalReceiptKey(arrival)])));
+}
+
+/** `nextAttempt` of the arrivals whose receipt keys are `keys`. */
+export async function nextAttemptFor(teamId: TeamId, pipeline: string, keys: readonly string[]): Promise<number> {
   if (keys.length === 0) return 1;
   const { rows } = await sql<{ latest: number | null }>`
     select max(attempt) as latest from automations.arrival_unjudged
-    where team_id = ${teamId}::uuid and pipeline = ${pipeline}::text and arrival = any(${keys}::text[])`.execute(getAutomationsQb(['arrival_unjudged']));
+    where team_id = ${teamId}::uuid and pipeline = ${pipeline}::text and arrival = any(${[...keys]}::text[])`.execute(getAutomationsQb(['arrival_unjudged']));
   const latest = rows[0]?.latest ?? null;
   return latest === null ? 1 : Math.max(latest + 1, 1);
 }
 
-async function ranBefore(teamId: TeamId, pipeline: string, receipt: string): Promise<boolean> {
+export async function ranBefore(teamId: TeamId, pipeline: string, receipt: string): Promise<boolean> {
   const { rows } = await sql`
     select 1 from automations.event_receipt where team_id = ${teamId}::uuid and listen = ${pipeline}::text and key = ${receipt}::text`.execute(
     getAutomationsQb(['event_receipt']),
   );
   return rows.length > 0;
+}
+
+/** What the kept delivery `row` brings `listen` (on `adapterType`'s module)
+ *  again: the page a door read, when the listen may read it, else its
+ *  request read again by the module. */
+export async function keptArrivalsFor(input: { listen: SavedListen; adapterType: string; row: KeptDeliveryRow }): Promise<KeptArrivals> {
+  const { listen, adapterType, row } = input;
+  const named = `${listen.file}:${listen.plan.movement}`;
+  if (row.request === null) {
+    return {
+      refused:
+        row.replayOf !== null
+          ? `delivery ${row.id} is a replay of ${row.replayOf}: replay ${row.replayOf} itself`
+          : `delivery ${row.id} kept no request (it was kept before deliveries kept theirs): it cannot be replayed`,
+    };
+  }
+  const kept = readKeptRequest(row.request);
+  if (kept === null) return { refused: `delivery ${row.id}'s kept request is not one the platform can read` };
+  if ('page' in kept) {
+    if (row.source === 'poll') {
+      if (!listenEdgeKeysOf(listen, ['polled']).some(({ digest }) => pollSubscriptionId(digest) === row.subscriptionId)) {
+        return {
+          refused: `delivery ${row.id} is a poll's page, read for the listens that shared that poll: ${named} is not one of them (it may have been edited since, or its connection changed)`,
+        };
+      }
+    } else if (kept.page.adapter !== adapterType) {
+      return { refused: `delivery ${row.id} came from ${kept.page.adapter}: ${named} listens on ${adapterType}` };
+    }
+    return { arrivals: kept.page.arrivals, credentialsId: kept.page.credential ?? null };
+  }
+  const read = await reread(listen, adapterType, kept.request);
+  return 'refused' in read ? read : { arrivals: read.arrivals, credentialsId: listen.credentialsId };
+}
+
+/** The arrivals of `judged` its listen settled, which it no longer waits on. */
+export function settledArrivals(judged: Judged, arrivals: readonly Arrival[]): string[] {
+  const unsettled = new Set(judged.unjudged.map((u) => u.fact.arrival));
+  return arrivals.flatMap((arrival) => ('gone' in arrival ? [] : [arrivalReceiptKey(arrival)])).filter((key) => !unsettled.has(key));
 }
 
 /** What a replay through a listen that is not the team's answers. A route that
@@ -140,7 +190,14 @@ export function noSuchListen(triggerId: string): ReplayOutcome {
  * `teamId` again. Refused, judging nothing, when either is not the team's,
  * or the delivery kept no request.
  */
-export async function replayThroughListen(input: { teamId: TeamId; triggerId: TriggerId; deliveryId: string; force?: boolean; now?: Date }): Promise<ReplayOutcome> {
+export async function replayThroughListen(input: {
+  teamId: TeamId;
+  triggerId: TriggerId;
+  deliveryId: string;
+  force?: boolean;
+  now?: Date;
+  host?: JudgeHost;
+}): Promise<ReplayOutcome> {
   const { teamId, deliveryId } = input;
   const now = input.now ?? new Date();
   const force = input.force === true;
@@ -151,41 +208,22 @@ export async function replayThroughListen(input: { teamId: TeamId; triggerId: Tr
   const named = `${listen.file}:${listen.plan.movement}`;
   const row = await deliveryOf(teamId, deliveryId);
   if (row === null) return { outcome: 'refused', reason: `no delivery ${deliveryId} is kept for this team: a delivery past its retention is forgotten` };
-  if (row.request === null) {
-    return {
-      outcome: 'refused',
-      reason:
-        row.replayOf !== null
-          ? `delivery ${row.id} is a replay of ${row.replayOf}: replay ${row.replayOf} itself`
-          : `delivery ${row.id} kept no request (it was kept before deliveries kept theirs): it cannot be replayed`,
-    };
-  }
-  const kept = readKeptRequest(row.request);
-  if (kept === null) return { outcome: 'refused', reason: `delivery ${row.id}'s kept request is not one the platform can read` };
-
-  let arrivals: Arrival[];
-  let credentialsId: string | null;
-  if ('page' in kept) {
-    if (row.source === 'poll') {
-      if (!listenEdgeKeysOf(listen, ['polled']).some(({ digest }) => pollSubscriptionId(digest) === row.subscriptionId)) {
-        return {
-          outcome: 'refused',
-          reason: `delivery ${row.id} is a poll's page, read for the listens that shared that poll: ${named} is not one of them (it may have been edited since, or its connection changed)`,
-        };
-      }
-    } else if (kept.page.adapter !== adapterType) {
-      return { outcome: 'refused', reason: `delivery ${row.id} came from ${kept.page.adapter}: ${named} listens on ${adapterType}` };
-    }
-    arrivals = kept.page.arrivals;
-    credentialsId = kept.page.credential ?? null;
-  } else {
-    arrivals = await reread(listen, adapterType, kept.request);
-    credentialsId = listen.credentialsId;
-  }
+  const brought = await keptArrivalsFor({ listen, adapterType, row });
+  if ('refused' in brought) return { outcome: 'refused', reason: brought.refused };
+  const { arrivals, credentialsId } = brought;
 
   const lines: string[] = [];
   const attempt = await nextAttempt(teamId, listen.pipeline, arrivals);
-  const judged = judgeArrivals({ listens: [listen], delivery: { adapterType, credentialsId }, arrivals, now, attempt });
+  const judged = await judgeArrivals({
+    listens: [listen],
+    delivery: { adapterType, credentialsId },
+    arrivals,
+    now,
+    attempt,
+    replaying: true,
+    ...(input.host !== undefined ? { host: input.host } : {}),
+  });
+  const settled = settledArrivals(judged, arrivals);
   for (const { fact } of judged.unjudged) {
     lines.push(`${named}: the arrival ${fact.arrival} on ${fact.edge} still cannot be judged (${fact.reason}): reported again, attempt ${attempt}`);
   }
@@ -201,11 +239,17 @@ export async function replayThroughListen(input: { teamId: TeamId; triggerId: Tr
   if (judged.minted.length === 0) {
     if (judged.unjudged.length > 0) {
       const facts = await unjudgedFacts({ teamId, undecided: judged.unjudged, deliveryId: row.id, now });
-      await inTransaction(async (trx) => {
+      const queued = await inTransaction(async (trx) => {
         for (const fact of facts) await keepUnjudgedIn(trx, { tenant: teamId }, fact);
+        await stopWaiting(trx, { tenant: teamId }, { pipeline: listen.pipeline, arrivals: settled });
+        const rows = [];
+        for (const retry of retryRowsFor({ teamId, undecided: judged.unjudged, now })) rows.push(await queueRow(trx, { host: 'platform' }, retry));
+        return rows;
       });
-    } else if (lines.length === 0) {
-      lines.push(`${named}: its filter does not take what delivery ${row.id} brought: nothing to run`);
+      await announceQueued(queued);
+    } else {
+      await stopWaiting(getAutomationsQb(['arrival_unjudged']), { tenant: teamId }, { pipeline: listen.pipeline, arrivals: settled });
+      if (lines.length === 0) lines.push(`${named}: its filter does not take what delivery ${row.id} brought: nothing to run`);
     }
     return { outcome: 'replayed', runIds: [], replayDeliveryId: null, attempt, stillUndecided, lines };
   }
@@ -222,6 +266,7 @@ export async function replayThroughListen(input: { teamId: TeamId; triggerId: Tr
     ...(force ? { forced: true } : {}),
     now,
   });
+  await stopWaiting(getAutomationsQb(['arrival_unjudged']), { tenant: teamId }, { pipeline: listen.pipeline, arrivals: settled });
   notifyWork();
   const runIds = replay.fires.map((fire) => fire.runId);
   lines.push(`${named}: delivery ${row.id} replayed, ${runIds.length === 1 ? 'one run' : `${runIds.length} runs`} queued`);
