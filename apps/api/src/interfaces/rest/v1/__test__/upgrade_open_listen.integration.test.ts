@@ -103,18 +103,14 @@ describe('upgrading an open 0.15 Slack listen through REST', () => {
     expect(await stored()).toEqual({ source: OLD_SLACK, language_version: '0.15.3' });
   });
 
-  // Fails until listen-fire's checker reads a parameter typed as a union of
-  // branded texts (the team's isMember takes an email address OR a phone
-  // number): its fix finds no claim for a union and offers nothing. Flips red
-  // when the 0.16.0 tarballs carry that fix; drop `.failing` then.
-  it.failing('offers the team check as a fix for review', async () => {
+  it('offers the team check as a fix for review', async () => {
     const held = await post(upgradeMovementHandler, { automation: 'old_slack' });
     const [open] = (held.diagnostics as Array<{ code: string; fix?: { safe?: boolean; edits: Array<{ text: string }> } }>).filter((d) => d.code === 'MOV_LISTEN_NOW_OPEN');
     expect(open?.fix?.safe).toBeFalsy();
     expect(open?.fix?.edits.map((edit) => edit.text).join('')).toContain('.isMember(');
   });
 
-  it.failing('applies the edit when the fix is accepted, and the result checks clean', async () => {
+  it('applies the edit when the fix is accepted, and the result checks clean', async () => {
     const moved = await post(upgradeMovementHandler, { automation: 'old_slack', applyAllFixes: true, acknowledge: true });
     expect(moved.status).toBe('upgraded');
     const after = await stored();

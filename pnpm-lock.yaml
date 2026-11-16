@@ -3485,7 +3485,7 @@ packages:
     engines: {node: '>=22.23.4 <23'}
 
   '@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz':
-    resolution: {integrity: sha512-enCrUpYXi+coxgoMQEVbsP7See5xWKxid4eUH36AXdd6KXkfo6ligUTW0Zyg5NGlba38Urr3zNThlOJGn4z4fw==, tarball: file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz}
+    resolution: {integrity: sha512-sQ369cGiZ7eoqiGzJ0bwHML6jxTF26n4DZAIYjJ7XkNV+WsHLA6SIHRL89ciFzI2PXs026HRxttyrET5VI/YoA==, tarball: file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz}
     version: 0.16.0
     engines: {node: '>=22.23.4 <23'}
 
@@ -19112,7 +19112,7 @@ snapshots:
   extract-pg-schema@5.8.0(@electric-sql/pglite@0.3.14)(better-sqlite3@11.10.0):
     dependencies:
       knex: 3.1.0(better-sqlite3@11.10.0)(pg@8.16.3)
-      knex-pglite: 0.12.1(@electric-sql/pglite@0.3.14)(knex@3.1.0(better-sqlite3@11.10.0)(pg@8.12.0))
+      knex-pglite: 0.12.1(@electric-sql/pglite@0.3.14)(knex@3.1.0(better-sqlite3@11.10.0)(pg@8.16.3))
       pg: 8.16.3
       pg-query-emscripten: 5.1.0
       ramda: 0.31.3
@@ -20770,7 +20770,7 @@ snapshots:
 
   kleur@4.1.5: {}
 
-  knex-pglite@0.12.1(@electric-sql/pglite@0.3.14)(knex@3.1.0(better-sqlite3@11.10.0)(pg@8.12.0)):
+  knex-pglite@0.12.1(@electric-sql/pglite@0.3.14)(knex@3.1.0(better-sqlite3@11.10.0)(pg@8.16.3)):
     dependencies:
       '@electric-sql/pglite': 0.3.14
       knex: 3.1.0(better-sqlite3@11.10.0)(pg@8.16.3)
