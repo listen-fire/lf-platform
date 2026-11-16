@@ -116,6 +116,21 @@ describe('judgeArrivals', () => {
     ]);
   });
 
+  it('keeps an arrival whose filter asks a host function as an unjudged fact with the reason, and runs nothing', () => {
+    const found = corpus.cases.find((c) => c.plan === 'insiders' && 'asks' in c.verdict);
+    if (found === undefined) throw new Error('no conformance case where the insiders plan asks the host');
+    const saved = listen({ plan: corpus.plans.insiders!.plan });
+    const arrival = { ...found.arrival, identity: 'press-1' } as Exclude<Arrival, { gone: true }>;
+    const reason = 'its filter asks the host function @lf-platform/team/isMember, which this platform does not answer yet';
+
+    const judged = judgeArrivals({ listens: [saved], delivery: { adapterType: 'talk', credentialsId: null }, arrivals: [arrival], now: NOW });
+
+    expect(judged.minted).toEqual([]);
+    expect(judged.unjudged.map((u) => u.fact.reason)).toEqual([reason]);
+    expect(judged.unjudged).toHaveLength(1);
+    expect(judged.lines).toEqual([`polls.lf:${saved.plan.movement}: an arrival on ${arrival.edge} cannot be judged (${reason}): it runs nothing`]);
+  });
+
   it('a replay`s facts carry its attempt', () => {
     const judged = judgeArrivals({ listens: [listen()], delivery: { adapterType: 'chat', credentialsId: null }, arrivals: [arrivalOf(UNDECIDED)], now: NOW, attempt: 2 });
 

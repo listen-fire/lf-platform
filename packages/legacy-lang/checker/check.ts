@@ -7209,6 +7209,13 @@ class Checker {
   private checkDottedCall(object: string, key: string, span: Span, at: { scope: Scope; writeField: boolean }): void {
     if (before(this.languageVersion, 5) || at.writeField) return;
     const found = at.scope.resolve(object);
+    // `pdf.render(t)` with no import of `@lf/pdf`: the root is never read as a
+    // name of its own, so the missing import is said here (the Rust twin:
+    // check_dotted_call).
+    if (found.kind === 'unknown' && packageCalled(this.catalog, object) !== undefined) {
+      this.reportResolutionFailure(object, span, found);
+      return;
+    }
     if (found.kind !== 'found') return; // a stdlib family, or reported where the name is read
     if (lookupBuiltin(key) !== undefined) return;
     this.report(

@@ -334,7 +334,8 @@ movement intake(m: <inbox-[:message]->>) {
   write crm-[:companies]-> { name: v }
 }
 `;
-    expect(listUnsupportedConstructs(source, { languageVersion: '5' })).toEqual(['non-built-in function calls (G())']);
+    // From 5 the dotted call is read whole (0.16), so the scan names it whole.
+    expect(listUnsupportedConstructs(source, { languageVersion: '5' })).toEqual(['non-built-in function calls (BOX.G())']);
     expect(listUnsupportedConstructs(source, { languageVersion: '4' })).toEqual(['non-built-in function calls (G())']);
   });
 

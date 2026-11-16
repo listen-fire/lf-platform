@@ -81,11 +81,23 @@ describe('a dotted call that never ran', () => {
     expect(errorsUnder(version, ['  box = { g: label }', '  v = box.g()'])).toEqual([]);
   });
 
-  it.each<LanguageVersion>([1, 2, 3, 4, 5])('version %s: a built-in in a record\'s scope is what it was', version => {
+  it.each<LanguageVersion>([1, 2, 3, 4])('version %s: a built-in in a record\'s scope is what it was', version => {
     expect(errorsUnder(version, ['  o = made()', '  v = o.UPPER(name)'])).toEqual([]);
+  });
+
+  // 0.12 retired the form, and the current parser reads it as one dotted call.
+  it('version 5: a built-in in a record\'s scope is refused, as the retired form it is', () => {
+    expect(codes(5, ['  o = made()', '  v = o.UPPER(name)'])).toEqual(['MOV_NAME_UNRESOLVED']);
   });
 
   it.each<LanguageVersion>([3, 4])('version %s: inside a write field the target may advertise the function', version => {
     expect(errorsUnder(version, ['  box = { g: label }', '  write crm-[:notes]-> { title: box.summarize() }'])).toEqual([]);
+  });
+});
+
+describe('a dotted call off a record value in dialect 5', () => {
+  it('is refused rather than passing silently (0.12 retired it)', () => {
+    const errors = errorsUnder(5, ['  rec = { n: 1 }', '  v = rec.show()']);
+    expect(errors.map(d => d.code)).toEqual(['MOV_FUNCTION_UNKNOWN']);
   });
 });
