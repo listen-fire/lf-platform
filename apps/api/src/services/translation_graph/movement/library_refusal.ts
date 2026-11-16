@@ -1,7 +1,8 @@
 // The one access check made when a run starts: every library the run's
-// imports reach must still stand. A library keeps its power only while one of
-// its writers holds use on each connection it names directly (like a definer
-// function, which fails when its owner loses the right). The answer is kept
+// imports reach must still stand. A library keeps its power only while each
+// connection name it makes directly resolves to a connection, and one of its
+// writers holds use on it (like a definer function, which fails when its owner
+// loses the right). The answer is kept
 // per library and recomputed when a list or a membership changes
 // (`recomputeLibraryStanding`); a run already going keeps its connections, so
 // only a run's start asks.
@@ -33,15 +34,22 @@ export async function libraryRefusal(input: { teamId: string; source: string }):
   let standing = await StatementStore.standingsOf(ids);
   // A library never worked out, or recorded as lost, is worked out again: a
   // member joining the team can restore a standing without any list changing.
-  const unsettled = ids.filter((id) => standing.get(id)?.lostConnectionId !== null || !standing.has(id));
+  const unsettled = ids.filter((id) => {
+    const recorded = standing.get(id);
+    return recorded === undefined || recorded.lostConnectionId !== null || recorded.unresolvedName !== null;
+  });
   if (unsettled.length > 0) {
     await recomputeLibraryStanding(teamId, unsettled);
     standing = await StatementStore.standingsOf(ids);
   }
   for (const [name, id] of idByName) {
-    const lost = standing.get(id)?.lostConnectionId;
-    if (lost === undefined || lost === null) continue;
-    const connection = await StatementStore.nameOf({ thing: 'connection', id: lost });
+    const recorded = standing.get(id);
+    if (recorded === undefined) continue;
+    if (recorded.unresolvedName !== null) {
+      return `The library "${name}" no longer stands: it names the connection "${recorded.unresolvedName}", which does not exist. A run that imports it is not started. Someone who may change "${name}" needs to name a connection that exists, or the connection needs to be created.`;
+    }
+    if (recorded.lostConnectionId === null) continue;
+    const connection = await StatementStore.nameOf({ thing: 'connection', id: recorded.lostConnectionId });
     return `The library "${name}" no longer stands: none of the people who may change it may use the connection "${connection}" it names. A run that imports it is not started. Someone who may change "${name}" needs use on "${connection}".`;
   }
   return undefined;

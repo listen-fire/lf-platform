@@ -102,6 +102,7 @@ import {
   creationStatements,
   exportsSomething,
   FIRST_EXPORT_REFUSAL,
+  hideUnreadableLibraries,
   inOneTransaction,
   librariesNamed,
   librariesRefusal,
@@ -1202,9 +1203,10 @@ async function checkForSave({ input, row, timer }: { input: SaveMovementInput; r
   // against its own catalog; this release's catalog is never assembled for it.
   const route = routeOf(row.languageVersion);
   if (route.kind === 'carried') {
-    const carried = await timer.step('diagnose', () =>
+    const checked = await timer.step('diagnose', () =>
       validateUnderCarried({ teamId: input.teamId, source: input.source, pin: route.pin, lane: route.lane, audience: input.audience }),
     );
+    const carried = { ...checked, diagnostics: await hideUnreadableLibraries(checked.diagnostics, input) };
     return {
       validation: carried,
       validity: assessMovementValidity({ diagnostics: carried.diagnostics, gaps: carried.gaps }),
@@ -1232,7 +1234,7 @@ async function checkForSave({ input, row, timer }: { input: SaveMovementInput; r
   // hard-blocks: a non-`valid` save without consent returns
   // `needsConfirmation` (source already persisted, so the broken movement is
   // retained as an artifact), never a wall.
-  const validation = await timer.step('diagnose', async () =>
+  const diagnosed = await timer.step('diagnose', async () =>
     diagnoseMovementSource(input.source, {
       catalog: teamCatalog.catalog,
       resolveCredentialId: teamCatalog.resolveCredentialId,
@@ -1242,6 +1244,7 @@ async function checkForSave({ input, row, timer }: { input: SaveMovementInput; r
       ...(teamCatalog.importsAcrossVersions !== undefined ? { importsAcrossVersions: teamCatalog.importsAcrossVersions } : {}),
     }),
   );
+  const validation = { ...diagnosed, diagnostics: await hideUnreadableLibraries(diagnosed.diagnostics, input) };
   return {
     validation,
     validity: assessMovementValidity({ diagnostics: validation.diagnostics, gaps: teamCatalog.gaps }),

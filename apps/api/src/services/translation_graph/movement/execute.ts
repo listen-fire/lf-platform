@@ -33,6 +33,7 @@ import { refusalOf, type CarriedEvent, type ResumingLane, type RunningCapability
 import { neverAsAny } from 'movement-engine/public/types';
 import { isLegacyLanguageVersion } from 'legacy-lang';
 import { describeError } from 'movement-engine/public/errors';
+import { withoutLibraryLines } from './save_access';
 import { logger } from 'movement-engine/public/log';
 import { legacyRunRefusal, refuseHeldRun, runMovement, resumeMovement, settleRaceFrame } from '../../movement_engine/dispatch/dispatch';
 import { MovementRunFailed, runFailureCause, type CancelGate, type MovementRunResult } from 'movement-engine/public/movement-engine';
@@ -155,6 +156,11 @@ async function interpretMovementFiring(input: {
     ...(input.dryRun !== undefined ? { dryRun: input.dryRun } : {}),
     ...(input.triggerMark !== undefined ? { triggerMark: input.triggerMark } : {}),
   });
+}
+
+/** What a failed run is recorded and reported as: the engine's words, without the lines of a library the check faulted. */
+function describeRunFailure(error: unknown): string {
+  return withoutLibraryLines(describeError(error));
 }
 
 // ── Entry point (a): trigger dispatch ───────────────────────────────────────
@@ -567,7 +573,7 @@ async function runMovementFiringInContext(
     const lost = leaseLostOutcome(err, context) ?? leaseLostBeforeSettle(lease, context);
     if (lost !== null) return noteLostFirstFiring(recorder.triggerRunId, lost);
     const { error, partial } = unwrapRunFailure(err);
-    const message = describeError(error);
+    const message = describeRunFailure(error);
     logger.error('[MovementEngine] movement firing failed', {
       triggerId: input.triggerId,
       movementId: input.movement.row.id,
@@ -901,7 +907,7 @@ async function resumeMovementFiringInContext(
     const lost = leaseLostOutcome(err, leaseContext) ?? leaseLostBeforeSettle(input.lease, leaseContext);
     if (lost !== null) return lost;
     const { error, partial } = unwrapRunFailure(err);
-    const message = describeError(error);
+    const message = describeRunFailure(error);
     logger.error('[MovementEngine] resume firing failed', {
       triggerId: input.triggerId,
       movementId: input.movementId,
@@ -1022,7 +1028,7 @@ export async function fireCallbackFiring(input: {
       const lost = leaseLostOutcome(err, leaseContext) ?? leaseLostBeforeSettle(input.lease, leaseContext);
       if (lost !== null) return lost;
       const { error, partial } = unwrapRunFailure(err);
-      const message = describeError(error);
+      const message = describeRunFailure(error);
       logger.error('[MovementEngine] callback body failed', { triggerId: input.triggerId, movementId: input.movementId, runId: input.runId, error: message });
       // The SEGMENT fails; the run does not.
       recorder.recordStepFailure({

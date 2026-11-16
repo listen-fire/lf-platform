@@ -342,7 +342,7 @@ const connectionsRouter = (procedure: typeof trpc.procedure) => {
         list.push({ name: importName, adapters: row.adapters });
         importedByCredentialId.set(row.id, list);
       }
-      const sharedThrough = await librariesSharingConnections(currentPrincipal(), teamId);
+      const sharedThrough = await librariesSharingConnections(teamId);
       const installsBySecretId = new Map<string, string[]>();
       for (const install of remoteInstalls) {
         const secretId = install.credentials_id as unknown as string | null;

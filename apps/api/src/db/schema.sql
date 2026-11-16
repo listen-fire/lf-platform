@@ -4645,14 +4645,18 @@ CREATE INDEX access_statement_team_idx ON automations.access_statement USING btr
 CREATE TRIGGER access_statement_audit AFTER INSERT OR DELETE OR UPDATE ON automations.access_statement FOR EACH ROW EXECUTE FUNCTION automations.audit();
 
 -- Whether a library file still stands: one of its writers holds use on each
--- connection it names directly. `lost_connection_id` is the first that fails,
--- null when it stands. Recomputed when a list, a membership or the library
--- changes (services/access/library_standing.ts); a run start reads it.
+-- connection it names directly, and each name resolves to a connection.
+-- `lost_connection_id` is the first connection that fails, `unresolved_name`
+-- the first name that resolves to none; both null when it stands. Recomputed
+-- when a list, a membership, a connection or the library changes
+-- (services/access/decide.ts); a run start reads it. A row whose connection
+-- is deleted goes with it, which a run start reads as not yet worked out.
 CREATE TABLE automations.library_standing (
     id uuid DEFAULT pg_catalog.gen_random_uuid() NOT NULL,
     team_id uuid NOT NULL, -- opaque tenant id; no foreign key (D3)
     movement_id uuid NOT NULL,
     lost_connection_id uuid,
+    unresolved_name text,
     checked_at timestamptz DEFAULT now() NOT NULL
 );
 
@@ -4666,7 +4670,7 @@ ALTER TABLE ONLY automations.library_standing
     ADD CONSTRAINT library_standing_movement_id_fkey FOREIGN KEY (movement_id) REFERENCES automations.movement(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY automations.library_standing
-    ADD CONSTRAINT library_standing_lost_connection_id_fkey FOREIGN KEY (lost_connection_id) REFERENCES automations.external_service_credentials(id) ON DELETE SET NULL;
+    ADD CONSTRAINT library_standing_lost_connection_id_fkey FOREIGN KEY (lost_connection_id) REFERENCES automations.external_service_credentials(id) ON DELETE CASCADE;
 
 CREATE INDEX library_standing_team_idx ON automations.library_standing USING btree (team_id);
 

@@ -32,7 +32,7 @@ import { granolaCredsParser } from '../../../services/credentials/connect_form_s
 import { evertraceCredsParser } from '@listen-fire/evertrace/api_client';
 import { dealroomCredsParser } from '@listen-fire/dealroom/api_client';
 import { mcpCredsParser } from '../../../services/translation_graph/adapters/mcp';
-import { persistCredential } from '../../../services/credentials/persist_credential';
+import { persistCredential, updateStoredCredential } from '../../../services/credentials/persist_credential';
 import { deleteCredential, forgetCachedClients } from '../../../services/credentials/delete_credential';
 import { intrinsicProvisionerForType } from '../../../services/credentials/intrinsic_provision';
 import { connectMethodForType } from '../../../services/credentials/connect_link';
@@ -364,15 +364,13 @@ const credentialsRouter = (procedure: typeof trpc.procedure) => {
           }
         }
 
-        await getAutomationsQb(['external_service_credentials'])
-          .updateTable('external_service_credentials')
-          .set({
-            name: input.name,
-            credentials: encrypted,
-            identifier,
-          })
-          .where('id', '=', input.id as ExternalServiceCredentialsId)
-          .executeTakeFirst();
+        await updateStoredCredential({
+          teamId: ctx.user.teamId as TeamId,
+          id: input.id,
+          name: input.name,
+          encrypted,
+          identifier,
+        });
 
         forgetCachedClients(input.type, input.id);
       }),

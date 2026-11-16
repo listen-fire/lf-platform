@@ -7,6 +7,7 @@ import type { TeamId } from '../../generated/kysely/core/Team';
 
 import { logger } from 'movement-engine/public/log';
 import { getAutomationsQb } from '../../lib/kysely';
+import { recomputeLibraryStanding } from '../access/decide';
 import { StatementStore } from '../access/statement';
 import { inOneTransaction } from '../context/one_transaction';
 import { decryptToken } from '../../lib/credentials';
@@ -114,5 +115,7 @@ export async function deleteCredential({ teamId, id }: { teamId: TeamId; id: Ext
       .where('team_id', '=', teamId)
       .execute();
     await StatementStore.deleteStatementsOf({ thing: 'connection', id }, { teamId });
+    // A name that resolved to it resolves to nothing now.
+    await recomputeLibraryStanding(teamId);
   });
 }

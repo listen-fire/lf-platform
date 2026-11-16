@@ -33,13 +33,14 @@
 
 import { LANGUAGE_VERSION, RUN_HOST_UNITS, entryPositionKeyOf, spellName, instanceSchemaKey, catalogSnapshotOf, type AdapterSpec, type Catalog, type CatalogSnapshot, type CredentialSpec, type SchemaFieldType, type InstanceSchema, type LanguageVersion, type PluginSpec, type ResolveFile } from 'movement-lang';
 import { isLegacyLanguageVersion, parseMovementExpression } from 'legacy-lang';
-import { parseTraversalPath, referencedConstructions, scanInstanceChains, surfaceNotEnumerated, type ConstructionRef, type InstanceChain } from 'legacy-lang';
+import { parseTraversalPath, referencedConstructions, referencedFileImports, scanInstanceChains, surfaceNotEnumerated, type ConstructionRef, type InstanceChain } from 'legacy-lang';
 
 import type { Expression } from 'movement-lang/expression/types';
+import type { Principal } from 'principal';
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { CatalogAudience } from './audience';
 
-import { readableIds } from '../../access/decide';
+import { accessTo, readableIds } from '../../access/decide';
 import type { AdapterManifest } from 'movement-engine/public/adapter';
 
 import { neverAsAny } from 'movement-engine/public/types';
@@ -747,13 +748,15 @@ async function assembleTeamCatalog(
         })
       : await allTeamMovementSources(teamId, { pin: rootPin, pins: filePins });
   const resolveFile = resolverOverSources(fileSources);
-  if (options.source !== undefined && options.audience.for !== 'run' && fileSources.size > 0) {
+  const person = options.audience.for;
+  if (options.source !== undefined && person !== 'run' && fileSources.size > 0) {
     credentialRows = await withConnectionsOfLibraries({
       teamId,
       manifests,
       usable: credentialRows,
       rootSource: options.source,
-      libraries: fileSources.values(),
+      libraries: fileSources,
+      principal: person,
     });
     credentialsByName = credentialImportNames({ rows: credentialRows, manifests });
   }
@@ -2124,9 +2127,11 @@ export async function resolveCredentialIdByImportName(input: {
 // ── DB helpers ──────────────────────────────────────────────────────────────
 
 /**
- * The connections a person may use, and those the libraries a file imports
- * name: use on a library covers the connections it reaches, so checking the
- * import has to see them. The file's own text never reaches beyond what the
+ * The connections a person may use, and those of the libraries the file
+ * imports that they may use: use on a library covers the connections it
+ * reaches (and the libraries it imports in turn), so checking the import has
+ * to see them. A library they may not use adds nothing, and neither does one
+ * reached only through it. The file's own text never reaches beyond what the
  * person may use: a connection named in the file itself stays hidden from them
  * unless they hold it, and the save refuses it.
  */
@@ -2135,14 +2140,32 @@ async function withConnectionsOfLibraries(input: {
   manifests: AdapterManifest[];
   usable: CredentialRow[];
   rootSource: string;
-  libraries: Iterable<string>;
+  /** Every file the import closure holds, by the name it is imported under. */
+  libraries: ReadonlyMap<string, string>;
+  principal: Principal;
 }): Promise<CredentialRow[]> {
   const all = await loadCredentialRows(input.teamId, { for: 'run' });
   const byName = credentialImportNames({ rows: all, manifests: input.manifests });
   const named = (source: string) => constructionsOf(source).flatMap((ref) => (ref.credential === undefined ? [] : [ref.credential]));
   const ownNames = new Set(named(input.rootSource));
+  const reachedFiles = new Set<string>();
+  const reach = (source: string) => {
+    for (const name of referencedFileImports(source)) {
+      const imported = input.libraries.get(name);
+      if (imported === undefined || reachedFiles.has(name)) continue;
+      reachedFiles.add(name);
+      reach(imported);
+    }
+  };
+  for (const name of new Set(referencedFileImports(input.rootSource))) {
+    const source = input.libraries.get(name);
+    const library = source === undefined ? null : await getMovementRowByName({ teamId: input.teamId, name });
+    if (source === undefined || library === null || !(await accessTo(input.principal, { target: { thing: 'automation', id: library.id }, verb: 'use' }))) continue;
+    reachedFiles.add(name);
+    reach(source);
+  }
   const reached = new Set(
-    [...input.libraries].flatMap(named).flatMap((name) => (ownNames.has(name) ? [] : [byName[name]?.id ?? ''])),
+    [...reachedFiles].flatMap((name) => named(input.libraries.get(name) ?? '')).flatMap((name) => (ownNames.has(name) ? [] : [byName[name]?.id ?? ''])),
   );
   const have = new Set(input.usable.map((row) => row.id));
   return [...input.usable, ...all.filter((row) => reached.has(row.id) && !have.has(row.id))];

@@ -18,7 +18,7 @@ import { StatementStore, type Grantee, type Target } from '../access/statement';
 import { forgetAffinityWorkspace } from '@listen-fire/affinity/api_client';
 import { encryptToken } from '../../lib/credentials';
 import { getAutomationsQb } from '../../lib/kysely';
-import { stateAtCreation } from '../access/decide';
+import { recomputeLibraryStanding, stateAtCreation } from '../access/decide';
 import { inOneTransaction } from '../context/one_transaction';
 import { defaultAppIdForType } from './app_id';
 import ExternalServiceType from '../../generated/kysely/automations/ExternalServiceType';
@@ -158,6 +158,8 @@ export async function persistCredential(input: PersistCredentialInput): Promise<
       carried = (await StatementStore.carryStatements(previous, created, { teamId: input.teamId })) || carried;
     }
     if (!carried) await stateAtCreation(created, { teamId: input.teamId, lists: [{ verb: 'use', grantees: input.use }] });
+    // A reconnect is a new row under an old name: the libraries naming it now resolve to it.
+    else await recomputeLibraryStanding(input.teamId);
   });
 
   // A workspace whose key was just (re)connected is a workspace somebody has
@@ -173,4 +175,27 @@ export async function persistCredential(input: PersistCredentialInput): Promise<
   }
 
   return id;
+}
+
+/**
+ * Store a changed name and key for a connection. A new name changes which
+ * connection a library's names resolve to, so the libraries are worked out
+ * again with it.
+ */
+export async function updateStoredCredential(input: {
+  teamId: TeamId;
+  id: string;
+  name: string;
+  encrypted: Buffer;
+  identifier: string | null;
+}): Promise<void> {
+  await inOneTransaction(async () => {
+    await getAutomationsQb(['external_service_credentials'])
+      .updateTable('external_service_credentials')
+      .set({ name: input.name, credentials: input.encrypted, identifier: input.identifier })
+      .where('id', '=', input.id as ExternalServiceCredentialsId)
+      .where('team_id', '=', input.teamId)
+      .executeTakeFirst();
+    await recomputeLibraryStanding(input.teamId);
+  });
 }

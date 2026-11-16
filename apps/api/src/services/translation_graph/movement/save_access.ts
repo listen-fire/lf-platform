@@ -199,14 +199,29 @@ export function librariesRefusal(unusable: readonly NamedLibrary[]): { refused: 
 }
 
 // How the checker reports a fault inside an imported file: on the importer's
-// import line, in the library's name and with its own line number.
+// import line, in the library's name and with its own line number. A fault
+// two levels down carries one such prefix per level, outermost first.
 const IN_LIBRARY = /^"([^"]+)" line \d+: /;
+
+/** The libraries a diagnostic's message passes through, outermost first. */
+function librariesInMessage(message: string): string[] {
+  const chain: string[] = [];
+  for (let rest = message; ; ) {
+    const match = IN_LIBRARY.exec(rest);
+    if (match === null || match[1] === undefined) return chain;
+    chain.push(match[1]);
+    rest = rest.slice(match[0].length);
+  }
+}
 
 /**
  * A diagnostic from inside a library the person may use but not read says so
  * and shows nothing of the library: not its line number, and not the text the
- * checker quotes from it. A person reads what they may read; a run's own
- * check (no person) reads everything.
+ * checker quotes from it. When the fault is deeper than the first library, the
+ * first library on the way down that they may not read is the one named, and
+ * what is below it stays unsaid. A person reads what they may read; a run's
+ * own check (no person) reads everything. Every check that reports to a person
+ * goes through this: validate, save, the carried route, the upgrade.
  */
 export async function hideUnreadableLibraries<D extends { message: string }>(
   diagnostics: readonly D[],
@@ -226,14 +241,34 @@ export async function hideUnreadableLibraries<D extends { message: string }>(
   };
   return Promise.all(
     diagnostics.map(async (diagnostic) => {
-      const library = IN_LIBRARY.exec(diagnostic.message)?.[1];
-      if (library === undefined || !(await hidden(library))) return diagnostic;
-      return {
-        ...diagnostic,
-        message: `The library "${library}" has a fault you cannot see: you may use it but not read it. Ask someone who may read it.`,
-      };
+      for (const library of librariesInMessage(diagnostic.message)) {
+        if (!(await hidden(library))) continue;
+        return {
+          ...diagnostic,
+          message: `The library "${library}" has a fault you cannot see: you may use it but not read it. Ask someone who may read it.`,
+        };
+      }
+      return diagnostic;
     }),
   );
+}
+
+// A diagnostic line of a failed run's check: its code, the importer's line,
+// then the library's own words.
+const RUN_CHECK_LINE = /^(\s*\S+ \(line \d+\): )"([^"]+)" line \d+: .*$/;
+
+/**
+ * A run's failure as it is recorded. The record is read by everyone who may
+ * read the importer, whether or not they may read the library the fault is in,
+ * and a record cannot know who will read it: so a fault the check found inside
+ * a library names the library and nothing of its lines. The library's readers
+ * see the fault by checking it.
+ */
+export function withoutLibraryLines(message: string): string {
+  return message
+    .split('\n')
+    .map((line) => line.replace(RUN_CHECK_LINE, (_whole, head: string, library: string) => `${head}The library "${library}" has a fault. Open the library to see it.`))
+    .join('\n');
 }
 
 /**
@@ -244,9 +279,9 @@ export async function hideUnreadableLibraries<D extends { message: string }>(
 export async function directNamesOf(id: string): Promise<DirectNames> {
   const target: Target<'automation'> = { thing: 'automation', id };
   const teamId = await StatementStore.teamOf(target);
-  if (teamId === undefined) return { connections: [], libraries: [] };
+  if (teamId === undefined) return { connections: [], libraries: [], unresolvedConnections: [] };
   const row = await getMovementRow({ teamId, id });
-  if (row === null) return { connections: [], libraries: [] };
+  if (row === null) return { connections: [], libraries: [], unresolvedConnections: [] };
   const [connections, libraries] = await Promise.all([
     connectionsNamed({ teamId, file: row.name, source: row.source }),
     librariesNamed({ teamId, source: row.source }),
@@ -254,6 +289,7 @@ export async function directNamesOf(id: string): Promise<DirectNames> {
   return {
     connections: connections.flatMap((c) => (c.id === undefined ? [] : [{ thing: 'connection' as const, id: c.id }])),
     libraries: libraries.flatMap((l) => (l.id === undefined ? [] : [{ thing: 'automation' as const, id: l.id }])),
+    unresolvedConnections: connections.flatMap((c) => (c.id === undefined ? [described(c.reach)] : [])),
   };
 }
 

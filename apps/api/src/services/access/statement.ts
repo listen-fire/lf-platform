@@ -339,8 +339,13 @@ async function librariesOf(teamId: string): Promise<string[]> {
   return rows.map((r) => r.thing_id);
 }
 
-/** What a file names directly: the connections its own `connect` statements name, and the libraries its own import lines name. Whatever does not resolve is left out. */
-type DirectNames = { connections: Target<'connection'>[]; libraries: Target<'automation'>[] };
+/**
+ * What a file names directly: the connections its own `connect` statements
+ * name, and the libraries its own import lines name. Whatever does not resolve
+ * is left out of those, and a connection name that resolves to none is listed
+ * by name: a library cannot stand on a connection that does not exist.
+ */
+type DirectNames = { connections: Target<'connection'>[]; libraries: Target<'automation'>[]; unresolvedConnections: string[] };
 
 /**
  * The file's direct names, read from its stored text. The reading belongs to
@@ -358,27 +363,30 @@ async function exportsSomething(target: Target<'automation'>): Promise<boolean> 
   return fileExportsSomething(target.id);
 }
 
-/** Where a library stands: undefined when it has not been worked out. `lostConnectionId` is null when it stands. */
-async function standingsOf(ids: readonly string[]): Promise<Map<string, { lostConnectionId: string | null }>> {
+/** A library's recorded standing: it stands when both are null. */
+type RecordedStanding = { lostConnectionId: string | null; unresolvedName: string | null };
+
+/** Where a library stands: undefined when it has not been worked out. */
+async function standingsOf(ids: readonly string[]): Promise<Map<string, RecordedStanding>> {
   const wanted = ids.filter(isUuid);
   if (wanted.length === 0) return new Map();
   const rows = await getAutomationsQb(['library_standing'])
     .selectFrom('library_standing')
-    .select(['movement_id', 'lost_connection_id'])
+    .select(['movement_id', 'lost_connection_id', 'unresolved_name'])
     .where('movement_id', 'in', wanted.map((id) => id as MovementId))
     .execute();
-  return new Map(rows.map((r) => [r.movement_id, { lostConnectionId: r.lost_connection_id }]));
+  return new Map(rows.map((r) => [r.movement_id, { lostConnectionId: r.lost_connection_id, unresolvedName: r.unresolved_name }]));
 }
 
 async function setStanding(
   target: Target<'automation'>,
-  options: { teamId: string; lostConnectionId: string | null },
+  options: { teamId: string } & RecordedStanding,
 ): Promise<void> {
   const lost = options.lostConnectionId === null ? null : (options.lostConnectionId as ExternalServiceCredentialsId);
   await getAutomationsQb(['library_standing'])
     .insertInto('library_standing')
-    .values({ team_id: options.teamId, movement_id: target.id as MovementId, lost_connection_id: lost })
-    .onConflict((oc) => oc.column('movement_id').doUpdateSet({ lost_connection_id: lost, checked_at: sql`now()` }))
+    .values({ team_id: options.teamId, movement_id: target.id as MovementId, lost_connection_id: lost, unresolved_name: options.unresolvedName })
+    .onConflict((oc) => oc.column('movement_id').doUpdateSet({ lost_connection_id: lost, unresolved_name: options.unresolvedName, checked_at: sql`now()` }))
     .execute();
 }
 
@@ -426,5 +434,6 @@ export {
   type Grantee,
   type GranteeKind,
   type DirectNames,
+  type RecordedStanding,
   StatementStore,
 };

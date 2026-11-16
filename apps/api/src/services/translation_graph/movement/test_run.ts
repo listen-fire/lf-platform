@@ -34,6 +34,7 @@ import { productionEngineHost } from './engine_host';
 import { tenantOfTeam } from './tenant';
 import { inMemoryRawTextStore } from './raw_text_store';
 import { InMemoryWriteLocks } from 'movement-engine/public/write-locks';
+import { libraryRefusal } from './library_refusal';
 import { getMovementRow } from './store';
 import { carriedRunLaneOf, runCarriedSegment } from './carried_run';
 import { describeError } from 'movement-engine/public/errors';
@@ -111,12 +112,18 @@ export async function runMovementTestRun(
   // A pin a carried version runs is rehearsed by that version (its manual
   // listen); this release's catalog and model never read its text.
   if ((await carriedRunLaneOf(movementRow.languageVersion)) !== undefined) {
+    const libraryLost = await libraryRefusal({ teamId: input.teamId, source: movementRow.source });
+    if (libraryLost !== undefined) return { ok: false, error: libraryLost };
     return runCarriedTestRun({ teamId: input.teamId, audience: input.audience, movementId: movementRow.id, ...(input.seed !== undefined ? { text: input.seed } : {}) });
   }
   // A pin this build does not run is refused before anything reads the
   // program: no introspection of its source, no model inventing an event.
   const refusal = heldRunRefusal(movementRow.languageVersion);
   if (refusal !== undefined) return { ok: false, error: refusal };
+  // A test run reads the live systems through a library's connections like any
+  // run, so a library that no longer stands is refused here too.
+  const libraryLost = await libraryRefusal({ teamId: input.teamId, source: movementRow.source });
+  if (libraryLost !== undefined) return { ok: false, error: libraryLost };
 
   // The trigger's kind IS the source adapter slug (Model A); resolve any
   // legacy uppercase channel kind to the canonical slug so the synthetic

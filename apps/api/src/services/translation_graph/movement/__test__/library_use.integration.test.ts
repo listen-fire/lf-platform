@@ -24,7 +24,12 @@ import { userPrincipal } from '../../../principal';
 import { ProvisioningService } from '../../../provisioning';
 import { TeamMembershipService } from '../../../team_membership';
 import { validateMovementForTeam } from '../authoring';
+import { movementCatalogForTeam } from '../catalog';
+import { encryptToken } from '../../../../lib/credentials';
+import { deleteCredential } from '../../../credentials/delete_credential';
+import { persistCredential, updateStoredCredential } from '../../../credentials/persist_credential';
 import { libraryRefusal } from '../library_refusal';
+import { runMovementTestRun } from '../test_run';
 import { saveMovement } from '../provision';
 import { dispatchTriggerByIdEvent } from '../../triggers/router';
 import { mintMovementVersionIfChanged } from '../version_store';
@@ -225,15 +230,13 @@ describe('use on a library (real Postgres)', () => {
     expect(await libraryRefusal({ teamId, source: IMPORTER })).toContain('"finance_chat"');
   });
 
-  it('a_connection_lists_the_libraries_it_is_shared_through, to those who may know of them', async () => {
+  it('a_connection_lists_the_libraries_it_is_shared_through, by name, to anyone who may see the connection', async () => {
     await file('helpers', LIBRARY, { read: [user(bob)], write: [user(bob)], use: [user(alice)] });
     await file('secret', LIBRARY, { read: [user(bob)], write: [user(bob)], use: [user(bob)] });
     await file('plain', IMPORTER, { read: [team], write: [team] });
 
-    expect(await librariesSharingConnections(asUser(bob), teamId)).toEqual(new Map([[finance, ['helpers', 'secret']]]));
-    // Alice may use `helpers` and so knows of it; she knows nothing of `secret`.
-    expect(await librariesSharingConnections(asUser(alice), teamId)).toEqual(new Map([[finance, ['helpers']]]));
-    expect(await librariesSharingConnections(asUser(carol), teamId)).toEqual(new Map());
+    // Only names: a library nobody here may read or use is still named, so the holders of the connection learn where it is shared.
+    expect(await librariesSharingConnections(teamId)).toEqual(new Map([[finance, ['helpers', 'secret']]]));
   });
 
   it('refuses a run at its start, recorded failed and naming the library and the connection, through the real dispatch path', async () => {
@@ -272,5 +275,206 @@ describe('use on a library (real Postgres)', () => {
       .execute();
     expect(runs).toEqual([{ status: 'failed', failure_reason: expect.stringContaining('The library "helpers" no longer stands') }]);
     expect(runs[0]?.failure_reason).toContain('"finance_chat"');
+  });
+
+  describe('a library that names a connection which does not resolve', () => {
+    const GHOST_LIBRARY = LIBRARY.replace(/finance_chat/g, 'ghost_chat');
+    const ghost = (use: Grantee[], options: { replaceExisting?: boolean } = {}) =>
+      runWithPrincipal(asUser(carol), () =>
+        persistCredential({ teamId, userId: carol, name: 'ghost_chat', use, type: ExternalServiceType.ATTIO, credentials: { apiKey: 'k' }, ...options }),
+      );
+    const standingOf = async (id: string) => (await StatementStore.standingsOf([id])).get(id);
+
+    it('does not stand on a name that resolves to nothing', async () => {
+      const helpers = await file('helpers', GHOST_LIBRARY, { read: [team], write: [user(bob)], use: [team] });
+      await recomputeLibraryStanding(teamId);
+      expect(await standingOf(helpers)).toMatchObject({ lostConnectionId: null, unresolvedName: 'ghost_chat' });
+      expect(await libraryRefusal({ teamId, source: IMPORTER })).toContain('"ghost_chat"');
+    });
+
+    it('a connection created later under the name is not reached by a library whose writers may not use it', async () => {
+      const helpers = await file('helpers', GHOST_LIBRARY, { read: [team], write: [user(bob)], use: [team] });
+      await recomputeLibraryStanding(teamId);
+
+      const created = await ghost([user(carol)]);
+      expect(await standingOf(helpers)).toEqual({ lostConnectionId: created, unresolvedName: null });
+      expect(await libraryRefusal({ teamId, source: IMPORTER })).toContain('"ghost_chat"');
+    });
+
+    it('stands once a writer may use the connection created under the name', async () => {
+      const helpers = await file('helpers', GHOST_LIBRARY, { read: [team], write: [user(bob)], use: [team] });
+      await recomputeLibraryStanding(teamId);
+      await ghost([user(bob)]);
+      expect(await standingOf(helpers)).toEqual({ lostConnectionId: null, unresolvedName: null });
+      expect(await libraryRefusal({ teamId, source: IMPORTER })).toBeUndefined();
+    });
+
+    it('a reconnect under the same name is worked out again', async () => {
+      const helpers = await file('helpers', GHOST_LIBRARY, { read: [team], write: [user(bob)], use: [team] });
+      await ghost([user(bob)]);
+      expect((await standingOf(helpers))?.lostConnectionId).toBeNull();
+
+      // The reconnect keeps the old row's use list (Bob); the standing stays, and points at the new row only if it were lost.
+      await ghost([user(carol)], { replaceExisting: true });
+      expect(await standingOf(helpers)).toEqual({ lostConnectionId: null, unresolvedName: null });
+    });
+
+    it('deleting the connection a library stands on stops it standing, and recreating it for others does not restore it', async () => {
+      const helpers = await file('helpers', LIBRARY, { read: [team], write: [user(bob)], use: [team] });
+      await recomputeLibraryStanding(teamId);
+      expect((await standingOf(helpers))?.lostConnectionId).toBeNull();
+
+      await deleteCredential({ teamId, id: finance });
+      expect(await libraryRefusal({ teamId, source: IMPORTER })).toContain('"finance_chat"');
+
+      await runWithPrincipal(asUser(carol), () =>
+        persistCredential({ teamId, userId: carol, name: 'finance_chat', use: [user(carol)], type: ExternalServiceType.ATTIO, credentials: { apiKey: 'k' } }),
+      );
+      expect(await libraryRefusal({ teamId, source: IMPORTER })).toContain('"finance_chat"');
+    });
+
+    it('deleting the connection a recorded loss points at is still a loss at the next run start', async () => {
+      const helpers = await file('helpers', LIBRARY, { read: [team], write: [user(carol)], use: [team] });
+      await recomputeLibraryStanding(teamId);
+      expect((await standingOf(helpers))?.lostConnectionId).toBe(finance);
+
+      await deleteCredential({ teamId, id: finance });
+      expect(await libraryRefusal({ teamId, source: IMPORTER })).toContain('"finance_chat"');
+    });
+
+    it('renaming a connection moves what a library’s names resolve to', async () => {
+      const helpers = await file('helpers', LIBRARY, { read: [team], write: [user(bob)], use: [team] });
+      await recomputeLibraryStanding(teamId);
+      expect((await standingOf(helpers))?.lostConnectionId).toBeNull();
+
+      await updateStoredCredential({ teamId, id: finance, name: 'finance_chat_2', encrypted: await encryptToken('{"apiKey":"k"}', finance), identifier: null });
+      expect(await standingOf(helpers)).toMatchObject({ unresolvedName: 'finance_chat' });
+    });
+  });
+
+  describe('the catalog a person checks a file against', () => {
+    const OUTER = 'import { tally } from "helpers"\n\nexport function wrap(t: <text>) {\n  return tally(t)\n}\n';
+    const throughOuter = IMPORTER.replace('{ tally } from "helpers"', '{ wrap } from "outer"').replace('tally(', 'wrap(');
+    const seenBy = async (userId: UserId, source: string) =>
+      Object.keys((await movementCatalogForTeam(teamId, { audience: { for: asUser(userId) }, source })).credentialsByName);
+
+    it('holds the connections of libraries they may use, and none of a library they may not use', async () => {
+      await file('helpers', LIBRARY, { read: [team], write: [user(bob)], use: [user(alice)] });
+      expect(await seenBy(alice, IMPORTER)).toContain('finance_chat');
+      expect(await seenBy(carol, IMPORTER)).not.toContain('finance_chat');
+    });
+
+    it('holds the connections of a library reached only through a library they may use', async () => {
+      await file('helpers', LIBRARY, { read: [team], write: [user(bob)], use: [user(bob)] });
+      await file('outer', OUTER, { read: [team], write: [user(bob)], use: [user(alice)] });
+      expect(await seenBy(alice, throughOuter)).toContain('finance_chat');
+      expect(await seenBy(carol, throughOuter)).not.toContain('finance_chat');
+    });
+  });
+
+  describe('use_without_read_sees_no_source, on every path that reports a check to a person', () => {
+    const saveUnconfirmed = (userId: UserId, source: string, name: string) => {
+      const principal = asUser(userId);
+      return runWithPrincipal(principal, () =>
+        saveMovement({ teamId, source, name, audience: { for: principal }, userId, intent: 'create', statements: { read: [team], write: [user(userId)] } }),
+      );
+    };
+
+    it('a save reports the fault without the library’s lines, and stores the same', async () => {
+      await file('helpers', BROKEN_LIBRARY, { read: [user(bob)], write: [user(bob)], use: [user(alice)] });
+      const result = await saveUnconfirmed(alice, IMPORTER, 'sales');
+      expect(result).toMatchObject({ ok: false, needsConfirmation: true });
+      const shown = JSON.stringify(result);
+      expect(shown).toContain('helpers');
+      expect(shown).not.toContain('nosuch');
+      expect(shown).not.toMatch(/helpers\\?" line \d/);
+      const stored = await getAutomationsQb(['movement'])
+        .selectFrom('movement')
+        .select('validity_reason')
+        .where('team_id', '=', teamId)
+        .where('name', '=', 'sales')
+        .executeTakeFirstOrThrow();
+      expect(JSON.stringify(stored.validity_reason)).not.toContain('nosuch');
+    });
+
+    it('a fault two levels down names only the unreadable library, to a reader of the outer one', async () => {
+      const OUTER = 'import { tally } from "inner"\n\nexport function wrap(t: <text>) {\n  return tally(t)\n}\n';
+      const importer = IMPORTER.replace('{ tally } from "helpers"', '{ wrap } from "outer"').replace('tally(', 'wrap(');
+      await file('inner', BROKEN_LIBRARY, { read: [user(bob)], write: [user(bob)], use: [user(bob), user(alice)] });
+      await file('outer', OUTER, { read: [team], write: [user(bob)], use: [user(alice)] });
+
+      const validation = await validateMovementForTeam({ teamId, source: importer, audience: { for: asUser(alice) } });
+      const shown = JSON.stringify(validation.diagnostics);
+      expect(shown).toContain('inner');
+      expect(shown).not.toContain('nosuch');
+      expect(shown).not.toMatch(/inner\\?" line \d/);
+
+      expect(JSON.stringify(await saveUnconfirmed(alice, importer, 'sales'))).not.toContain('nosuch');
+    });
+  });
+
+  it('a_test_run_is_refused_like_a_live_one, before anything is read through the library’s connection', async () => {
+    await file('helpers', LIBRARY, { read: [team], write: [user(carol)], use: [team] });
+    const movementId = await file('sales', IMPORTER, { read: [team], write: [team] });
+    const triggerId = randomUUID();
+    await getAutomationsQb(['trigger'])
+      .insertInto('trigger')
+      .values({
+        id: triggerId as TriggerId,
+        team_id: teamId,
+        name: 'movement/sales/go',
+        kind: 'manual',
+        config: {} as never,
+        movement_id: movementId as MovementId,
+        fired_movement_name: 'go',
+        run_mode: 'live',
+        provisioned_by_setup_agent: false,
+      } as never)
+      .execute();
+    const invent = jest.fn(async () => ({ Text: 'hello' }));
+
+    const result = await runMovementTestRun({ teamId, audience: { for: asUser(alice) }, triggerId, invent });
+
+    expect(result).toMatchObject({ ok: false, error: expect.stringContaining('The library "helpers" no longer stands') });
+    expect(invent).not.toHaveBeenCalled();
+  });
+
+  it('a_run_failure_inside_a_library_shows_its_importer’s_readers_no_library_lines', async () => {
+    const helpers = await file('helpers', BROKEN_LIBRARY, { read: [user(bob)], write: [user(bob)], use: [team] });
+    await mintMovementVersionIfChanged({ teamId, movementId: helpers, source: BROKEN_LIBRARY, languageVersion: LANGUAGE_VERSION });
+    const importer = IMPORTER.replace('tally(run.Text)', 'tally("hello")');
+    const movementId = await file('sales', importer, { read: [team], write: [team] });
+    await mintMovementVersionIfChanged({ teamId, movementId, source: importer, languageVersion: LANGUAGE_VERSION });
+    const triggerId = randomUUID();
+    await getAutomationsQb(['trigger'])
+      .insertInto('trigger')
+      .values({
+        id: triggerId as TriggerId,
+        team_id: teamId,
+        name: 'movement/sales/go',
+        kind: 'manual',
+        config: {} as never,
+        movement_id: movementId as MovementId,
+        fired_movement_name: 'go',
+        run_mode: 'live',
+        provisioned_by_setup_agent: false,
+      } as never)
+      .execute();
+    const event: TriggerEvent = {
+      pipelineInputId: `trigger:${triggerId}`,
+      adapterType: 'manual',
+      triggerType: 'webhook',
+      payload: { firedAt: new Date().toISOString(), text: 'hello' },
+    };
+
+    await dispatchTriggerByIdEvent({ teamId, triggerId, event });
+
+    const [run] = await getAutomationsQb(['trigger_run']).selectFrom('trigger_run').where('team_id', '=', teamId).selectAll().execute();
+    expect(run?.status).toBe('failed');
+    // Everything a reader of the importer is shown of the run: the reason, the steps' errors.
+    const recorded = JSON.stringify([run?.failure_reason, run?.steps, run?.errors]);
+    expect(recorded).toContain('helpers');
+    expect(recorded).not.toContain('nosuch');
+    expect(recorded).not.toMatch(/helpers\\?" line \d/);
   });
 });

@@ -15,8 +15,8 @@ const mockTable: {
   memberSince: string[];
   rows: Row[];
   /** What each file names directly, by file id; a file in here exports. */
-  names: Map<string, { connections: Target<'connection'>[]; libraries: Target<'automation'>[] }>;
-  standing: Map<string, string | null>;
+  names: Map<string, { connections: Target<'connection'>[]; libraries: Target<'automation'>[]; unresolvedConnections?: string[] }>;
+  standing: Map<string, { lostConnectionId: string | null; unresolvedName: string | null }>;
 } = { things: new Map(), members: new Map(), memberSince: [], rows: [], names: new Map(), standing: new Map() };
 
 jest.mock('../statement', () => {
@@ -66,12 +66,12 @@ jest.mock('../statement', () => {
         ...new Set(mockTable.rows.filter((r) => r.teamId === teamId && r.target.thing === 'automation' && r.verb === 'use').map((r) => r.target.id)),
       ],
       exportsSomething: async (target: Target) => mockTable.names.has(target.id),
-      namedBy: async (target: Target) => mockTable.names.get(target.id) ?? { connections: [], libraries: [] },
+      namedBy: async (target: Target) => ({ unresolvedConnections: [], ...(mockTable.names.get(target.id) ?? { connections: [], libraries: [] }) }),
       nameOf: async (target: Target) => `name-of-${target.id.slice(-1)}`,
       standingsOf: async (ids: string[]) =>
-        new Map(ids.flatMap((id) => (mockTable.standing.has(id) ? [[id, { lostConnectionId: mockTable.standing.get(id) ?? null }] as const] : []))),
-      setStanding: async (target: Target, options: { lostConnectionId: string | null }) => {
-        mockTable.standing.set(target.id, options.lostConnectionId);
+        new Map(ids.flatMap((id) => { const standing = mockTable.standing.get(id); return standing === undefined ? [] : [[id, standing] as const]; })),
+      setStanding: async (target: Target, options: { lostConnectionId: string | null; unresolvedName: string | null }) => {
+        mockTable.standing.set(target.id, { lostConnectionId: options.lostConnectionId, unresolvedName: options.unresolvedName });
       },
       // Membership is keyed by a uuid column, which Postgres compares without
       // regard to case, and it answers with the canonical lowercase id.
@@ -132,6 +132,7 @@ const NOTES: Target<'automation'> = { thing: 'automation', id: 'd0000000-0000-40
 const ELSEWHERE: Target<'automation'> = { thing: 'automation', id: 'd0000000-0000-4000-8000-000000000003' };
 const LEDGER: Target<'automation'> = { thing: 'automation', id: 'd0000000-0000-4000-8000-000000000004' };
 const FINANCE: Target<'connection'> = { thing: 'connection', id: 'c0000000-0000-4000-8000-000000000001' };
+const SECOND: Target<'connection'> = { thing: 'connection', id: 'c0000000-0000-4000-8000-000000000002' };
 
 function member(teamId: string, userId: string, access: Access): void {
   mockTable.members.set(`${teamId}:${userId}`, access);
@@ -827,27 +828,40 @@ describe('use on a library', () => {
 
   it('stands while one of its writers holds use on each connection it names, worked out when a list changes', async () => {
     await recomputeLibraryStanding(TEAM, [LEDGER.id]);
-    expect(mockTable.standing.get(LEDGER.id)).toBeNull();
+    expect(mockTable.standing.get(LEDGER.id)).toEqual({ lostConnectionId: null, unresolvedName: null });
 
     // Bob, its only writer, loses the connection: the library stops standing, naming the connection.
     await setStatement(person(ALICE), { target: FINANCE, verb: 'use', grantees: [user(CAROL)] });
-    expect(mockTable.standing.get(LEDGER.id)).toBe(FINANCE.id);
+    expect(mockTable.standing.get(LEDGER.id)).toEqual({ lostConnectionId: FINANCE.id, unresolvedName: null });
 
     // Another writer who holds it restores it.
     await setStatement(person(BOB), { target: LEDGER, verb: 'write', grantees: [user(BOB), user(CAROL)] });
-    expect(mockTable.standing.get(LEDGER.id)).toBeNull();
+    expect(mockTable.standing.get(LEDGER.id)).toEqual({ lostConnectionId: null, unresolvedName: null });
+  });
+
+  it('does not stand on a connection name that resolves to nothing', async () => {
+    mockTable.names.set(LEDGER.id, { connections: [FINANCE], libraries: [SALES_LIB], unresolvedConnections: ['ghost_chat'] });
+    await recomputeLibraryStanding(TEAM, [LEDGER.id]);
+    expect(mockTable.standing.get(LEDGER.id)).toEqual({ lostConnectionId: null, unresolvedName: 'ghost_chat' });
+  });
+
+  it('is worked out again when a connection is created, since a library’s name may now resolve to it', async () => {
+    await recomputeLibraryStanding(TEAM, [LEDGER.id]);
+    mockTable.names.set(LEDGER.id, { connections: [FINANCE, SECOND], libraries: [SALES_LIB] });
+    await stateAtCreation(SECOND, { teamId: TEAM, lists: [{ verb: 'use', grantees: [user(CAROL)] }] });
+    expect(mockTable.standing.get(LEDGER.id)).toEqual({ lostConnectionId: SECOND.id, unresolvedName: null });
   });
 
   it('is worked out again when a writer leaves the team', async () => {
     stated(LEDGER, 'write', [user(CAROL)]);
     stated(FINANCE, 'use', [user(CAROL)]);
     await recomputeLibraryStanding(TEAM);
-    expect(mockTable.standing.get(LEDGER.id)).toBeNull();
+    expect(mockTable.standing.get(LEDGER.id)).toEqual({ lostConnectionId: null, unresolvedName: null });
 
     leaves(TEAM, CAROL);
     await passOnWhatTheyHeld({ teamId: TEAM, userId: CAROL, because: 'left' });
     // Bob still writes it but lost the connection long ago in this setup: only Carol held both.
-    expect(mockTable.standing.get(LEDGER.id)).toBeNull();
+    expect(mockTable.standing.get(LEDGER.id)).toEqual({ lostConnectionId: null, unresolvedName: null });
   });
 
   it('a library with no writer that holds the connection does not stand after the last holder leaves', async () => {
@@ -855,10 +869,10 @@ describe('use on a library', () => {
     stated(FINANCE, 'use', [user(CAROL)]);
     stated(LEDGER, 'write', [user(BOB), user(CAROL)]);
     await recomputeLibraryStanding(TEAM);
-    expect(mockTable.standing.get(LEDGER.id)).toBeNull();
+    expect(mockTable.standing.get(LEDGER.id)).toEqual({ lostConnectionId: null, unresolvedName: null });
 
     leaves(TEAM, CAROL);
     await passOnWhatTheyHeld({ teamId: TEAM, userId: CAROL, because: 'left' });
-    expect(mockTable.standing.get(LEDGER.id)).toBe(FINANCE.id);
+    expect(mockTable.standing.get(LEDGER.id)).toEqual({ lostConnectionId: FINANCE.id, unresolvedName: null });
   });
 });

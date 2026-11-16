@@ -18,6 +18,8 @@ export default interface LibraryStandingTable {
 
   lost_connection_id: ColumnType<ExternalServiceCredentialsId | null, ExternalServiceCredentialsId | null, ExternalServiceCredentialsId | null>;
 
+  unresolved_name: ColumnType<string | null, string | null, string | null>;
+
   checked_at: ColumnType<Date, Date | string | undefined, Date | string>;
 }
 

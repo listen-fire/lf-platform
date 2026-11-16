@@ -14,7 +14,7 @@ import { neverAsAny } from 'movement-engine/public/types';
 
 import { meets, narrower, type Access, type Principal } from 'principal';
 
-import { StatementStore, type Grantee, type StatedVerb, type Target, type Thing, type Verb } from './statement';
+import { StatementStore, type Grantee, type RecordedStanding, type StatedVerb, type Target, type Thing, type Verb } from './statement';
 
 type StatementRefusal =
   | 'empty'
@@ -495,6 +495,8 @@ async function stateAtCreation<T extends Thing>(
   const checked: { verb: StatedVerb<T>; grantees: Grantee[] }[] = [];
   for (const list of lists) checked.push({ verb: list.verb, grantees: await checkedList(teamId, list) });
   for (const list of checked) await StatementStore.replaceGrants(target, { teamId, ...list });
+  // A new connection may be the one a library's name was waiting for.
+  if (target.thing === 'connection') await recomputeLibraryStanding(teamId);
 }
 
 /** The team's members these lists admit, as the team stands now: the people who hold any of them. */
@@ -586,14 +588,16 @@ async function passOnWhatTheyHeld(input: {
 }
 
 /**
- * Whether a library stands: for every connection it names directly, at least
- * one of its writers holds use on it, as the team stands now. Returns the
- * first connection that fails, or null when it stands. A library with no
- * writer stands on nothing.
+ * Whether a library stands: every connection name it makes directly resolves
+ * to a connection, and for each of those at least one of its writers holds use
+ * on it, as the team stands now. Names the first that fails, or neither when
+ * it stands. A library with no writer stands on nothing.
  */
-async function lostConnectionOf(library: Target<'automation'>, teamId: string): Promise<string | null> {
-  const { connections } = await StatementStore.namedBy(library);
-  if (connections.length === 0) return null;
+async function standingOf(library: Target<'automation'>, teamId: string): Promise<RecordedStanding> {
+  const { connections, unresolvedConnections } = await StatementStore.namedBy(library);
+  const [unresolvedName = null] = unresolvedConnections;
+  if (unresolvedName !== null) return { lostConnectionId: null, unresolvedName };
+  if (connections.length === 0) return { lostConnectionId: null, unresolvedName: null };
   const writers = await membersAdmitted(teamId, [
     { verb: 'write', grantees: await StatementStore.grantsOf(library, { teamId, verb: 'write' }) },
   ]);
@@ -601,23 +605,25 @@ async function lostConnectionOf(library: Target<'automation'>, teamId: string): 
     const users = await membersAdmitted(teamId, [
       { verb: 'use', grantees: await StatementStore.grantsOf(connection, { teamId, verb: 'use' }) },
     ]);
-    if (![...writers].some((writer) => users.has(writer))) return connection.id;
+    if (![...writers].some((writer) => users.has(writer))) return { lostConnectionId: connection.id, unresolvedName: null };
   }
-  return null;
+  return { lostConnectionId: null, unresolvedName: null };
 }
 
 /**
  * Work out again whether libraries stand and keep the answer, for the given
  * files of the team or, with none given, every file with a use list. Called
- * when a list changes, a membership changes, or a library is saved; a run
- * start reads the answer and never works it out for a run already going.
+ * when a list changes, a membership changes, a connection is created, renamed,
+ * reconnected or deleted (which changes what a library's names resolve to), or
+ * a library is saved; a run start reads the answer and never works it out for
+ * a run already going.
  */
 async function recomputeLibraryStanding(teamId: string, movementIds?: readonly string[]): Promise<void> {
   const ids = movementIds ?? (await StatementStore.librariesOf(teamId));
   for (const id of ids) {
     const library: Target<'automation'> = { thing: 'automation', id };
     if ((await StatementStore.teamOf(library)) !== teamId) continue;
-    await StatementStore.setStanding(library, { teamId, lostConnectionId: await lostConnectionOf(library, teamId) });
+    await StatementStore.setStanding(library, { teamId, ...(await standingOf(library, teamId)) });
   }
 }
 
