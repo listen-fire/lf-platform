@@ -1,7 +1,8 @@
-// Release 0.15's engine, checker and listen judge, as one door. The platform's
-// run host is shared by every version it runs (Henry, 2026-11-16: "One host,
-// two engines"): a 0.15 pin is parsed, checked, planned, judged and run by
-// 0.15's own packages here, and everything else of its run is the platform's.
+// Release 0.15's engine, checker, modules and listen judge, as one door. The
+// platform's run host is shared by every version it runs (Henry, 2026-11-16:
+// "One host, two engines"): a 0.15 pin is parsed, checked, planned, judged and
+// run by 0.15's own packages here, against the catalog 0.15's own modules
+// describe (`lane/`), and everything else of its run is the platform's.
 //
 // Only plain data leaves this file: a parse, a check or a run that fails comes
 // back as its name, message and code, never as one of 0.15's classes, which the
@@ -50,6 +51,9 @@ import { MovementEngineError, MovementRunFailed, RunCancelledSignal } from '@lis
 import type { EngineHost } from '@listen-fire/engine/public/host';
 
 export { LANGUAGE_VERSION } from '@listen-fire/movement-lang';
+export { checkSource, completionsAt, definitionAt, hoverAt } from './lane/check';
+export { outlineOf } from './lane/outline';
+export { storyOf } from './lane/story';
 
 /** A parse, as plain data: the program, or where (`loc`) and why (`message`)
  *  it does not parse. */

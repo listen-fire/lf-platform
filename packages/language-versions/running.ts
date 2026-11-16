@@ -20,6 +20,7 @@ import type { WriteLocks } from 'movement-engine/public/write-locks';
 import type { ModuleCredential, ModuleFiles, ModuleIdentities, ModuleKv, ModuleLog, ModuleModels } from 'module-kit';
 import type { KgStore } from '@listen-fire/kg/store';
 import type { SlackComposeChat } from '@listen-fire/slack/compose';
+import type { SystemRecords } from '@listen-fire/system/records';
 
 import type { TeamFacts } from './index';
 
@@ -75,8 +76,8 @@ export interface PlatformModuleParts {
   whatsappNumber: string | null;
   isExposedFileUrl(url: string): boolean;
   readDocument(ref: FileRef, options: { teamId: string }): Promise<ResolveFileRefResult>;
-  /** What a carried version's system module reads of the platform's own events. */
-  systemRecords: CarriedSystemRecords;
+  /** What a carried version's system module reads of a team's own events. */
+  systemRecords(tenant: string): CarriedSystemRecords;
   /** A team's install of a remote adapter: its stored manifest file (JSON,
    *  read by the version in its own terms), its server secret, the document
    *  store a fetched file lands in, and the connection's provider credential
@@ -479,27 +480,9 @@ export interface ReadDeliveryOutcome {
 
 export type GateAnswer = { kind: 'suppress'; reason: string } | { kind: 'proceed' } | { kind: 'needs-actor'; candidates: unknown };
 
-/** The platform's own events, as a carried version's system module reads them. */
-export interface CarriedSystemRecords {
-  failedRuns(input: { tenant: string; after: { failedAt: string; runId: string }; until: Date; limit: number }): Promise<
-    Array<{ runId: string; automation: { id: string; name: string } | null; firedMovement?: string; url?: string; reason: string; failedAt: Date }>
-  >;
-  storedEvents(input: { tenant: string; kinds: readonly string[]; after: { occurredAt: string; id: string }; until: Date; limit: number }): Promise<
-    Array<{ id: string; kind: string; payload: CarriedSystemEventPayload; occurredAt: Date }>
-  >;
-  webBaseUrl(): string;
-}
-
-/** A stored platform event's payload, as its version's module reads it. */
-export interface CarriedSystemEventPayload {
-  automation: string;
-  automationId: string;
-  runId: string;
-  version: string;
-  reason: string;
-  url: string;
-  at: string;
-}
+/** The platform's own events for one team, as a carried version's system
+ *  module reads them: 0.15's records are this release's (`@listen-fire/system`). */
+export type CarriedSystemRecords = SystemRecords;
 
 export interface AddressRequest {
   teamId: string;

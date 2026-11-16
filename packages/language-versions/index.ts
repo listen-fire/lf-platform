@@ -354,7 +354,20 @@ const CURRENT_VERSION: CarriedVersion = {
   provides: { check: CURRENT, help: CURRENT, run: CURRENT, resume: CURRENT, listen: CURRENT },
 };
 
-const CARRIED: readonly CarriedVersion[] = [CURRENT_VERSION];
+const loadLang015 = () => import('@listen-fire/lang-0.15');
+
+/** Release 0.15, carried while any 0.15 pin remains (Henry's ruling: every
+ *  release keeps the previous language running). Its own checker, against the
+ *  catalog its own modules describe, judges its pins: 0.15's checker cannot
+ *  read this release's catalog. */
+const VERSION_015: CarriedVersion = {
+  key: '0.15',
+  release: '0.15.3',
+  load: loadLang015,
+  provides: { check: { kind: 'carried', lane: loadLang015 }, help: HELD, run: HELD, resume: HELD, listen: HELD },
+};
+
+const CARRIED: readonly CarriedVersion[] = [CURRENT_VERSION, VERSION_015];
 
 let carriedByKey: ReadonlyMap<string, CarriedVersion> | undefined;
 

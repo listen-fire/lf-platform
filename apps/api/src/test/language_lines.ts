@@ -13,7 +13,8 @@ function lineAt(step: number): string {
 
 /** The first release of the installed line: read as written. */
 export const SAME_LINE = lineAt(0);
-/** The line before the installed one: refused, to be upgraded. */
-export const OLDER_LINE = lineAt(-1);
+/** An older line no entry carries: refused, to be upgraded. Two lines back,
+ *  because the line just before the installed one is carried beside it. */
+export const OLDER_LINE = lineAt(-2);
 /** The line after the installed one: refused, never read. */
 export const NEWER_LINE = lineAt(1);

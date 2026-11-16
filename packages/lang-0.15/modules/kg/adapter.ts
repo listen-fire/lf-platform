@@ -1,0 +1,1184 @@
+// Knowledge-graph adapter — the graph as a system the engine reaches, on the
+// same `Adapter` contract as every external one.
+//
+// After D25 the graph is another optional system, and now a module like any
+// other: it reaches the records through the store its host supplies
+// (`./store`), never a database. What is in here is what an adapter is FOR —
+// translating the program's natural names into the store's ids and back —
+// rather than a privileged shortcut into somebody else's tables.
+//
+// Two consequences worth knowing before reading:
+//
+//   - **Every schema question is one cached ontology response.** Entry points,
+//     `describe`, the name↔id maps and the dedup rules are all projections of
+//     it, so a walk costs one round trip rather than one per type.
+//   - **Ids are the wire currency, names are the program's** (K-5). The
+//     translation happens on the first line of each method, and an ontology
+//     UUID never rides a position.
+
+import type { ModuleLog } from '@listen-fire/module-kit';
+import type { EdgesFromResult } from '@listen-fire/engine/public/adapter';
+import type {
+  Adapter,
+  RuntimeCapabilities,
+  DedupConstraint,
+  DedupRules,
+  EnsureEventSubscriptionInput,
+  EventSubscriptionRegistration,
+  RemoveEventSubscriptionInput,
+  DeleteInput,
+  DeleteResult,
+  FieldEvidence,
+  GetFieldValueInput,
+  GetRelatedInput,
+  LinkRecordsInput,
+  LinkRecordsResult,
+  ParentLink,
+  UnlinkRecordsInput,
+  UnlinkRecordsResult,
+  RelatedResult,
+  ResolveEntityInput,
+  ResolveEntityResult,
+  UpdateInput,
+  UpdateResult,
+  WriteInput,
+  WriteResult,
+} from '@listen-fire/engine/public/adapter';
+import type { ArrivalsCapability, AwaitHead, AwaitKey } from '@listen-fire/engine-contracts';
+import type { KgStore, WireOntology, WirePropertyType } from './store';
+
+import { uniformWalk } from '@listen-fire/module-kit/adapter/hop';
+import { RESOURCES_REFERENCE_FIELD_ID, writeParentLinks } from '@listen-fire/engine/public/adapter';
+import {
+  ADAPTER_META_TYPE_ID,
+  META_RECORD_TYPE,
+  isStablePosition,
+  makeStablePosition,
+  makeUnstablePosition,
+  positionData,
+  positionRecordId,
+  type SchemaEntryPoint,
+  type SchemaFieldKind,
+  type SchemaTypeDescriptor,
+  type SourcePosition,
+} from '@listen-fire/engine/public/catalog';
+import {
+  memoizedResolver,
+  naturalName,
+  type AdapterNameResolver,
+  type ScopedResolver,
+} from '@listen-fire/module-kit/adapter/name_resolution';
+import {
+  KG_CHANGE_EVENTS,
+  KG_CHANGE_RECORD_EDGE,
+  KG_CHANGES_EDGE,
+  changeArrivals,
+  changeEntryPoint,
+  changesReference,
+  describeChange,
+  nodeTypeOfChangeType,
+  type KgChangeArrival,
+} from './changes';
+import { KG_ADAPTER_TYPE, KG_RESOURCE_TYPE_ID, KG_RESOURCES_EDGE_NAME } from './manifest';
+import {
+  createKgRecord,
+  deleteKgRecord,
+  linkKgRecords,
+  unlinkKgRecords,
+  updateKgRecord,
+  type WriteConnection,
+} from './writes';
+
+/** One property type as a schema field. Node-anchored and edge-anchored
+ *  property types describe identically — an anchor is a write-routing fact,
+ *  not a difference in what the field IS — so both go through here and the
+ *  edge-anchored caller adds its marker on top. */
+function propertyField(pt: WirePropertyType): SchemaTypeDescriptor['fields'][number] {
+  return {
+    fieldId: pt.id,
+    displayName: pt.name,
+    kind: mapPropertyValueTypeToFieldKind(pt.valueType),
+    enumValues: pt.enumValues ?? undefined,
+    writable: true,
+    required: false,
+    cardinality: pt.cardinality === 'multi' ? ('many' as const) : ('one' as const),
+  };
+}
+
+/** An `Attached Resource`'s fields by the name a movement reads them under,
+ *  and the key the store materialises each at on the landing's `data`. */
+const KG_RESOURCE_FIELDS: Readonly<Record<string, 'name' | 'url' | 'type'>> = {
+  Name: 'name',
+  URL: 'url',
+  Type: 'type',
+};
+
+/**
+ * Fold a candidate's adjacency context into its `data` bag as ordinary
+ * entries (3b §3.1) — `<edge name>: <neighbour>` — so the flat
+ * `ExternalRecordRef` currency carries the connections the LLM judge uses
+ * to disambiguate, without a separate `relationships` field. Multiple
+ * neighbours on the same edge join with `, `; edge-attached properties
+ * render inline.
+ */
+function foldRelationshipsIntoData(
+  properties: Record<string, unknown>,
+  relationships:
+    | { edgeName: string; targetName: string; edgeProperties?: Record<string, unknown> }[]
+    | undefined,
+): Record<string, unknown> {
+  if (!relationships || relationships.length === 0) return properties;
+  const data: Record<string, unknown> = { ...properties };
+  for (const rel of relationships) {
+    const props =
+      rel.edgeProperties && Object.keys(rel.edgeProperties).length > 0
+        ? ` (${Object.entries(rel.edgeProperties)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join(', ')})`
+        : '';
+    const rendered = `${rel.targetName}${props}`;
+    const existing = data[rel.edgeName];
+    data[rel.edgeName] =
+      existing === undefined ? rendered : `${existing}, ${rendered}`;
+  }
+  return data;
+}
+
+/**
+ * The KG's whole-adapter capability — the richest of any adapter: it traverses
+ * BOTH directions, carries edge properties, and exposes resources. Per-edge /
+ * per-field capability rides `describe()`; the broad expression-kind / operator
+ * / aggregation surface is no longer adapter-declared.
+ */
+const KG_RUNTIME_CAPABILITIES: RuntimeCapabilities = {
+  traversal: { incoming: true, edgeProperties: true },
+  resources: true,
+};
+
+export class KnowledgeGraphAdapter implements Adapter {
+  readonly adapterType = KG_ADAPTER_TYPE;
+  readonly supportedTriggers = ['mutation' as const];
+
+  runtimeCapabilities(): RuntimeCapabilities {
+    return KG_RUNTIME_CAPABILITIES;
+  }
+
+  private readonly store: KgStore;
+  private readonly log: ModuleLog;
+
+  constructor(input: { store: KgStore; log: ModuleLog }) {
+    this.store = input.store;
+    this.log = input.log;
+  }
+
+  /**
+   * Natural-name → internal-id resolver for THIS team's ontology, memoized
+   * from the KG's OWN `listEntryPoints()` / `describe()` — the same uniform
+   * mechanism every adapter uses (Decision #3). The interface methods below
+   * receive the program's NATURAL names (ontology node / property / edge
+   * display names) and resolve them to the id currency the wire consumes, on
+   * their first line, through this; the engine/host carries no KG translation.
+   * The KG is NOT special — it composes the same `memoizedResolver` BaseAdapter
+   * wires in (it doesn't extend BaseAdapter because its positions are kg-node,
+   * not external-record).
+   */
+  private readonly resolver: ScopedResolver = memoizedResolver(this);
+
+  /** This team's whole model, fetched once. Everything schema-shaped below is a
+   *  projection of it. A failed fetch is forgotten, so the next call retries
+   *  rather than the instance staying poisoned. */
+  private model?: Promise<WireOntology>;
+
+  private readonly ontology = {
+    get: (): Promise<WireOntology> => {
+      if (this.model === undefined) {
+        const pending = this.store.ontology();
+        this.model = pending;
+        pending.catch(() => {
+          if (this.model === pending) this.model = undefined;
+        });
+      }
+      return this.model;
+    },
+  };
+
+  // ── Name → structured-identifier cache ──────────────────────────────────
+  // The framework names an ontology node type only by its pretty `name` (the
+  // node type's displayName) — that IS the `recordType` every position carries
+  // and the `typeId` `listEntryPoints` / `describe` publish. The wire, by
+  // contrast, routes on the ontology node-type UUID, which is ALSO the FK key —
+  // which is exactly WHY a rename never orphans a node. The map between the two
+  // is a projection of the same ontology response that lists entry points;
+  // every method that needs the id recovers it from the recordType NAME here,
+  // on its first line. The id never rides a position.
+
+  /** Resolve a node type's pretty NAME to its ontology id, or undefined when
+   *  the name isn't a known node type (the caller decides graceful-empty vs
+   *  hard error). */
+  private async structuredIdFor(name: string): Promise<string | undefined> {
+    const model = await this.ontology.get();
+    return model.nodeTypes.find((nt) => nt.name === name)?.id;
+  }
+
+  /** The read/write variant: a name that doesn't resolve is drift — the
+   *  movement targets a node type this ontology no longer exposes. */
+  private async requireStructuredId(name: string, method: string): Promise<string> {
+    const id = await this.structuredIdFor(name);
+    if (!id) {
+      throw new Error(`KnowledgeGraphAdapter.${method}: unrecognised node type "${name}".`);
+    }
+    return id;
+  }
+
+  // ── 1. Schema descriptor ────────────────────────────────────────────────
+  // Generated dynamically from the ontology — node types, property types,
+  // edge types. The ontology can change at runtime as agents edit the
+  // customer's schema, so callers should not cache aggressively.
+
+  async listEntryPoints(): Promise<SchemaEntryPoint[]> {
+    const nodeTypes = await this.nodeTypeEntryPoints();
+    // Each node type's change type, which its records' `Changes` land on:
+    // named so the resolver knows it, never listed (changes.ts).
+    return [...nodeTypes, ...nodeTypes.map((entry) => changeEntryPoint(entry.typeId))];
+  }
+
+  /** One entry per ontology node type — the author-facing collections. */
+  private async nodeTypeEntryPoints(): Promise<SchemaEntryPoint[]> {
+    const { nodeTypes } = await this.ontology.get();
+    return nodeTypes.map((nt) => ({
+      // The framework identity IS the pretty node-type name — the ontology UUID
+      // lives only in the private structured-id cache + the SQL. `externalId`
+      // keeps the raw UUID for generic consumers that key on the node type.
+      typeId: nt.name,
+      displayName: nt.name,
+      externalId: nt.id,
+      writable: true,
+      readable: true,
+    }));
+  }
+
+  /**
+   * The knowledge graph's walk.
+   *
+   * Its root edges are exactly "one per ontology node type", which is the
+   * entry list — so the root descriptor is derived rather than described.
+   * `describe(meta)` returns null by design (the KG has no snapshot to
+   * enumerate), which is why the root is built here instead.
+   *
+   * Targets are HYDRATED: a node type's describe reads the team's own ontology
+   * out of Postgres, not somebody else's API, so the lookahead is cheap and an
+   * author gets every type's fields without a hop.
+   *
+   */
+  async edgesFrom(position: SourcePosition): Promise<EdgesFromResult | null> {
+    return uniformWalk({
+      adapterType: KG_ADAPTER_TYPE,
+      at: position,
+      root: await this.walkRoot(),
+      describe: (typeId) => this.describe(typeId),
+    });
+  }
+
+  /** The root: what this knowledge graph IS, and an edge per node type. */
+  private async walkRoot(): Promise<SchemaTypeDescriptor> {
+    const entries = await this.nodeTypeEntryPoints();
+    return {
+      typeId: META_RECORD_TYPE,
+      displayName: 'Knowledge Graph',
+      description:
+        "Listen-Fire's own store of the things this team cares about. Every edge " +
+        'here is a type in their ontology — walk one to see its fields and ' +
+        'how it connects to the rest.',
+      fields: [],
+      references: entries.map((entry) => ({
+        fieldId: entry.typeId,
+        targetTypeId: entry.typeId,
+        name: entry.displayName,
+        cardinality: 'many' as const,
+        // The entry list and the walk are the same node's edges: copy the
+        // promises rather than restating them, so they cannot drift.
+        ...(entry.readable !== undefined ? { readable: entry.readable } : {}),
+        ...(entry.writable !== undefined ? { writable: entry.writable } : {}),
+        // The scan pages the WHOLE collection newest-first by `(created_at,
+        // id)` and reverses once (`scanNodeIds`), so the type's nodes arrive
+        // oldest-first — the order they were ADDED to the graph, which is not
+        // the same as any timestamp the node itself carries. WHERE / ORDER BY
+        // / LIMIT are applied engine-side over that complete stream, so there
+        // is no partial window to make the order a half-truth.
+        sequenced: 'arrival' as const,
+      })),
+    };
+  }
+
+  async describe(typeRef: string): Promise<SchemaTypeDescriptor | null> {
+    // KG isn't snapshot-capable today, so the meta-position has no edges
+    // to enumerate. Return null and short-circuit before the UUID-typed
+    // node_type query rejects the sentinel string.
+    if (typeRef === ADAPTER_META_TYPE_ID) return null;
+    // `Attached Resource` is the synthetic target of every node type's
+    // `#resources` edge — a `node_resource` attachment surfaced as a resource
+    // position, NOT an ontology node type, so `structuredIdFor` can't recover a
+    // UUID for it and it would otherwise render undescribed. Its honest shape is
+    // the `Resource` fields `readNodeResources` materialises onto the position
+    // (`name` / `url` / `type`). It types the landing of `-[f:Resources]->`
+    // (a `_resources` hop, versions 1–4, stays untyped in the checker) — the
+    // fields it lists are the real, populated ones. (The
+    // lazy `document_url` / `content` are deliberately omitted: they always read
+    // null today, so advertising them would be an unchecked promise.)
+    if (typeRef === KG_RESOURCE_TYPE_ID) {
+      return {
+        typeId: KG_RESOURCE_TYPE_ID,
+        displayName: KG_RESOURCE_TYPE_ID,
+        description:
+          'A source attached to this record — the material a fact was drawn ' +
+          'from (a document, email, message, or link). Read its `Name`, `URL`, ' +
+          'and `Type`.',
+        fields: [
+          { fieldId: 'name', displayName: 'Name', kind: 'string', writable: false, required: false, description: 'The source\'s display name (a filename, subject line, or the URL when unnamed).' },
+          { fieldId: 'url', displayName: 'URL', kind: 'string', writable: false, required: false, description: 'A link to the source, when it has one.' },
+          { fieldId: 'type', displayName: 'Type', kind: 'string', writable: false, required: false, description: 'What kind of source it is — one of URL, EMAIL, WHATSAPP, FILE, TEXT.' },
+        ],
+        references: [],
+      };
+    }
+    // `describe` is fed the NATURAL node-type name (the movement engine /
+    // checker currency, and the entry-point `typeId` the resolver build feeds
+    // back). Recover its ontology id from the model; an unknown name (drift) →
+    // null. No bilingual id-passthrough — a position never carries the id, so
+    // an id never lands here.
+    const model = await this.ontology.get();
+    const nodeType = model.nodeTypes.find((nt) => nt.name === typeRef);
+    if (!nodeType) {
+      const changed = nodeTypeOfChangeType(model, typeRef);
+      return changed === undefined ? null : describeChange(model, changed);
+    }
+    const typeId = nodeType.id;
+
+    const propertyTypes = model.propertyTypes.filter((pt) => pt.nodeTypeId === typeId);
+    const outgoingEdges = model.edgeTypes.filter((et) => et.sourceNodeTypeId === typeId);
+    const incomingEdges = model.edgeTypes.filter((et) => et.targetNodeTypeId === typeId);
+
+    // Edge references publish their COUNTERPART type by NAME — the same
+    // currency `listEntryPoints` keys on. Publishing the raw ontology id
+    // (the old behaviour) never matched an entry, so every KG edge target
+    // projected as an opaque UUID: agent-visible noise AND silently open
+    // hop typing (the checker couldn't follow any KG edge).
+    const nameByNodeTypeId = new Map(model.nodeTypes.map((nt) => [nt.id, nt.name]));
+    const counterpartName = (id: string): string => nameByNodeTypeId.get(id) ?? id;
+
+    // Edge properties (KG-only — adapters don't model edge attributes
+    // natively). Surfaced two ways from the same source rows:
+    //
+    //   1. On each reference's `edgeFields` — drives `edge.X`
+    //      autocomplete + the `edge_property` evaluator on the read
+    //      side (W3).
+    //   2. As writable fields on the action's `fields` array with an
+    //      `anchor: { kind: 'edge', edgeTypeId, side }` marker (W4-KG3).
+    //      The write path inspects the marker and routes the value to
+    //      `property.edge_id` instead of `property.node_id`. Authors
+    //      pick the field the same way as a node property — the
+    //      anchor marker is an internal write-routing concern.
+    const allEdgeIds = new Set([
+      ...outgoingEdges.map((e) => e.id),
+      ...incomingEdges.map((e) => e.id),
+    ]);
+    const edgePropertyTypes = model.propertyTypes.filter(
+      (pt) => pt.edgeTypeId !== null && allEdgeIds.has(pt.edgeTypeId),
+    );
+    const edgeFieldsByEdgeTypeId = new Map<string, SchemaTypeDescriptor['fields']>();
+    for (const pt of edgePropertyTypes) {
+      const edgeId = pt.edgeTypeId;
+      if (!edgeId) continue;
+      const arr = edgeFieldsByEdgeTypeId.get(edgeId) ?? [];
+      arr.push(propertyField(pt));
+      edgeFieldsByEdgeTypeId.set(edgeId, arr);
+    }
+
+    // W4-KG3 — promote edge-property fields into the action's
+    // writable-fields list with an anchor marker. `side` records which
+    // end of the edge type this node type sits on (target for outgoing
+    // references, source for incoming ones) so the write path can
+    // disambiguate edges that connect two instances of the same node
+    // type via different edge types.
+    const edgeAnchoredFields: SchemaTypeDescriptor['fields'] = [];
+    for (const et of outgoingEdges) {
+      for (const pt of edgePropertyTypes.filter((p) => p.edgeTypeId === et.id)) {
+        edgeAnchoredFields.push({
+          ...propertyField(pt),
+          anchor: { kind: 'edge', edgeTypeId: et.id, side: 'source' },
+        });
+      }
+    }
+    for (const et of incomingEdges) {
+      for (const pt of edgePropertyTypes.filter((p) => p.edgeTypeId === et.id)) {
+        edgeAnchoredFields.push({
+          ...propertyField(pt),
+          anchor: { kind: 'edge', edgeTypeId: et.id, side: 'target' },
+        });
+      }
+    }
+
+    // Native uniqueness — the wire already publishes the PROJECTED form (the
+    // stored expression grammar is knowledge's own and never leaves it), so all
+    // that happens here is the rename to the adapter's NATURAL names (property
+    // displayName / edge `outboundName` — the same names `describe`'s
+    // fields/references publish). The descriptor keeps ids adapter-private
+    // (Decision #6): the engine merges these natural-named constraints with the
+    // author's `unique by` (also natural) and hands the uniform set back to
+    // `resolveEntity`, which translates the whole set through this instance's
+    // own resolver.
+    const propertyNameById = new Map<string, string>(
+      propertyTypes.map((pt) => [pt.id, pt.name]),
+    );
+    const edgeNameById = new Map<string, string>([
+      ...outgoingEdges.map((et) => [et.id, et.outboundName] as const),
+      ...incomingEdges.map((et) => [et.id, et.inboundName] as const),
+    ]);
+    const uniquenessConstraints = {
+      any: nodeType.uniquenessConstraints.any.map((branch) => ({
+        all: branch.all.map((entry) => ({
+          ...entry,
+          field: propertyNameById.get(entry.field) ?? edgeNameById.get(entry.field) ?? entry.field,
+        })),
+      })),
+    };
+
+    return {
+      // The descriptor's framework identity is the node-type NAME, matching the
+      // entry point — the ontology UUID stays adapter-private (cache + SQL).
+      typeId: nodeType.name,
+      displayName: nodeType.name,
+      // Every node can be removed (`deleteRecord` → `deleteKgRecord`).
+      deletable: true,
+      uniquenessConstraints,
+      // The graph resolves fuzzy uniqueness components by trigram similarity
+      // (the store's `identity` search), so authors may mark a `unique by`
+      // component FUZZY against any node type.
+      supportsFuzzyResolution: true,
+      // No KG field is ever required — the KG is forgiving by design: a
+      // partial record is still knowledge. De-duplication is the
+      // uniqueness constraints' job; `property_type.identity` is legacy
+      // and deliberately ignored here.
+      fields: [...propertyTypes.map(propertyField), ...edgeAnchoredFields],
+      // KG edges are bidirectional: each edge_type publishes an outgoing
+      // reference on its source type (named by `outboundName`) and an
+      // incoming reference on its target type (named by `inboundName`).
+      // The editor lists both so authors can say `-[:employs]-> Person`
+      // or `-[:works_for]-> Company` from People's side; the runtime
+      // resolves the edge by id + direction. Edge properties hang off
+      // each reference via `edgeFields` regardless of direction.
+      //
+      // EVERY ontology edge is writable, in BOTH directions: the write path
+      // resolves an edge by name against `outboundName` (outgoing) OR
+      // `inboundName` (incoming) — `resolveParentLinkEdgeType` tries both —
+      // and that one resolver backs all three write shapes: the linked create
+      // (`createKgRecord` inserts the connecting edge in the node's own
+      // transaction), the standalone assert (`linkKgRecords`) and its inverse
+      // (`unlinkKgRecords`). Nothing about an edge type gates any of them, so
+      // there is no read-only ontology edge to carve out. (The `#resources`
+      // edge below is the exception, and declares nothing — see there.)
+      references: [
+        ...outgoingEdges.map((et) => ({
+          fieldId: et.id,
+          targetTypeId: counterpartName(et.targetNodeTypeId),
+          cardinality: 'many' as const,
+          direction: 'outgoing' as const,
+          name: et.outboundName,
+          writable: true,
+          edgeFields: edgeFieldsByEdgeTypeId.get(et.id),
+        })),
+        ...incomingEdges.map((et) => ({
+          fieldId: et.id,
+          targetTypeId: counterpartName(et.sourceNodeTypeId),
+          cardinality: 'many' as const,
+          direction: 'incoming' as const,
+          name: et.inboundName,
+          writable: true,
+          // A scoping edge (`edge_type.scopes`) is part of the scoped
+          // type's identity — the scoped (target) type cannot exist
+          // without it, so ITS reference declares the requirement.
+          ...(et.scopes === true ? { required: true } : {}),
+          edgeFields: edgeFieldsByEdgeTypeId.get(et.id),
+        })),
+        {
+          // Resources (`#resources`) — `node_resource` attachments as
+          // resource positions. The engine's `#resources` meta-edge /
+          // `resource_traverse` walk this; resolved in `getRelated` (P12,
+          // replacing the retired `getResources`).
+          //
+          // READ-ONLY (no `writable`) — and alone among KG edges in that. It is
+          // not an ontology edge type, so the write path's edge resolution
+          // cannot see it: a linked write along `#resources` would reach
+          // `resolveParentLinkEdgeType` and throw on the sentinel. Resources
+          // are attached as PROVENANCE of a record write — the `Resources`
+          // slot on the create/update input, persisted by `persistKgResources`
+          // against the node — never by walking a relationship to a target
+          // that is then created or linked.
+          fieldId: RESOURCES_REFERENCE_FIELD_ID,
+          targetTypeId: KG_RESOURCE_TYPE_ID,
+          cardinality: 'many' as const,
+          direction: 'outgoing' as const,
+          name: KG_RESOURCES_EDGE_NAME,
+        },
+        changesReference(nodeType.name),
+      ],
+    };
+  }
+
+
+  // ── 2. Entity resolution ────────────────────────────────────────────────
+  // Two stages, lowest-cost first:
+  //   1. Match KG nodes by linked_object bridge. Candidates come pre-filtered
+  //      by (team, source-adapter, source-recordId); narrow by node_type to
+  //      disambiguate when one external record bridges to multiple node types
+  //      (e.g. an Attio Company linked to both a KG Organisation and a KG
+  //      Deal).
+  //   2. If no bridge match, search by the target node type's
+  //      `uniqueness_constraints` — the same OR-of-AND rules used by
+  //      consolidate.ts to dedup extracted nodes. This catches "Attio
+  //      webhook for an Acme that already exists in the KG, no bridge
+  //      yet" without any TG-side identity flag: identity is whatever the
+  //      ontology says it is. On match, the engine's apply step writes a
+  //      linked_object so future events hit (1).
+  //
+  // For KG-as-target the engine's "externalId" is the KG node id (not the
+  // linked_object.external_id, which holds the *source's* id) — set it
+  // explicitly so the engine uses the right value when calling updateRecord.
+
+  async resolveEntity(input: ResolveEntityInput): Promise<ResolveEntityResult> {
+    // Translate the program's NATURAL currency (node-type / property / edge
+    // display names) to the ontology UUIDs the search SQL consumes — on the
+    // first line, through this instance's own resolver (Decision #3). The
+    // node-type name, the constraint fields (property OR edge names) and the
+    // record keys all rename here; the engine/host did none of it.
+    const resolver = await this.resolver({ types: [input.recordType] });
+    const nodeTypeId = await this.requireStructuredId(input.recordType, 'resolveEntity');
+    const internal = this.toInternalResolveCurrency({
+      typeName: input.recordType,
+      record: input.record,
+      constraints: input.constraints,
+      resolver,
+    });
+
+    const bridgeMatch = await this.resolveByBridge(input, nodeTypeId);
+    if (bridgeMatch) return bridgeMatch;
+    return this.resolveByConstraints({
+      nodeTypeId,
+      record: internal.record,
+      constraints: internal.constraints,
+    });
+  }
+
+  /**
+   * Rename a resolve's NATURAL constraint fields + record keys to the KG's
+   * internal UUID currency. A constraint field is a property name first, else
+   * an edge name (the property-then-edge order the engine's `unique by`
+   * lowering and `describe`'s native-constraint projection both follow); the
+   * record carries scalar property values (keyed by property name) and folded
+   * edge neighbours (`{ id }`, keyed by edge name) the engine added for
+   * edge-scoped compound identity. Unknown names fall through to drift via the
+   * search (an internal id that doesn't match any property/edge row matches
+   * nothing) — the resolver's `try*` variants keep the rename non-throwing so a
+   * field that's genuinely a folded edge isn't mis-flagged as a missing
+   * property.
+   */
+  private toInternalResolveCurrency(input: {
+    typeName: string;
+    record: Record<string, unknown>;
+    constraints: ResolveEntityInput['constraints'];
+    resolver: AdapterNameResolver;
+  }): { record: Record<string, unknown>; constraints: ResolveEntityInput['constraints'] } {
+    const { resolver } = input;
+    const type = naturalName(input.typeName);
+    // Property first, else edge — the property-then-edge order the engine's
+    // `unique by` lowering and the native-constraint projection both follow.
+    // An edge constraint scopes identity by adjacency to a folded neighbour;
+    // it resolves to the edge's write name (the same currency the engine's
+    // edge-scoped fold + the parentLink use), which `searchKgCandidatesByUniqueness`
+    // matches against. An edge declared on the parent (not this child type)
+    // has no reverse map here and stays its natural name — preserved verbatim,
+    // exactly as the prior engine threaded it.
+    const internalFieldName = (name: string): string =>
+      resolver.tryFieldId(type, naturalName(name)) ??
+      resolver.tryEdgeWriteName(type, naturalName(name)) ??
+      name;
+    const record: Record<string, unknown> = {};
+    for (const [name, value] of Object.entries(input.record)) {
+      record[internalFieldName(name)] = value;
+    }
+    const constraints = {
+      any: input.constraints.any.map((branch) => ({
+        all: branch.all.map((entry) => ({
+          ...entry,
+          field: internalFieldName(entry.field),
+        })),
+      })),
+    };
+    return { record, constraints };
+  }
+
+  private async resolveByBridge(
+    input: ResolveEntityInput,
+    nodeTypeId: string,
+  ): Promise<ResolveEntityResult | null> {
+    if (input.candidates.length === 0) return null;
+    const batch = await this.store.nodeTypesOf(input.candidates.map((c) => c.node_id));
+    // Narrow by node type: one external record can bridge to several node types
+    // (an Attio Company linked to both an Organisation and a Deal), and the
+    // bridge alone does not say which of them this write is about.
+    const matching = batch.filter((n) => n.nodeTypeId === nodeTypeId);
+    if (matching.length === 0) return null;
+    // For KG-as-target the node id IS the external id (the bridge keys off
+    // it). A single bridge hit is the unambiguous match.
+    const id = matching[0].id;
+    return {
+      candidates: [{ adapterType: KG_ADAPTER_TYPE, externalId: id, data: {} }],
+    };
+  }
+
+  private async resolveByConstraints(input: {
+    nodeTypeId: string;
+    record: Record<string, unknown>;
+    constraints: ResolveEntityInput['constraints'];
+  }): Promise<ResolveEntityResult> {
+    const nodeTypeId = input.nodeTypeId;
+    if (input.constraints.any.length === 0) return { candidates: [] };
+
+    // The opaque constraints' `field`s and the `record` keys are now the wire's
+    // id currency (renamed above). The graph compiles the OR-of-AND to its own
+    // search and answers with the candidates AND their adjacency — the
+    // adjacency rides along because the engine's `judgeEntityMatch`
+    // disambiguates by connections, not just properties, and fetching it
+    // separately would be a second walk of a graph we just queried.
+    const candidates = await this.store.matchNodes({ nodeTypeId, record: input.record });
+
+    // Candidate `data` comes back keyed by property_type_id — rename it to the
+    // adapter's NATURAL property names so the engine arbitrates exactness in
+    // the same natural currency it holds the asserted record + constraints in
+    // (the relationship fold already uses natural edge names). Decision #6: the
+    // KG's internal ids never leave the adapter.
+    const propertyNameById = await this.propertyNameMap(nodeTypeId);
+    const toNaturalData = (data: Record<string, unknown>): Record<string, unknown> => {
+      const out: Record<string, unknown> = {};
+      for (const [id, value] of Object.entries(data)) {
+        out[propertyNameById.get(id) ?? id] = value;
+      }
+      return out;
+    };
+
+    // Flat `ExternalRecordRef`s — the node id IS the external id for a KG
+    // target; `data` is keyed by the natural property / edge names.
+    return {
+      candidates: candidates.map((c) => ({
+        adapterType: KG_ADAPTER_TYPE,
+        externalId: c.nodeId,
+        data: foldRelationshipsIntoData(toNaturalData(c.data), c.relationships),
+      })),
+    };
+  }
+
+  /** property_type_id → display name for one node type — renames a candidate
+   *  data bag back to the adapter's natural property names before it leaves
+   *  the adapter (Decision #6). */
+  private async propertyNameMap(nodeTypeId: string): Promise<Map<string, string>> {
+    const { propertyTypes } = await this.ontology.get();
+    return new Map(
+      propertyTypes.filter((pt) => pt.nodeTypeId === nodeTypeId).map((pt) => [pt.id, pt.name]),
+    );
+  }
+
+  // ── 2b. In-batch dedup rules (W6-D1) ────────────────────────────────────
+  //
+  // Project this node type's uniqueness into the ephemeral-vs-ephemeral form
+  // the framework's `runInBatchDedup` consumes. Property entries pass through
+  // as `{ propertyTypeId, fuzzy }` — the framework maps `propertyTypeId` to a
+  // field name on the ephemeral data record via the bundle's synthetic schema
+  // (W3-F4 stamped each `FieldShape.propertyTypeId` at pre-collection time).
+  //
+  // EDGE entries are intentionally omitted: adjacency needs a materialised
+  // graph, which does not exist mid-batch, so they cannot be evaluated against
+  // ephemeral pairs. The framework's pair walker finds the constraint has no
+  // usable entries and moves on. (The expression-level entries the graph itself
+  // drops — `edge_to:` ancestors, multi-step traversals — never arrive here at
+  // all: the wire publishes the PROJECTED form, so the stored grammar is not
+  // this adapter's to parse.)
+  //
+  // Returns null when the type has no uniqueness constraints or doesn't
+  // exist (the framework skips the type entirely).
+  async getDedupRules(input: { typeRef: string }): Promise<DedupRules | null> {
+    // `typeRef` is the NATURAL node-type name — recover its ontology id from
+    // the model (the engine never hands the adapter an id). An unknown name →
+    // no rules (the framework skips the type).
+    const model = await this.ontology.get();
+    const nodeType = model.nodeTypes.find((nt) => nt.name === input.typeRef);
+    if (!nodeType) return null;
+    if (nodeType.uniquenessConstraints.any.length === 0) return null;
+
+    // A field id is a property's or an edge's; the model is what says which.
+    // Nothing is inferred from the id's SHAPE — both are UUIDs, and guessing
+    // from a string is how a rename becomes a silent mismatch.
+    const propertyTypeIds = new Set(
+      model.propertyTypes.filter((pt) => pt.nodeTypeId === nodeType.id).map((pt) => pt.id),
+    );
+
+    const constraints: DedupConstraint[] = [];
+    for (const branch of nodeType.uniquenessConstraints.any) {
+      const entries: DedupConstraint['entries'] = [];
+      for (const entry of branch.all) {
+        if (!propertyTypeIds.has(entry.field)) continue;
+        entries.push({ propertyTypeId: entry.field, fuzzy: entry.fuzzy ?? false });
+      }
+      // Constraints with no evaluable entries never fire — drop them
+      // so the framework's pair walker doesn't waste cycles on empty
+      // AND-lists.
+      if (entries.length > 0) constraints.push({ entries });
+    }
+
+    if (constraints.length === 0) return null;
+    return { constraints };
+  }
+
+  // ── 3. Field-level access ───────────────────────────────────────────────
+
+  async getFieldValue(input: GetFieldValueInput): Promise<unknown> {
+    // A resource landing (`c-[f:Resources]-> { … f.URL … }`) is not a node:
+    // its fields ride the landing itself (the store materialised them onto `data`).
+    if (input.position.recordType === KG_RESOURCE_TYPE_ID) {
+      const key = KG_RESOURCE_FIELDS[input.fieldId] ?? input.fieldId;
+      const data = positionData(input.position) as Record<string, unknown> | null | undefined;
+      return data?.[key] ?? null;
+    }
+    // A change, or a record an arrival carried: its fields ride the landing,
+    // as the change had them (changes.ts).
+    const landed = await this.landedFieldValue(input);
+    if (landed !== undefined) return landed;
+    const nodeId = expectKgNodeId(input.position, 'getFieldValue');
+    // `fieldId` is the NATURAL property name and the position's `recordType`
+    // is the NATURAL node-type name (the source-read wrapper stamps it);
+    // resolve to the PropertyTypeId the property query consumes (Decision #3).
+    const propertyTypeId = await this.resolvePropertyId(
+      input.position.recordType,
+      input.fieldId,
+    );
+    const node = await this.store.getNode(nodeId);
+    // A field of a record that is gone reads null, not an error: the walk that
+    // got here already landed on the position, and a record deleted between the
+    // landing and the read is an ordinary race, not a broken program.
+    return node?.properties[propertyTypeId] ?? null;
+  }
+
+  /** A field a landing carries: every field of a change (an absent one reads
+   *  null), and a carried record's property by name. Undefined for a field the
+   *  position does not hold, which is read from the store. */
+  private async landedFieldValue(input: GetFieldValueInput): Promise<unknown> {
+    const data = positionData(input.position);
+    if (typeof data !== 'object' || data === null) return undefined;
+    const held = Object.entries(data).find(([name]) => name === input.fieldId);
+    if (nodeTypeOfChangeType(await this.ontology.get(), input.position.recordType) !== undefined) {
+      return held?.[1] ?? null;
+    }
+    return held?.[1];
+  }
+
+  /** Resolve a NATURAL property name to its PropertyTypeId against a NATURAL
+   *  node-type name, through this instance's own resolver. When the position
+   *  carries no type (a typeless inbound node) there's nothing to resolve
+   *  against — the name is used as-is. */
+  private async resolvePropertyId(
+    typeName: string | null,
+    fieldNaturalName: string,
+  ): Promise<string> {
+    if (typeName === null) return fieldNaturalName;
+    const resolver = await this.resolver({ types: [typeName] });
+    return resolver.fieldId(naturalName(typeName), naturalName(fieldNaturalName));
+  }
+
+  /** Resolve a NATURAL edge name to its EdgeTypeId (the read currency
+   *  `getRelated` scans by) against a NATURAL node-type name. Used as-is when
+   *  the position carries no type. */
+  private async resolveEdgeReadId(
+    typeName: string | null,
+    edgeNaturalName: string,
+  ): Promise<string> {
+    if (typeName === null) return edgeNaturalName;
+    const resolver = await this.resolver({ types: [typeName] });
+    return resolver.edgeReadId(naturalName(typeName), naturalName(edgeNaturalName));
+  }
+
+  async getRelated(input: GetRelatedInput): Promise<RelatedResult[]> {
+    // A meta-root hop is a COLLECTION scan — every node of the named type.
+    // `fieldId` is the NATURAL node-type name; resolve it to the NodeTypeId
+    // the scan consumes (Decision #3). The movement engine's kg-rooted
+    // traversals (`kg-[c:\`Funding Round\` WHERE …]->`) ride this; WHERE /
+    // ORDER BY / LIMIT are applied engine-side, post-stream (no pushdown — the
+    // scan streams the type's nodes and the engine filters/sorts/slices the
+    // survivors). The landed records are stamped with the natural collection
+    // type by the read wrapper.
+    if (input.position.recordType === META_RECORD_TYPE) {
+      // `fieldId` is the NATURAL collection (node-type) name — recover its
+      // ontology id for the scan. Each landed record is stamped with the same
+      // NATURAL name, never the id.
+      const nodeTypeId = await this.requireStructuredId(input.fieldId, 'getRelated');
+      const ids = await this.scanNodeIds(nodeTypeId);
+      return ids.map<RelatedResult>((id) => ({
+        position: makeStablePosition({
+          adapterType: KG_ADAPTER_TYPE,
+          recordType: input.fieldId,
+          recordId: id,
+        }),
+      }));
+    }
+
+    const nodeId = expectKgNodeId(input.position, 'getRelated');
+
+    // Resources: a node's `node_resource` attachments become resource
+    // positions whose `data` carries the `Resource`. Matched by the reserved
+    // fieldId — the edge's address — and never by its display name: a team's
+    // ontology edge may be named `Resources` too, and that one is the
+    // ontology's. A walk of the edge by its name (`c-[f:Resources]->`, read
+    // through `getFieldValue` above) reaches here because the read wrapper
+    // (`surfaceReadAdapter`) sends the schema's resources edge as this
+    // fieldId; versions 1–4's `_resources` reference (`resource_traverse`,
+    // which applies any `ResourceFilter`) asks for it directly.
+    if (input.fieldId === RESOURCES_REFERENCE_FIELD_ID) {
+      // The store answers the attachments with the resources themselves
+      // (fields materialised onto `data`); the engine applies any author
+      // `ResourceFilter` post-hoc.
+      const resources = await this.store.resourcesOf(nodeId);
+      return resources.map<RelatedResult>((resource) => ({
+        position: makeUnstablePosition({
+          adapterType: KG_ADAPTER_TYPE,
+          recordType: KG_RESOURCE_TYPE_ID,
+          data: resource,
+        }),
+      }));
+    }
+
+    // A change's `Record`: the record it is about, as it is now. A deleted one
+    // is none.
+    const changed = nodeTypeOfChangeType(await this.ontology.get(), input.position.recordType);
+    if (changed !== undefined) {
+      if (input.fieldId !== KG_CHANGE_RECORD_EDGE) return [];
+      const data = positionData(input.position);
+      const recordId = typeof data === 'object' && data !== null ? Reflect.get(data, 'Record Id') : undefined;
+      const record = typeof recordId === 'string' ? await this.store.getNode(recordId) : null;
+      if (record === null) return [];
+      return [{ position: makeStablePosition({ adapterType: KG_ADAPTER_TYPE, recordType: changed, recordId: record.id }) }];
+    }
+
+    // `fieldId` is the NATURAL edge name, belonging to the position's NATURAL
+    // node type (the read wrapper stamps it); resolve to the EdgeTypeId the
+    // edge query consumes (Decision #3).
+    const edgeTypeId = await this.resolveEdgeReadId(input.position.recordType, input.fieldId);
+    // One call answers the whole hop: the edges at this end, the type of what
+    // sits at the other end, and each edge's own properties. The other end's
+    // TYPE is not optional — a position must name its type, and when this
+    // returned bare ids the question was pushed onto every consumer and, having
+    // no answer, onto a whole-graph edge-name scan. Edge properties ride along
+    // for the same reason candidate adjacency does (3b §2): an `edge_property`
+    // expression reads them off the result rather than re-asking per field.
+    const rows = await this.store.edgesOf({
+      nodeId,
+      edgeTypeId,
+      direction: input.direction === 'outgoing' ? 'out' : 'in',
+    });
+
+    // The wire names the other end by node-type ID; a position carries the
+    // NATURAL name (Decision #6). Both maps are the one cached model.
+    const model = await this.ontology.get();
+    const nodeTypeNameById = new Map(model.nodeTypes.map((nt) => [nt.id, nt.name]));
+    const edgePropNameById = new Map(
+      model.propertyTypes.filter((pt) => pt.edgeTypeId === edgeTypeId).map((pt) => [pt.id, pt.name]),
+    );
+    const toNaturalEdgeProps = (props: Record<string, unknown>): Record<string, unknown> => {
+      const out: Record<string, unknown> = {};
+      for (const [id, value] of Object.entries(props)) out[edgePropNameById.get(id) ?? id] = value;
+      return out;
+    };
+    return rows.map<RelatedResult>((row) => ({
+      position: makeStablePosition({
+        adapterType: KG_ADAPTER_TYPE,
+        recordType: nodeTypeNameById.get(row.otherNodeTypeId) ?? row.otherNodeTypeId,
+        recordId: row.otherNodeId,
+      }),
+      edgeId: row.edgeId,
+      edgeProperties: toNaturalEdgeProps(row.properties),
+    }));
+  }
+
+  /**
+   * Every node of one type, oldest first.
+   *
+   * The engine applies WHERE / ORDER BY / LIMIT post-stream, so the whole
+   * collection has to arrive — which over HTTP means paging. The wire's order is
+   * newest-first and total (created_at, then id), so pages compose: collect them
+   * all and reverse once, rather than trusting a partial order that could show a
+   * row on two pages and skip a third.
+   */
+  private async scanNodeIds(nodeTypeId: string): Promise<string[]> {
+    const pageSize = 100;
+    const ids: string[] = [];
+    for (let offset = 0; ; offset += pageSize) {
+      const page = await this.store.listNodeIds({ nodeTypeId, limit: pageSize, offset });
+      ids.push(...page);
+      if (page.length < pageSize) break;
+    }
+    return ids.reverse();
+  }
+
+  // ── 4. Changes ──────────────────────────────────────────────────────────
+  //
+  // The store derives one change per record a write touched and hands it on
+  // through an outbox, never polled. Which way it travels depends on the
+  // deployment (D39(c)): beside the host, the drainer hands the envelope
+  // straight to the host and the subscription methods are not advertised; in
+  // another process, it arrives as a signed webhook, which the two below
+  // register.
+
+  /** The store's change as the arrival on its record's `Changes` (changes.ts),
+   *  carrying the record as the change left it. */
+  async preprocessInbound(input: { raw: unknown }): Promise<{ events: []; arrivals: KgChangeArrival[] }> {
+    const arrivals = await changeArrivals(input.raw, {
+      ontology: () => this.ontology.get(),
+      node: (nodeId) => this.store.getNode(nodeId),
+    });
+    return { events: [], arrivals };
+  }
+
+  /** A run waits on a record's `Changes` under its id: the key each arrival
+   *  on them names. */
+  readonly arrivals: ArrivalsCapability = {
+    awaitKeys: async ({ edge, heads }: { edge: string; heads: AwaitHead[] }): Promise<AwaitKey[]> => {
+      if (edge !== KG_CHANGES_EDGE) throw new Error(`kg: '${edge}' is not a listenable edge (only '${KG_CHANGES_EDGE}')`);
+      return heads.map((head) => ({ key: head.recordId }));
+    },
+  };
+
+  /**
+   * Have the store post its changes to this deployment's callback. One
+   * registration serves every listen on a connection's `Changes`: it takes
+   * every change, and the host judges each by the record type it landed on.
+   */
+  async ensureEventSubscription(
+    input: EnsureEventSubscriptionInput,
+  ): Promise<EventSubscriptionRegistration | undefined> {
+    if (input.edge !== KG_CHANGES_EDGE) throw new Error(`kg: '${input.edge}' is not a listenable edge (only '${KG_CHANGES_EDGE}')`);
+    // The one registration for this URL is held: it already takes every change.
+    if (input.current?.externalId !== undefined) return undefined;
+    return (await this.store.registerChangeWebhook({ targetUrl: input.callbackUrl, eventTypes: [...KG_CHANGE_EVENTS] })) ?? undefined;
+  }
+
+  async removeEventSubscription(input: RemoveEventSubscriptionInput): Promise<void> {
+    await this.store.removeChangeWebhook({ externalId: input.externalId ?? input.callbackUrl });
+  }
+
+  // ── 5. Writes ───────────────────────────────────────────────────────────
+  // Implementation lives in ./writes.ts.
+
+  /** Everything a write needs to reach the graph: the credential and the model
+   *  it resolves edge and property types against. Both are already cached — the
+   *  ontology behind the introspection cache, the credential behind its own —
+   *  so a write costs the same round trips as the writes it replaced, minus the
+   *  queries the resolution used to be. */
+  private async writeConnection(): Promise<WriteConnection> {
+    return { store: this.store, ontology: await this.ontology.get(), log: this.log };
+  }
+
+  async createRecord(input: WriteInput): Promise<WriteResult> {
+    // Translate the program's NATURAL currency to ontology UUIDs on the first
+    // line (Decision #3): the node-type name → NodeTypeId, the field keys
+    // (and their per-field evidence) → PropertyTypeId, each parent's type →
+    // NodeTypeId. A parent's `edgeName` stays the natural edge name — the
+    // write SQL matches it directly against `edge_type.outbound_name` /
+    // `inbound_name` (which ARE the adapter's natural edge names).
+    const w = await this.toInternalWriteCurrency(input);
+    const { externalId } = await createKgRecord({
+      connection: await this.writeConnection(),
+      recordType: w.recordType,
+      fields: w.fields,
+      evidence: w.evidence,
+      resources: input.resources,
+      mutationContext: input.mutationContext,
+      // One entry for a linked write, N for a tuple-path multi-parent
+      // create — every connecting edge inserts in the node's own
+      // transaction (`writeParentLinks` normalizes both input slots).
+      parentLinks: w.parentLinks,
+      bridgeToExternal: input.bridgeToExternal,
+    });
+    // `data: {}` — the KG is only ever the target on an External → KG flow,
+    // whose bridge snapshots the *source* position's data, not this write
+    // return. The canonical post-commit values live in the graph itself.
+    return { adapterType: KG_ADAPTER_TYPE, externalId, data: {} };
+  }
+
+  async updateRecord(input: UpdateInput): Promise<UpdateResult> {
+    const w = await this.toInternalWriteCurrency(input);
+    const result = await updateKgRecord({
+      connection: await this.writeConnection(),
+      externalId: input.externalId,
+      recordType: w.recordType,
+      fields: w.fields,
+      evidence: w.evidence,
+      resources: input.resources,
+      mutationContext: input.mutationContext,
+      // W4-KG3 — edge-anchored field writes on a matched (update) node
+      // resolve the existing edge(s) between the parent(s) and this node
+      // via the same name-matching the create path uses. Empty for root
+      // updates (no edge to resolve, so any edge-anchored field would
+      // be a no-op — logged at the write site).
+      parentLinks: w.parentLinks,
+    });
+    // NOT-FOUND contract (3b): the node was gone — surface the typed signal.
+    if ('notFound' in result) return { notFound: true };
+    return {
+      adapterType: KG_ADAPTER_TYPE,
+      externalId: input.externalId,
+      data: {},
+      association: result.association,
+    };
+  }
+
+  /**
+   * Rename a write's NATURAL currency (node-type / property / parent-type
+   * names) to the ontology UUIDs `writes` consumes. Field keys
+   * (and per-field evidence keys) become PropertyTypeIds; the record type and
+   * each parent's type become NodeTypeIds. The parent `edgeName` is left as the
+   * natural edge name — the write SQL matches it against `outbound_name` /
+   * `inbound_name` directly.
+   */
+  private async toInternalWriteCurrency(input: WriteInput): Promise<{
+    recordType: string;
+    fields: Record<string, unknown>;
+    evidence?: Record<string, FieldEvidence>;
+    parentLinks: ParentLink[];
+  }> {
+    const resolver = await this.resolver({ types: [input.recordType] });
+    const typeName = naturalName(input.recordType);
+    // The node-type name → its ontology UUID via the private cache; field keys
+    // (property display names) → PropertyTypeIds via the resolver (those ids
+    // never ride a position, so they keep flowing through the resolver).
+    const recordType = await this.requireStructuredId(input.recordType, 'write');
+    const fields: Record<string, unknown> = {};
+    for (const [name, value] of Object.entries(input.fields)) {
+      fields[resolver.fieldId(typeName, naturalName(name))] = value;
+    }
+    let evidence: Record<string, FieldEvidence> | undefined;
+    if (input.evidence) {
+      evidence = {};
+      for (const [name, ev] of Object.entries(input.evidence)) {
+        evidence[resolver.fieldId(typeName, naturalName(name))] = ev;
+      }
+    }
+    const parentLinks = await Promise.all(
+      writeParentLinks(input).map(async (p) => ({
+        ...p,
+        recordType: await this.requireStructuredId(p.recordType, 'write'),
+        // edgeName stays natural — `resolveParentLinkEdgeType` matches it
+        // against `outbound_name` / `inbound_name`.
+      })),
+    );
+    return { recordType, fields, ...(evidence ? { evidence } : {}), parentLinks };
+  }
+
+  // ── 5b. Link two existing nodes — the standalone `edge a -[:e]-> b`
+  //       assert. Implementation lives in ./writes.ts
+  //       (`linkKgRecords`), mirroring the parentLink edge machinery.
+  async linkRecords(input: LinkRecordsInput): Promise<LinkRecordsResult> {
+    const ends = await this.toInternalLinkCurrency(input);
+    return linkKgRecords({ connection: await this.writeConnection(), ...input, ...ends });
+  }
+
+  /** Sever an edge — the inverse of linkRecords (the movement language's
+   *  `unlink a -[:e]-> b`). Implementation in ./writes.ts. */
+  async unlinkRecords(input: UnlinkRecordsInput): Promise<UnlinkRecordsResult> {
+    const ends = await this.toInternalLinkCurrency(input);
+    return unlinkKgRecords({ connection: await this.writeConnection(), ...input, ...ends });
+  }
+
+  /** Rename a link/unlink's endpoint NATURAL node-type names to NodeTypeIds.
+   *  `edgeName` stays natural (the link SQL matches it against the from-side's
+   *  `outbound_name` / `inbound_name`). */
+  private async toInternalLinkCurrency(
+    input: LinkRecordsInput,
+  ): Promise<{ from: LinkRecordsInput['from']; to: LinkRecordsInput['to'] }> {
+    const [from, to] = await Promise.all([
+      this.requireStructuredId(input.from.recordType, 'linkRecords'),
+      this.requireStructuredId(input.to.recordType, 'linkRecords'),
+    ]);
+    return {
+      from: { ...input.from, recordType: from },
+      to: { ...input.to, recordType: to },
+    };
+  }
+
+  /** Hard-delete a node, reusing the knowledge layer's existing removal
+   *  shape (FK cascades + `node_removed` change record). Implementation in
+   *  ./writes.ts. */
+  async deleteRecord(input: DeleteInput): Promise<DeleteResult> {
+    await deleteKgRecord({
+      connection: await this.writeConnection(),
+      recordType: await this.requireStructuredId(input.recordType, 'deleteRecord'),
+      externalId: input.externalId,
+      mutationContext: input.mutationContext,
+    });
+    return {};
+  }
+
+  // ── 6. readRecord (no-op detection support) ─────────────────────────────
+  // Reading current canonical values for no-op detection on KG targets is
+  // handled by the transaction-commit hook (per 3h §Layer 2), not via this
+  // method. Leaving readRecord undefined is the right signal: the engine's
+  // commit hook reads canonical values directly through readProperty rather
+  // than via the adapter.
+
+
+  // (Correspondence — `getPriorMatch` / `recordLink` — retired with the TG
+  // engine. The KG is no longer a correspondence store for the engine;
+  // linking is the engine-owned `bind` store. The `linked_object` table
+  // survives for `resolveByBridge` candidate lookup, not for prior-match.)
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+/**
+ * Narrow a `SourcePosition` to the stable KG-owned position the read paths
+ * expect and return its `recordId` (the KG node id). A KG position is the
+ * stable position whose `adapterType` is the KG's — its `recordId` IS the
+ * node id (a kg-node carries no inline data; KG reads by id).
+ */
+function expectKgNodeId(position: SourcePosition, method: string): string {
+  if (!isStablePosition(position) || position.adapterType !== KG_ADAPTER_TYPE) {
+    throw new Error(
+      `KnowledgeGraphAdapter.${method} expects a stable knowledge-graph position; ` +
+        `got adapterType=${position.adapterType}, identity.kind=${position.identity.kind}`,
+    );
+  }
+  const nodeId = positionRecordId(position);
+  if (nodeId === undefined) {
+    throw new Error(
+      `KnowledgeGraphAdapter.${method} expected a stable position with a recordId`,
+    );
+  }
+  return nodeId;
+}
+
+/** The wire spells a value type with the store's own enum values, so the map is
+ *  the same one it always was — it just arrives as a string rather than as a
+ *  column. An unknown kind means the store grew a value type this build has
+ *  never heard of; `json` is the honest landing place for "structured, and we
+ *  cannot say more". */
+function mapPropertyValueTypeToFieldKind(value: string): SchemaFieldKind {
+  switch (value) {
+    case 'text':
+      return 'string';
+    case 'number':
+      return 'number';
+    case 'date':
+      return 'date';
+    case 'boolean':
+      return 'boolean';
+    case 'json':
+    default:
+      return 'json';
+  }
+}

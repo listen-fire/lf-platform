@@ -20,6 +20,7 @@
     "@listen-fire/kg": "workspace:*",
     "@listen-fire/lang-0.15": "workspace:*",
     "@listen-fire/movement-lang": "file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz",
+    "@listen-fire/system": "workspace:*",
     "@listen-fire/slack": "file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-slack-0.14.0.tgz",
     "legacy-lang": "workspace:@listen-fire/legacy-lang@*",
     "module-kit": "file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-module-kit-0.15.0.tgz",

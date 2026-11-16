@@ -97,6 +97,31 @@ describe("a 0.12 pin's check", () => {
   });
 });
 
+/** The same listen as 0.15 spells it, reading who acted (`@user_email`, which
+ *  0.16 retired). */
+const ECHO_015 = 'function echo(run: <manual-[:Invocation]->>) {\n  who = @user_email\n  return run.Text\n}\nlisten to manual-[:Invocations]-> fire echo\n';
+
+describe("a 0.15 pin's check", () => {
+  it("is 0.15's own checker's, against the units 0.15 describes", async () => {
+    const validation = await validateMovementForTeam({ audience: { for: 'run' }, teamId: TEAM, source: ECHO_015, languageVersion: '0.15.3' });
+    expect(validation.diagnostics).toEqual([]);
+    expect(validation.ok).toBe(true);
+    expect(validation.firedMovements).toEqual(['echo']);
+    expect(movementCatalogForTeam).not.toHaveBeenCalled();
+  });
+
+  it("names a field 0.15's unit does not have, by 0.15's checker", async () => {
+    const validation = await validateMovementForTeam({ audience: { for: 'run' }, teamId: TEAM, source: ECHO_015.replace('run.Text', 'run.Textt'), languageVersion: '0.15.3' });
+    expect(validation.ok).toBe(false);
+    expect(validation.diagnostics).toEqual([expect.objectContaining({ severity: 'error', message: expect.stringContaining('Textt') })]);
+  });
+
+  it('the same 0.15 text is refused under the current version', () => {
+    const validation = diagnoseMovementSource(ECHO_015, { catalog: fromCatalogSnapshot(currentSnapshot), snapshot: currentSnapshot, languageVersion: LANGUAGE_VERSION });
+    expect(validation.ok).toBe(false);
+  });
+});
+
 describe("a deploy sweep's team facts", () => {
   it('are read once per team, however many automations it checks', async () => {
     const facts = teamFactsOncePerTeam();

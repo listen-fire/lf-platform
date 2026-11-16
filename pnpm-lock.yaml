@@ -1262,6 +1262,9 @@ importers:
       '@listen-fire/slack':
         specifier: file:/Users/henrystanford/src/lf-dev-tarballs/0.16.0/listen-fire-slack-0.14.0.tgz
         version: file:../lf-dev-tarballs/0.16.0/listen-fire-slack-0.14.0.tgz(@listen-fire/engine-contracts@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-contracts-0.16.0.tgz)(@listen-fire/engine@file:../lf-dev-tarballs/0.16.0/listen-fire-engine-0.16.0.tgz)(@listen-fire/movement-lang@file:../lf-dev-tarballs/0.16.0/listen-fire-movement-lang-0.16.0.tgz)(tsx@4.21.0)
+      '@listen-fire/system':
+        specifier: workspace:*
+        version: link:../../modules/system
       legacy-lang:
         specifier: workspace:@listen-fire/legacy-lang@*
         version: link:../legacy-lang

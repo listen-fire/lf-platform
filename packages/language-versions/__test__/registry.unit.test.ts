@@ -44,7 +44,7 @@ describe('the language versions this build carries', () => {
   });
 
   it('a key no entry carries and a text that is no version belong to none, and are refused in the language\'s own text', () => {
-    for (const pin of ['0.12.0', '0.12.13', '0.13.0', '0.14.2', '0.15.0', '0.15.3', '1.0.0', 'latest']) {
+    for (const pin of ['0.12.0', '0.12.13', '0.13.0', '0.14.2', '1.0.0', 'latest']) {
       expect(versionOf(pin)).toBeUndefined();
       expect(runningOf(pin)).toEqual({ kind: 'held' });
       expect(resumingOf(pin)).toEqual({ kind: 'held' });
@@ -56,10 +56,14 @@ describe('the language versions this build carries', () => {
     }
   });
 
-  it('a 0.15 pin is held, refused at every door with the language`s own "upgrade it" text', () => {
-    const upgradeIt = languageVersionDiagnostic('0.15.3', LANGUAGE_VERSION)?.message;
-    expect(upgradeIt).toContain('validate it under 0.16.0 and upgrade it');
-    for (const needed of ['run', 'resume', 'listen'] as const) expect(refusalOf('0.15.3', needed)).toBe(upgradeIt);
+  it('a 0.15 pin is carried as release 0.15.3: its own checker checks it; it does not yet run, resume or fire', () => {
+    for (const pin of ['0.15.0', '0.15.3']) {
+      expect(versionOf(pin)?.release).toBe('0.15.3');
+      expect(isCurrent(pin)).toBe(false);
+      expect(checkingOf(pin)).toEqual({ kind: 'carried', lane: expect.any(Function) });
+      expect(providedFlagsFor(pin)).toEqual({ check: true, run: false, resume: false, listen: false });
+      for (const needed of ['run', 'resume', 'listen'] as const) expect(refusalOf(pin, needed)).toMatch(/this platform carries 0\.15\.3 to check its automations, but not to/);
+    }
     expect(untilUpgraded('0.15.3')).toBe('its listens do not fire, and a run of it that would wait (an ask, a pause) is stopped');
   });
 
@@ -74,8 +78,8 @@ describe('the language versions this build carries', () => {
     expect(importKeyOf('5')).toBe('5');
   });
 
-  it('carries the current version alone: 0.12 and the legacy ids are dropped, and 0.15 is not carried yet', () => {
-    expect(carriedVersions()).toEqual([currentVersion()]);
+  it('carries the current version and 0.15: 0.12 and the legacy ids are dropped', () => {
+    expect(carriedVersions().map((version) => version.key)).toEqual([currentVersion().key, '0.15']);
   });
 
   it('every carried package set loads as the release its entry names', async () => {
