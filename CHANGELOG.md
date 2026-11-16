@@ -15,6 +15,12 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 
 ## [Unreleased]
 
+<!-- add merged PRs here -->
+
+## [0.16.0] - 2026-11-16
+
+Takes listen-fire 0.16.0 and states who may reach what. Read `deploy/UPGRADING.md` before deploying: the deploy stops while a run is parked on language versions 1 to 4 or 0.12, and the access statement step runs a second time once the new api is healthy.
+
 - Who may reach what is now stated on each automation, connection and library, and an event is seen only by someone who may use its connection. An automation has two lists: read, and write (change, run and delete it, and change its lists). A connection has one, use (run automations on it and read through it). A file that exports is a library and has a third list, use: who may import and call it without reading its source; use on a library covers the connections it reaches. Each list takes the team or members of it. A team has a third level, **admin**, above write: only an admin invites or removes people, changes someone's level, renames the team, switches the team's engine, claims or releases a public inbox, or reads a delivery's kept request; an admin also sees every automation and connection on the team (locked ones show name and lists only) and may change any list. The web shows and changes the lists in each access panel; agents read them in `getAutomation`'s and `describeConnection`'s `access` and change them with `setAccess`. Creating something states its lists: `saveAutomation` takes `statements` for a new automation (and the use list for its first export), and `connectSystem` a use list for a new connection, as the person chose them. A creation with no person in it (a script, lf, a harness) gets the team. A save may name only connections and libraries the saver may use, and plays back, one plain line per listen, what it fires on (`playback`; it passes no judgement, so it is not among `warnings`). To see a stored event you need use on its connection; to run an automation with an event you need write on it; a replay reruns only that automation's listens; and "why didn't this fire?" lists only the listens of automations you may read. A connection lists its recent deliveries, so an event that set nothing off can be found and asked about: the web's "Recent events" on each account, and `listDeliveries` for agents, need use on the connection. Who may set a Slack listen off is now the listen's own filter. The platform serves the team's host functions as the plugin package `@lf-platform/team` (`isMember` and `userFor`), which a filter calls on a claim an event carries (for Slack, `User Email`), and the app's own messages are told apart by `Sent By This App`. A listen on 0.16 is judged by its filter alone, at the door.
 - **Upgrading.** The deploy's statement step gives everything saved before this release the reach its team has today, and its use backfill gives each library the use list that matches its read list (`deploy/UPGRADING.md`). The migration makes every member who was not read-only an admin, so nobody loses what they could do; demote people afterwards as you like. The public identity's membership stays write. A self-hosted installation on the static principal (`LISTEN_FIRE_ACCESS` unset) is now admin; set `LISTEN_FIRE_ACCESS=write` to narrow it. Stop the previous api's drain before the new api starts. While it runs, the previous api still creates automations and connections with no statement; the deploy's second statement run gives them one. Nothing moves a pin by itself. A Slack listen on a 0.15 pin keeps the old rule (only registered team members set it off); it changes only when its automation is upgraded. Upgrading it holds the pin and reports the listen as open under 0.16, with a fix that adds the team check and keeps out the app's own messages; the fix is shown as a diff and applied only when the author, a person or an agent, accepts it.
 - **Rolling back.** The previous release reads none of the lists and does not know admin: run against the migrated database, it lets every member reach everything again and refuses member management to anyone who holds the new level. A rollback is a restore of the snapshot taken before the upgrade, as `deploy/UPGRADING.md` says, not a re-pin of the tag.
@@ -25,8 +31,6 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
   - An earlier 0.15 receipt from the email or WhatsApp door names no delivery, and cannot be filled. An unforced replay of a delivery kept before this release may therefore run its event again, while that delivery is within its retention.
   - A saved automation on a pin of 1 to 4 or 0.12 is held: it does not run, listen, resume or present. Its text is still checked, by the frozen 0.12 parser, and it upgrades through that parser.
   - The deploy check refuses while a run is parked on a dropped pin. Cancel or finish those runs, or upgrade their automations, before deploying.
-
-<!-- add merged PRs here -->
 
 ## [0.15.3] - 2026-11-12
 
@@ -2331,7 +2335,8 @@ Releases before v0.11 are kept one file per minor line, newest first:
 - [v0.2.x](docs/changelog/v0.2.md) (v0.2.0)
 - [v0.1.x](docs/changelog/v0.1.md) (v0.1.0 to v0.1.2)
 
-[Unreleased]: https://github.com/listen-fire/lf-platform/compare/v0.15.3...HEAD
+[Unreleased]: https://github.com/listen-fire/lf-platform/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/listen-fire/lf-platform/compare/v0.15.3...v0.16.0
 [0.15.3]: https://github.com/listen-fire/lf-platform/compare/v0.15.2...v0.15.3
 [0.15.2]: https://github.com/listen-fire/lf-platform/compare/v0.12.13...v0.15.2
 [0.12.13]: https://github.com/listen-fire/lf-platform/compare/v0.12.11...v0.12.13
