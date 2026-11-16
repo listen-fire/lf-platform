@@ -39,7 +39,7 @@ import { lfEngineTeams } from '../lf_engine/team_engine';
 import { notifyWork, registerWorkHandler } from '../work/drain';
 import { enqueueWork, listWorkByKind, removeWork } from '../work/store';
 import { edgePollerOf } from './edge_poller';
-import { listenEdgeKeysOf, type ListenEdgeKey } from '../inbound/listen_edge';
+import { listenEdgeDigest, listenEdgeKeysOf, type ListenEdgeKey } from '../inbound/listen_edge';
 import { carriedEdgeKeysOf, carriedListensContained, type CarriedListen } from '../inbound/carried_listens';
 
 /** The interval of a polled edge that declares none. */
@@ -147,6 +147,16 @@ async function cursorOf(teamId: TeamId, subscriptionId: string): Promise<{ curso
   return row === undefined ? null : { cursor: row.checkpoint };
 }
 
+/** A carried key's cursor: its own, else the one its listens kept while their
+ *  version was current, under the same key without the version. A version
+ *  becomes carried at an upgrade, which renames its keys; taking that cursor
+ *  over keeps what arrived between the last poll before the upgrade and the
+ *  first after, which a first poll would arm past. Its own row, once kept,
+ *  always wins. The old row is left as it is: a current listen may share it. */
+async function carriedCursorOf(key: ListenEdgeKey, subscriptionId: string): Promise<{ cursor: unknown } | null> {
+  return (await cursorOf(key.teamId, subscriptionId)) ?? (await cursorOf(key.teamId, pollSubscriptionId(listenEdgeDigest({ ...key, version: undefined }))));
+}
+
 async function keepCursor(teamId: TeamId, subscriptionId: string, cursor: unknown): Promise<void> {
   await sql`
     insert into automations.inbound_checkpoint (team_id, subscription_id, checkpoint)
@@ -208,7 +218,7 @@ async function pollCarried(poll: SharedPoll): Promise<{ arrivals: number; armed:
   // Loaded when a carried key is polled: the carried run host reaches the catalog, which reaches this worker.
   const [{ modulePlatform }, { judgeCarriedPage }] = await Promise.all([import('../translation_graph/movement/carried_run'), import('../inbound/carried_delivery')]);
   const subscriptionId = pollSubscriptionId(digest);
-  const before = await cursorOf(key.teamId, subscriptionId);
+  const before = await carriedCursorOf(key, subscriptionId);
   const polled = await lane.pollEdge(
     {
       teamId: key.teamId,
