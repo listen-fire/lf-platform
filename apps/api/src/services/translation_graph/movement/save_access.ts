@@ -27,7 +27,7 @@ import { getRemoteAdapter } from '../adapters/remote/store';
 import { teamAdapterManifests } from '../adapters/team_manifests';
 import { constructionsOf, loadCredentialRows } from './catalog';
 import { movementFileFacets } from './files';
-import { libraryFaultRecord, librariesInMessage } from './library_faults';
+import { libraryFaultRecord, librariesInMessage, RUN_CHECK_LINE, withoutLibraryText } from './library_faults';
 import { getMovementRow, getMovementRowByName, type MovementRow } from './store';
 
 /** Why a creation's statements were refused: the decision's own reasons, and statements given to a save that overwrites. */
@@ -228,19 +228,15 @@ export async function hideUnreadableLibraries<D extends { message: string }>(
     diagnostics.map(async (diagnostic) => {
       for (const library of librariesInMessage(diagnostic.message)) {
         if (!(await hidden(library))) continue;
-        return {
-          ...diagnostic,
-          message: `The library "${library}" has a fault you cannot see: you may use it but not read it. Ask someone who may read it.`,
-        };
+        return withoutLibraryText(
+          diagnostic,
+          `The library "${library}" has a fault you cannot see: you may use it but not read it. Ask someone who may read it.`,
+        );
       }
       return diagnostic;
     }),
   );
 }
-
-// A diagnostic line of a failed run's check: its code, the importer's line,
-// then the library's own words.
-const RUN_CHECK_LINE = /^(\s*\S+ \(line \d+\): )"([^"]+)" line \d+: .*$/;
 
 /** A run's failure as it is recorded; see `withoutLibraryFaults`. */
 export function withoutLibraryLines(message: string): string {

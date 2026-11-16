@@ -417,6 +417,52 @@ describe('use on a library (real Postgres)', () => {
     });
   });
 
+  describe('use_without_read_sees_no_source, for a library that does not parse', () => {
+    // The parser quotes a position, and its message may quote text; neither may reach a reader without read.
+    const UNPARSEABLE = 'export function tally(t: <text>) {\n  return @@leakyword (\n}\n';
+    const parseShape = /does not parse|leakyword|fix the library file/;
+
+    it('validate and save name the library and show neither the parser message nor its position, with no fix', async () => {
+      await file('helpers', UNPARSEABLE, { read: [user(bob)], write: [user(bob)], use: [user(alice)] });
+
+      const validation = await validateMovementForTeam({ teamId, source: IMPORTER, audience: { for: asUser(alice) } });
+      const own = validation.diagnostics.filter((d) => d.message.includes('helpers'));
+      expect(own.length).toBeGreaterThan(0);
+      expect(JSON.stringify(validation.diagnostics)).not.toMatch(parseShape);
+      for (const diagnostic of validation.diagnostics) expect(diagnostic).not.toHaveProperty('fix');
+
+      const principal = asUser(alice);
+      const result = await runWithPrincipal(principal, () =>
+        saveMovement({ teamId, source: IMPORTER, name: 'sales', audience: { for: principal }, userId: alice, intent: 'create', statements: { read: [team], write: [user(alice)] } }),
+      );
+      expect(JSON.stringify(result)).toContain('helpers');
+      expect(JSON.stringify(result)).not.toMatch(parseShape);
+
+      const stored = await getAutomationsQb(['movement'])
+        .selectFrom('movement')
+        .select('validity_reason')
+        .where('team_id', '=', teamId)
+        .where('name', '=', 'sales')
+        .executeTakeFirst();
+      expect(JSON.stringify(stored?.validity_reason ?? null)).not.toMatch(parseShape);
+    });
+
+    it('a reader of the library still sees the parser message', async () => {
+      await file('helpers', UNPARSEABLE, { read: [user(bob)], write: [user(bob)], use: [user(alice)] });
+      const validation = await validateMovementForTeam({ teamId, source: IMPORTER, audience: { for: asUser(bob) } });
+      expect(JSON.stringify(validation.diagnostics)).toContain('does not parse');
+    });
+
+    it('a fault two levels down, in an unparseable inner library, names the unreadable one only', async () => {
+      const OUTER = 'import { tally } from "inner"\n\nexport function wrap(t: <text>) {\n  return tally(t)\n}\n';
+      const importer = IMPORTER.replace('{ tally } from "helpers"', '{ wrap } from "outer"').replace('tally(', 'wrap(');
+      await file('inner', UNPARSEABLE, { read: [user(bob)], write: [user(bob)], use: [user(bob), user(alice)] });
+      await file('outer', OUTER, { read: [team], write: [user(bob)], use: [user(alice)] });
+      const validation = await validateMovementForTeam({ teamId, source: importer, audience: { for: asUser(alice) } });
+      expect(JSON.stringify(validation.diagnostics)).not.toMatch(parseShape);
+    });
+  });
+
   it('a_test_run_is_refused_like_a_live_one, before anything is read through the library’s connection', async () => {
     await file('helpers', LIBRARY, { read: [team], write: [user(carol)], use: [team] });
     const movementId = await file('sales', IMPORTER, { read: [team], write: [team] });
