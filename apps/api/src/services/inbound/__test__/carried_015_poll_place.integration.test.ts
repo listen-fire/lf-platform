@@ -87,6 +87,37 @@ async function carriedReleaseListen(options: { pollsAlone?: boolean } = {}) {
   return { teamId, movementId, triggerId, poll, ownId, oldId, oldDigest: listenEdgeDigest(asCurrent) };
 }
 
+/** Project A's shape twice over: two 0.15 automations of one team, each with a
+ *  listen polling alone on the same key. v0.16.0 named their carried keys
+ *  without `alone`, so it polled both under one name (`v0160Id`). Each has the
+ *  row v0.15.3 left frozen under its own name (60 min ago), and a release
+ *  between that row and v0.16.0's that either would fire again from it. */
+async function twoPollingAlone() {
+  const teamId = randomUUID() as TeamId;
+  teams.push(teamId);
+  await getCoreQb(['team']).insertInto('team').values({ id: teamId, name: `carried-place-${teamId.slice(0, 8)}` }).execute();
+  await ProvisioningService.provisionUser({ teamId, email: `ada+${teamId.slice(0, 8)}@example.com`, access: 'admin' });
+  const listens: Array<{ triggerId: TriggerId; ownId: string }> = [];
+  const v0160Ids = new Set<string>();
+  for (const name of ['releases', 'releases_too']) {
+    const movementId = randomUUID() as MovementId;
+    await getAutomationsQb(['movement']).insertInto('movement').values({ id: movementId, team_id: teamId, name, source: SYSTEM_015, description: '', language_version: '0.15.3' }).execute();
+    const saved = await saveMovement({ audience: { for: 'run' }, teamId, id: movementId, source: SYSTEM_015 });
+    if (!saved.ok) throw new Error(`test: the 0.15 automation did not save: ${JSON.stringify(saved)}`);
+    const triggerId = saved.listeners[0]!.triggerId as TriggerId;
+    await sql`update automations.trigger set config = jsonb_set(config, '{listen,carriedFrom}', ${JSON.stringify({ at: '2026-11-04T10:00:00.000Z', pollsAlone: true })}::text::jsonb)
+      where id = ${triggerId}::uuid`.execute(getAutomationsQb(['trigger']));
+    const poll = await carriedPollOf(teamId, triggerId);
+    expect(poll.key.alone).toBe(triggerId);
+    v0160Ids.add(pollSubscriptionId(listenEdgeDigest({ ...poll.key, alone: undefined })));
+    await keep(teamId, pollSubscriptionId(listenEdgeDigest({ ...poll.key, version: undefined })), { releases: { at: minutesAgo(60), version: '' } });
+    listens.push({ triggerId, ownId: pollSubscriptionId(poll.digest) });
+  }
+  expect(v0160Ids.size).toBe(1);
+  await released(teamId, '0.15.9', minutesAgo(30));
+  return { teamId, listens, v0160Id: [...v0160Ids][0]! };
+}
+
 async function keep(teamId: TeamId, subscriptionId: string, checkpoint: unknown): Promise<void> {
   await sql`insert into automations.inbound_checkpoint (team_id, subscription_id, checkpoint, updated_at)
     values (${teamId}::uuid, ${subscriptionId}::text, ${JSON.stringify(checkpoint)}::text::jsonb, now() - interval '1 hour')`.execute(getAutomationsQb(['inbound_checkpoint']));
@@ -216,6 +247,44 @@ describe('a carried listen keeps its poll’s place across the upgrade (real Pos
     expect(await kept(teamId, v0160Id)).toBeUndefined();
   });
 
+  describe.each([{ first: 'the first listen' }, { first: 'the second listen' }])('two listens polling alone that shared one v0.16.0 row', ({ first }) => {
+    it(`each fires only what came after v0.16.0's cursor on its first 0.16.1 poll, nothing replayed, when ${first} polls first`, async () => {
+      const { teamId, listens, v0160Id } = await twoPollingAlone();
+      await keep(teamId, v0160Id, { releases: { at: minutesAgo(10), version: '' } });
+      const after = minutesAgo(5);
+      await released(teamId, '0.16.0', after);
+
+      const order = first === 'the first listen' ? listens : [...listens].reverse();
+      for (const listen of order) await pollOnce(await carriedPollOf(teamId, listen.triggerId));
+
+      for (const listen of listens) {
+        expect(await receiptsOf(listen.triggerId)).toEqual([{ status: 'received' }]);
+        expect(releasesOf(await kept(teamId, listen.ownId))).toEqual({ at: after, version: '0.16.0' });
+      }
+    });
+  });
+
+  it('two listens polling alone that shared one v0.16.0 row, one of them paused: the one polling first copies the row, and the paused one, resumed, replays nothing', async () => {
+    const { teamId, listens, v0160Id } = await twoPollingAlone();
+    const [firing, paused] = listens;
+    if (firing === undefined || paused === undefined) throw new Error('test: two listens expected');
+    await getAutomationsQb(['trigger']).updateTable('trigger').set({ run_mode: 'off' }).where('id', '=', paused.triggerId).execute();
+    const place = { releases: { at: minutesAgo(10), version: '' } };
+    await keep(teamId, v0160Id, place);
+    const after = minutesAgo(5);
+    await released(teamId, '0.16.0', after);
+
+    await pollOnce(await carriedPollOf(teamId, firing.triggerId));
+    expect(await receiptsOf(firing.triggerId)).toEqual([{ status: 'received' }]);
+    // The paused listen still reads that name: the row stays where it was.
+    expect(releasesOf(await kept(teamId, v0160Id))).toEqual(place.releases);
+
+    await getAutomationsQb(['trigger']).updateTable('trigger').set({ run_mode: 'live' }).where('id', '=', paused.triggerId).execute();
+    await pollOnce(await carriedPollOf(teamId, paused.triggerId));
+    expect(await receiptsOf(paused.triggerId)).toEqual([{ status: 'received' }]);
+    expect(releasesOf(await kept(teamId, paused.ownId))).toEqual({ at: after, version: '0.16.0' });
+  });
+
   it('with a current 0.16 listen polling under the old key, the cursor is copied: the old row is untouched, and each polls from its own', async () => {
     const { teamId, triggerId, poll, ownId, oldId, oldDigest } = await carriedReleaseListen();
     const currentMovement = randomUUID() as MovementId;
@@ -226,7 +295,7 @@ describe('a carried listen keeps its poll’s place across the upgrade (real Pos
     expect(own?.digest).toBe(oldDigest);
     if (own === undefined) return;
     const carried = await carriedPollOf(teamId, triggerId);
-    expect(carried.earlier).toEqual([{ digest: oldDigest, polled: true }]);
+    expect(carried.earlier).toEqual([{ digest: oldDigest, readElsewhere: true }]);
 
     await keep(teamId, oldId, { releases: { at: minutesAgo(10), version: '' } });
     const oldBefore = await kept(teamId, oldId);

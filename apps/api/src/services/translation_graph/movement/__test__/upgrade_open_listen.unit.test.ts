@@ -37,6 +37,7 @@ jest.mock('../provision', () => ({ saveMovement: jest.fn() }));
 jest.mock('../upgrade_holds', () => ({ holdsOnMoving: jest.fn(async () => []), eventsInFlight: jest.fn(async () => []) }));
 jest.mock('../../../movement_engine/run_host_deliveries', () => ({ holdDoorsAlone: jest.fn(async () => new Date(0)) }));
 jest.mock('../listens_up', () => ({ bringUpListensLater: jest.fn(async () => undefined) }));
+jest.mock('../listen_subscriptions', () => ({ ...jest.requireActual('../listen_subscriptions'), takeOverEarlierSubscriptions: jest.fn(async () => undefined) }));
 // The real authoring core is loaded by one case below; its team wrapper's
 // catalog assembly is never reached.
 jest.mock('../catalog', () => ({ movementCatalogForTeam: jest.fn() }));

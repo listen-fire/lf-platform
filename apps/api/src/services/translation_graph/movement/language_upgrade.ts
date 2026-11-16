@@ -116,7 +116,7 @@ import { readOnlyByFrozenParser } from './language_route';
 import { DoorsTryAgain } from '../../movement_engine/doors_hold';
 import { notifyWork } from '../../work/drain';
 import { bringUpListensLater } from './listens_up';
-import { queueListenSubscriptionSyncAfterRelease } from './listen_subscriptions';
+import { queueListenSubscriptionSyncAfterRelease, takeOverEarlierSubscriptions } from './listen_subscriptions';
 import { moveNeverShippedPin, saveMovement } from './provision';
 import {
   getMovementRow,
@@ -1403,7 +1403,12 @@ export async function upgradeMovement(input: {
         });
       }
       const shipped = checked.filter((member) => member.movement.currentVersionId !== null).map((member) => member.movement.id);
-      if (shipped.length > 0) await bringUpListensLater({ teamId: movement.teamId, movementIds: shipped });
+      if (shipped.length > 0) {
+        // A webhook already registered for a listen moved here is its own as
+        // this commits; the work row registers and removes the rest.
+        await takeOverEarlierSubscriptions({ teamId: movement.teamId as TeamId });
+        await bringUpListensLater({ teamId: movement.teamId, movementIds: shipped });
+      }
     });
   try {
     await untilNothingInFlight(moveTheGroup, input.inFlightWaitMs ?? IN_FLIGHT_WAIT_MS);

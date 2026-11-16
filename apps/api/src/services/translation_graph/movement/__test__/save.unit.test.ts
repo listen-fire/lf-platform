@@ -248,6 +248,7 @@ jest.mock('../../../work/store', () => ({
 // fixtures.
 jest.mock('../listen_subscriptions', () => ({
   syncListenSubscriptions: jest.fn(async () => ({ notes: [] })),
+  takeOverEarlierSubscriptions: jest.fn(async () => undefined),
 }));
 
 jest.mock('../../storage/tg_table', () => ({

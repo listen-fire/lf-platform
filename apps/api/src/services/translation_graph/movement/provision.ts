@@ -154,7 +154,7 @@ import { listeningOf, runningOf, type ListeningLane, type TeamFacts } from '@lis
 import { neverAsAny } from 'movement-engine/public/types';
 import { plannedListensOfSource } from './listen_plans';
 import { carriedPauses, listenIdentityOf, type CarriedPause } from './carried_pauses';
-import { carriedConfig, heardAnything, keepCarriedPlaces, placesHeardOf, predecessorsOf, type MovedListen, type PlacesHeard } from './carried_cursors';
+import { carriedConfig, heardAnything, keepCarriedPlaces, placesHeardOf, predecessorsOf, pushedListen, type MovedListen, type PlacesHeard } from './carried_cursors';
 import { carriedRunTriggerId } from './carried_names';
 import { listenConfigSchema, type ListenConfig, type SavedListen } from '../../inbound/listen_door';
 import { keepingCarriedFrom } from '../../inbound/listen_edge';
@@ -646,9 +646,15 @@ async function reconcileDerivedTriggers(input: {
       placesNotCarried.push(`${input.movementRow.name}: ${what} starts from its first poll: it could not be told which of the automation's earlier listens it was, so where that one stood was not carried, and what arrived since its last poll is missed.`);
     }
     const config = kept !== undefined ? keepingCarriedFrom({ config: input.desired[i].config, kept: kept.config, what: `${input.movementRow.name}: ${what}` }) : input.desired[i].config;
-    // A listen that never polled brings nothing, and joins its key's poll as a new listen does.
+    // A listen that never polled brings nothing, and joins its key's poll as a
+    // new listen does. A pushed one is marked whatever it brought: the upgrade
+    // hands it its webhook as it commits (listen_subscriptions.ts), and the door
+    // leaves what was kept there before the move to the version that read it.
+    const broughtPlace = heardAnything(places);
     const desired: DesiredListener =
-      input.carrying !== undefined && heardAnything(places) ? { ...input.desired[i], config: carriedConfig(config, input.carrying.movedAt) } : { ...input.desired[i], config };
+      input.carrying !== undefined && (broughtPlace || pushedListen(config))
+        ? { ...input.desired[i], config: carriedConfig(config, { movedAt: input.carrying.movedAt, broughtPlace }) }
+        : { ...input.desired[i], config };
     if (heardAnything(places)) carriedPlaces.push({ triggerId: rowId, credentialsId: desired.credentialsId, config: desired.config, places, what });
     const name = desired.alias ?? `movement/${input.movementRow.name}/${desired.movementName}`;
 

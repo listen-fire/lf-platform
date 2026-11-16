@@ -125,13 +125,40 @@ export function earlierNamesOf(key: ListenEdgeKey): string[] {
   return [...new Set(names)].filter((name) => name !== own);
 }
 
+/** What a key keeps its place under (its cursor, its subscription row): its own
+ *  name, and the names earlier releases kept that place under, most recent
+ *  first. */
+export interface PlaceNames {
+  own: string;
+  earlier: readonly string[];
+}
+
+/**
+ * The names keys other than `taker` may read a place from: each one's own and
+ * each of its earlier ones, paused or firing. The one rule for taking over a
+ * place kept under an earlier name, for a cursor and a subscription row alike:
+ * copied when another key reads that name, moved when none does. Two listens a
+ * release named apart may both read the one name they shared under the release
+ * before; moved by the first, it is gone for the second, which falls back to an
+ * older place and replays from it.
+ */
+export function namesReadBesides(input: { taker: string; keys: Iterable<PlaceNames> }): Set<string> {
+  const names = new Set<string>();
+  for (const { own, earlier } of input.keys) {
+    if (own === input.taker) continue;
+    names.add(own);
+    for (const name of earlier) names.add(name);
+  }
+  return names;
+}
+
 /** One traversal a listen is watched by, with how its last edge is
  *  delivered and, for an edge pushed per scope, the records that scope is
  *  (its last resolve's): the listen's own, or, over a union, each member's
  *  (`memberPlans`). Each is how the one listen is watched, never a listen of
  *  its own. */
 export function watchedTraversals(
-  listen: SavedListen,
+  listen: Pick<SavedListen, 'plan' | 'delivery' | 'members' | 'watching'>,
 ): Array<{ plan: ListenPlan; delivery: SavedListen['delivery']; scopes: readonly string[] | undefined }> {
   if (listen.plan.members === undefined) return [{ plan: listen.plan, delivery: listen.delivery, scopes: listen.watching?.heads }];
   return memberPlans(listen.plan).map((plan, member) => ({
@@ -139,6 +166,12 @@ export function watchedTraversals(
     delivery: listen.members?.[member]?.delivery,
     scopes: listen.watching?.members?.[member]?.heads,
   }));
+}
+
+/** Whether a listen's module pushes it what arrives on some traversal: to its
+ *  connection, or per scope. */
+export function isPushed(listen: Pick<SavedListen, 'plan' | 'delivery' | 'members' | 'watching'>): boolean {
+  return watchedTraversals(listen).some(({ delivery }) => delivery?.kind === 'connection' || delivery?.kind === 'scope');
 }
 
 /** A listen as its keys are made: its connection, and each traversal it is

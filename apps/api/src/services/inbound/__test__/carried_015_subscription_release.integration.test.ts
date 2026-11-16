@@ -369,8 +369,10 @@ describe('a carried narrowed push listen across the release that versions its ke
 });
 
 describe('a narrowed push listen upgraded off 0.15 (real Postgres)', () => {
-  /** What the upgrade leaves for its sync: the 0.15 row replaced by a current
-   *  one with the same plan, as the upgrade re-plans it. */
+  /** The upgrade's rows alone: the 0.15 row replaced by a current one with the
+   *  same plan, as the upgrade re-plans it. The upgrade itself also renames the
+   *  subscription row as it commits (carried_015_subscription_upgrade); these
+   *  cases are of the sync's own takeover, which does it when nothing did. */
   async function upgraded(carried: TriggerId): Promise<TriggerId> {
     await getAutomationsQb(['trigger']).deleteFrom('trigger').where('id', '=', carried).execute();
     return insertListen(currentMovement);
@@ -382,7 +384,7 @@ describe('a narrowed push listen upgraded off 0.15 (real Postgres)', () => {
     const own = await registeredRow({ key, name: digest, version: '0.15', webhook: 'wh-0160' });
 
     const now = await upgraded(carried);
-    // Until its sync runs (the upgrade queues it), the row still names 0.15, which has no listen there, so a delivery is heard by neither version.
+    // Until a sync runs, the row still names 0.15, which has no listen there, so a delivery is heard by neither version.
     expect(await currentListensAt(own)).toEqual([]);
     await postDeleted(own, 'rec-before');
     await drainAll();

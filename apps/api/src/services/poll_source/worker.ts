@@ -40,7 +40,7 @@ import { lfEngineTeams } from '../lf_engine/team_engine';
 import { notifyWork, registerWorkHandler } from '../work/drain';
 import { enqueueWork, listWorkByKind, removeWork } from '../work/store';
 import { edgePollerOf } from './edge_poller';
-import { earlierNamesOf, listenEdgeKeysOf, type ListenEdgeKey } from '../inbound/listen_edge';
+import { earlierNamesOf, listenEdgeKeysOf, namesReadBesides, type ListenEdgeKey, type PlaceNames } from '../inbound/listen_edge';
 import { carriedEdgeKeysOf, carriedListens, carriedListensContained, type CarriedListen } from '../inbound/carried_listens';
 import { inOneTransaction } from '../context/one_transaction';
 
@@ -72,8 +72,9 @@ export interface SharedPoll {
   carried: CarriedListen[];
   everyMs: number;
   /** A carried key's names under earlier releases, most recent first
-   *  (`earlierNamesOf`), each with whether a listen polls there now. */
-  earlier?: Array<{ digest: string; polled: boolean }>;
+   *  (`earlierNamesOf`), each with whether another key reads a place from it
+   *  (`namesReadBesides`). */
+  earlier?: Array<{ digest: string; readElsewhere: boolean }>;
 }
 
 export function pollWorkKey(digest: string): string {
@@ -94,12 +95,13 @@ export async function sharedPolls(input: { teamId?: TeamId } = {}): Promise<Shar
 
 /** The shared polls, and the carried versions whose listens could not be read:
  *  those are left out, so the current version's polls run whatever a carried
- *  version does, and a caller must not take their polls for gone. */
+ *  version does, and a caller must not take their polls for gone. Paused listens
+ *  are read too: they are polled for nothing, but a carried key's earlier name
+ *  one of them reads is not this key's to move. */
 async function readSharedPolls(input: { teamId?: TeamId }): Promise<{ polls: SharedPoll[]; carriedUnread: ReadonlySet<string> }> {
   let query = getAutomationsQb(['trigger', 'movement'])
     .selectFrom('trigger')
     .innerJoin('movement', 'movement.id', 'trigger.movement_id')
-    .where('trigger.run_mode', '!=', 'off')
     // A listen polled on its own last edge, or over a union on some member's.
     .where(
       sql<boolean>`(trigger.config->'listen'->'delivery'->>'kind' = 'polled' or trigger.config->'listen'->'members' @> '[{"delivery":{"kind":"polled"}}]'::jsonb)`,
@@ -114,11 +116,17 @@ async function readSharedPolls(input: { teamId?: TeamId }): Promise<{ polls: Sha
         'trigger.credentials_id as credentialsId',
         'movement.name as file',
         'movement.language_version as pin',
+        'trigger.run_mode as runMode',
       ])
       .execute(),
     lfEngineTeams(),
   ]);
   const polls = new Map<string, SharedPoll>();
+  // Every key's names, paused listens' included (`namesReadBesides`).
+  const named = new Map<string, PlaceNames>();
+  const name = (keyed: { key: ListenEdgeKey; digest: string }): void => {
+    named.set(keyed.digest, { own: keyed.digest, earlier: earlierNamesOf(keyed.key) });
+  };
   const share = (keyed: { key: ListenEdgeKey; digest: string; delivery: { pollEverySeconds?: number } }, listen: { current: SavedListen } | { carried: CarriedListen }): void => {
     const everyMs = (keyed.delivery.pollEverySeconds ?? DEFAULT_POLL_EVERY_SECONDS) * SECOND;
     const shared = polls.get(keyed.digest) ?? { key: keyed.key, digest: keyed.digest, listens: [], carried: [], everyMs };
@@ -132,22 +140,25 @@ async function readSharedPolls(input: { teamId?: TeamId }): Promise<{ polls: Sha
     const config = currentListenOf(row);
     if (config === null) continue;
     const listen: SavedListen = { ...config, triggerId: row.id, teamId: teamIdSchema.parse(row.teamId), file: row.file, credentialsId: row.credentialsId ?? null };
-    for (const keyed of listenEdgeKeysOf(listen, ['polled'])) share(keyed, { current: listen });
+    for (const keyed of listenEdgeKeysOf(listen, ['polled'])) {
+      name(keyed);
+      if (row.runMode !== 'off') share(keyed, { current: listen });
+    }
   }
   // A carried row is read by its version alone, so it is not narrowed by its
   // plan here: its version says how it is watched.
-  const carried = await carriedListensContained({ ...(input.teamId !== undefined ? { teamId: input.teamId } : {}), firing: true });
+  const carried = await carriedListensContained(input.teamId !== undefined ? { teamId: input.teamId } : {});
   for (const listen of carried.listens) {
     if (lfTeams.has(listen.teamId)) continue;
-    for (const keyed of carriedEdgeKeysOf(listen, ['polled'])) share(keyed, { carried: listen });
+    for (const keyed of carriedEdgeKeysOf(listen, ['polled'])) {
+      name(keyed);
+      if (listen.runMode !== 'off') share(keyed, { carried: listen });
+    }
   }
   for (const poll of polls.values()) {
     if (poll.key.version === undefined) continue;
-    // Any listen polling under an earlier name is another key's: this one's is its own.
-    poll.earlier = earlierNamesOf(poll.key).map((digest) => {
-      const there = polls.get(digest);
-      return { digest, polled: there !== undefined && there.listens.length + there.carried.length > 0 };
-    });
+    const readBesides = namesReadBesides({ taker: poll.digest, keys: named.values() });
+    poll.earlier = earlierNamesOf(poll.key).map((digest) => ({ digest, readElsewhere: readBesides.has(digest) }));
   }
   return { polls: [...polls.values()], carriedUnread: carried.unread };
 }
@@ -169,25 +180,26 @@ async function carriedCursorOf(poll: SharedPoll, subscriptionId: string): Promis
   const { teamId } = poll.key;
   const own = await cursorOf(teamId, subscriptionId);
   if (own !== null || poll.earlier === undefined) return own;
-  await takeOverEarlierPlace({ teamId, subscriptionId, earlier: poll.earlier.map(({ digest, polled }) => ({ subscriptionId: pollSubscriptionId(digest), polled })) });
+  await takeOverEarlierPlace({ teamId, subscriptionId, earlier: poll.earlier.map(({ digest, readElsewhere }) => ({ subscriptionId: pollSubscriptionId(digest), readElsewhere })) });
   return cursorOf(teamId, subscriptionId);
 }
 
 /**
  * Takes over, for a carried key with no cursor of its own, the first cursor
  * kept under one of its earlier names (`earlierNamesOf`, most recent first): it
- * is where the key stood. It is moved when nothing else polls there: left
- * behind, it would be found again later (an upgrade of these listens, or another
- * listen saved on that key) and replay what this key already heard. It is copied
- * when something does, which goes on polling from it. Written before the poll,
- * so a poll that fails after it polls again from the cursor taken over.
+ * is where the key stood. It is moved when no other key reads that name
+ * (`namesReadBesides`): left behind, it would be found again later (an upgrade
+ * of these listens, or another listen saved on that key) and replay what this
+ * key already heard. It is copied when one does, which polls from it, or takes
+ * it over in turn. Written before the poll, so a poll that fails after it polls
+ * again from the cursor taken over.
  */
-export async function takeOverEarlierPlace(input: { teamId: TeamId; subscriptionId: string; earlier: ReadonlyArray<{ subscriptionId: string; polled: boolean }> }): Promise<void> {
+export async function takeOverEarlierPlace(input: { teamId: TeamId; subscriptionId: string; earlier: ReadonlyArray<{ subscriptionId: string; readElsewhere: boolean }> }): Promise<void> {
   const { teamId, subscriptionId } = input;
   const db = getAutomationsQb(['inbound_checkpoint']);
-  for (const { subscriptionId: from, polled } of input.earlier) {
+  for (const { subscriptionId: from, readElsewhere } of input.earlier) {
     if ((await cursorOf(teamId, from)) === null) continue;
-    if (polled) {
+    if (readElsewhere) {
       await sql`
         insert into automations.inbound_checkpoint (team_id, subscription_id, checkpoint)
         select team_id, ${subscriptionId}::text, checkpoint from automations.inbound_checkpoint

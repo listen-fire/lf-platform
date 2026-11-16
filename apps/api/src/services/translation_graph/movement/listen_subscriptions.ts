@@ -27,7 +27,8 @@
 //     earlier name when nothing wants that name any more, so the webhook the
 //     source already posts to serves it (`takeOverEarlierRows`). Each release's
 //     deploy check queues one sync of every team, which does it without a save
-//     (`syncListenSubscriptionsAfterRelease`);
+//     (`syncListenSubscriptionsAfterRelease`); an upgrade does it in its own
+//     transaction (`takeOverEarlierSubscriptions`);
 //   - a team whose engine is lf wants no subscription at all: a cloud lf
 //     registers its own, so every one is removed, and a switch back to the
 //     platform registers them afresh (lf_engine/switch.ts runs this sync).
@@ -62,7 +63,7 @@ import { carriedVersions, type ListeningLane, type ModulePlatform } from '@liste
 import { savedListens, type SavedListen } from '../../inbound/listen_door';
 import { carriedEdgeKeysOf, carriedListensContained, kindsOf, kindsPinnedTo } from '../../inbound/carried_listens';
 import { neverAsAny } from 'movement-engine/public/types';
-import { earlierNamesOf, listenEdgeDigest, listenEdgeKeysOf, watchedTraversals, type ListenEdgeKey } from '../../inbound/listen_edge';
+import { earlierNamesOf, isPushed, listenEdgeDigest, listenEdgeKeysOf, namesReadBesides, type ListenEdgeKey, type PlaceNames } from '../../inbound/listen_edge';
 import { WorkGivesUp, registerWorkHandler } from '../../work/drain';
 import { enqueueWork } from '../../work/store';
 import { teamIdSchema } from '../../../lib/team_id';
@@ -302,27 +303,28 @@ function earlierSubscriptionNamesOf(key: ListenEdgeKey): Array<{ digest: string;
 /**
  * Each wanted subscription with no row of its own takes over the row its
  * listens were subscribed under by an earlier name (a release that versioned
- * its key, or an upgrade that unversioned it), when no subscription wants that
- * name any more: the row is renamed, so the webhook the source already posts
- * to is this key's, its registration unchanged, as a carried poll moves the
- * cursor it finds under an earlier name (poll_source/worker.ts). When one
- * still wants it, the row stays its, and this key is registered on a row of
- * its own. A name a version whose listens could not be read was subscribed
- * under is not known unwanted, so it is never taken. Answers the rows as they
- * now stand.
+ * its key, or an upgrade that unversioned it), when no other subscription reads
+ * that name, as its own or as an earlier one (`namesReadBesides`, the rule a
+ * carried poll's cursor is taken over by, poll_source/worker.ts): the row is
+ * renamed, so the webhook the source already posts to is this key's, its
+ * registration unchanged. When one does, the row stays, and this key is
+ * registered on a row of its own. A name a version whose listens could not be
+ * read was subscribed under is not known unwanted, so it is never taken.
+ * Answers the rows as they now stand.
  */
 async function takeOverEarlierRows(input: {
   desired: readonly DesiredSubscription[];
   existing: readonly SubscriptionRow[];
   carriedUnread: ReadonlySet<string>;
 }): Promise<SubscriptionRow[]> {
-  const wanted = new Set(input.desired.map((subscription) => subscription.held.digest));
+  const named = input.desired.map((subscription): PlaceNames => ({ own: subscription.held.digest, earlier: earlierSubscriptionNamesOf(subscription.key).map(({ digest }) => digest) }));
   const rows = [...input.existing];
   const onRow = (digest: string, providerKey: string) => rows.findIndex((row) => row.held?.digest === digest && row.provider === providerKey);
   for (const subscription of input.desired) {
     if (onRow(subscription.held.digest, subscription.providerKey) !== -1) continue;
+    const readBesides = namesReadBesides({ taker: subscription.held.digest, keys: named });
     for (const { digest: earlier, version } of earlierSubscriptionNamesOf(subscription.key)) {
-      if (wanted.has(earlier) || (version !== undefined && input.carriedUnread.has(version))) continue;
+      if (readBesides.has(earlier) || (version !== undefined && input.carriedUnread.has(version))) continue;
       const at = onRow(earlier, subscription.providerKey);
       const row = rows[at];
       if (row === undefined) continue;
@@ -485,8 +487,7 @@ async function webhooksStillCarryingMoved(input: { teamId: TeamId; manifestBySlu
   for (const listen of moved) {
     const manifest = input.manifestBySlug.get(resolveAdapterSlug(listen.plan.adapter));
     if (manifest === undefined || !manifest.methods.includes('ensureEventSubscription')) continue;
-    const pushed = watchedTraversals(listen).some(({ delivery }) => delivery?.kind === 'connection' || delivery?.kind === 'scope');
-    if (!pushed) continue;
+    if (!isPushed(listen)) continue;
     const keys = listenEdgeKeysOf(listen, ['connection', 'scope']);
     if (keys.length === 0 || keys.some(({ digest }) => !up.has(digest))) waiting.push({ provider: webhookProviderKey(manifest), credentialsId: listen.credentialsId });
   }
@@ -512,6 +513,25 @@ async function subscriberOfRow(input: { teamId: TeamId; slug: string; row: Subsc
     ...(row.credentialsId !== null ? { credentialsId: row.credentialsId } : {}),
     ...(install.constructionArgs !== undefined ? { constructionArgs: install.constructionArgs } : {}),
   });
+}
+
+/**
+ * An upgrade's share of the sync, in its own transaction once its automations
+ * are moved: each subscription the team's listens want now takes over the row
+ * of its earlier name (`takeOverEarlierRows`), so the webhook the source posts
+ * to is the upgraded listen's from the moment the upgrade commits, not from
+ * when the sync it queued runs. That sync then finds the row its. Nothing is
+ * registered or removed: no provider is called while the transaction is open.
+ * A delivery kept on the row before the move stays its earlier version's: the
+ * upgrade marks each pushed listen with the move (`carriedFrom.at`).
+ */
+export async function takeOverEarlierSubscriptions(input: { teamId: TeamId }): Promise<void> {
+  if ((await readTeamEngine(input.teamId)).engine === 'lf') return;
+  const account: SyncAccount = { notes: [], unregistered: [] };
+  const { manifests, remoteDegraded } = await teamAdapterManifestSet(input.teamId, account.notes);
+  const manifestBySlug = new Map(manifests.map((m) => [m.adapterType, m]));
+  const { desired, carriedUnread } = await desiredSubscriptions({ teamId: input.teamId, manifestBySlug, remoteDegraded, account });
+  await takeOverEarlierRows({ desired, existing: await provisionedRows(input.teamId), carriedUnread });
 }
 
 /**

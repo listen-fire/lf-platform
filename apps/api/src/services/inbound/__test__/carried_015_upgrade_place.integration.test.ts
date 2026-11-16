@@ -275,9 +275,12 @@ describe('an upgrade from 0.15 keeps a polled listen’s place (real Postgres)',
     if (before.unversioned !== listen.subscriptionId) expect(await kept(teamId, before.unversioned)).toBeUndefined();
   });
 
-  it('an upgrade that commits while a carried poll is between its module call and its write: the page fires once, from the place the upgrade carried', async () => {
+  it.each([
+    { shape: 'sharing its poll', pollsAlone: false },
+    { shape: 'polling alone on a cursor it brought from 0.12', pollsAlone: true },
+  ])('an upgrade that commits while a carried poll of a listen $shape is between its module call and its write: the page fires once, from the place the upgrade carried', async ({ pollsAlone }) => {
     const teamId = await newTeam();
-    const before = await shipped015(teamId, { name: 'releases', source: SYSTEM_015 });
+    const before = await shipped015(teamId, { name: 'releases', source: SYSTEM_015, pollsAlone });
     await keep(teamId, before.versioned, { releases: { at: minutesAgo(10), version: '' } });
     await released(teamId, '0.16.0', minutesAgo(5));
 

@@ -26,7 +26,7 @@ import { getAutomationsQb } from '../../../lib/kysely';
 import { triggerIdSchema } from '../../../lib/trigger_id';
 import { carriedEdgeKeysOf, carriedListens, type CarriedListen } from '../../inbound/carried_listens';
 import { listenConfigSchema, savedListens, type SavedListen } from '../../inbound/listen_door';
-import { earlierNamesOf, listenEdgeKeysOf, type ListenEdgeKey } from '../../inbound/listen_edge';
+import { earlierNamesOf, listenEdgeKeysOf, isPushed, namesReadBesides, pollsAloneOf, type ListenEdgeKey, type PlaceNames } from '../../inbound/listen_edge';
 import { pollSubscriptionId, takeOverEarlierPlace } from '../../poll_source/worker';
 
 /** Where one polled key of a carried listen stood. */
@@ -48,9 +48,11 @@ export interface PlacesHeard {
 }
 
 /** Every name a carried listen's polls may read a place from, by key. */
-function namesOf(listen: CarriedListen): Array<{ key: ListenEdgeKey; names: string[] }> {
-  return carriedEdgeKeysOf(listen, ['polled']).map(({ key, digest }) => ({ key, names: [digest, ...earlierNamesOf(key)].map(pollSubscriptionId) }));
+function namesOf(listen: CarriedListen): Array<{ key: ListenEdgeKey; names: PlaceNames }> {
+  return carriedEdgeKeysOf(listen, ['polled']).map(({ key, digest }) => ({ key, names: { own: pollSubscriptionId(digest), earlier: earlierNamesOf(key).map(pollSubscriptionId) } }));
 }
+
+const everyName = (names: PlaceNames): string[] => [names.own, ...names.earlier];
 
 async function lockedCursor(teamId: TeamId, subscriptionId: string): Promise<{ cursor: unknown } | null> {
   const { rows } = await sql<{ checkpoint: unknown }>`
@@ -71,29 +73,26 @@ export async function placesHeardOf(input: { teamId: TeamId; movementId: Movemen
   const moving = await carriedListens({ teamId: input.teamId, movementId: input.movementId });
   if (moving.length === 0) return { byRow: new Map(), readByOthers: new Set() };
   const movingIds = new Set<string>(moving.map((listen) => listen.triggerId));
-  const readByOthers = new Set(
-    (await carriedListens({ teamId: input.teamId })).filter((listen) => !movingIds.has(listen.triggerId)).flatMap((listen) => namesOf(listen).flatMap(({ names }) => names)),
-  );
-  const polledByCurrent = new Set(
-    (await savedListens({ teamId: input.teamId })).filter((listen) => !movingIds.has(listen.triggerId)).flatMap((listen) => listenEdgeKeysOf(listen, ['polled']).map(({ digest }) => pollSubscriptionId(digest))),
-  );
+  const staying = (await carriedListens({ teamId: input.teamId })).filter((listen) => !movingIds.has(listen.triggerId)).flatMap((listen) => namesOf(listen).map(({ names }) => names));
+  const current = (await savedListens({ teamId: input.teamId }))
+    .filter((listen) => !movingIds.has(listen.triggerId))
+    .flatMap((listen) => listenEdgeKeysOf(listen, ['polled']).map(({ digest }): PlaceNames => ({ own: pollSubscriptionId(digest), earlier: [] })));
   const keyed = moving.map((listen) => ({ triggerId: listen.triggerId, keys: namesOf(listen) }));
+  // Every key that may read a place, this automation's own included.
+  const everyKey = [...staying, ...current, ...keyed.flatMap(({ keys }) => keys.map(({ names }) => names))];
   const byRow = new Map<string, PlaceHeard[]>();
   for (const { triggerId, keys } of keyed) {
-    // Another listen reading a name, this automation's included, gets a copy.
-    const readElsewhere = new Set([...readByOthers, ...polledByCurrent, ...keyed.filter((other) => other.triggerId !== triggerId).flatMap((other) => other.keys.flatMap(({ names }) => names))]);
     const heard: PlaceHeard[] = [];
     for (const { key, names } of keys) {
-      const [own, ...earlier] = names;
-      if (own === undefined) continue;
-      if ((await lockedCursor(input.teamId, own)) === null) {
-        await takeOverEarlierPlace({ teamId: input.teamId, subscriptionId: own, earlier: earlier.map((name) => ({ subscriptionId: name, polled: readElsewhere.has(name) })) });
+      if ((await lockedCursor(input.teamId, names.own)) === null) {
+        const readBesides = namesReadBesides({ taker: names.own, keys: everyKey });
+        await takeOverEarlierPlace({ teamId: input.teamId, subscriptionId: names.own, earlier: names.earlier.map((name) => ({ subscriptionId: name, readElsewhere: readBesides.has(name) })) });
       }
-      heard.push({ edge: key.edge, scope: key.scope, cursor: await lockedCursor(input.teamId, own), names });
+      heard.push({ edge: key.edge, scope: key.scope, cursor: await lockedCursor(input.teamId, names.own), names: everyName(names) });
     }
     byRow.set(triggerId, heard);
   }
-  return { byRow, readByOthers: new Set([...readByOthers, ...polledByCurrent]) };
+  return { byRow, readByOthers: new Set([...staying, ...current].flatMap(everyName)) };
 }
 
 /** Whether a listen stood anywhere: one that never polled loses nothing by
@@ -120,13 +119,22 @@ export function predecessorsOf(input: {
   });
 }
 
-/** The new row's config, noting the move: it polls on the place it brought.
- *  `at` records when its place was last carried, so a row carried from 0.12
- *  and then from 0.15 says the later. */
-export function carriedConfig(config: Record<string, unknown>, movedAt: Date): Record<string, unknown> {
+/** The new row's config, noting the move. `at` records when it was last
+ *  carried, so a row carried from 0.12 and then from 0.15 says the later, and
+ *  the door leaves a delivery kept before it to the version that read it then
+ *  (inbound/listen_door.ts). `broughtPlace`: it polls alone on the place it
+ *  brought; otherwise it polls as its row already said. */
+export function carriedConfig(config: Record<string, unknown>, carried: { movedAt: Date; broughtPlace: boolean }): Record<string, unknown> {
   const listen = config['listen'];
   if (typeof listen !== 'object' || listen === null) return config;
-  return { ...config, listen: { ...listen, carriedFrom: { at: movedAt.toISOString(), pollsAlone: true } } };
+  const pollsAlone = carried.broughtPlace || pollsAloneOf(config);
+  return { ...config, listen: { ...listen, carriedFrom: { at: carried.movedAt.toISOString(), ...(pollsAlone ? { pollsAlone: true } : {}) } } };
+}
+
+/** Whether a planned row is a listen its module pushes to on some traversal. */
+export function pushedListen(config: Record<string, unknown>): boolean {
+  const parsed = listenConfigSchema.safeParse(config);
+  return parsed.success && isPushed(parsed.data.listen);
 }
 
 /** A listen the upgrade moved, as its new row is written, with where its
@@ -160,7 +168,10 @@ export async function keepCarriedPlaces(input: {
   const left: PlaceHeard[] = [];
   for (const moved of input.moved) {
     const parsed = listenConfigSchema.safeParse(moved.config);
-    if (!parsed.success) continue;
+    if (!parsed.success) {
+      notes.push(`${input.file}: ${moved.what} starts polling from its first poll: this release could not read its new row, so where it stood was not carried, and what arrived since its last poll is missed.`);
+      continue;
+    }
     const listen: SavedListen = { ...parsed.data.listen, triggerId: triggerIdSchema.parse(moved.triggerId), teamId: input.teamId, file: input.file, credentialsId: moved.credentialsId };
     for (const { key, digest } of listenEdgeKeysOf(listen, ['polled'])) {
       const subscriptionId = pollSubscriptionId(digest);
