@@ -119,8 +119,9 @@ import {
   inspectMovementRun,
 } from '../../../services/translation_graph/movement/run_now';
 import { abortRun, resumeRun } from '../../../services/interaction/operator';
-import { movementEventsImpl } from '../../../services/inbound/arrival_ledger';
+import { movementEventsImpl, type MovementEventItem } from '../../../services/inbound/arrival_ledger';
 import { replayThroughListen } from '../../../services/inbound/listen_replay';
+import { listeningVersionOf } from '../../../services/inbound/carried_listens';
 import { resumeListen } from '../../../services/inbound/listen_pause';
 import { RunBusy } from '../../../services/movement_engine/run_lease';
 import { MovementEngineError } from 'movement-engine/public/errors';
@@ -2000,6 +2001,23 @@ const resumeRunHandler: RequestHandler = jsonHandler(resumeRunSchema, 'body', as
 // is shown only to a team admin who asks for it in the app (ruling 3).
 // ---------------------------------------------------------------------------
 
+/** What names an arrival for its next step: the run it started, or the
+ *  attempt a retry of an unjudged one is at. One that ran nothing has neither. */
+function arrivalHandle(item: MovementEventItem): { runId: string } | { attempt: number | null } | Record<string, never> {
+  switch (item.status) {
+    case 'ran':
+    case 'run_failed':
+      return { runId: item.id };
+    case 'not_judged':
+    case 'waiting_for_host':
+      return { attempt: item.attempt };
+    case 'does_not_fire':
+      return {};
+    default:
+      return neverAsAny(item.status);
+  }
+}
+
 const listArrivalsHandler: RequestHandler = async (req, res) => {
   try {
     const idOrName = String(req.params.idOrName ?? '');
@@ -2013,7 +2031,7 @@ const listArrivalsHandler: RequestHandler = async (req, res) => {
       ...(item.arrivalIndex !== null ? { arrivalIndex: item.arrivalIndex } : {}),
       system: item.adapterType,
       status: item.status,
-      ...(item.status === 'not_judged' || item.status === 'waiting_for_host' ? { attempt: item.attempt } : { runId: item.id }),
+      ...arrivalHandle(item),
       ...(item.failureReason !== null ? { reason: item.failureReason } : {}),
       at: item.occurredAt,
     }));
@@ -2037,11 +2055,12 @@ const replayDeliveryHandler: RequestHandler = jsonHandler(replayDeliverySchema, 
   if (owner === undefined) return missing;
   const refused = await refusedChange({ automationId: owner.automationId, missing });
   if (refused !== null) return refused;
-  // A replay judges by the current version's listen plan. A listen on another
-  // version has none, so saying "no such listen" would be untrue.
+  // A replay judges by the listen's own version: this release's, or a version
+  // this platform carries, through its own lane. A listen on any other has no
+  // reader, so saying "no such listen" would be untrue.
   const movement = owner.automationId !== null ? await getMovementRow({ teamId: owner.teamId, id: owner.automationId }) : null;
-  if (movement && !isCurrent(movement.languageVersion)) {
-    return { error: `'${movement.name}' is written in language ${movement.languageVersion}, and this platform replays a delivery only through a listen on ${LANGUAGE_VERSION}. Upgrade it (upgradeAutomation) to replay through it.` };
+  if (movement && !isCurrent(movement.languageVersion) && listeningVersionOf(movement.languageVersion) === undefined) {
+    return { error: `'${movement.name}' is written in language ${movement.languageVersion}, and this platform replays a delivery only through a listen on ${LANGUAGE_VERSION} or on a version it carries. Upgrade it (upgradeAutomation) to replay through it.` };
   }
   const outcome = await replayThroughListen({
     teamId: teamIdSchema.parse(owner.teamId),
@@ -2347,7 +2366,7 @@ function registerAutomationToolRoutes(): void {
   reg('GET', '/automations/:idOrName/runs', 'List an automation\'s recent runs (every listener / "Run now" firing), newest first. Returns each run\'s { runId, lane, triggerType, status, committed, captured, recordCount, timestamps, costUsd, modelCalls } — `committed` = writes that landed, `captured` = writes rehearsed (a `dry_run` target, or a whole-run rehearsal), `costUsd`/`modelCalls` = the run\'s model-call spend and call count. Use a runId with inspectRun to see what the run actually captured and wrote. Query: ?limit= (default 20), ?team=. Also the top-level "listRuns" tool.', { readOnly: true, latency: 'fast' });
   reg('POST', '/automations/inspect-run', 'Read one run\'s full captured detail by id: the source event that fired it, the resolved write-plan (every target record + the FINAL field values it wrote, with every `?:` and enum coercion applied, each write flagged `committed` or captured), the decision trace (gate/branch outcomes, extraction emissions), errors, and the run\'s `committed`/`captured` counts plus its `costUsd`/`modelCalls` model-call spend. The "did it actually do what I meant" surface — including exactly which writes a rehearsal captured versus committed. Body: { runId, team? }. Get runIds from listRuns. Also the top-level "inspectRun" tool.', { inputSchema: inspectRunSchema, readOnly: true, latency: 'fast' });
   reg('POST', '/automations/resume-run', 'Resume a run that paused because it reached its cost limit (checkRun shows it as status "parked" with `paused` set). Every part of the run that stopped carries on from where it stopped, and its usage resets, so the limit applies afresh. Body: { runId, team? }. Also the top-level "resumeRun" tool.', { inputSchema: resumeRunSchema, latency: 'fast' });
-  reg('GET', '/automations/:idOrName/arrivals', 'List what reached an automation\'s listens, newest first: each run an arrival started and each arrival a listen could not judge (status `not_judged`, with the reason and its attempt; `waiting_for_host` while its listen waits for a host function, which it retries). Each names its `listen` and `deliveryId`, which replayDelivery takes, and, when known, its `arrivalIndex`, which runWithEvent takes. Query: ?team=. Also the top-level "listArrivals" tool.', { readOnly: true, latency: 'fast' });
+  reg('GET', '/automations/:idOrName/arrivals', 'List what reached an automation\'s listens, newest first: each run an arrival started and each arrival a listen could not judge (status `not_judged`, with the reason and its attempt; `waiting_for_host` while its listen waits for a host function, which it retries; `does_not_fire`, with the reason, for an event an automation on an earlier language version stopped before running). Each names its `listen` and `deliveryId`, which replayDelivery takes, and, when known, its `arrivalIndex`, which runWithEvent takes. Query: ?team=. Also the top-level "listArrivals" tool.', { readOnly: true, latency: 'fast' });
   reg('POST', '/automations/replay-delivery', 'Put one kept delivery through one listen again: the way out of an arrival the listen could not judge once the system it needed answers again. Only the arrivals that delivery brought are judged, by that listen alone. A listen that ran the arrival before runs nothing unless `force` is true. Needs write on the automation the listen belongs to; no other listen reruns. Body: { listen, deliveryId, force?, team? }. Returns { outcome, runIds, attempt, stillUndecided, lines }; the runs are queued, so poll checkRun. Also the top-level "replayDelivery" tool.', { inputSchema: replayDeliverySchema, latency: 'fast' });
   reg('POST', '/automations/explain-arrival', 'Say why a stored event did or did not fire the listens on its connection: the event is judged now against each listen of an automation you can read, naming the first term of the filter that failed. Needs use of the connection the delivery came for. A host function the filter calls is asked now, so its answer is as of this question, not as of the event. Nothing is kept. Body: { deliveryId, arrivalIndex, team? } (as listArrivals names them). Returns { edge, listens: [{ automationName, listen, verdict, firstFailed, reason, hostAnswers }] }. Also the top-level "explainArrival" tool.', { inputSchema: explainArrivalSchema, readOnly: true, latency: 'fast' });
   reg('POST', '/automations/run-with-event', 'Start an automation with a stored event\'s data, skipping its listens\' filters, as runAutomation skips them: each listen of the automation that hears that event (its module, its connection) starts one run. Needs write on the automation. Body: { automation, deliveryId, arrivalIndex, team? } (`deliveryId` and `arrivalIndex` as listArrivals names them). Returns { runIds, movementName }; the runs are queued, so poll checkRun. Also the top-level "runWithEvent" tool.', { inputSchema: runWithEventSchema, latency: 'fast' });
@@ -2402,6 +2421,7 @@ export {
   searchLanguageHandler,
   showExampleHandler,
   replayDeliveryHandler,
+  listArrivalsHandler,
   readBookHandler,
   getNodeDetailHandler,
   listCatalogHandler,

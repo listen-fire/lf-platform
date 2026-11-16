@@ -367,6 +367,8 @@ type MovementFiringInput = {
   triggerMark?: number;
   /** The receipt it runs from, when a carried version's door kept one. */
   triggerEventId?: TriggerEventId;
+  /** The kept delivery whose arrival started it, when one was kept. */
+  deliveryId?: string;
 };
 
 /** A fresh firing of a listener's movement. */
@@ -433,6 +435,7 @@ async function runMovementFiringInContext(
     movementVersionId: input.movement.version.id,
     ...(input.existingRunId !== undefined ? { existingRunId: input.existingRunId } : {}),
     ...(input.triggerEventId !== undefined ? { triggerEventId: input.triggerEventId } : {}),
+    ...(input.deliveryId !== undefined ? { deliveryId: input.deliveryId } : {}),
   });
   await recorder.startOpsRun();
   const movementName = input.firedMovementName ?? firedMovementNameFromTriggerName(input.triggerName);

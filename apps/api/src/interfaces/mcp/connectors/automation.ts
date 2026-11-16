@@ -660,7 +660,7 @@ function automationConnectorOptions(): McpRouterOptions {
       },
       listArrivals: {
         description:
-          "List what reached an automation's listeners, newest first: each run an arrival started (with its runId) and each arrival a listener could not judge (status \"not_judged\", with the reason — usually a system that did not answer a lookup — and which attempt; \"waiting_for_host\" while the listener waits for a platform function it could not reach, which it retries every 30 seconds, in order). Each entry names its `listen` and `deliveryId`: pass both to replayDelivery; with its `arrivalIndex` (when it has one), pass the automation, `deliveryId` and `arrivalIndex` to runWithEvent. Pass the automation id or its exact name.",
+          "List what reached an automation's listeners, newest first: each run an arrival started (with its runId) and each arrival a listener could not judge (status \"not_judged\", with the reason — usually a system that did not answer a lookup — and which attempt; \"waiting_for_host\" while the listener waits for a platform function it could not reach, which it retries every 30 seconds, in order; \"does_not_fire\", with the reason, for an event an automation on an earlier language version stopped before running, such as a sender who is not a registered team member). Each entry names its `listen` and `deliveryId`: pass both to replayDelivery; with its `arrivalIndex` (when it has one), pass the automation, `deliveryId` and `arrivalIndex` to runWithEvent. Pass the automation id or its exact name.",
         annotations: { readOnlyHint: true },
         inputSchema: {
           idOrName: z.string().describe('The automation id (from listAutomations) or its exact name.'),

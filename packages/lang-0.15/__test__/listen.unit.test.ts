@@ -4,7 +4,7 @@
 
 import { createServer, type Server } from 'node:http';
 
-import { gateFiring, isListenRow, judgePage, planListens, readDelivery } from '../lane/listen';
+import { eventAt, gateFiring, isListenRow, judgeEvent, judgePage, planListens, readDelivery } from '../lane/listen';
 import { watchOf } from '../lane/watch';
 import type { ModulePlatform } from '../lane/run_types';
 import type { TeamFacts } from '../lane/types';
@@ -127,6 +127,61 @@ describe("a 0.15 listen, by 0.15's planner, module and judge", () => {
     expect(judged.edges).toEqual(['Messages']);
     // A page for another connection is not this listen's.
     expect(judgePage({ teamId: 'team-1', adapterType: 'slack', credentialsId: 'c2', page: [said('hello', 'a')], listens: [row], now: new Date().toISOString() }).receipts).toEqual([]);
+  });
+
+  it("judges one event of a kept delivery for each row, with the event its run is handed, as 0.15's reading judges it", async () => {
+    const planned = await planListens({ source: SLACK_015, pin: '0.15.3', file: 'intake', team: team(), connected: { teamId: 'team-1', modules: modules() } });
+    if (!planned.ok) throw new Error('unplanned');
+    const row = { id: 'trigger-1', credentialsId: 'c1', config: { listen: planned.listens[0]?.listen } };
+    const elsewhere = { ...row, id: 'trigger-2', credentialsId: 'c2' };
+    const notOurs = { id: 'trigger-3', credentialsId: 'c1', config: { listen: { plan: { lane: 'x' } } } };
+    const judge = (text: string, arrivalIndex = 0) =>
+      judgeEvent(
+        { teamId: 'team-1', adapterType: 'slack', credentialsId: 'c1', kept: { delivery: { body: message(text) } }, arrivalIndex, listens: [row, elsewhere, notOurs], now: new Date().toISOString() },
+        modules(),
+      );
+    expect(await judge('hello')).toEqual({
+      ok: true,
+      edge: 'Messages',
+      listens: [
+        { triggerId: 'trigger-1', heard: true, verdict: { kind: 'fires' }, event: expect.objectContaining({ adapterType: 'slack' }) },
+        // Another connection's listen does not hear it; a row that is not 0.15's is left out.
+        { triggerId: 'trigger-2', heard: false },
+      ],
+    });
+    // The filter fails, and the event a vouched run is handed is still there.
+    expect(await judge('')).toEqual({
+      ok: true,
+      edge: 'Messages',
+      listens: [
+        { triggerId: 'trigger-1', heard: true, verdict: { kind: 'skips', edge: 'Messages' }, event: expect.objectContaining({ adapterType: 'slack' }) },
+        { triggerId: 'trigger-2', heard: false },
+      ],
+    });
+    expect(await judge('hello', 1)).toEqual({ ok: false, refused: expect.stringContaining('no event at 1') });
+    // Kept with more events than 0.15's module reads from it: which one is meant cannot be told.
+    const keptWithTwo = await judgeEvent(
+      { teamId: 'team-1', adapterType: 'slack', credentialsId: 'c1', kept: { delivery: { body: message('hello') }, brought: ['a', 'b'] }, arrivalIndex: 0, listens: [row], now: new Date().toISOString() },
+      modules(),
+    );
+    expect(keptWithTwo).toEqual({ ok: false, refused: expect.stringContaining('kept with 2 events') });
+
+    const said = { edge: 'Messages', identity: 'a', landing: { recordId: 'a', recordType: 'Message', fields: { Message: 'hi' } } };
+    const page = await judgeEvent({ teamId: 'team-1', adapterType: 'slack', credentialsId: null, kept: { page: [said] }, arrivalIndex: 0, listens: [row], now: new Date().toISOString() }, modules());
+    // A page for no connection is the install's: the listen on `c1` hears it.
+    expect(page).toEqual({ ok: true, edge: 'Messages', listens: [expect.objectContaining({ triggerId: 'trigger-1', heard: true, verdict: { kind: 'fires' } })] });
+  });
+
+  it('takes the event at a place of several only when 0.15 reads that place as the event it was kept with', () => {
+    const said = (identity: string) => ({ edge: 'Messages', identity, landing: { recordId: identity, recordType: 'Message', fields: { Message: identity } } });
+    const present = [said('a'), said('b')];
+    // The keys the delivery was kept with, in its order: 0.15 reads the same two.
+    expect(eventAt({ present, brought: ['Messages::a:', 'Messages::b:'], arrivalIndex: 1 })).toEqual({ arrival: said('b') });
+    // Another order, or another event, at that place is refused, never guessed.
+    expect(eventAt({ present, brought: ['Messages::b:', 'Messages::a:'], arrivalIndex: 1 })).toEqual({ refused: expect.stringContaining('another event at 1') });
+    expect(eventAt({ present, brought: ['Messages::a:'], arrivalIndex: 0 })).toEqual({ refused: expect.stringContaining('kept with 1 events') });
+    // One event each way is that event, however each release names it.
+    expect(eventAt({ present: [said('a')], brought: ['elsewhere'], arrivalIndex: 0 })).toEqual({ arrival: said('a') });
   });
 
   it('says how a 0.15 row is watched, off its own plan', async () => {

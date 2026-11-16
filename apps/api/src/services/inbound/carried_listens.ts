@@ -11,11 +11,13 @@ import { logger } from 'movement-engine/public/log';
 
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { TriggerId } from '../../generated/kysely/automations/Trigger';
+import type { MovementId } from '../../generated/kysely/automations/Movement';
 import type { Resolution } from '../lf_store/listens';
 
 import { getAutomationsQb } from '../../lib/kysely';
 import { teamIdSchema } from '../../lib/team_id';
 import { triggerIdSchema } from '../../lib/trigger_id';
+import { parseRunMode, type TriggerRunMode } from '../translation_graph/triggers/run_mode';
 import { states } from '../lf_store/listens';
 import { siblingKindsForAdapter } from '../translation_graph/adapters/registry';
 import { edgeKeysOf, type ListenDelivery, type WatchedListen } from './listen_edge';
@@ -32,6 +34,10 @@ export interface CarriedListen {
   /** The file (the movement row's name) the listen is in. */
   file: string;
   credentialsId: string | null;
+  /** Whether its runs go live, rehearse or are paused. */
+  runMode: TriggerRunMode;
+  /** The version its automation shipped, which a run started on purpose pins. */
+  versionId: string;
   /** What its last member listing came to, for a listen the host lists the
    *  members of; absent for one never listed, and for any other. */
   watching?: Resolution;
@@ -47,6 +53,8 @@ interface RowsWanted {
   teamId?: TeamId;
   kinds?: readonly string[];
   triggerId?: TriggerId;
+  /** One automation's rows. */
+  movementId?: MovementId;
   /** Only rows that fire: a paused row is not polled. */
   firing?: boolean;
 }
@@ -59,6 +67,7 @@ function rowsQuery(input: RowsWanted) {
   if (input.teamId !== undefined) query = query.where('trigger.team_id', '=', input.teamId);
   if (input.kinds !== undefined) query = query.where('trigger.kind', 'in', [...input.kinds]);
   if (input.triggerId !== undefined) query = query.where('trigger.id', '=', input.triggerId);
+  if (input.movementId !== undefined) query = query.where('trigger.movement_id', '=', input.movementId);
   if (input.firing === true) query = query.where('trigger.run_mode', '!=', 'off');
   return query;
 }
@@ -70,7 +79,7 @@ function listensCarried(version: CarriedVersion): boolean {
 
 /** The carried version a pin's rows are read by, when its listens fire through
  *  its own lane. */
-function listeningVersionOf(pin: string): CarriedVersion | undefined {
+export function listeningVersionOf(pin: string): CarriedVersion | undefined {
   const version = versionOf(pin);
   return version !== undefined && listensCarried(version) ? version : undefined;
 }
@@ -88,8 +97,11 @@ async function listeningPins(input: RowsWanted & { version?: string }): Promise<
   return listening;
 }
 
+/** A row on a carried pin, with what the platform keeps beside its plan. */
+type ShippedRow = ListenRow & { teamId: TeamId; file: string; runMode: TriggerRunMode; versionId: string };
+
 /** The rows wanted on these pins, each with the pin it ships under. */
-async function shippedListenRows(input: RowsWanted & { pins: readonly string[] }): Promise<Array<ListenRow & { teamId: TeamId; file: string }>> {
+async function shippedListenRows(input: RowsWanted & { pins: readonly string[] }): Promise<Array<ShippedRow>> {
   const rows = await rowsQuery(input)
     .where('movement_version.language_version', 'in', [...input.pins])
     .select([
@@ -101,9 +113,11 @@ async function shippedListenRows(input: RowsWanted & { pins: readonly string[] }
       'trigger.fired_movement_name as firedMovementName',
       'movement.name as file',
       'movement_version.language_version as pin',
+      'trigger.run_mode as runMode',
+      'movement_version.id as versionId',
     ])
     .execute();
-  return rows.map((row) => ({ ...row, teamId: teamIdSchema.parse(row.teamId), credentialsId: row.credentialsId ?? null }));
+  return rows.map((row) => ({ ...row, teamId: teamIdSchema.parse(row.teamId), credentialsId: row.credentialsId ?? null, runMode: parseRunMode(row.runMode) }));
 }
 
 /** Whether any of `kinds` holds a row pinned to a carried version that listens:
@@ -151,13 +165,13 @@ async function withWatching(listens: CarriedListen[]): Promise<CarriedListen[]> 
 }
 
 /** One version's rows as its listens, read with its own lane. */
-async function listensOfVersion(version: CarriedVersion, rows: ReadonlyArray<ListenRow & { teamId: TeamId; file: string }>): Promise<CarriedListen[]> {
+async function listensOfVersion(version: CarriedVersion, rows: readonly ShippedRow[]): Promise<CarriedListen[]> {
   const load = version.listenRows;
   if (load === undefined) return [];
   const lane = await load();
-  return rows.flatMap(({ teamId, file, ...row }) => {
+  return rows.flatMap(({ teamId, file, runMode, versionId, ...row }) => {
     const watch = lane.watchOf(row);
-    return watch === null ? [] : [{ version, lane, row, watch, triggerId: triggerIdSchema.parse(row.id), teamId, file, credentialsId: row.credentialsId }];
+    return watch === null ? [] : [{ version, lane, row, watch, triggerId: triggerIdSchema.parse(row.id), teamId, file, credentialsId: row.credentialsId, runMode, versionId }];
   });
 }
 
@@ -191,7 +205,7 @@ async function readCarriedListens(input: RowsWanted & { version?: string }, opti
       error: error instanceof Error ? error.message : String(error),
     });
   };
-  let byVersion: Map<string, { version: CarriedVersion; rows: Array<ListenRow & { teamId: TeamId; file: string }> }>;
+  let byVersion: Map<string, { version: CarriedVersion; rows: ShippedRow[] }>;
   try {
     const pins = await listeningPins(input);
     if (pins.size === 0) return { listens: [], unread };

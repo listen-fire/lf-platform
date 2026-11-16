@@ -130,7 +130,15 @@ const acceptInboundEmail = async (
         request: keptPage({ adapterType: EMAIL_ADAPTER_TYPE, credentialsId: null, arrivals }),
       });
       const stableKey = messageId !== undefined ? `email:${messageId}` : `email:request:${ctx.id}`;
-      return { ...delivered, carriedFired: await judgeCarriedPage({ teamId, adapterType: EMAIL_ADAPTER_TYPE, credentialsId: null, page: arrivals, stableKey }) };
+      const carriedFired = await judgeCarriedPage({
+        teamId,
+        adapterType: EMAIL_ADAPTER_TYPE,
+        credentialsId: null,
+        page: arrivals,
+        stableKey,
+        ...(delivered.kept.kept ? { deliveryId: delivered.deliveryId } : {}),
+      });
+      return { ...delivered, carriedFired };
     });
     if (!kept.kept && carriedFired === 0) return res.status(201).send();
     fired = fires.length + carriedFired;

@@ -788,10 +788,12 @@ export type OpsEventId = string & {
 };
 
 /** How an arrival reached one of a movement's listens: a run it started, an
- *  `Arrival Not Judged` fact (the listen could not tell), or one the listen
+ *  `Arrival Not Judged` fact (the listen could not tell), one the listen
  *  waits on (its host function could not be reached, or an earlier arrival
- *  waits), which its retry judges again. */
-export type MovementEventStatus = 'ran' | 'run_failed' | 'not_judged' | 'waiting_for_host';
+ *  waits), which its retry judges again, or a carried version's receipt that
+ *  ran nothing (`does_not_fire`: its gate dropped it, or it failed before its
+ *  run started), with the reason, as "why didn't this fire?" says one. */
+export type MovementEventStatus = 'ran' | 'run_failed' | 'not_judged' | 'waiting_for_host' | 'does_not_fire';
 export type MovementEventItem = {
     id: string;
     /** The lane (trigger name) of the listen it reached. */

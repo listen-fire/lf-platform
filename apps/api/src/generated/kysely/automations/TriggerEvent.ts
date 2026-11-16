@@ -33,6 +33,8 @@ export default interface TriggerEventTable {
   occurred_at: ColumnType<Date, Date | string | undefined, Date | string>;
 
   created_at: ColumnType<Date, Date | string | undefined, Date | string>;
+
+  delivery_id: ColumnType<string | null, string | null, string | null>;
 }
 
 export type TriggerEvent = Selectable<TriggerEventTable>;

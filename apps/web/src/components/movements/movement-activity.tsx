@@ -350,12 +350,15 @@ const ARRIVAL_LABEL: Record<
   run_failed: { label: "Failed", tone: "red" },
   not_judged: { label: "Not judged", tone: "amber" },
   waiting_for_host: { label: "Waiting for the host", tone: "gray" },
+  does_not_fire: { label: "Did not fire", tone: "gray" },
 };
 
 /**
  * The arrival ledger, scoped to the same lane filter as the runs above: the
- * runs arrivals started, and the arrivals a listen could not judge (its
- * connected system could not give a field its filter reads). Replay puts
+ * runs arrivals started, the arrivals a listen could not judge (its
+ * connected system could not give a field its filter reads), and the events
+ * an automation on an earlier language version stopped before running (its
+ * old team-member check), each with why. Replay puts
  * the kept delivery through that one listen again; a run it starts shows up
  * in the list above.
  */

@@ -10,4 +10,8 @@ describe("replaying an arrival from the activity list", () => {
   it("does not force an arrival its listen waits on: it never ran", () => {
     expect(replayForces("waiting_for_host")).toBe(false);
   });
+
+  it("does not force an arrival a carried version's gate stopped: it never ran", () => {
+    expect(replayForces("does_not_fire")).toBe(false);
+  });
 });

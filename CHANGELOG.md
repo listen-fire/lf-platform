@@ -21,6 +21,8 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 - **Engines.** The platform runs two language engines side by side, 0.16 and the carried 0.15. The 0.12 engine and the TypeScript engine for versions 1 to 4 are gone.
   - An automation on a 0.15 pin keeps running on the carried 0.15 engine. It uses 0.15's own checker, modules and filter evaluator.
   - A Slack listen on a 0.15 pin keeps the old Slack check, so only registered team members set it off, until the automation is upgraded.
+  - A 0.15 automation's events show as a 0.16 automation's do: its runs name the delivery that started them, and its arrivals (web and `listArrivals`) list an event its old check stopped as `does_not_fire`, with the reason. "Why didn't this fire?", "run with this event" and replay answer for it with 0.15's own filter evaluator and check, on its own pin. A new migration adds `trigger_event.delivery_id`, and fills it for earlier receipts whose key names their delivery (reading rows and pushes).
+  - An earlier 0.15 receipt from the email or WhatsApp door names no delivery, and cannot be filled. An unforced replay of a delivery kept before this release may therefore run its event again, while that delivery is within its retention.
   - A saved automation on a pin of 1 to 4 or 0.12 is held: it does not run, listen, resume or present. Its text is still checked, by the frozen 0.12 parser, and it upgrades through that parser.
   - The deploy check refuses while a run is parked on a dropped pin. Cancel or finish those runs, or upgrade their automations, before deploying.
 

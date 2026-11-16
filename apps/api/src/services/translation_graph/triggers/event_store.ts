@@ -16,7 +16,7 @@
 // the event entirely (and the sender waited on the whole run before its
 // ack).
 
-import { sql } from 'kysely';
+import { sql, type QueryExecutorProvider } from 'kysely';
 
 import type { TeamId } from '../../../generated/kysely/core/Team';
 import type { TriggerEventId } from '../../../generated/kysely/automations/TriggerEvent';
@@ -29,10 +29,6 @@ import { getAutomationsQb } from '../../../lib/kysely';
 export interface StoredEvent {
   json: Readonly<Record<string, unknown>>;
   record: CarriedEventRecord;
-}
-
-function jsonb(value: unknown): unknown {
-  return sql`${JSON.stringify(value)}::jsonb` as unknown;
 }
 
 /**
@@ -49,39 +45,31 @@ export async function storeTriggerEvent(input: {
   triggerId: string;
   /** The event in its own version's shape, read by that version. */
   event: StoredEvent;
+  /** The kept delivery it was judged from, when one was kept. */
+  deliveryId?: string;
+  /** The transaction the receipt is written in, with what it is the receipt of. */
+  db?: QueryExecutorProvider;
 }): Promise<{ id: TriggerEventId; duplicate: boolean }> {
-  const externalEventId = input.event.record.idempotencyKey ?? null;
-  const inserted = await getAutomationsQb(['trigger_event'])
-    .insertInto('trigger_event')
-    .values({
-      team_id: input.teamId,
-      trigger_id: input.triggerId,
-      adapter_type: input.event.record.adapterType,
-      trigger_type: input.event.record.triggerType,
-      payload: jsonb(input.event.json) as never,
-      external_event_id: externalEventId,
-      ...(input.event.record.occurredAt !== undefined
-        ? { occurred_at: new Date(input.event.record.occurredAt) }
-        : {}),
-    })
-    .onConflict((oc) =>
-      oc.columns(['trigger_id', 'external_event_id']).where('external_event_id', 'is not', null).doNothing(),
-    )
-    .returning('id')
-    .executeTakeFirst();
-
-  if (inserted) return { id: inserted.id, duplicate: false };
+  const db = input.db ?? getAutomationsQb(['trigger_event']);
+  const { record } = input.event;
+  const externalEventId = record.idempotencyKey ?? null;
+  const { rows: inserted } = await sql<{ id: TriggerEventId }>`
+    insert into automations.trigger_event (team_id, trigger_id, adapter_type, trigger_type, payload, external_event_id, delivery_id, occurred_at)
+    values (${input.teamId}::uuid, ${input.triggerId}::text, ${record.adapterType}::text, ${record.triggerType}::text, ${JSON.stringify(input.event.json)}::text::jsonb,
+            ${externalEventId}::text, ${input.deliveryId ?? null}::uuid, coalesce(${record.occurredAt ?? null}::timestamptz, current_timestamp))
+    on conflict (trigger_id, external_event_id) where external_event_id is not null do nothing
+    returning id`.execute(db);
+  const [first] = inserted;
+  if (first !== undefined) return { id: first.id, duplicate: false };
 
   // Conflict: this delivery id was already received for this trigger (only
   // reachable when externalEventId is non-null — the partial index). Return the
   // first delivery's row id so the receipt is still addressable, flagged dup.
-  const existing = await getAutomationsQb(['trigger_event'])
-    .selectFrom('trigger_event')
-    .where('trigger_id', '=', input.triggerId)
-    .where('external_event_id', '=', externalEventId)
-    .select('id')
-    .executeTakeFirstOrThrow();
-  return { id: existing.id, duplicate: true };
+  const { rows: existing } = await sql<{ id: TriggerEventId }>`
+    select id from automations.trigger_event where trigger_id = ${input.triggerId}::text and external_event_id = ${externalEventId}::text`.execute(db);
+  const [held] = existing;
+  if (held === undefined) throw new Error(`the receipt of trigger ${input.triggerId} under ${externalEventId} conflicted and is not there`);
+  return { id: held.id, duplicate: true };
 }
 
 /** Outcome markers the dispatch half records on the receipt. */

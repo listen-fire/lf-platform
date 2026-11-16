@@ -78,6 +78,8 @@ export interface TriggerRunFiring {
   queued?: boolean;
   /** The receipt it runs from, when a carried version's door kept one. */
   triggerEventId?: TriggerEventId;
+  /** The kept delivery whose arrival started it, when one was kept. */
+  deliveryId?: string;
 }
 
 type StepStatus = 'success' | 'partial' | 'failed';
@@ -286,6 +288,7 @@ export class TriggerRunRecorder {
           started_at: this.startedAt,
           last_heartbeat_at: this.firing.queued === true ? null : new Date(),
           trigger_event_id: this.firing.triggerEventId ?? null,
+          delivery_id: this.firing.deliveryId ?? null,
         })
         .onConflict((oc) => oc.column('id').doNothing())
         .execute();
@@ -766,6 +769,7 @@ export class TriggerRunRecorder {
             completed_at: terminal.completedAt,
             failed_at: terminal.failedAt,
             failure_reason: terminal.failureReason,
+            delivery_id: this.firing.deliveryId ?? null,
           })
           .onConflict((oc) => {
             const update = oc.column('id').doUpdateSet({

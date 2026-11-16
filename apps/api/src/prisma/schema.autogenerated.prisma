@@ -834,6 +834,7 @@ model TriggerEvent {
   externalEventId String?      @map("external_event_id")
   occurredAt      DateTime     @default(now()) @map("occurred_at") @db.Timestamptz(3)
   createdAt       DateTime     @default(now()) @map("created_at")
+  deliveryId      String?      @map("delivery_id") @db.Uuid
   triggerRuns     TriggerRun[]
 
   @@index([createdAt])

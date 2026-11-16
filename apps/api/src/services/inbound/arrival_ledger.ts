@@ -11,10 +11,12 @@ import { getAutomationsQb } from '../../lib/kysely';
 import { readKeptRequest } from './captured_request';
 
 /** How an arrival reached one of a movement's listens: a run it started, an
- *  `Arrival Not Judged` fact (the listen could not tell), or one the listen
+ *  `Arrival Not Judged` fact (the listen could not tell), one the listen
  *  waits on (its host function could not be reached, or an earlier arrival
- *  waits), which its retry judges again. */
-export type MovementEventStatus = 'ran' | 'run_failed' | 'not_judged' | 'waiting_for_host';
+ *  waits), which its retry judges again, or a carried version's receipt that
+ *  ran nothing (`does_not_fire`: its gate dropped it, or it failed before its
+ *  run started), with the reason, as "why didn't this fire?" says one. */
+export type MovementEventStatus = 'ran' | 'run_failed' | 'not_judged' | 'waiting_for_host' | 'does_not_fire';
 
 export type MovementEventItem = {
   id: string;
@@ -57,13 +59,14 @@ async function eventKeysOf(teamId: TeamId, deliveryIds: readonly string[]): Prom
 
 /**
  * The arrival ledger for a movement's listens, newest first: each run an
- * arrival started (with the delivery it came in), and each arrival a listen
- * could not judge (ruling 4: each with its replay). A listen edited since
- * keeps its facts under the pipeline it had, so they are not shown here.
+ * arrival started (with the delivery it came in), each arrival a listen
+ * could not judge (ruling 4: each with its replay), and each receipt of a
+ * carried version that started no run, with why. A listen edited since keeps
+ * its facts under the pipeline it had, so they are not shown here.
  */
 export async function movementEventsImpl(params: { teamId: TeamId; movementId: string }): Promise<MovementEventItem[]> {
   const { teamId, movementId } = params;
-  const exec = getAutomationsQb(['trigger', 'trigger_run', 'arrival_unjudged', 'delivery']);
+  const exec = getAutomationsQb(['trigger', 'trigger_run', 'arrival_unjudged', 'delivery', 'trigger_event']);
   const { rows: runs } = await sql<{
     id: string;
     trigger_id: string;
@@ -99,9 +102,29 @@ export async function movementEventsImpl(params: { teamId: TeamId; movementId: s
     join automations.arrival_unjudged u on u.team_id = t.team_id and u.pipeline = t.config->'listen'->>'pipeline'
     where t.team_id = ${teamId}::uuid and t.movement_id = ${movementId}::uuid
     order by u.noted_at desc limit 50`.execute(exec);
-  const keys = await eventKeysOf(teamId, [...new Set([...runs.map((run) => run.delivery_id), ...facts.flatMap((fact) => (fact.delivery_id === null ? [] : [fact.delivery_id]))])]);
+  // A carried version's receipts that started no run: its gate dropped it, or it
+  // failed before a run started, at the time that was decided (a receipt's own
+  // created_at has no time zone). One that started a run is listed by its run.
+  const { rows: receipts } = await sql<{
+    id: string;
+    trigger_id: string;
+    lane: string;
+    kind: string;
+    delivery_id: string | null;
+    failure_reason: string | null;
+    created_at: Date;
+  }>`
+    select e.id::text as id, t.id::text as trigger_id, t.name as lane, t.kind, e.delivery_id::text as delivery_id, e.failure_reason,
+           coalesce(e.dispatched_at, e.occurred_at) as created_at
+    from automations.trigger t
+    join automations.trigger_event e on e.trigger_id = t.id::text and e.team_id = t.team_id
+    where t.team_id = ${teamId}::uuid and t.movement_id = ${movementId}::uuid and e.status in ('suppressed', 'failed')
+      and not exists (select 1 from automations.trigger_run r where r.trigger_event_id = e.id)
+    order by 7 desc limit 50`.execute(exec);
+  const deliveryIds = [...runs.map((run) => run.delivery_id), ...[...facts, ...receipts].flatMap((row) => (row.delivery_id === null ? [] : [row.delivery_id]))];
+  const keys = await eventKeysOf(teamId, [...new Set(deliveryIds)]);
   // A run does not record which event started it: it is known only of a delivery that brought one.
-  const indexOfRun = (deliveryId: string): number | null => (keys.get(deliveryId)?.length === 1 ? 0 : null);
+  const indexOfRun = (deliveryId: string | null): number | null => (deliveryId !== null && keys.get(deliveryId)?.length === 1 ? 0 : null);
   const indexOfFact = (deliveryId: string | null, arrival: string): number | null => {
     const index = deliveryId === null ? -1 : (keys.get(deliveryId)?.indexOf(arrival) ?? -1);
     return index === -1 ? null : index;
@@ -132,6 +155,19 @@ export async function movementEventsImpl(params: { teamId: TeamId; movementId: s
       attempt: fact.attempt,
       occurredAt: fact.noted_at,
       createdAt: fact.noted_at,
+    })),
+    ...receipts.map((receipt): MovementEventItem => ({
+      id: receipt.id,
+      lane: receipt.lane,
+      triggerId: receipt.trigger_id,
+      deliveryId: receipt.delivery_id,
+      arrivalIndex: indexOfRun(receipt.delivery_id),
+      adapterType: receipt.kind,
+      status: 'does_not_fire',
+      failureReason: receipt.failure_reason,
+      attempt: null,
+      occurredAt: receipt.created_at,
+      createdAt: receipt.created_at,
     })),
   ];
   return items.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, 50);

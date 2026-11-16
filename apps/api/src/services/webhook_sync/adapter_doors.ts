@@ -137,7 +137,7 @@ export const platformPushStore: PushStore = {
     });
     // A carried version's listens on the module judge the pushed arrivals with
     // their own judge; the push names no id, so its kept delivery names it.
-    await judgeCarriedPage({ teamId: team, adapterType, credentialsId: null, page: arrivals, stableKey: `push:${deliveryId}` });
+    await judgeCarriedPage({ teamId: team, adapterType, credentialsId: null, page: arrivals, stableKey: `push:${deliveryId}`, deliveryId });
   },
 
   notify: () => notifyWork(),

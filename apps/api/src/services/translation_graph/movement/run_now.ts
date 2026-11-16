@@ -68,6 +68,8 @@ import { logger } from 'movement-engine/public/log';
 import { readKeptRequest } from '../../inbound/captured_request';
 import { deliveryOriginOf } from '../../inbound/delivery_origin';
 import { deliveryOf, reread } from '../../inbound/listen_replay';
+import { hearsConnection, runWithCarriedEvent } from '../../inbound/carried_delivery';
+import { listeningVersionOf } from '../../inbound/carried_listens';
 
 export interface MovementRunNowSuccess {
   ok: true;
@@ -273,7 +275,10 @@ export async function runWithEvent(input: RunWithEventInput): Promise<RunWithEve
   if (row === null) return noSuchEvent(input.deliveryId);
   const movement = await getMovementRow({ teamId: input.teamId, id: input.automationId });
   if (!movement) return nothingToRun({ movementId: input.automationId });
-  const refusal = heldRunRefusal(movement.languageVersion);
+  // A pin whose listens a carried version judges runs on that version (below);
+  // any other this release's engine does not run is refused.
+  const carried = listeningVersionOf(movement.languageVersion) !== undefined;
+  const refusal = carried ? undefined : heldRunRefusal(movement.languageVersion);
   if (refusal !== undefined) return { ok: false, errors: [refusal] };
   if (row.request === null) {
     return {
@@ -294,10 +299,27 @@ export async function runWithEvent(input: RunWithEventInput): Promise<RunWithEve
   const { adapterType } = origin;
   // A page kept before deliveries recorded a connection still names its own.
   const delivery = { adapterType, credentialsId: origin.credentialsId ?? ('page' in kept ? kept.page.credential ?? null : null) };
+  const by = `${input.by.userId ?? 'a machine'}${input.by.credentialId !== undefined ? ` (key ${input.by.credentialId})` : ''}`;
 
-  const listens = (await savedListens({ teamId, adapterType, movementId: movement.id as MovementId })).filter(
-    (listen) => delivery.credentialsId === null || listen.credentialsId === null || listen.credentialsId === delivery.credentialsId,
-  );
+  // Its own module reads the event, and its own gate decides in dispatch.
+  if (carried) {
+    if (movement.currentVersionId === null) {
+      return { ok: false, errors: [`'${movement.name}' has never been saved clean, so there is nothing to run: save it, then run it`] };
+    }
+    const started = await runWithCarriedEvent({
+      teamId,
+      automation: { id: movement.id as MovementId, name: movement.name, versionId: movement.currentVersionId },
+      delivery: row,
+      kept,
+      origin: delivery,
+      arrivalIndex: input.arrivalIndex,
+    });
+    if (!started.ok) return started;
+    logger.info(`[RunWithEvent] ${by} ran event ${input.arrivalIndex} of delivery ${row.id} through '${movement.name}' (${movement.languageVersion}) without its filter`);
+    return { ok: true, runIds: started.runIds, movementName: movement.name };
+  }
+
+  const listens = (await savedListens({ teamId, adapterType, movementId: movement.id as MovementId })).filter((listen) => hearsConnection(listen, delivery.credentialsId));
   const [first] = listens;
   if (first === undefined) {
     return { ok: false, errors: [`'${movement.name}' has no listen on ${adapterType} that hears the connection delivery ${row.id} came for`] };
@@ -338,7 +360,7 @@ export async function runWithEvent(input: RunWithEventInput): Promise<RunWithEve
     now,
   });
   notifyWork();
-  logger.info(`[RunWithEvent] ${input.by.userId ?? 'a machine'}${input.by.credentialId !== undefined ? ` (key ${input.by.credentialId})` : ''} ran event ${input.arrivalIndex} of delivery ${row.id} through '${movement.name}' without its filter: ${replay.deliveryId}`);
+  logger.info(`[RunWithEvent] ${by} ran event ${input.arrivalIndex} of delivery ${row.id} through '${movement.name}' without its filter: ${replay.deliveryId}`);
   return { ok: true, runIds: replay.fires.map((fire) => fire.runId), movementName: movement.name };
 }
 

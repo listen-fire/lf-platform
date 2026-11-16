@@ -219,7 +219,15 @@ export async function dispatchWhatsappMessage(input: {
         // arrivals again rather than reading Meta's delivery afresh.
         request: keptPage({ adapterType: WHATSAPP_ADAPTER_TYPE, credentialsId: null, arrivals }),
       });
-      const carried = await judgeCarriedPage({ teamId, adapterType: WHATSAPP_ADAPTER_TYPE, providerKey: WHATSAPP_KIND, credentialsId: null, page: arrivals, stableKey: `whatsapp:${message.id}` });
+      const carried = await judgeCarriedPage({
+        teamId,
+        adapterType: WHATSAPP_ADAPTER_TYPE,
+        providerKey: WHATSAPP_KIND,
+        credentialsId: null,
+        page: arrivals,
+        stableKey: `whatsapp:${message.id}`,
+        ...(delivered.kept.kept ? { deliveryId: delivered.deliveryId } : {}),
+      });
       return { ...delivered, carriedFired: carried };
     });
     if (!kept.kept && carriedFired === 0) return;

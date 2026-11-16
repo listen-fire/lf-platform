@@ -3976,7 +3976,12 @@ CREATE TABLE automations.trigger_event (
     dropped_reason text,
     external_event_id text, -- the source's own per-DELIVERY id (Slack envelope event_id, …); the idempotency key for at-least-once redeliveries. NULL when the source has no stable delivery id.
     occurred_at timestamp(3) with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    -- The kept automations.delivery the receipt was judged from: its run's
+    -- delivery_id, and where the arrival ledger lists a receipt that ran
+    -- nothing. NULL for an event no delivery was kept for (a carried poll's
+    -- page, an ask's answer). No foreign key, as for a run's.
+    delivery_id uuid
 );
 
 ALTER TABLE ONLY automations.trigger_event

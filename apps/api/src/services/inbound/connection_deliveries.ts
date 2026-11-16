@@ -7,7 +7,10 @@
 //   connection it was kept for).
 // - A listen it fired is named only when the caller may read its automation.
 // - The automations the caller may write that listen on its module and
-//   connection are named, so one can be run with one of its events.
+//   connection are named, so one can be run with one of its events: a listen
+//   a carried version judges as well as the current version's.
+// - A run a carried version's receipt started is listed as fired, by the
+//   delivery its receipt was judged from.
 // - A replay or a run with an event is a delivery of its own, made by
 //   someone: it is listed under the activity of what it ran, not here.
 
@@ -23,6 +26,8 @@ import { getAutomationsQb } from '../../lib/kysely';
 import { readableIds } from '../access/decide';
 import { deliveryOriginOf } from './delivery_origin';
 import { savedListens } from './listen_door';
+import { hearsConnection } from './carried_delivery';
+import { carriedListens, kindsOf } from './carried_listens';
 
 export interface FiredListen {
   automationId: string;
@@ -74,11 +79,14 @@ async function firedBy(teamId: TeamId, deliveryIds: readonly string[]): Promise<
   return fired;
 }
 
-/** The automations the caller may write with a listen on `adapterType` that hears `credentialsId`, as run-with-event takes them. */
+/** The automations the caller may write with a listen on `adapterType` that
+ *  hears `credentialsId`, as run-with-event takes them: those whose listens
+ *  this release judges, and those a carried version judges, on its own. */
 async function writableListening(input: { teamId: TeamId; adapterType: string; credentialsId: string | null }): Promise<ConnectionDelivery['runnable']> {
-  const listens = (await savedListens({ teamId: input.teamId, adapterType: input.adapterType })).filter(
-    (listen) => input.credentialsId === null || listen.credentialsId === null || listen.credentialsId === input.credentialsId,
-  );
+  const listens = [
+    ...(await savedListens({ teamId: input.teamId, adapterType: input.adapterType })),
+    ...(await carriedListens({ teamId: input.teamId, kinds: kindsOf({ adapterType: input.adapterType }) })),
+  ].filter((listen) => hearsConnection(listen, input.credentialsId));
   if (listens.length === 0) return [];
   const rows = await getAutomationsQb(['trigger', 'movement'])
     .selectFrom('trigger')

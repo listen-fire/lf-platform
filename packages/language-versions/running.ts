@@ -302,6 +302,29 @@ export interface JudgePageRequest extends Omit<ReadDeliveryRequest, 'delivery'> 
   page: readonly unknown[];
 }
 
+/** One event of a kept delivery or of a page a door built. `arrivalIndex`
+ *  counts among the arrivals the version's own module reads from the
+ *  delivery, in the order it reads them (a page's, as the door built it).
+ *  `brought`: the receipt keys of the events the delivery was kept with, in
+ *  the order a person counting them sees; a version that reads the delivery
+ *  otherwise refuses rather than guess which event is meant. */
+export interface JudgeEventRequest extends Omit<ReadDeliveryRequest, 'delivery'> {
+  kept: { delivery: CarriedKeptDelivery; brought?: readonly string[] } | { page: readonly unknown[] };
+  arrivalIndex: number;
+}
+
+/** What the version's own judge makes of an event for one listen: it fires;
+ *  it fails the filter of a hop (on `edge`), or, with a `reason`, the record
+ *  it carries there is of another type; or it cannot tell, and says why. */
+export type EventVerdict = { kind: 'fires' } | { kind: 'skips'; edge?: string; reason?: string } | { kind: 'undecided'; reason: string };
+
+/** One row's part in an event: not its to judge (another edge, another
+ *  connection), or its judge's verdict and the event its run is handed, in the
+ *  version's own shape. */
+export type JudgedListen = { triggerId: string; heard: false } | { triggerId: string; heard: true; verdict: EventVerdict; event: CarriedEvent };
+
+export type JudgedEvent = { ok: true; edge: string; listens: JudgedListen[] } | { ok: false; refused: string };
+
 /** How a module delivers a listen's last edge, as the version read its
  *  declaration. */
 export interface WatchedDelivery {
@@ -412,6 +435,11 @@ export interface ListeningLane {
   /** A page a door built, each arrival read with the version's own arrival
    *  schema and judged by its own judge against the rows pinned to it. */
   judgePage(request: JudgePageRequest): ReadDeliveryOutcome;
+  /** One event of a kept delivery or a page, read again by the version's own
+   *  module and judged by its own judge against each row handed in, as its
+   *  reading of the delivery judged it: what "why didn't this fire?" is told,
+   *  and what "run with this event" hands a run. */
+  judgeEvent(request: JudgeEventRequest, modules: ModulePlatform): Promise<JudgedEvent>;
   /** How a kept row is watched, read with the version's own plan schema; null
    *  for a row that is not its listen. */
   watchOf(row: Pick<ListenRow, 'config'>): ListenWatch | null;

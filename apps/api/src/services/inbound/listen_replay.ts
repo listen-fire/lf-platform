@@ -19,6 +19,10 @@
 //   nothing and says so. `force` runs it again under a receipt of its own.
 // - A listen that still cannot judge it is kept as the next attempt, its
 //   delivery still the one replayed.
+// - A listen of an automation pinned to a carried version is replayed by that
+//   version: its own module reads the request again, its own judge judges it,
+//   and each event its filter takes runs on its pin through dispatch, under
+//   the version's own gate (carried_delivery.ts `replayThroughCarriedListen`).
 // - It judges each arrival as it stands, never behind another the listen
 //   waits on. One it judges, to run or not, the listen no longer waits on,
 //   and nothing of that wait is kept; one it still cannot judge for a reason
@@ -41,6 +45,9 @@ import { pollSubscriptionId } from '../poll_source/worker';
 import { readKeptRequest, type CapturedRequest } from './captured_request';
 import { listenEdgeKeysOf } from './listen_edge';
 import { judgeArrivals, keepJudgedDelivery, retryRowsFor, savedListenOf, unjudgedFacts, type Judged, type JudgeHost, type SavedListen } from './listen_door';
+import { replayThroughCarriedListen } from './carried_delivery';
+import { carriedListens, kindsOf } from './carried_listens';
+import { deliveryOriginOf } from './delivery_origin';
 
 /** What a replay did, said in lines a person reads. */
 export type ReplayOutcome =
@@ -198,6 +205,37 @@ export function noSuchListen(triggerId: string): ReplayOutcome {
   return { outcome: 'refused', reason: `no listen ${triggerId} in this team` };
 }
 
+/** A replay through a listen a carried version judges: through that
+ *  version's own lane, as dispatch reads its deliveries. */
+async function replayCarried(input: { teamId: TeamId; triggerId: TriggerId; deliveryId: string; force: boolean }): Promise<ReplayOutcome> {
+  const { teamId } = input;
+  const [listen] = await carriedListens({ teamId, triggerId: input.triggerId });
+  if (listen === undefined) return noSuchListen(input.triggerId);
+  const row = await deliveryOf(teamId, input.deliveryId);
+  if (row === null) return { outcome: 'refused', reason: `no delivery ${input.deliveryId} is kept for this team: a delivery past its retention is forgotten` };
+  if (row.request === null) {
+    return {
+      outcome: 'refused',
+      reason:
+        row.replayOf !== null
+          ? `delivery ${row.id} is a replay of ${row.replayOf}: replay ${row.replayOf} itself`
+          : `delivery ${row.id} kept no request (it was kept before deliveries kept theirs): it cannot be replayed`,
+    };
+  }
+  const kept = readKeptRequest(row.request);
+  if (kept === null) return { outcome: 'refused', reason: `delivery ${row.id}'s kept request is not one the platform can read` };
+  const origin = await deliveryOriginOf({ teamId, deliveryId: row.id });
+  if (origin === null || origin.adapterType === null) {
+    return { outcome: 'refused', reason: `delivery ${row.id} does not say which module delivered it: it cannot be replayed` };
+  }
+  const named = `${listen.file}:${listen.watch.movement}`;
+  if (!kindsOf({ adapterType: origin.adapterType }).includes(listen.row.kind)) {
+    return { outcome: 'refused', reason: `delivery ${row.id} came from ${origin.adapterType}: ${named} listens on ${listen.row.kind}` };
+  }
+  const credentialsId = origin.credentialsId ?? ('page' in kept ? kept.page.credential ?? null : null);
+  return replayThroughCarriedListen({ teamId, listen, delivery: row, kept, origin: { adapterType: origin.adapterType, credentialsId }, force: input.force });
+}
+
 /**
  * Put the kept delivery `deliveryId` through the listen `triggerId` of
  * `teamId` again. Refused, judging nothing, when either is not the team's,
@@ -215,7 +253,8 @@ export async function replayThroughListen(input: {
   const now = input.now ?? new Date();
   const force = input.force === true;
   const listen = await savedListenOf(input.triggerId);
-  if (listen === null || listen.teamId !== teamId) return noSuchListen(input.triggerId);
+  if (listen === null) return replayCarried({ teamId, triggerId: input.triggerId, deliveryId, force });
+  if (listen.teamId !== teamId) return noSuchListen(input.triggerId);
   const adapterType = await adapterTypeOf(input.triggerId);
   if (adapterType === null) return noSuchListen(input.triggerId);
   const named = `${listen.file}:${listen.plan.movement}`;

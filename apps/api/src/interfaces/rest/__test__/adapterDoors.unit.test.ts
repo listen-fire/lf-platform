@@ -324,7 +324,7 @@ describe('wake', () => {
       request: { adapter: 'acme_crm', arrivals: [ARRIVAL, second] },
     });
     // A carried version's listens on the module judge the same page, named by its delivery.
-    expect(judgeCarriedPage).toHaveBeenCalledWith({ teamId: A_TEAM, adapterType: 'acme_crm', credentialsId: null, page: [ARRIVAL, second], stableKey: 'push:kept-1' });
+    expect(judgeCarriedPage).toHaveBeenCalledWith({ teamId: A_TEAM, adapterType: 'acme_crm', credentialsId: null, page: [ARRIVAL, second], stableKey: 'push:kept-1', deliveryId: 'kept-1' });
     expect(notifyWork).toHaveBeenCalled();
   });
 

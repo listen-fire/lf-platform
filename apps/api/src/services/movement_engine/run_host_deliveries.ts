@@ -38,6 +38,10 @@ export interface PlatformKeepDelivery extends KeepDelivery {
   rawKept?: { id: string };
   /** The connection the delivery was kept for (null: none, or the module's install). */
   credentialsId?: string | null;
+  /** What a carried version keeps with the delivery in its one write (a
+   *  replay's receipts, their queued runs and their rows); the rows it queues
+   *  are announced with the delivery's. */
+  alongside?: (trx: StoreDb) => Promise<readonly Queued[]>;
 }
 
 /** The row a door keeps before any version reads the delivery. */
@@ -329,6 +333,7 @@ export function deliveryRowStore(owner: { host: Host; teamId: string }): Platfor
         }
         for (const wake of wakes ?? []) queued.push(await queueWake(trx, arrivals?.teamId ?? owner.teamId, wake));
         for (const fact of input.unjudged ?? []) await keepUnjudgedIn(trx, { tenant: owner.teamId }, fact);
+        if (input.alongside !== undefined) queued.push(...(await input.alongside(trx)));
         return { mark, wakes, queued };
       });
       if (written === null) return { kept: false };

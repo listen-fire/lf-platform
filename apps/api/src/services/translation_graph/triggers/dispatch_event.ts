@@ -40,7 +40,7 @@ import { loadTriggerById } from '../storage/tg_table';
 import { describeDroppedReason } from './dropped_reason';
 import { markTriggerEventDispatched, markTriggerEventFailed, markTriggerEventSuppressed } from './event_store';
 import { applyLoopGuard, mapRecordingTriggerType } from './router';
-import { runModeGate } from './run_mode';
+import { runModeGate, type TriggerRunMode } from './run_mode';
 
 /** One trigger's durable receipt for one event, as a production row holds it. */
 const capturedSchema = z.object({
@@ -107,6 +107,53 @@ async function actorPasses(teamId: TeamId, candidates: unknown): Promise<string 
   }
 }
 
+/** What a carried version's own gate makes of a firing: it proceeds, asking
+ *  nothing (a rehearsal is never gated); its sender is a registered team user,
+ *  looked up now; or it is dropped, and why. */
+export type CarriedGate =
+  | { kind: 'proceed' }
+  | { kind: 'member' }
+  | { kind: 'dropped'; reason: Extract<DroppedReason, 'echo_suppressed' | 'actor_unregistered' | 'run_mode_off'>; note: string };
+
+/** A carried version's own gate on a firing: the row's run mode (paused drops,
+ *  a rehearsal proceeds ungated, as does a dry run someone asked for,
+ *  `rehearsal`), then what its source module says of the event, then, when the
+ *  module asks, whether the sender is a registered team user. The one gate a
+ *  receipt's dispatch, and "why didn't this fire?", reach. */
+export async function carriedGate(input: {
+  teamId: TeamId;
+  lane: Pick<ListeningLane, 'gateFiring'>;
+  adapterType: string;
+  trigger: { credentialsId: string | null; config: unknown; runMode: TriggerRunMode };
+  event: CarriedEvent;
+  rehearsal?: boolean;
+  modules: ModulePlatform;
+}): Promise<CarriedGate> {
+  const { teamId, trigger, event } = input;
+  const mode = runModeGate(trigger.runMode);
+  if (!mode.dispatch) return { kind: 'dropped', reason: mode.droppedReason, note: describeDroppedReason(mode.droppedReason) };
+  if (mode.dryRun || input.rehearsal === true) return { kind: 'proceed' };
+  const answer = await input.lane.gateFiring({ teamId, adapterType: input.adapterType, credentialsId: trigger.credentialsId, config: trigger.config, event }, input.modules);
+  switch (answer.kind) {
+    case 'suppress':
+      return { kind: 'dropped', reason: 'echo_suppressed', note: answer.reason };
+    case 'needs-actor': {
+      const refused = await actorPasses(teamId, answer.candidates);
+      return refused !== null ? { kind: 'dropped', reason: 'actor_unregistered', note: refused } : { kind: 'member' };
+    }
+    case 'proceed':
+      return { kind: 'proceed' };
+    default:
+      return neverAsAny(answer);
+  }
+}
+
+/** The kept delivery a receipt was judged from: the delivery its run started from. */
+async function deliveryOfReceipt(id: TriggerEventId): Promise<string | null> {
+  const row = await getAutomationsQb(['trigger_event']).selectFrom('trigger_event').where('id', '=', id).select('delivery_id').executeTakeFirst();
+  return row?.delivery_id ?? null;
+}
+
 /** One event through the gates and, past them, its firing. */
 async function dispatchCaptured(captured: CapturedTriggerEvent, modules: () => ModulePlatform): Promise<Outcome> {
   const { teamId, triggerId } = captured;
@@ -129,6 +176,8 @@ async function dispatchCaptured(captured: CapturedTriggerEvent, modules: () => M
   const read = lane.readEvent(event);
   if (!read.ok) return { kind: 'failed', message: `the queued event could not be read: ${read.reason}` };
   const { record } = read;
+  const receipt = captured.storedEventId !== undefined ? (captured.storedEventId as TriggerEventId) : undefined;
+  const deliveryId = receipt !== undefined ? await deliveryOfReceipt(receipt) : null;
   const firing = (dryRun: boolean) =>
     runMovementFiring({
       teamId,
@@ -141,7 +190,8 @@ async function dispatchCaptured(captured: CapturedTriggerEvent, modules: () => M
       recordingTriggerType: mapRecordingTriggerType(record.triggerType),
       dryRun,
       ...(captured.runId !== undefined ? { existingRunId: captured.runId as TriggerRunId } : {}),
-      ...(captured.storedEventId !== undefined ? { triggerEventId: captured.storedEventId as TriggerEventId } : {}),
+      ...(receipt !== undefined ? { triggerEventId: receipt } : {}),
+      ...(deliveryId !== null ? { deliveryId } : {}),
     });
   // A start the version does not serve is refused before anything else. An
   // operator reads why on the automation's one issue, which counts the refusals:
@@ -162,21 +212,9 @@ async function dispatchCaptured(captured: CapturedTriggerEvent, modules: () => M
       throw new WorkDeferred(`${trigger.name} is held by the loop guard's rate floor`);
     }
     if (guarded !== undefined) return { kind: 'dropped', reason: guarded };
-    const answer = await lane.gateFiring({ teamId, adapterType: record.adapterType, credentialsId: trigger.credentialsId, config: trigger.config, event }, modules());
-    switch (answer.kind) {
-      case 'suppress':
-        return { kind: 'dropped', reason: 'echo_suppressed', note: answer.reason };
-      case 'needs-actor': {
-        const refused = await actorPasses(teamId, answer.candidates);
-        if (refused !== null) return { kind: 'dropped', reason: 'actor_unregistered', note: refused };
-        break;
-      }
-      case 'proceed':
-        break;
-      default:
-        return neverAsAny(answer);
-    }
   }
+  const gated = await carriedGate({ teamId, lane, adapterType: record.adapterType, trigger, event, rehearsal: captured.dryRun === true, modules: modules() });
+  if (gated.kind === 'dropped') return { kind: 'dropped', reason: gated.reason, note: gated.note };
   const outcome = await firing(dryRun);
   if (outcome.result) {
     const written = outcome.result.writes.filter(isWriteEffect).length;

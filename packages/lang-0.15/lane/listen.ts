@@ -11,7 +11,7 @@
 // acted, among it), which the old Slack gate asks.
 
 import { z } from 'zod';
-import { WireArrival, listenPlanSchema, memberPlans, triggerEventSchema, type Arrival, type ListenPlan, type PlanHop } from '@listen-fire/engine-contracts';
+import { WireArrival, listenPlanSchema, memberPlans, triggerEventSchema, type Arrival, type ListenPlan, type PlanHop, type Verdict } from '@listen-fire/engine-contracts';
 import {
   arrivalReceiptKey,
   arrivalTriggerOf,
@@ -270,19 +270,28 @@ function judged(input: { listens: readonly { row: ListenRow; listen: ListenConfi
   return { receipts, lines, edges: [...edges] };
 }
 
+/** What the door kept, read again by 0.15's own module; a module that reads
+ *  no delivery says so. A module's failure throws. */
+async function arrivalsOfDelivery(
+  request: Pick<ReadDeliveryRequest, 'teamId' | 'adapterType' | 'credentialsId' | 'delivery'>,
+  modules: ModulePlatform,
+): Promise<{ arrivals: readonly Arrival[] } | { unread: string }> {
+  const { teamId, adapterType, delivery } = request;
+  const adapter = await moduleTable(modules).resolve(adapterType, { teamId, ...(request.credentialsId !== null ? { credentialsId: request.credentialsId } : {}) });
+  if (adapter.preprocessInbound === undefined) return { unread: `${adapterType} under 0.15 reads no delivery` };
+  const read = await adapter.preprocessInbound({ raw: bodyOf(delivery), ...(delivery.checkpoint !== undefined ? { checkpoint: delivery.checkpoint } : {}) });
+  return { arrivals: read.arrivals ?? [] };
+}
+
 /** Reads what the door kept with 0.15's own module and judges each arrival
  *  with 0.15's own judge against the 0.15 rows handed in. A module's failure
  *  throws: the platform's row retries. */
 export async function readDelivery(request: ReadDeliveryRequest, modules: ModulePlatform): Promise<ReadDeliveryOutcome> {
-  const { teamId, adapterType, delivery } = request;
   const listens = listensHearing(request, { installHeard: false });
   if (listens.length === 0) return { receipts: [], lines: [], edges: [] };
-  const adapter = await moduleTable(modules).resolve(adapterType, { teamId, ...(request.credentialsId !== null ? { credentialsId: request.credentialsId } : {}) });
-  if (adapter.preprocessInbound === undefined) {
-    return { receipts: [], lines: [`${adapterType} under 0.15 reads no delivery: nothing in it is judged under 0.15`], edges: [] };
-  }
-  const read = await adapter.preprocessInbound({ raw: bodyOf(delivery), ...(delivery.checkpoint !== undefined ? { checkpoint: delivery.checkpoint } : {}) });
-  return judged({ listens, arrivals: read.arrivals ?? [], adapterType, now: new Date(request.now) });
+  const read = await arrivalsOfDelivery(request, modules);
+  if ('unread' in read) return { receipts: [], lines: [`${read.unread}: nothing in it is judged under 0.15`], edges: [] };
+  return judged({ listens, arrivals: read.arrivals, adapterType: request.adapterType, now: new Date(request.now) });
 }
 
 export interface JudgePageRequest extends Omit<ReadDeliveryRequest, 'delivery'> {
@@ -307,6 +316,95 @@ export function judgePage(request: JudgePageRequest): ReadDeliveryOutcome {
   });
   const outcome = judged({ listens, arrivals, adapterType: request.adapterType, now: new Date(request.now) });
   return { ...outcome, lines: [...lines, ...outcome.lines] };
+}
+
+/** One event of a kept delivery or of a page a door built. `arrivalIndex`
+ *  counts among the arrivals 0.15's own module reads from the delivery, in the
+ *  order it reads them (a page's, as the door built it): 0.15 reads the
+ *  delivery itself, never the current release's reading of it. `brought`: the
+ *  receipt keys of the events the delivery was kept with, in the order the
+ *  person counting them sees (a page counts its own). */
+export interface JudgeEventRequest extends Omit<ReadDeliveryRequest, 'delivery'> {
+  kept: { delivery: ReadDeliveryRequest['delivery']; brought?: readonly string[] } | { page: readonly unknown[] };
+  arrivalIndex: number;
+}
+
+/** An arrival that brought a record, not word that one went. */
+type PresentArrival = Exclude<Arrival, { gone: true }>;
+
+/** The arrival at `arrivalIndex` of those 0.15's module read, when it is
+ *  surely the event the delivery was kept with at that place: the two count
+ *  as many, and, of several, the one there has that place's receipt key. 0.15
+ *  never reads another release's events, so a delivery it reads otherwise
+ *  than it was kept is refused, never guessed at. */
+export function eventAt(input: { present: readonly Arrival[]; brought?: readonly string[]; arrivalIndex: number }): { arrival: PresentArrival } | { refused: string } {
+  const { present, brought, arrivalIndex } = input;
+  if (brought !== undefined && brought.length !== present.length) {
+    return { refused: `the delivery was kept with ${brought.length} events and 0.15's module reads ${present.length} from it: which is event ${arrivalIndex} cannot be told under 0.15` };
+  }
+  const arrival = present[arrivalIndex];
+  if (arrival === undefined || 'gone' in arrival) {
+    return { refused: `the delivery brought no event at ${arrivalIndex} that 0.15 can judge (0.15's module reads ${present.length} from it)` };
+  }
+  if (brought !== undefined && present.length > 1 && arrivalReceiptKey(arrival) !== brought[arrivalIndex]) {
+    return { refused: `0.15's module reads another event at ${arrivalIndex} than the one the delivery was kept with there: it cannot be told under 0.15` };
+  }
+  return { arrival };
+}
+
+/** What 0.15's judge makes of an event for one listen: it fires; it fails the
+ *  filter of a hop (on `edge`), or, with a `reason`, the record it carries
+ *  there is of another type; or it cannot tell, and says why. */
+export type EventVerdict = { kind: 'fires' } | { kind: 'skips'; edge?: string; reason?: string } | { kind: 'undecided'; reason: string };
+
+/** One row's part in an event: not its to judge (another edge, another
+ *  connection), or its judge's verdict and the event its run is handed, in
+ *  0.15's shape, as JSON. */
+export type JudgedListen = { triggerId: string; heard: false } | { triggerId: string; heard: true; verdict: EventVerdict; event: Record<string, unknown> };
+
+export type JudgedEvent = { ok: true; edge: string; listens: JudgedListen[] } | { ok: false; refused: string };
+
+function verdictOf(plan: ListenPlan, verdict: Verdict): EventVerdict {
+  if ('fires' in verdict) return { kind: 'fires' };
+  if ('skips' in verdict) {
+    const edge = plan.hops[verdict.skips]?.edge;
+    return { kind: 'skips', ...(edge !== undefined ? { edge } : {}), ...(verdict.reason !== undefined ? { reason: verdict.reason } : {}) };
+  }
+  return { kind: 'undecided', reason: verdict.undecided };
+}
+
+/** One event read again by 0.15's own module (a page's, with 0.15's own
+ *  arrival schema) and judged by 0.15's own judge against each 0.15 row handed
+ *  in, as a reading of the delivery judged it: what a person asking why it did
+ *  not fire is told, and what a run vouched for is handed. A row that is not a
+ *  0.15 listen is left out. A module's failure throws. */
+export async function judgeEvent(request: JudgeEventRequest, modules: ModulePlatform): Promise<JudgedEvent> {
+  const { adapterType, arrivalIndex, kept } = request;
+  let found: PresentArrival;
+  if ('page' in kept) {
+    const element = kept.page[arrivalIndex];
+    const read = element === undefined ? undefined : WireArrival.safeParse(element);
+    if (read !== undefined && !read.success) return { ok: false, refused: `event ${arrivalIndex} is not an arrival 0.15 reads (${read.error.issues[0]?.message ?? 'invalid'})` };
+    if (read === undefined || 'gone' in read.data) return { ok: false, refused: `the page brought no event at ${arrivalIndex} that 0.15 can judge (it brought ${kept.page.length})` };
+    found = read.data;
+  } else {
+    const read = await arrivalsOfDelivery({ ...request, delivery: kept.delivery }, modules);
+    if ('unread' in read) return { ok: false, refused: `${read.unread}: its events cannot be judged under 0.15` };
+    const at = eventAt({ present: read.arrivals.filter((candidate) => !('gone' in candidate)), ...(kept.brought !== undefined ? { brought: kept.brought } : {}), arrivalIndex });
+    if ('refused' in at) return { ok: false, refused: at.refused };
+    found = at.arrival;
+  }
+  const now = new Date(request.now);
+  const hearing = new Map(listensHearing(request, { installHeard: 'page' in kept }).map((heard) => [heard.row.id, heard.listen]));
+  const listens = request.listens.flatMap((row): JudgedListen[] => {
+    if (!isListenRow(row)) return [];
+    const listen = hearing.get(row.id);
+    const verdict = listen === undefined ? null : listenFires(listen, namedArrival(found, listen.fieldIds), { adapterType }, now.getTime());
+    if (listen === undefined || verdict === null) return [{ triggerId: row.id, heard: false }];
+    const event: Record<string, unknown> = JSON.parse(JSON.stringify(arrivalTriggerOf({ pipelineInputId: listen.pipeline, adapterType, arrival: found, now })));
+    return [{ triggerId: row.id, heard: true, verdict: verdictOf(listen.plan, verdict), event }];
+  });
+  return { ok: true, edge: found.edge, listens };
 }
 
 /** What the source module says of a firing before it runs: the old ownership

@@ -22,25 +22,39 @@ import { sql } from 'kysely';
 import { z } from 'zod';
 import { logger } from 'movement-engine/public/log';
 import type { DeliverySource, NewWorkRow } from 'movement-engine/public/run-host';
-import { carriedVersions, versionOf, type CarriedEvent, type CarriedKeptDelivery, type CarriedVersion, type ListenRow, type ListeningLane } from '@listen-fire/language-versions';
+import {
+  carriedVersions,
+  versionOf,
+  type CarriedEvent,
+  type CarriedEventRecord,
+  type CarriedKeptDelivery,
+  type CarriedVersion,
+  type JudgeEventRequest,
+  type JudgedEvent,
+  type ListenRow,
+  type ListeningLane,
+  type ReadDeliveryOutcome,
+} from '@listen-fire/language-versions';
 
 import type { TeamId } from '../../generated/kysely/core/Team';
 import type { WorkContext, WorkHandler } from '../work/kinds';
 import type { TriggerEventId } from '../../generated/kysely/automations/TriggerEvent';
+import type { MovementId } from '../../generated/kysely/automations/Movement';
+import type { KeptDeliveryRow, ReplayOutcome } from './listen_replay';
 
 import { getAutomationsQb } from '../../lib/kysely';
 import { teamIdSchema } from '../../lib/team_id';
 import { WAITING_KEY_PREFIX, deliveryRowStore, withDoorsHeld } from '../movement_engine/run_host_deliveries';
+import { announceQueued, inStoreTransaction, queueRow, type Exec, type Queued, type StoreDb } from '../movement_engine/run_host_queue';
 import { stillHoldingDoors } from '../movement_engine/doors_hold';
-import type { StoreDb } from '../movement_engine/run_host_queue';
 import { WorkGivesUp, notifyWork, registerWorkHandler } from '../work/drain';
-import { enqueueWork } from '../work/store';
 import { modulePlatform } from '../translation_graph/movement/carried_run';
 import { MOVEMENT_LISTEN_PROVISIONER, edgeSubscriptionOf } from '../translation_graph/movement/listen_subscriptions';
 import { dispatchWorkKey } from '../translation_graph/triggers/dispatch_event';
 import { storeTriggerEvent } from '../translation_graph/triggers/event_store';
 import { recordMovementFailureIssue } from '../translation_graph/movement/issues';
-import { readKeptRequest } from './captured_request';
+import { mapRecordingTriggerType } from '../translation_graph/triggers/router';
+import { readKeptRequest, type KeptRequest } from './captured_request';
 import { unnarrowed } from './listen_edge';
 import { anyCarriedPin, carriedEdgeKeysOf, carriedListens, kindsOf, type CarriedListen } from './carried_listens';
 import { armCarriedForArrivals } from './listen_resolve';
@@ -209,40 +223,134 @@ async function listensFor(input: { row: ReadDeliveryRow; version: CarriedVersion
   return row.digest === undefined ? listens : listens.filter((listen) => carriedEdgeKeysOf(listen, ['connection', 'scope']).some(({ digest }) => digest === row.digest));
 }
 
+/** What a kept request holds for a carried version to read: the request its
+ *  own module reads again, with the receipt keys of the events it was kept
+ *  with, or the page a door built, as plain data. */
+export function carriedKeptOf(kept: KeptRequest): JudgeEventRequest['kept'] {
+  if ('page' in kept) return { page: kept.page.arrivals };
+  const { body, checkpoint, headers, arrivalIds } = kept.request;
+  const contentType = headers['content-type'];
+  return {
+    delivery: { body, ...(contentType !== undefined ? { contentType } : {}), ...(checkpoint !== undefined ? { checkpoint } : {}) },
+    ...(arrivalIds !== undefined ? { brought: arrivalIds } : {}),
+  };
+}
+
 async function keptDeliveryOf(row: ReadDeliveryRow): Promise<CarriedKeptDelivery | null> {
   const { rows } = await sql<{ request: unknown }>`
     select request from automations.delivery where team_id = ${row.teamId}::uuid and id = ${row.deliveryId}::uuid`.execute(getAutomationsQb(['delivery']));
   const kept = rows[0] === undefined ? null : readKeptRequest(rows[0].request);
-  if (kept === null || !('request' in kept)) return null;
-  const { body, checkpoint, headers } = kept.request;
-  const contentType = headers['content-type'];
-  return { body, ...(contentType !== undefined ? { contentType } : {}), ...(checkpoint !== undefined ? { checkpoint } : {}) };
+  if (kept === null) return null;
+  const carried = carriedKeptOf(kept);
+  return 'delivery' in carried ? carried.delivery : null;
 }
 
-/** A receipt and its row, for one listen the version judged: a redelivery of a
- *  receipt still waiting queues it again, as its row may have been lost.
- *  `stableKey`: what names the event when its source gave it no id, so a reading
- *  taken again keeps one receipt. Answers whether the receipt is new. */
-export async function receiveJudgedEvent(input: { teamId: TeamId; triggerId: string; event: CarriedEvent; lane: Pick<ListeningLane, 'readEvent'>; stableKey?: string }): Promise<{ fresh: boolean }> {
-  stillHoldingDoors();
+/** A run queued for a receipt of its own, as a door's queued run is: no
+ *  heartbeat until a worker starts it, under the version it shipped. */
+async function queueOwnRun(
+  exec: Exec,
+  input: { teamId: TeamId; triggerId: string; receipt: TriggerEventId; record: CarriedEventRecord; run: OwnRun; deliveryId: string | null },
+): Promise<void> {
+  const { record } = input;
+  await sql`
+    insert into automations.trigger_run (id, team_id, trigger_id, trigger_type, status, record_id, movement_version_id, trigger_payload, started_at, last_heartbeat_at, delivery_id, trigger_event_id)
+    values (${input.run.runId}::uuid, ${input.teamId}::uuid, ${input.triggerId}::text, ${mapRecordingTriggerType(record.triggerType)}::text, 'running', ${record.recordId ?? null}::text,
+            ${input.run.movementVersionId}::uuid, ${JSON.stringify(record)}::text::jsonb, now(), null, ${input.deliveryId}::uuid, ${input.receipt}::uuid)`.execute(exec);
+}
+
+/** A run someone started on purpose (run with this event, a replay): its
+ *  receipt is its own, whatever names the event, and its run is queued under
+ *  `runId` for them to follow. */
+export interface OwnRun {
+  runId: string;
+  movementVersionId: string;
+}
+
+/** One listen's receipt of an event its version judged. `stableKey`: what
+ *  names the event when its source gave it no id, so a reading taken again
+ *  keeps one receipt. `deliveryId`: the kept delivery it was judged from,
+ *  which its run started from. */
+export interface JudgedReceipt {
+  teamId: TeamId;
+  triggerId: string;
+  event: CarriedEvent;
+  lane: Pick<ListeningLane, 'readEvent'>;
+  stableKey?: string;
+  deliveryId?: string;
+  ownRun?: OwnRun;
+}
+
+/** The receipt, any run of its own and its dispatch row, in the one write
+ *  `exec` is: a failure between them leaves none of them. */
+async function writeReceipt(exec: Exec, input: JudgedReceipt): Promise<{ fresh: boolean; queued: Queued[] }> {
   const read = input.lane.readEvent(input.event);
   if (!read.ok) throw new Error(`a judged event could not be read by its own version: ${read.reason}`);
-  const idempotencyKey = read.record.idempotencyKey ?? input.stableKey;
+  const idempotencyKey = input.ownRun !== undefined ? `own:${input.ownRun.runId}` : (read.record.idempotencyKey ?? input.stableKey);
   const record = idempotencyKey !== undefined ? { ...read.record, idempotencyKey } : read.record;
-  const stored = await storeTriggerEvent({ teamId: input.teamId, triggerId: input.triggerId, event: { json: input.event, record } });
-  if (stored.duplicate && (await receiptStatus(stored.id)) !== 'received') return { fresh: false };
-  await enqueueWork({
+  const stored = await storeTriggerEvent({
+    teamId: input.teamId,
+    triggerId: input.triggerId,
+    event: { json: input.event, record },
+    ...(input.deliveryId !== undefined ? { deliveryId: input.deliveryId } : {}),
+    db: exec,
+  });
+  if (stored.duplicate && (await receiptStatus(exec, stored.id)) !== 'received') return { fresh: false, queued: [] };
+  if (input.ownRun !== undefined) {
+    await queueOwnRun(exec, { teamId: input.teamId, triggerId: input.triggerId, receipt: stored.id, record, run: input.ownRun, deliveryId: input.deliveryId ?? null });
+  }
+  const queued = await queueRow(exec, { host: 'platform' }, {
     kind: 'dispatch_event',
     key: dispatchWorkKey(stored.id),
     teamId: input.teamId,
-    payload: { triggerId: input.triggerId, teamId: input.teamId, triggerEvent: input.event, storedEventId: stored.id, duplicate: false },
+    payload: {
+      triggerId: input.triggerId,
+      teamId: input.teamId,
+      triggerEvent: input.event,
+      storedEventId: stored.id,
+      duplicate: false,
+      ...(input.ownRun !== undefined ? { runId: input.ownRun.runId } : {}),
+    },
   });
-  return { fresh: !stored.duplicate };
+  return { fresh: !stored.duplicate, queued: [queued] };
 }
 
-async function receiptStatus(id: TriggerEventId): Promise<string | undefined> {
-  const row = await getAutomationsQb(['trigger_event']).selectFrom('trigger_event').where('id', '=', id).select('status').executeTakeFirst();
-  return row?.status;
+/** A receipt and its row, for one listen the version judged, in one write: a
+ *  redelivery of a receipt still waiting queues it again, as its row may have
+ *  been lost. Answers whether the receipt is new. */
+export async function receiveJudgedEvent(input: JudgedReceipt): Promise<{ fresh: boolean }> {
+  stillHoldingDoors();
+  const written = await inStoreTransaction((trx) => writeReceipt(trx, input));
+  await announceQueued(written.queued);
+  return { fresh: written.fresh };
+}
+
+async function receiptStatus(exec: Exec, id: TriggerEventId): Promise<string | undefined> {
+  const { rows } = await sql<{ status: string }>`select status from automations.trigger_event where id = ${id}::uuid`.execute(exec);
+  return rows[0]?.status;
+}
+
+/** Receipts of runs someone started on purpose, kept as a replay delivery of
+ *  `delivery` in one write: the replay, each receipt, its queued run and its
+ *  row, or none of them. */
+async function keepOwnRuns(input: {
+  teamId: TeamId;
+  delivery: Pick<KeptDeliveryRow, 'id' | 'subscriptionId' | 'credentialsId'>;
+  receipts: ReadonlyArray<Omit<JudgedReceipt, 'teamId' | 'deliveryId' | 'ownRun'> & { ownRun: OwnRun }>;
+  now: Date;
+}): Promise<string> {
+  const replayId = randomUUID();
+  await deliveryRowStore({ host: 'platform', teamId: input.teamId }).keepDelivery({
+    subscriptionId: input.delivery.subscriptionId,
+    credentialsId: input.delivery.credentialsId,
+    delivery: { id: replayId, externalId: null, receivedAt: input.now.toISOString(), source: 'cli', inline: false, events: [], replayOf: input.delivery.id },
+    work: [],
+    alongside: async (trx) => {
+      const queued: Queued[] = [];
+      for (const receipt of input.receipts) queued.push(...(await writeReceipt(trx, { ...receipt, teamId: input.teamId, deliveryId: replayId })).queued);
+      return queued;
+    },
+  });
+  return replayId;
 }
 
 /** A page a door built, judged by each carried version with listens on its
@@ -262,6 +370,8 @@ export async function judgeCarriedPage(input: {
   page: readonly unknown[];
   stableKey: string;
   listens?: readonly CarriedListen[];
+  /** The delivery the door kept for the page, when it kept one: its runs'. */
+  deliveryId?: string;
 }): Promise<number> {
   let listens = input.listens;
   if (listens === undefined) {
@@ -280,12 +390,148 @@ export async function judgeCarriedPage(input: {
     const judged = lane.judgePage({ teamId: input.teamId, adapterType: input.adapterType, credentialsId: input.credentialsId, page: input.page, listens: rows, now: new Date().toISOString() });
     for (const line of judged.lines) logger.warn(`[CarriedPage] ${line}`);
     for (const receipt of judged.receipts) {
-      const kept = await receiveJudgedEvent({ teamId: input.teamId, triggerId: receipt.triggerId, event: receipt.event, lane, stableKey: `${input.stableKey}:${receipt.arrivalKey}` });
+      const kept = await receiveJudgedEvent({
+        teamId: input.teamId,
+        triggerId: receipt.triggerId,
+        event: receipt.event,
+        lane,
+        stableKey: `${input.stableKey}:${receipt.arrivalKey}`,
+        ...(input.deliveryId !== undefined ? { deliveryId: input.deliveryId } : {}),
+      });
       if (kept.fresh) fresh += 1;
     }
     await armCarriedForArrivals({ edges: judged.edges, listens: ofVersion });
   }
   return fresh;
+}
+
+/** Whether a listen hears a delivery kept for `credentialsId` (null: the
+ *  module's install, which serves every connection). */
+export function hearsConnection(listen: { credentialsId: string | null }, credentialsId: string | null): boolean {
+  return credentialsId === null || listen.credentialsId === null || listen.credentialsId === credentialsId;
+}
+
+/**
+ * Run with this event, for an automation whose listens a carried version
+ * judges: event `arrivalIndex` of the kept delivery, read again by the
+ * version's own module, run through each listen of the automation that hears
+ * it without its filter, as someone with write on it vouched. Kept as a replay
+ * delivery of the one stored, as the current version keeps one, each listen's
+ * receipt of its own and its run queued, so the version's own gate (dispatch)
+ * still decides whether it runs. Does NOT run them; poll each run id.
+ */
+export async function runWithCarriedEvent(input: {
+  teamId: TeamId;
+  automation: { id: MovementId; name: string; versionId: string };
+  delivery: Pick<KeptDeliveryRow, 'id' | 'subscriptionId' | 'credentialsId'>;
+  kept: KeptRequest;
+  origin: { adapterType: string; credentialsId: string | null };
+  arrivalIndex: number;
+}): Promise<{ ok: true; runIds: string[] } | { ok: false; errors: string[] }> {
+  const { teamId, automation, delivery, origin } = input;
+  const listens = (await carriedListens({ teamId, kinds: kindsOf(origin), movementId: automation.id })).filter((listen) => hearsConnection(listen, origin.credentialsId));
+  const [first] = listens;
+  if (first === undefined) {
+    return { ok: false, errors: [`'${automation.name}' has no listen on ${origin.adapterType} that hears the connection delivery ${delivery.id} came for`] };
+  }
+  const now = new Date();
+  let judged: JudgedEvent;
+  try {
+    judged = await first.lane.judgeEvent(
+      {
+        teamId,
+        adapterType: origin.adapterType,
+        credentialsId: origin.credentialsId,
+        // A delivery that recorded no connection is run through every listen
+        // of the automation on its module, as the current version's are.
+        ...(origin.credentialsId === null ? { matchAnyCredential: true } : {}),
+        kept: carriedKeptOf(input.kept),
+        arrivalIndex: input.arrivalIndex,
+        listens: listens.map((listen) => listen.row),
+        now: now.toISOString(),
+      },
+      modulePlatform(),
+    );
+  } catch (error) {
+    return { ok: false, errors: [error instanceof Error ? error.message : String(error)] };
+  }
+  if (!judged.ok) return { ok: false, errors: [`delivery ${delivery.id}: ${judged.refused}`] };
+  const heard = judged.listens.flatMap((listen) => (listen.heard ? [listen] : []));
+  if (heard.length === 0) return { ok: false, errors: [`no listen of '${automation.name}' takes an event on ${judged.edge}: nothing to run`] };
+  const receipts = heard.map((listen) => ({ triggerId: listen.triggerId, event: listen.event, lane: first.lane, ownRun: { runId: randomUUID(), movementVersionId: automation.versionId } }));
+  await keepOwnRuns({ teamId, delivery, receipts, now });
+  return { ok: true, runIds: receipts.map((receipt) => receipt.ownRun.runId) };
+}
+
+/** Whether this listen's receipt from the delivery started a run: what a
+ *  replay that is not forced runs nothing again for. A carried version's
+ *  events carry no id of their source, so the delivery is what names them
+ *  (receipts from before this release had theirs filled by its migration). */
+async function ranBeforeFrom(input: { teamId: TeamId; triggerId: string; deliveryId: string }): Promise<boolean> {
+  const { rows } = await sql<{ ran: boolean }>`
+    select exists (
+      select 1 from automations.trigger_event e
+      join automations.trigger_run r on r.trigger_event_id = e.id
+      where e.team_id = ${input.teamId}::uuid and e.trigger_id = ${input.triggerId}::text and e.delivery_id = ${input.deliveryId}::uuid
+    ) as ran`.execute(getAutomationsQb(['trigger_event', 'trigger_run']));
+  return rows[0]?.ran === true;
+}
+
+/**
+ * A replay through a listen a carried version judges, through the carried
+ * path dispatch reads a delivery by: the kept request read again by the
+ * version's own module (a page, with its own arrival schema), judged by its
+ * own judge for that listen alone, and each event its filter takes run as a
+ * run of its own under a replay delivery, which dispatch gates as it gates
+ * any of the version's. Unless `force`, an event of a delivery this listen's
+ * receipt from it started a run for runs nothing again. A version keeps no facts
+ * of what it could not judge: its lines say so.
+ */
+export async function replayThroughCarriedListen(input: {
+  teamId: TeamId;
+  listen: CarriedListen;
+  delivery: KeptDeliveryRow;
+  kept: KeptRequest;
+  origin: { adapterType: string; credentialsId: string | null };
+  force: boolean;
+}): Promise<ReplayOutcome> {
+  const { teamId, listen, delivery, origin } = input;
+  const named = `${listen.file}:${listen.watch.movement}`;
+  const now = new Date();
+  const request = {
+    teamId,
+    adapterType: origin.adapterType,
+    credentialsId: origin.credentialsId,
+    // A delivery that recorded no connection is put through the listen
+    // whatever its connection, as the current version's are.
+    ...(origin.credentialsId === null ? { matchAnyCredential: true } : {}),
+    listens: [listen.row],
+    now: now.toISOString(),
+  };
+  const kept = carriedKeptOf(input.kept);
+  let judged: ReadDeliveryOutcome;
+  try {
+    judged = 'page' in kept ? listen.lane.judgePage({ ...request, page: kept.page }) : await listen.lane.readDelivery({ ...request, delivery: kept.delivery }, modulePlatform());
+  } catch (error) {
+    return { outcome: 'refused', reason: `${named}: delivery ${delivery.id} could not be read again under ${listen.version.release} (${error instanceof Error ? error.message : String(error)})` };
+  }
+  const lines = judged.lines.map((line) => `${named}: ${line}`);
+  const receipts: Array<{ triggerId: string; event: CarriedEvent; lane: ListeningLane; ownRun: OwnRun }> = [];
+  for (const receipt of judged.receipts) {
+    if (!input.force && (await ranBeforeFrom({ teamId, triggerId: receipt.triggerId, deliveryId: delivery.id }))) {
+      lines.push(`${named}: ran the event ${receipt.arrivalKey} before: nothing replayed (force runs it again)`);
+      continue;
+    }
+    receipts.push({ triggerId: receipt.triggerId, event: receipt.event, lane: listen.lane, ownRun: { runId: randomUUID(), movementVersionId: listen.versionId } });
+  }
+  if (receipts.length === 0) {
+    if (lines.length === 0) lines.push(`${named}: its filter does not take what delivery ${delivery.id} brought: nothing to run`);
+    return { outcome: 'replayed', runIds: [], replayDeliveryId: null, attempt: 0, stillUndecided: false, lines };
+  }
+  const replayDeliveryId = await keepOwnRuns({ teamId, delivery, receipts, now });
+  const runIds = receipts.map((receipt) => receipt.ownRun.runId);
+  lines.push(`${named}: delivery ${delivery.id} replayed under ${listen.version.release}, ${runIds.length === 1 ? 'one run' : `${runIds.length} runs`} queued`);
+  return { outcome: 'replayed', runIds, replayDeliveryId, attempt: 0, stillUndecided: false, lines };
 }
 
 /** The automations a delivery was owed to under a version: those with a listen
@@ -353,7 +599,7 @@ async function readKeptDelivery(row: ReadDeliveryRow): Promise<void> {
   );
   for (const line of read.lines) logger.warn(`[ReadDelivery] ${line}`);
   for (const [index, receipt] of read.receipts.entries()) {
-    await receiveJudgedEvent({ teamId: row.teamId, triggerId: receipt.triggerId, event: receipt.event, lane, stableKey: `delivery:${row.deliveryId}:${index}` });
+    await receiveJudgedEvent({ teamId: row.teamId, triggerId: receipt.triggerId, event: receipt.event, lane, stableKey: `delivery:${row.deliveryId}:${index}`, deliveryId: row.deliveryId });
   }
   await armCarriedForArrivals({ edges: read.edges, listens });
   notifyWork();
