@@ -24,10 +24,10 @@ import type { MovementId } from '../../../generated/kysely/automations/Movement'
 
 import { getAutomationsQb } from '../../../lib/kysely';
 import { triggerIdSchema } from '../../../lib/trigger_id';
-import { carriedEdgeKeysOf, carriedListens } from '../../inbound/carried_listens';
+import { carriedEdgeKeysOf, carriedListens, type CarriedListen } from '../../inbound/carried_listens';
 import { listenConfigSchema, savedListens, type SavedListen } from '../../inbound/listen_door';
-import { listenEdgeDigest, listenEdgeKeysOf } from '../../inbound/listen_edge';
-import { pollSubscriptionId } from '../../poll_source/worker';
+import { earlierNamesOf, listenEdgeKeysOf, type ListenEdgeKey } from '../../inbound/listen_edge';
+import { pollSubscriptionId, takeOverEarlierPlace } from '../../poll_source/worker';
 
 /** Where one polled key of a carried listen stood. */
 export interface PlaceHeard {
@@ -35,21 +35,22 @@ export interface PlaceHeard {
   scope: string | undefined;
   /** Its cursor; null for a key that had none, which polls nothing yet. */
   cursor: { cursor: unknown } | null;
-  /** Where its version keeps it, and the same key without the version, where
-   *  it was kept while its version was current. */
-  versioned: string;
-  unversioned: string;
-  /** Whether it was found only under `unversioned`: a carried key that has not
-   *  polled since its version became carried takes that one over on its first
-   *  poll (poll_source/worker.ts `carriedCursorOf`), so it is where it stands. */
-  unpolledSince: boolean;
-  /** Whether a carried listen of another automation polls under `versioned`
-   *  too: the row is its as well, so the place is copied, not moved. */
-  shared: boolean;
+  /** Every name its cursor may be kept under: its own, then its earlier ones
+   *  (`earlierNamesOf`). */
+  names: readonly string[];
 }
 
-/** Where each of an automation's carried listens stood, by trigger row. */
-export type PlacesHeard = ReadonlyMap<string, readonly PlaceHeard[]>;
+/** Where an automation's carried listens stood, by trigger row, and the names
+ *  the carried listens it leaves behind may still read a place from. */
+export interface PlacesHeard {
+  byRow: ReadonlyMap<string, readonly PlaceHeard[]>;
+  readByOthers: ReadonlySet<string>;
+}
+
+/** Every name a carried listen's polls may read a place from, by key. */
+function namesOf(listen: CarriedListen): Array<{ key: ListenEdgeKey; names: string[] }> {
+  return carriedEdgeKeysOf(listen, ['polled']).map(({ key, digest }) => ({ key, names: [digest, ...earlierNamesOf(key)].map(pollSubscriptionId) }));
+}
 
 async function lockedCursor(teamId: TeamId, subscriptionId: string): Promise<{ cursor: unknown } | null> {
   const { rows } = await sql<{ checkpoint: unknown }>`
@@ -61,29 +62,38 @@ async function lockedCursor(teamId: TeamId, subscriptionId: string): Promise<{ c
 }
 
 /** Where the automation's carried listens stand, read before the upgrade
- *  touches their rows, each cursor row held until it commits. A paused listen
- *  is read too: its place moves with it. Empty for an automation its version's
- *  lane does not read. */
+ *  touches their rows, each cursor row held until it commits. A key that has
+ *  not polled under its own name since a release renamed it first takes over
+ *  its earlier place, as its next poll would (`takeOverEarlierPlace`). A paused
+ *  listen is read too: its place moves with it. Empty for an automation its
+ *  version's lane does not read. */
 export async function placesHeardOf(input: { teamId: TeamId; movementId: MovementId }): Promise<PlacesHeard> {
   const moving = await carriedListens({ teamId: input.teamId, movementId: input.movementId });
-  if (moving.length === 0) return new Map();
+  if (moving.length === 0) return { byRow: new Map(), readByOthers: new Set() };
   const movingIds = new Set<string>(moving.map((listen) => listen.triggerId));
-  const staying = new Set(
-    (await carriedListens({ teamId: input.teamId })).filter((listen) => !movingIds.has(listen.triggerId)).flatMap((listen) => carriedEdgeKeysOf(listen, ['polled']).map(({ digest }) => digest)),
+  const readByOthers = new Set(
+    (await carriedListens({ teamId: input.teamId })).filter((listen) => !movingIds.has(listen.triggerId)).flatMap((listen) => namesOf(listen).flatMap(({ names }) => names)),
   );
-  const places = new Map<string, PlaceHeard[]>();
-  for (const listen of moving) {
+  const polledByCurrent = new Set(
+    (await savedListens({ teamId: input.teamId })).filter((listen) => !movingIds.has(listen.triggerId)).flatMap((listen) => listenEdgeKeysOf(listen, ['polled']).map(({ digest }) => pollSubscriptionId(digest))),
+  );
+  const keyed = moving.map((listen) => ({ triggerId: listen.triggerId, keys: namesOf(listen) }));
+  const byRow = new Map<string, PlaceHeard[]>();
+  for (const { triggerId, keys } of keyed) {
+    // Another listen reading a name, this automation's included, gets a copy.
+    const readElsewhere = new Set([...readByOthers, ...polledByCurrent, ...keyed.filter((other) => other.triggerId !== triggerId).flatMap((other) => other.keys.flatMap(({ names }) => names))]);
     const heard: PlaceHeard[] = [];
-    for (const { key, digest } of carriedEdgeKeysOf(listen, ['polled'])) {
-      const versioned = pollSubscriptionId(digest);
-      const unversioned = pollSubscriptionId(listenEdgeDigest({ ...key, version: undefined }));
-      const own = await lockedCursor(input.teamId, versioned);
-      const before = own ?? (await lockedCursor(input.teamId, unversioned));
-      heard.push({ edge: key.edge, scope: key.scope, cursor: before, versioned, unversioned, unpolledSince: own === null && before !== null, shared: staying.has(digest) });
+    for (const { key, names } of keys) {
+      const [own, ...earlier] = names;
+      if (own === undefined) continue;
+      if ((await lockedCursor(input.teamId, own)) === null) {
+        await takeOverEarlierPlace({ teamId: input.teamId, subscriptionId: own, earlier: earlier.map((name) => ({ subscriptionId: name, polled: readElsewhere.has(name) })) });
+      }
+      heard.push({ edge: key.edge, scope: key.scope, cursor: await lockedCursor(input.teamId, own), names });
     }
-    places.set(listen.triggerId, heard);
+    byRow.set(triggerId, heard);
   }
-  return places;
+  return { byRow, readByOthers: new Set([...readByOthers, ...polledByCurrent]) };
 }
 
 /** Whether a listen stood anywhere: one that never polled loses nothing by
@@ -110,7 +120,9 @@ export function predecessorsOf(input: {
   });
 }
 
-/** The new row's config, noting the move: it polls on the place it brought. */
+/** The new row's config, noting the move: it polls on the place it brought.
+ *  `at` records when its place was last carried, so a row carried from 0.12
+ *  and then from 0.15 says the later. */
 export function carriedConfig(config: Record<string, unknown>, movedAt: Date): Record<string, unknown> {
   const listen = config['listen'];
   if (typeof listen !== 'object' || listen === null) return config;
@@ -139,6 +151,8 @@ export async function keepCarriedPlaces(input: {
   teamId: TeamId;
   file: string;
   moved: readonly MovedListen[];
+  /** Names another listen may still read a place from (`PlacesHeard`). */
+  readByOthers: ReadonlySet<string>;
 }): Promise<string[]> {
   const db = getAutomationsQb(['inbound_checkpoint']);
   const notes: string[] = [];
@@ -171,18 +185,11 @@ export async function keepCarriedPlaces(input: {
   }
   if (left.length === 0) return notes;
   // Read after the moved rows are written: their keys poll alone, so only
-  // another current listen polls under an unversioned key here.
+  // another current listen polls under an earlier name here.
   const polledNow = new Set((await savedListens({ teamId: input.teamId })).flatMap((listen) => listenEdgeKeysOf(listen, ['polled']).map(({ digest }) => pollSubscriptionId(digest))));
-  for (const place of left) {
-    // Another carried listen polls from the versioned row, or takes the
-    // unversioned one over on its first poll when it has none.
-    if (place.shared) {
-      if (place.unpolledSince) continue;
-    } else {
-      await sql`delete from automations.inbound_checkpoint where team_id = ${input.teamId}::uuid and subscription_id = ${place.versioned}::text`.execute(db);
-    }
-    if (written.has(place.unversioned) || polledNow.has(place.unversioned)) continue;
-    await sql`delete from automations.inbound_checkpoint where team_id = ${input.teamId}::uuid and subscription_id = ${place.unversioned}::text`.execute(db);
+  for (const name of new Set(left.flatMap((place) => place.names))) {
+    if (written.has(name) || polledNow.has(name) || input.readByOthers.has(name)) continue;
+    await sql`delete from automations.inbound_checkpoint where team_id = ${input.teamId}::uuid and subscription_id = ${name}::text`.execute(db);
   }
   return notes;
 }

@@ -17,6 +17,33 @@
 
 import { randomUUID } from 'node:crypto';
 
+/** Runs once inside the next read of the platform's releases, which a system
+ *  poll makes between its module call and its write. */
+const mockDuringRead: { next?: () => Promise<void> } = {};
+jest.mock('../../translation_graph/adapters/system/events', () => {
+  const actual = jest.requireActual('../../translation_graph/adapters/system/events');
+  return {
+    ...actual,
+    systemRecordsFor: (tenant: string) => {
+      const records = actual.systemRecordsFor(tenant);
+      return new Proxy(records, {
+        get(target, property) {
+          const value: unknown = Reflect.get(target, property);
+          if (typeof value !== 'function') return value;
+          if (property !== 'releases') return value.bind(target);
+          return async (...args: unknown[]) => {
+            const read = await value.apply(target, args);
+            const during = mockDuringRead.next;
+            mockDuringRead.next = undefined;
+            if (during !== undefined) await during();
+            return read;
+          };
+        },
+      });
+    },
+  };
+});
+
 import { sql } from 'kysely';
 import { RELEASE_APPLIED } from '@listen-fire/system';
 
@@ -79,7 +106,9 @@ async function shipped015(teamId: TeamId, options: { name: string; source: strin
   if (options.pollsAlone === true) expect(poll.key.alone).toBe(triggerId);
   const versioned = pollSubscriptionId(poll.digest);
   const unversioned = pollSubscriptionId(listenEdgeDigest({ ...poll.key, version: undefined }));
-  return { movementId, triggerId, versioned, unversioned };
+  // v0.16.0 named a carried key without `alone`.
+  const v0160 = pollSubscriptionId(listenEdgeDigest({ ...poll.key, alone: undefined }));
+  return { movementId, triggerId, poll, versioned, unversioned, v0160 };
 }
 
 async function upgrade(teamId: TeamId, movementId: MovementId): Promise<void> {
@@ -224,6 +253,46 @@ describe.each([
 });
 
 describe('an upgrade from 0.15 keeps a polled listen’s place (real Postgres)', () => {
+  it('from Project A’s state: frozen by v0.15.3, polled on by v0.16.0 and not yet by 0.16.1, its place is v0.16.0’s', async () => {
+    const teamId = await newTeam();
+    const before = await shipped015(teamId, { name: 'releases', source: SYSTEM_015, pollsAlone: true });
+    await keep(teamId, before.unversioned, { releases: { at: minutesAgo(60), version: '' } });
+    await released(teamId, '0.15.9', minutesAgo(30));
+    const place = { releases: { at: minutesAgo(10), version: '' } };
+    await keep(teamId, before.v0160, place);
+    const after = minutesAgo(5);
+    await released(teamId, '0.16.0', after);
+
+    await upgrade(teamId, before.movementId);
+    const listen = await upgradedListen(teamId, before.movementId);
+    expect(releasesOf(await kept(teamId, listen.subscriptionId))).toEqual(place.releases);
+    await pollOnce(await currentPollOf(teamId, listen.triggerId));
+
+    expect(await firedFor(teamId, listen.triggerId)).toEqual([`${RELEASE_APPLIED.id}:0.16.0`]);
+    // No earlier name is left for anything to read again.
+    expect(await kept(teamId, before.v0160)).toBeUndefined();
+    expect(await kept(teamId, before.versioned)).toBeUndefined();
+    if (before.unversioned !== listen.subscriptionId) expect(await kept(teamId, before.unversioned)).toBeUndefined();
+  });
+
+  it('an upgrade that commits while a carried poll is between its module call and its write: the page fires once, from the place the upgrade carried', async () => {
+    const teamId = await newTeam();
+    const before = await shipped015(teamId, { name: 'releases', source: SYSTEM_015 });
+    await keep(teamId, before.versioned, { releases: { at: minutesAgo(10), version: '' } });
+    await released(teamId, '0.16.0', minutesAgo(5));
+
+    mockDuringRead.next = () => upgrade(teamId, before.movementId);
+    await pollOnce(before.poll);
+    expect(mockDuringRead.next).toBeUndefined();
+
+    // The carried poll kept nothing: no receipt, and no cursor under its old name.
+    expect(await receiptsOf(before.triggerId)).toEqual([]);
+    expect(await kept(teamId, before.versioned)).toBeUndefined();
+    const listen = await upgradedListen(teamId, before.movementId);
+    await pollOnce(await currentPollOf(teamId, listen.triggerId));
+    expect(await firedFor(teamId, listen.triggerId)).toEqual([`${RELEASE_APPLIED.id}:0.16.0`]);
+  });
+
   it('a schedule: a tick due after its place and before its first poll after the upgrade fires once', async () => {
     const teamId = await newTeam();
     const before = await shipped015(teamId, { name: 'hourly', source: HOURLY_015 });

@@ -89,6 +89,19 @@ export function listenEdgeDigest(key: ListenEdgeKey): string {
   return createHash('sha256').update(canonical(key)).digest('hex').slice(0, 16);
 }
 
+/** The names a carried key's cursor was kept under by earlier releases, most
+ *  recent first, each unlike the key's own: v0.16.0's, its key with its
+ *  version and without `alone`, since v0.16.0 never let a carried listen poll
+ *  alone; then v0.15.3's, its key without its version, from while 0.15 was
+ *  current, polling alone as `carriedFrom.pollsAlone` says. None for a current
+ *  key. */
+export function earlierNamesOf(key: ListenEdgeKey): string[] {
+  if (key.version === undefined) return [];
+  const names = [...(key.alone !== undefined ? [listenEdgeDigest({ ...key, alone: undefined })] : []), listenEdgeDigest({ ...key, version: undefined })];
+  const own = listenEdgeDigest(key);
+  return [...new Set(names)].filter((name) => name !== own);
+}
+
 /** One traversal a listen is watched by, with how its last edge is
  *  delivered and, for an edge pushed per scope, the records that scope is
  *  (its last resolve's): the listen's own, or, over a union, each member's

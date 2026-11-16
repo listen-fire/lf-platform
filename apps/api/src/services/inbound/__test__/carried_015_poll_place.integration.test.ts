@@ -10,7 +10,8 @@
 //     so an upgrade of the listen later never finds it again;
 //   - with one, it is copied, and each polls from its own row;
 //   - a listen that brought its own cursor from an earlier version (it polls
-//     alone) is found under 0.15.3's key for it too;
+//     alone) is found under 0.15.3's key for it too, and under v0.16.0's
+//     first, which named it without `alone`;
 //   - a cursor under the new name always wins; with neither, the first poll
 //     still only arms.
 
@@ -170,6 +171,26 @@ describe('a carried listen keeps its poll’s place across the upgrade (real Pos
     expect((await carriedPollOf(teamId, triggerId)).digest).toBe(poll.digest);
   });
 
+  it('Project A’s history: a listen polling alone, its row frozen by v0.15.3 and polled on by v0.16.0, takes v0.16.0’s place on its first 0.16.1 poll', async () => {
+    const { teamId, triggerId, poll, ownId, oldId } = await carriedReleaseListen({ pollsAlone: true });
+    // v0.16.0 polled the carried listen under its key without `alone`.
+    const v0160Id = pollSubscriptionId(listenEdgeDigest({ ...poll.key, alone: undefined }));
+    expect(poll.earlier?.map(({ digest }) => pollSubscriptionId(digest))).toEqual([v0160Id, oldId]);
+    await keep(teamId, oldId, { releases: { at: minutesAgo(60), version: '' } });
+    // Heard by v0.16.0 already: from the frozen row it would fire again.
+    await released(teamId, '0.15.9', minutesAgo(30));
+    await keep(teamId, v0160Id, { releases: { at: minutesAgo(10), version: '' } });
+    const after = minutesAgo(5);
+    await released(teamId, '0.16.0', after);
+
+    await pollOnce(poll);
+
+    expect(await receiptsOf(triggerId)).toEqual([{ status: 'received' }]);
+    expect(releasesOf(await kept(teamId, ownId))).toEqual({ at: after, version: '0.16.0' });
+    // Nothing else polls under v0.16.0's name: the place moved.
+    expect(await kept(teamId, v0160Id)).toBeUndefined();
+  });
+
   it('with a current 0.16 listen polling under the old key, the cursor is copied: the old row is untouched, and each polls from its own', async () => {
     const { teamId, triggerId, poll, ownId, oldId, oldDigest } = await carriedReleaseListen();
     const currentMovement = randomUUID() as MovementId;
@@ -180,7 +201,7 @@ describe('a carried listen keeps its poll’s place across the upgrade (real Pos
     expect(own?.digest).toBe(oldDigest);
     if (own === undefined) return;
     const carried = await carriedPollOf(teamId, triggerId);
-    expect(carried.asCurrent).toEqual({ digest: oldDigest, polled: true });
+    expect(carried.earlier).toEqual([{ digest: oldDigest, polled: true }]);
 
     await keep(teamId, oldId, { releases: { at: minutesAgo(10), version: '' } });
     const oldBefore = await kept(teamId, oldId);

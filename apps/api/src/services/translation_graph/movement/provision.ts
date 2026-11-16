@@ -521,7 +521,7 @@ async function reconcileDerivedTriggers(input: {
 }): Promise<{ listeners: ProvisionedListener[]; reconciles: Set<WorkKind>; leftPaused: string[]; placesNotCarried: string[] }> {
   const qb = getAutomationsQb(['trigger']);
   // Read before the rows are touched, while its version still reads them.
-  const heard: PlacesHeard = input.carrying !== undefined ? await placesHeardOf({ teamId: input.teamId, movementId: input.movementRow.id as MovementId }) : new Map();
+  const heard: PlacesHeard = input.carrying !== undefined ? await placesHeardOf({ teamId: input.teamId, movementId: input.movementRow.id as MovementId }) : { byRow: new Map(), readByOthers: new Set() };
   // The schedule reconciles whose rows this save made stale: a new, changed or
   // retired cron or poll. An unchanged listener is armed already.
   const reconciles = new Set<WorkKind>();
@@ -580,7 +580,7 @@ async function reconcileDerivedTriggers(input: {
   const placesNotCarried: string[] = [];
   const identityOfDesired = (d: DesiredListener): string | null => listenIdentityOf({ movementName: d.movementName, kind: d.adapter, credentialsId: d.credentialsId });
   const predecessors =
-    heard.size > 0
+    heard.byRow.size > 0
       ? predecessorsOf({
           fresh: input.desired.map((d, i) => ({ kept: plan.matches[i]?.id, identity: identityOfDesired(d) })),
           retired: plan.retired.map((row) => ({ id: row.id, identity: listenIdentityOf({ movementName: row.firedMovementName, kind: row.kind, credentialsId: row.credentialsId }) })),
@@ -639,9 +639,9 @@ async function reconcileDerivedTriggers(input: {
     const kept = plan.matches[i];
     const rowId = kept?.id ?? randomUUID();
     const came = predecessors[i] ?? null;
-    const places = came !== null && 'row' in came ? heard.get(came.row) : undefined;
+    const places = came !== null && 'row' in came ? heard.byRow.get(came.row) : undefined;
     const what = `the ${input.desired[i].adapter} listen that fires ${input.desired[i].movementName}`;
-    if (came !== null && 'unsure' in came && came.unsure.some((row) => heardAnything(heard.get(row)))) {
+    if (came !== null && 'unsure' in came && came.unsure.some((row) => heardAnything(heard.byRow.get(row)))) {
       placesNotCarried.push(`${input.movementRow.name}: ${what} starts from its first poll: it could not be told which of the automation's earlier listens it was, so where that one stood was not carried, and what arrived since its last poll is missed.`);
     }
     const config = kept !== undefined ? keepingCarriedFrom(input.desired[i].config, kept.config) : input.desired[i].config;
@@ -741,7 +741,7 @@ async function reconcileDerivedTriggers(input: {
       reused: kept !== undefined,
     });
   }
-  if (carriedPlaces.length > 0) placesNotCarried.push(...(await keepCarriedPlaces({ teamId: input.teamId, file: input.movementRow.name, moved: carriedPlaces })));
+  if (carriedPlaces.length > 0) placesNotCarried.push(...(await keepCarriedPlaces({ teamId: input.teamId, file: input.movementRow.name, moved: carriedPlaces, readByOthers: heard.readByOthers })));
   return { listeners, reconciles, leftPaused, placesNotCarried };
 }
 

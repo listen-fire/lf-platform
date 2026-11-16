@@ -22,6 +22,7 @@
 // next poll of each is a first poll and replays nothing lf already handled.
 
 import { createHash } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 
 import { sql } from 'kysely';
 import { z } from 'zod';
@@ -39,8 +40,9 @@ import { lfEngineTeams } from '../lf_engine/team_engine';
 import { notifyWork, registerWorkHandler } from '../work/drain';
 import { enqueueWork, listWorkByKind, removeWork } from '../work/store';
 import { edgePollerOf } from './edge_poller';
-import { listenEdgeDigest, listenEdgeKeysOf, type ListenEdgeKey } from '../inbound/listen_edge';
-import { carriedEdgeKeysOf, carriedListensContained, type CarriedListen } from '../inbound/carried_listens';
+import { earlierNamesOf, listenEdgeKeysOf, type ListenEdgeKey } from '../inbound/listen_edge';
+import { carriedEdgeKeysOf, carriedListens, carriedListensContained, type CarriedListen } from '../inbound/carried_listens';
+import { inOneTransaction } from '../context/one_transaction';
 
 /** The interval of a polled edge that declares none. */
 const DEFAULT_POLL_EVERY_SECONDS = 60;
@@ -69,9 +71,9 @@ export interface SharedPoll {
   listens: SavedListen[];
   carried: CarriedListen[];
   everyMs: number;
-  /** A carried key's name while its version was current, the same key without
-   *  its version, and whether a current listen still polls there. */
-  asCurrent?: { digest: string; polled: boolean };
+  /** A carried key's names under earlier releases, most recent first
+   *  (`earlierNamesOf`), each with whether a listen polls there now. */
+  earlier?: Array<{ digest: string; polled: boolean }>;
 }
 
 export function pollWorkKey(digest: string): string {
@@ -141,8 +143,11 @@ async function readSharedPolls(input: { teamId?: TeamId }): Promise<{ polls: Sha
   }
   for (const poll of polls.values()) {
     if (poll.key.version === undefined) continue;
-    const digest = listenEdgeDigest({ ...poll.key, version: undefined });
-    poll.asCurrent = { digest, polled: (polls.get(digest)?.listens.length ?? 0) > 0 };
+    // Any listen polling under an earlier name is another key's: this one's is its own.
+    poll.earlier = earlierNamesOf(poll.key).map((digest) => {
+      const there = polls.get(digest);
+      return { digest, polled: there !== undefined && there.listens.length + there.carried.length > 0 };
+    });
   }
   return { polls: [...polls.values()], carriedUnread: carried.unread };
 }
@@ -155,41 +160,71 @@ async function cursorOf(teamId: TeamId, subscriptionId: string): Promise<{ curso
   return row === undefined ? null : { cursor: row.checkpoint };
 }
 
-/** A carried key's cursor: its own, else the one its listens kept while their
- *  version was current (`asCurrent`), taken over. A version becomes carried at
- *  an upgrade, which renames its keys; taking that cursor over keeps what
- *  arrived between the last poll before the upgrade and the first after, which
- *  a first poll would arm past. Its own row, once kept, always wins.
- *
- *  It is moved when no current listen polls there: left behind, it would be
- *  found again when these listens are upgraded and their keys lose their
- *  version, and replay what the carried key already heard. It is copied when
- *  one does, which goes on polling from it. Either is written before the poll,
- *  so a poll that fails after it polls again from the cursor taken over. */
+/** A carried key's cursor: its own, else the one it had under an earlier
+ *  release (`takeOverEarlierPlace`). A version becomes carried at an upgrade,
+ *  and a release can rename a carried key, so taking that cursor over keeps what
+ *  arrived between the last poll under the old name and the first under the new
+ *  one, which a first poll would arm past. Its own row, once kept, always wins. */
 async function carriedCursorOf(poll: SharedPoll, subscriptionId: string): Promise<{ cursor: unknown } | null> {
   const { teamId } = poll.key;
   const own = await cursorOf(teamId, subscriptionId);
-  if (own !== null || poll.asCurrent === undefined) return own;
-  const from = pollSubscriptionId(poll.asCurrent.digest);
-  const db = getAutomationsQb(['inbound_checkpoint']);
-  if (poll.asCurrent.polled) {
-    await sql`
-      insert into automations.inbound_checkpoint (team_id, subscription_id, checkpoint)
-      select team_id, ${subscriptionId}::text, checkpoint from automations.inbound_checkpoint
-      where team_id = ${teamId}::uuid and subscription_id = ${from}::text
-      on conflict (team_id, subscription_id) do nothing`.execute(db);
-  } else {
-    await sql`
-      with moved as (
-        delete from automations.inbound_checkpoint
-        where team_id = ${teamId}::uuid and subscription_id = ${from}::text
-        returning team_id, checkpoint
-      )
-      insert into automations.inbound_checkpoint (team_id, subscription_id, checkpoint)
-      select team_id, ${subscriptionId}::text, checkpoint from moved
-      on conflict (team_id, subscription_id) do nothing`.execute(db);
-  }
+  if (own !== null || poll.earlier === undefined) return own;
+  await takeOverEarlierPlace({ teamId, subscriptionId, earlier: poll.earlier.map(({ digest, polled }) => ({ subscriptionId: pollSubscriptionId(digest), polled })) });
   return cursorOf(teamId, subscriptionId);
+}
+
+/**
+ * Takes over, for a carried key with no cursor of its own, the first cursor
+ * kept under one of its earlier names (`earlierNamesOf`, most recent first): it
+ * is where the key stood. It is moved when nothing else polls there: left
+ * behind, it would be found again later (an upgrade of these listens, or another
+ * listen saved on that key) and replay what this key already heard. It is copied
+ * when something does, which goes on polling from it. Written before the poll,
+ * so a poll that fails after it polls again from the cursor taken over.
+ */
+export async function takeOverEarlierPlace(input: { teamId: TeamId; subscriptionId: string; earlier: ReadonlyArray<{ subscriptionId: string; polled: boolean }> }): Promise<void> {
+  const { teamId, subscriptionId } = input;
+  const db = getAutomationsQb(['inbound_checkpoint']);
+  for (const { subscriptionId: from, polled } of input.earlier) {
+    if ((await cursorOf(teamId, from)) === null) continue;
+    if (polled) {
+      await sql`
+        insert into automations.inbound_checkpoint (team_id, subscription_id, checkpoint)
+        select team_id, ${subscriptionId}::text, checkpoint from automations.inbound_checkpoint
+        where team_id = ${teamId}::uuid and subscription_id = ${from}::text
+        on conflict (team_id, subscription_id) do nothing`.execute(db);
+    } else {
+      await sql`
+        with moved as (
+          delete from automations.inbound_checkpoint
+          where team_id = ${teamId}::uuid and subscription_id = ${from}::text
+          returning team_id, checkpoint
+        )
+        insert into automations.inbound_checkpoint (team_id, subscription_id, checkpoint)
+        select team_id, ${subscriptionId}::text, checkpoint from moved
+        on conflict (team_id, subscription_id) do nothing`.execute(db);
+    }
+    return;
+  }
+}
+
+async function lockedCursorOf(teamId: TeamId, subscriptionId: string): Promise<{ cursor: unknown } | null> {
+  const { rows } = await sql<{ checkpoint: unknown }>`
+    select checkpoint from automations.inbound_checkpoint
+    where team_id = ${teamId}::uuid and subscription_id = ${subscriptionId}::text
+    for update`.execute(getAutomationsQb(['inbound_checkpoint']));
+  const row = rows[0];
+  return row === undefined ? null : { cursor: row.checkpoint };
+}
+
+/** The key's carried listens still on it and firing, their rows held: taken
+ *  in id order, as an upgrade takes its automations' rows, before the cursor's
+ *  row, as the upgrade takes it. */
+async function listensStillOn(poll: SharedPoll): Promise<CarriedListen[]> {
+  const ids = poll.carried.map((listen): string => listen.triggerId);
+  await sql`select id from automations.trigger where id = any(${ids}::uuid[]) order by id for update`.execute(getAutomationsQb(['trigger']));
+  const now = await carriedListens({ teamId: poll.key.teamId, firing: true });
+  return now.filter((listen) => ids.includes(listen.triggerId) && carriedEdgeKeysOf(listen, ['polled']).some(({ digest }) => digest === poll.digest));
 }
 
 async function keepCursor(teamId: TeamId, subscriptionId: string, cursor: unknown): Promise<void> {
@@ -243,8 +278,8 @@ export async function pollShared(poll: SharedPoll): Promise<{ arrivals: number; 
 
 /** A carried version's key polled once by its own module: a first poll arms;
  *  a later one's page is judged by the key's listens with that version's own
- *  judge, its receipts kept before its cursor moves, so a poll that fails
- *  between is polled again from the same cursor and keeps each receipt once. */
+ *  judge, its receipts and its cursor kept in one write, so a poll that fails
+ *  before it is polled again from the same cursor. */
 async function pollCarried(poll: SharedPoll): Promise<{ arrivals: number; armed: boolean; pollAgainAt?: Date }> {
   const { key, digest } = poll;
   const [first] = poll.carried;
@@ -270,19 +305,32 @@ async function pollCarried(poll: SharedPoll): Promise<{ arrivals: number; armed:
   const pollAgainAt = polled.pollAgainAt !== undefined ? new Date(polled.pollAgainAt) : undefined;
   if (pollAgainAt !== undefined && Number.isNaN(pollAgainAt.getTime())) throw new Error(`${key.adapterType}: a poll answered pollAgainAt ${JSON.stringify(polled.pollAgainAt)}: expected an instant`);
   const again = pollAgainAt !== undefined ? { pollAgainAt } : {};
-  if (before !== null && polled.page.length > 0) {
-    await judgeCarriedPage({
-      teamId: key.teamId,
-      adapterType: key.adapterType,
-      credentialsId: key.credentialsId,
-      page: polled.page,
-      // The cursor it was polled from names the page: polled again from it, it is the same page.
-      stableKey: `${subscriptionId}:${createHash('sha256').update(JSON.stringify(before.cursor ?? null)).digest('hex').slice(0, 16)}`,
-      listens: poll.carried,
-    });
-    notifyWork();
-  }
-  await keepCursor(key.teamId, subscriptionId, polled.cursor);
+  const judging = before !== null && polled.page.length > 0;
+  // Kept as the 0.12 worker kept a pull (`pollOne` in poll_source/carried_worker.ts
+  // at 0.12.13, deleted in abbb3ac3): in one write, under the listens' rows and
+  // the cursor's, and only while the cursor is still the one polled from. An
+  // upgrade that committed meanwhile carried the place to its listens' new keys,
+  // which poll on from it: the page is theirs, and is dropped here, so nothing
+  // fires twice. Of the listens, only those still on this key judge it.
+  const kept = await inOneTransaction(async () => {
+    const listens = await listensStillOn(poll);
+    if (listens.length === 0 || !isDeepStrictEqual(await lockedCursorOf(key.teamId, subscriptionId), before)) return false;
+    if (judging) {
+      await judgeCarriedPage({
+        teamId: key.teamId,
+        adapterType: key.adapterType,
+        credentialsId: key.credentialsId,
+        page: polled.page,
+        // The cursor it was polled from names the page: polled again from it, it is the same page.
+        stableKey: `${subscriptionId}:${createHash('sha256').update(JSON.stringify(before.cursor ?? null)).digest('hex').slice(0, 16)}`,
+        listens,
+      });
+    }
+    await keepCursor(key.teamId, subscriptionId, polled.cursor);
+    return true;
+  });
+  if (!kept) return { arrivals: 0, armed: false, ...again };
+  if (judging) notifyWork();
   return { arrivals: before === null ? 0 : polled.page.length, armed: before === null, ...again };
 }
 
