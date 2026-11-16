@@ -431,6 +431,9 @@ listen to manual-[:Invocations]-> fire hello
       ...jest.requireActual('../../../../services/translation_graph/movement/store'),
       getMovementRow: async (input: { id: string }) =>
         input.id === KNOWN_ID ? { id: KNOWN_ID, languageVersion: '4' } : null,
+      // The library the program imports; the definition is hidden unless its reader may read it.
+      getMovementRowByName: async (input: { name: string }) =>
+        input.name === 'lib/greet' ? { id: KNOWN_ID, languageVersion: '4' } : null,
     }));
     jest.doMock('../../../../services/translation_graph/movement/catalog', () => {
       const { fromCatalogSnapshot, parseProgram, LANGUAGE_VERSION } = jest.requireActual('movement-lang');

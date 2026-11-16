@@ -61,17 +61,19 @@ export interface KeptDeliveryRow {
   source: string;
   replayOf: string | null;
   request: unknown;
+  /** The connection it was kept for, when it was recorded. */
+  credentialsId: string | null;
 }
 
 export async function deliveryOf(teamId: TeamId, deliveryId: string): Promise<KeptDeliveryRow | null> {
-  const { rows } = await sql<{ id: string; subscription_id: string; source: string; replay_of: string | null; request: unknown }>`
-    select id::text as id, subscription_id, source, replay_of::text as replay_of, request
+  const { rows } = await sql<{ id: string; subscription_id: string; source: string; replay_of: string | null; request: unknown; credentials_id: string | null }>`
+    select id::text as id, subscription_id, source, replay_of::text as replay_of, request, credentials_id::text as credentials_id
     from automations.delivery
     where team_id = ${teamId}::uuid and id::text = ${deliveryId}::text`.execute(getAutomationsQb(['delivery']));
   const row = rows[0];
   return row === undefined
     ? null
-    : { id: row.id, subscriptionId: row.subscription_id, source: row.source, replayOf: row.replay_of, request: row.request };
+    : { id: row.id, subscriptionId: row.subscription_id, source: row.source, replayOf: row.replay_of, request: row.request, credentialsId: row.credentials_id };
 }
 
 async function adapterTypeOf(triggerId: TriggerId): Promise<string | null> {
@@ -216,6 +218,7 @@ export async function replayThroughListen(input: { teamId: TeamId; triggerId: Tr
     arrivals,
     judged,
     replayOf: row.id,
+    credentialsId: row.credentialsId,
     ...(force ? { forced: true } : {}),
     now,
   });

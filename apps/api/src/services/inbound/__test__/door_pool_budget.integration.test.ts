@@ -227,7 +227,7 @@ describe.each([4, 2])('doors at a pool of %i', (poolMax) => {
     await withinBudget(
       'the keep',
       store.keepRawDelivery({
-        delivery: { id: randomUUID(), subscriptionId: 'SLACK', externalId: 'under-the-lock', receivedAt: new Date().toISOString(), source: 'webhook', request: {} },
+        delivery: { id: randomUUID(), subscriptionId: 'SLACK', externalId: 'under-the-lock', receivedAt: new Date().toISOString(), source: 'webhook', request: {}, credentialsId: null },
         work: async (trx) => {
           doorsWhileReading = await tryDoorsAlone();
           // The read is on the keep's own transaction: it sees the row uncommitted.
@@ -385,7 +385,7 @@ describe.each([4, 2])('doors at a pool of %i', (poolMax) => {
 
     it("a keep's write does not commit, and its retry keeps it once with what it owes", async () => {
       const store = at.deliveryRowStore({ host: 'platform', teamId });
-      const delivery = { id: randomUUID(), subscriptionId: 'SLACK', externalId: 'lost-in-keep', receivedAt: new Date().toISOString(), source: 'webhook' as const, request: {} };
+      const delivery = { id: randomUUID(), subscriptionId: 'SLACK', externalId: 'lost-in-keep', receivedAt: new Date().toISOString(), source: 'webhook' as const, request: {}, credentialsId: null };
       const kept = await timed(
         'the keep',
         store.keepRawDelivery({

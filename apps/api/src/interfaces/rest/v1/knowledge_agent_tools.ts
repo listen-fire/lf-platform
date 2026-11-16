@@ -112,6 +112,7 @@ import {
 } from '../../../services/translation_graph/movement/story_token';
 import {
   runMovementAsync,
+  noSuchEvent,
   runWithEvent,
   getMovementRunStatus,
   listMovementRuns,
@@ -138,6 +139,7 @@ import {
   unseen,
   type Decision,
 } from '../../access_route';
+import { deliveryUnseen } from '../../delivery_access';
 import { Whose } from '../../../services/access/whose';
 import { automationAccess, connectionAccess, type ConnectionAccess } from '../../../services/access/listing';
 import { StatementRefusedError, adminOf, administered, maySeeStatement, setStatement } from '../../../services/access/decide';
@@ -2064,6 +2066,10 @@ const runWithEventHandler: RequestHandler = jsonHandler(runWithEventSchema, 'bod
   if (movementId === null) return missing;
   const refused = await refusedChange({ automationId: movementId, missing });
   if (refused !== null) return refused;
+  if (await deliveryUnseen({ teamId, deliveryId: input.deliveryId })) {
+    const { errors } = noSuchEvent(input.deliveryId);
+    return { error: errors.join('; ') };
+  }
   const userId = actingUserId();
   const result = await runWithEvent({
     teamId,

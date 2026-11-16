@@ -571,6 +571,9 @@ jest.mock('../../services/translation_graph/adapters/resolve', () => ({
   }),
 }));
 
+// No database here: a transaction is just the work.
+jest.mock('../../services/context/one_transaction', () => ({ inOneTransaction: async <T>(fn: () => Promise<T>): Promise<T> => fn() }));
+
 jest.mock('../../services/credentials/delete_credential', () => ({
   ...jest.requireActual('../../services/credentials/delete_credential'),
   deleteCredential: () => mockEffects.deleteCredential(),
@@ -1318,6 +1321,50 @@ describe('as a write member who may only read the automation', () => {
     } else {
       expect(seen).not.toEqual(await missingAnswer(() => callTrpc(name, how.input(MISSING))));
     }
+  });
+});
+
+describe('as a writer of the automation, running it with an event of a delivery kept for a connection', () => {
+  const REST_RUN = 'POST /v1/automation/automations/run-with-event';
+  const TRPC_RUN = 'views.movement.runWithEvent';
+
+  const runViaRest = () => {
+    const route = restRoutes.find((candidate) => candidate.key === REST_RUN);
+    const how = REST_CALLS[REST_RUN];
+    if (route === undefined || how === undefined) throw new Error(`no call for ${REST_RUN}`);
+    return callRest(route.handler, how.call(SEEDED));
+  };
+  const runViaTrpc = () => {
+    const how = TRPC_CALLS[TRPC_RUN];
+    if (how === undefined) throw new Error(`no call for ${TRPC_RUN}`);
+    return callTrpc(TRPC_RUN, how.input(SEEDED));
+  };
+
+  beforeEach(() => {
+    for (const verb of ['read', 'write'] as const) {
+      mockState.rows.push({ teamId: TEAM, target: { thing: 'automation', id: SEEDED.automationId }, verb, grantee: { kind: 'user', userId: ALICE } });
+    }
+  });
+
+  it('is refused, over REST, without use on the delivery\'s connection, and starts nothing', async () => {
+    const seen = await runViaRest();
+    expect(JSON.stringify(seen.body)).toMatch(/no delivery .* is kept for this team/);
+    expect(effectsReached()).toEqual([]);
+  });
+
+  it('is refused, over tRPC, without use on the delivery\'s connection, and starts nothing', async () => {
+    const seen = await runViaTrpc();
+    expect(JSON.stringify(seen.body)).toMatch(/no delivery .* is kept for this team/);
+    expect(effectsReached()).toEqual([]);
+  });
+
+  it('starts it, over both, with use on the connection', async () => {
+    mockState.rows.push({ teamId: TEAM, target: FINANCE, verb: 'use', grantee: { kind: 'user', userId: ALICE } });
+    expect((await runViaRest()).status).toBe(200);
+    expect(effectsReached()).toContain('runWithEvent');
+    jest.clearAllMocks();
+    expect((await runViaTrpc()).status).toBe(200);
+    expect(effectsReached()).toContain('runWithEvent');
   });
 });
 

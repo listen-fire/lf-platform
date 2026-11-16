@@ -134,6 +134,21 @@ describe('the door that keeps first, from the current version', () => {
     expect(bareRow!.request).toBeNull();
   });
 
+  it.each([true, false])('records the subscription\'s connection on the delivery it keeps (kept first: %s)', async (keptFirst) => {
+    readsOnce([arrival('thing-1')]);
+    const subscriptionId = await attioSubscription(SECRET);
+    await insertTestListen({ teamId, movementId, adapterType: 'attio', edge: 'Things', delivery: 'connection' });
+
+    expect((await deliver({ subscriptionId, rawBody: bodyOf('recorded'), keptFirst })).status).toBe(200);
+
+    const { rows } = await sql<{ credentials_id: string | null; connection: string }>`
+      select d.credentials_id::text as credentials_id, w.credentials_id::text as connection
+      from automations.delivery d join automations.webhook_subscription w on w.id::text = d.subscription_id
+      where d.team_id = ${teamId}::uuid`.execute(getAutomationsQb(['delivery']));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.credentials_id).toBe(rows[0]!.connection);
+  });
+
   it('reads a retry of a delivery the current version had not judged, once, and a delivery after that is a new one', async () => {
     const subscriptionId = await attioSubscription(SECRET);
     await insertTestListen({ teamId, movementId, adapterType: 'attio', edge: 'Things', delivery: 'connection' });

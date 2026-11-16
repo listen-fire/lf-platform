@@ -106,6 +106,18 @@ describe('shared polls of a listenable edge', () => {
     expect((await firesOf()).map((fire) => fire.triggerId).sort()).toEqual([open, alsoOpen].sort());
   });
 
+  it('records the connection the poll was made for on the delivery it keeps', async () => {
+    const connection = randomUUID();
+    polled.mockResolvedValueOnce({ arrivals: [arrival('t-2', 'open')], cursor: 'c3' });
+
+    await pollShared({ ...shared, key: { ...shared.key, credentialsId: connection } });
+
+    const { rows } = await sql<{ credentials_id: string | null }>`
+      select credentials_id::text as credentials_id from automations.delivery
+      where team_id = ${teamId}::uuid and source = 'poll' order by received_at desc limit 1`.execute(getAutomationsQb(['delivery']));
+    expect(rows).toEqual([{ credentials_id: connection }]);
+  });
+
   const dueOf = async () => (await listWorkByKind('poll_edge')).find((each) => each.key === pollWorkKey(shared.digest))?.dueAt.getTime();
 
   it('re-arms its row one interval after a poll, and the reconcile keeps one row per shared poll', async () => {

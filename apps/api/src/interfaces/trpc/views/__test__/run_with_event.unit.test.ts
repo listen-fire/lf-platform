@@ -1,6 +1,9 @@
 // "Run with this event" is a write on the automation: someone who may only
 // read it is refused with the read-only message, someone who cannot see it is
-// told it is not there, and a writer starts it, vouched for by name.
+// told it is not there, and a writer starts it, vouched for by name. The event's
+// delivery must also be one the writer may reach: use on the connection it was
+// kept for, or, for a delivery that recorded none, the admin's read of what it
+// reached.
 
 import { TRPCError } from '@trpc/server';
 import { runWithPrincipal, type Principal } from 'principal';
@@ -9,6 +12,21 @@ const runWithEvent = jest.fn(async () => ({ ok: true, runIds: ['run-1'], movemen
 jest.mock('../../../../services/translation_graph/movement/run_now', () => ({
   ...jest.requireActual('../../../../services/translation_graph/movement/run_now'),
   runWithEvent: (...args: unknown[]) => (runWithEvent as (...rest: unknown[]) => unknown)(...args),
+}));
+
+const deliveryOriginOf = jest.fn(async (): Promise<{ adapterType: string; credentialsId: string | null } | null> => ({
+  adapterType: 'attio',
+  credentialsId: 'connection-1',
+}));
+jest.mock('../../../../services/inbound/delivery_origin', () => ({
+  deliveryOriginOf: (...args: unknown[]) => (deliveryOriginOf as (...rest: unknown[]) => unknown)(...args),
+}));
+
+const mayUse = jest.fn(async (_connectionId: string) => true);
+jest.mock('../../../../services/access/decide', () => ({
+  ...jest.requireActual('../../../../services/access/decide'),
+  accessTo: async (_principal: unknown, asked: { target: { thing: string; id: string } }) =>
+    asked.target.thing === 'connection' ? mayUse(asked.target.id) : true,
 }));
 
 const cannotChange = jest.fn(async (_automationId: string | null): Promise<boolean> => false);
@@ -34,6 +52,8 @@ function runWith() {
 beforeEach(() => {
   jest.clearAllMocks();
   cannotChange.mockResolvedValue(false);
+  deliveryOriginOf.mockResolvedValue({ adapterType: 'attio', credentialsId: 'connection-1' });
+  mayUse.mockResolvedValue(true);
 });
 
 describe('run_with_this_event_needs_write_and_skips_the_filter (the route needs write)', () => {
@@ -54,6 +74,25 @@ describe('run_with_this_event_needs_write_and_skips_the_filter (the route needs 
   it('answers as for an automation that is not there to someone who cannot see it', async () => {
     cannotChange.mockResolvedValue(true);
     await expect(runWith()).resolves.toEqual({ ok: false, errors: [`movement ${AUTOMATION} not found`] });
+    expect(runWithEvent).not.toHaveBeenCalled();
+  });
+
+  it('refuses a writer who may not use the connection the delivery was kept for, and starts nothing', async () => {
+    mayUse.mockResolvedValue(false);
+    await expect(runWith()).resolves.toEqual({ ok: false, errors: [expect.stringMatching(/^no delivery delivery-1 is kept for this team/)] });
+    expect(mayUse).toHaveBeenCalledWith('connection-1');
+    expect(runWithEvent).not.toHaveBeenCalled();
+  });
+
+  it('refuses a writer who is no admin a delivery that recorded no connection', async () => {
+    deliveryOriginOf.mockResolvedValue({ adapterType: 'attio', credentialsId: null });
+    await expect(runWith()).resolves.toEqual({ ok: false, errors: [expect.stringMatching(/^no delivery delivery-1 is kept for this team/)] });
+    expect(runWithEvent).not.toHaveBeenCalled();
+  });
+
+  it('refuses a delivery the team does not keep', async () => {
+    deliveryOriginOf.mockResolvedValue(null);
+    await expect(runWith()).resolves.toMatchObject({ ok: false });
     expect(runWithEvent).not.toHaveBeenCalled();
   });
 });

@@ -445,6 +445,8 @@ export async function keepJudgedDelivery(input: {
   forced?: boolean;
   /** The row the door kept before reading it (carried_delivery.ts). */
   rawKeptId?: string;
+  /** The connection it was kept for: a replay carries its original's. */
+  credentialsId?: string | null;
   now: Date;
 }): Promise<{ kept: KeptDelivery; deliveryId: string; fires: FireRow[] }> {
   const { teamId, judged, now } = input;
@@ -464,6 +466,7 @@ export async function keepJudgedDelivery(input: {
   const kept = await deliveryRowStore({ host: 'platform', teamId }).keepDelivery({
     subscriptionId: input.subscriptionId,
     ...(input.rawKeptId !== undefined ? { rawKept: { id: input.rawKeptId } } : {}),
+    credentialsId: input.credentialsId ?? null,
     ...('checkpoint' in input ? { checkpoint: input.checkpoint } : {}),
     delivery: {
       id: deliveryId,
@@ -605,6 +608,7 @@ export async function deliverArrivals(input: {
     ...('checkpoint' in input ? { checkpoint: input.checkpoint } : {}),
     ...(input.request !== undefined ? { request: input.request } : {}),
     ...(input.rawKeptId !== undefined ? { rawKeptId: input.rawKeptId } : {}),
+    credentialsId: input.delivered.credentialsId,
     now,
   });
   // A module that pushes its members' changes reports them as arrivals on the

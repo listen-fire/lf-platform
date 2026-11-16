@@ -257,7 +257,7 @@ function inBroughtOrder(arrivals: readonly Arrival[], brought: readonly string[]
   return brought.flatMap((key) => arrivals.filter((arrival) => !('gone' in arrival) && arrivalReceiptKey(arrival) === key));
 }
 
-const noSuchEvent = (deliveryId: string): MovementRunNowFailure => ({
+export const noSuchEvent = (deliveryId: string): MovementRunNowFailure => ({
   ok: false,
   errors: [`no delivery ${deliveryId} is kept for this team: a delivery past its retention is forgotten`],
 });
@@ -292,7 +292,8 @@ export async function runWithEvent(input: RunWithEventInput): Promise<RunWithEve
     return { ok: false, errors: [`delivery ${row.id} does not say which module delivered it: its events cannot be run again`] };
   }
   const { adapterType } = origin;
-  const delivery = { adapterType, credentialsId: origin.credentialsId };
+  // A page kept before deliveries recorded a connection still names its own.
+  const delivery = { adapterType, credentialsId: origin.credentialsId ?? ('page' in kept ? kept.page.credential ?? null : null) };
 
   const listens = (await savedListens({ teamId, adapterType, movementId: movement.id as MovementId })).filter(
     (listen) => delivery.credentialsId === null || listen.credentialsId === null || listen.credentialsId === delivery.credentialsId,
@@ -327,6 +328,7 @@ export async function runWithEvent(input: RunWithEventInput): Promise<RunWithEve
     arrivals: [arrival],
     judged,
     replayOf: row.id,
+    credentialsId: row.credentialsId,
     forced: true,
     now,
   });

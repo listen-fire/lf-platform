@@ -152,3 +152,48 @@ describe('replay_reruns_only_that_automations_listens', () => {
     expect(await queuedFor(replayed.runIds)).toEqual([everything.first]);
   });
 });
+
+describe('a delivery records the connection it was kept for', () => {
+  const CONNECTION = randomUUID();
+  const credentialsOf = async (deliveryId: string): Promise<string | null> => {
+    const { rows } = await sql<{ credentials_id: string | null }>`
+      select credentials_id::text as credentials_id from automations.delivery where team_id = ${teamId}::uuid and id = ${deliveryId}::uuid`.execute(
+      getAutomationsQb(['delivery']),
+    );
+    return rows[0]?.credentials_id ?? null;
+  };
+  const deliverFor = (credentialsId: string | null) =>
+    deliverArrivals({
+      teamId,
+      delivered: { adapterType: ADAPTER, credentialsId },
+      subscriptionId: ADAPTER,
+      externalId: null,
+      source: 'webhook',
+      arrivals: [open],
+      request: keptPage({ adapterType: ADAPTER, credentialsId, arrivals: [open] }),
+    });
+  const replayDeliveryOf = async (originalId: string): Promise<string> => {
+    const { rows } = await sql<{ id: string }>`
+      select id::text as id from automations.delivery where team_id = ${teamId}::uuid and replay_of = ${originalId}::uuid`.execute(getAutomationsQb(['delivery']));
+    return rows.map((row) => row.id).sort().at(-1) ?? '';
+  };
+
+  it('keeps the connection of a delivery that came for one, and none for one that came for none (the mail door)', async () => {
+    expect(await credentialsOf((await deliverFor(CONNECTION)).deliveryId)).toBe(CONNECTION);
+    expect(await credentialsOf((await deliverFor(null)).deliveryId)).toBeNull();
+  });
+
+  it('gives a replay delivery the connection of the delivery it replays', async () => {
+    const { deliveryId } = await deliverFor(CONNECTION);
+    const replayed = await replayThroughListen({ teamId, triggerId: everything.first, deliveryId, force: true });
+    if (replayed.outcome !== 'replayed' || replayed.replayDeliveryId === null) throw new Error('not replayed');
+    expect(await credentialsOf(replayed.replayDeliveryId)).toBe(CONNECTION);
+  });
+
+  it('gives the delivery a run with this event keeps the connection of the delivery it runs', async () => {
+    const { deliveryId } = await deliverFor(CONNECTION);
+    const started = await runWithEvent({ teamId, automationId: everything.movementId, deliveryId, arrivalIndex: 0, by: BY });
+    if (!started.ok) throw new Error(started.errors.join('; '));
+    expect(await credentialsOf(await replayDeliveryOf(deliveryId))).toBe(CONNECTION);
+  });
+});

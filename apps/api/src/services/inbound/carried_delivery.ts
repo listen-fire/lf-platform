@@ -173,6 +173,7 @@ export async function keepForEveryVersion(input: {
       receivedAt: new Date().toISOString(),
       source: input.source,
       request: input.request,
+      credentialsId: origin.credentialsId,
     },
     work: async (trx) => readingRows(origin, id, await versionsConcerned(trx, origin, input.subscriptionId)),
   });

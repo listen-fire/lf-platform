@@ -31,6 +31,8 @@ export default interface DeliveryTable {
   request: ColumnType<unknown | null, unknown | null, unknown | null>;
 
   judged_at: ColumnType<Date | null, Date | string | null, Date | string | null>;
+
+  credentials_id: ColumnType<string | null, string | null, string | null>;
 }
 
 export type Delivery = Selectable<DeliveryTable>;

@@ -31,7 +31,6 @@ import type { MovementId } from '../../../generated/kysely/automations/Movement'
 
 import { currentContext } from '../../../services/context';
 import { noSuchListen, replayThroughListen, type ReplayOutcome } from '../../../services/inbound/listen_replay';
-import { deliveryOriginOf } from '../../../services/inbound/delivery_origin';
 import {
   noSuchDelivery,
   showDeliveryRequest,
@@ -70,6 +69,7 @@ import { actingPrincipal, userProcedure as sharedUserProcedure } from '../proced
 import { EXEMPT, USE_CONNECTION, connectionUnseen, decidesEach, readableAmong, unseen, usableAmong, type Decision } from '../../access_route';
 import { callerAudience } from '../../../services/translation_graph/movement/audience';
 import { cannotChange } from '../access';
+import { deliveryUnseen } from '../../delivery_access';
 import { Whose } from '../../../services/access/whose';
 import { nothingToRun } from '../../../services/translation_graph/movement/run_now';
 
@@ -936,8 +936,9 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
 
     /**
      * Show one delivery's kept request: to anyone who may use the connection
-     * it came for, each read recorded. A mutation, so nothing refetches it
-     * unasked.
+     * it was kept for, each read recorded. A delivery of no recorded connection
+     * is shown only to an admin who reads every automation it reached. A
+     * mutation, so nothing refetches it unasked.
      */
     showDeliveryRequest: userProcedure
       .input(z.object({ deliveryId: z.string().min(1) }))
@@ -947,8 +948,7 @@ const triggersRouter = (procedure: typeof trpc.procedure) => {
           userId: user.id,
           ...(user.apiKeyId !== undefined ? { credentialId: user.apiKeyId } : {}),
         };
-        const origin = await deliveryOriginOf({ teamId: user.teamId as TeamId, deliveryId: input.deliveryId });
-        if (origin?.credentialsId != null && (await connectionUnseen(origin.credentialsId))) return noSuchDelivery(input.deliveryId);
+        if (await deliveryUnseen({ teamId: user.teamId, deliveryId: input.deliveryId })) return noSuchDelivery(input.deliveryId);
         return showDeliveryRequest({ teamId: user.teamId as TeamId, deliveryId: input.deliveryId, reader });
       }),
   });

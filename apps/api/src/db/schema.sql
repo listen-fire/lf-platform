@@ -3628,7 +3628,11 @@ CREATE TABLE automations.delivery (
     -- brought. Sensitive (a message's text, a person's address): read only by
     -- one explicit read of the delivery, and forgotten with the delivery or by
     -- the delivery sweep past retention, whichever is first.
-    request jsonb
+    request jsonb,
+    -- The connection it was kept for, written when it is kept: the delivery
+    -- outlives its subscription. No foreign key: a deleted connection leaves its
+    -- id, which then matches nobody's use. Null: no connection, or not known.
+    credentials_id uuid
 );
 CREATE UNIQUE INDEX delivery_external_idx ON automations.delivery (team_id, subscription_id, external_id) WHERE external_id IS NOT NULL;
 CREATE INDEX delivery_received_idx ON automations.delivery (team_id, received_at);

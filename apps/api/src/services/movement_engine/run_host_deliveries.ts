@@ -36,6 +36,8 @@ export interface PlatformKeepDelivery extends KeepDelivery {
   /** The door kept this delivery before reading it (`keepRawDelivery`): this
    *  write is its judging. `kept: false` when it was judged before. */
   rawKept?: { id: string };
+  /** The connection the delivery was kept for (null: none, or the module's install). */
+  credentialsId?: string | null;
 }
 
 /** The row a door keeps before any version reads the delivery. */
@@ -46,6 +48,8 @@ export interface RawDelivery {
   receivedAt: string;
   source: KeepDelivery['delivery']['source'];
   request: unknown;
+  /** The connection it came for; null for a module's install, or none. */
+  credentialsId: string | null;
 }
 
 export interface PlatformDeliveryRowStore extends DeliveryRowStore {
@@ -254,11 +258,11 @@ export function deliveryRowStore(owner: { host: Host; teamId: string }): Platfor
                 where id = ${input.rawKept.id}::uuid and team_id = ${owner.teamId}::uuid and judged_at is null
                 returning id::text as id`.execute(trx)
             : await sql<{ id: string }>`
-                insert into automations.delivery (id, team_id, subscription_id, external_id, received_at, source, inline, replay_of, events, event_count, request, judged_at)
+                insert into automations.delivery (id, team_id, subscription_id, external_id, received_at, source, inline, replay_of, events, event_count, request, judged_at, credentials_id)
                 values (${delivery.id}::uuid, ${owner.teamId}::uuid, ${subscriptionId}::text, ${delivery.externalId ?? null}::text,
                         ${delivery.receivedAt}::timestamptz, ${delivery.source}::text, ${delivery.inline}::bool, ${delivery.replayOf ?? null}::uuid,
                         ${JSON.stringify(delivery.events)}::text::jsonb, ${delivery.events.length}::int,
-                        ${delivery.request === undefined ? null : JSON.stringify(delivery.request)}::text::jsonb, now())
+                        ${delivery.request === undefined ? null : JSON.stringify(delivery.request)}::text::jsonb, now(), ${input.credentialsId ?? null}::uuid)
                 on conflict do nothing returning id::text as id`.execute(trx);
         if (rows.length === 0) return null;
         if ('checkpoint' in input) await saveCheckpointIn(trx, { teamId: owner.teamId, subscriptionId, checkpoint: input.checkpoint });
@@ -296,9 +300,9 @@ export function deliveryRowStore(owner: { host: Host; teamId: string }): Platfor
               and received_at < now() - interval '1 day'`.execute(trx);
         }
         const { rows } = await sql<{ id: string; received_at: Date }>`
-          insert into automations.delivery (id, team_id, subscription_id, external_id, received_at, source, inline, events, event_count, request)
+          insert into automations.delivery (id, team_id, subscription_id, external_id, received_at, source, inline, events, event_count, request, credentials_id)
           values (${delivery.id}::uuid, ${owner.teamId}::uuid, ${delivery.subscriptionId}::text, ${delivery.externalId}::text,
-                  clock_timestamp(), ${delivery.source}::text, false, '[]'::jsonb, 0, ${JSON.stringify(delivery.request)}::text::jsonb)
+                  clock_timestamp(), ${delivery.source}::text, false, '[]'::jsonb, 0, ${JSON.stringify(delivery.request)}::text::jsonb, ${delivery.credentialsId}::uuid)
           on conflict do nothing returning id::text as id, received_at`.execute(trx);
         const first = rows[0];
         if (first === undefined) {

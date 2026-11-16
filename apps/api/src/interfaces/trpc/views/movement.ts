@@ -75,6 +75,7 @@ import {
 } from '../../../services/translation_graph/movement/provision';
 import {
   getMovementRunStatus,
+  noSuchEvent,
   nothingToRun,
   runMovementAsync,
   runWithEvent,
@@ -119,6 +120,7 @@ import { reportedFailureReason } from '../../../services/translation_graph/runs/
 import { UserService } from '../../../services/user';
 import { movementEventsImpl, type MovementEventItem } from '../../../services/inbound/arrival_ledger';
 import { userProcedure as sharedUserProcedure } from '../procedures';
+import { deliveryUnseen } from '../../delivery_access';
 import { EXEMPT, USE_CONNECTION, decidesEach, readableAmong, seenAmong, unseen, type Decision } from '../../access_route';
 import { cannotChange } from '../access';
 import { Whose } from '../../../services/access/whose';
@@ -829,6 +831,7 @@ const movementRouter = (procedure: typeof trpc.procedure) => {
       .mutation(async ({ input }): Promise<RunWithEventStarted | MovementRunNowFailure> => {
         if (await cannotChange(input.id)) return nothingToRun({ movementId: input.id });
         const { user } = currentContext();
+        if (await deliveryUnseen({ teamId: user.teamId, deliveryId: input.deliveryId })) return noSuchEvent(input.deliveryId);
         return runWithEvent({
           teamId: user.teamId,
           automationId: input.id,
