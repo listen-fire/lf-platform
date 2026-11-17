@@ -20,6 +20,7 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import { sql } from 'kysely';
 import { z } from 'zod';
+import { WireArrival } from 'engine-contracts';
 import { logger } from 'movement-engine/public/log';
 import type { DeliverySource, NewWorkRow } from 'movement-engine/public/run-host';
 import {
@@ -54,7 +55,7 @@ import { dispatchWorkKey } from '../translation_graph/triggers/dispatch_event';
 import { storeTriggerEvent } from '../translation_graph/triggers/event_store';
 import { recordMovementFailureIssue } from '../translation_graph/movement/issues';
 import { mapRecordingTriggerType } from '../translation_graph/triggers/router';
-import { keptPage, keptPageSchema, readKeptRequest, type KeptRequest } from './captured_request';
+import { keptPage, readKeptRequest, type KeptRequest } from './captured_request';
 import { unnarrowed } from './listen_edge';
 import { anyCarriedPin, carriedEdgeKeysOf, carriedListens, kindsOf, type CarriedListen } from './carried_listens';
 import { armCarriedForArrivals } from './listen_resolve';
@@ -405,37 +406,49 @@ export async function judgeCarriedPage(input: {
   return fresh;
 }
 
+/** A carried version's page, read as this release's arrivals, as every reader
+ *  of a kept page reads it (the arrival ledger, why-didn't-this-fire, the
+ *  request view). 0.15's arrival is this release's with one member more, who
+ *  acted (`actor`): none of those readers interprets it, and 0.15's own judge
+ *  reads it again on a replay, so a member this release does not name is kept,
+ *  not dropped. A page in any other shape is refused here, so its poll keeps
+ *  nothing and is tried again. */
+const [arrived, gone] = WireArrival.options;
+const carriedPageSchema = z.array(z.union([arrived.loose(), gone.loose()]));
+
 /** A page a carried poll answered, kept as the current version's poll keeps its
  *  own (listen_door.ts `deliverArrivals`): a delivery of the poll's subscription
  *  holding the page, which its runs name, and which a replay or a run with one
- *  of its events judges again. Its arrivals are not logged as a current page's
- *  are: they are in its version's shape, not this one's. `stableKey` names the
- *  page, so a page polled again from the same cursor is kept once: answers null
- *  then, as it was judged with its first keep. */
+ *  of its events judges again. Like a current poll's, it is named by no
+ *  external id: a page polled again is a delivery of its own, and what fires
+ *  once is each receipt. Its arrivals are not logged as a current page's are,
+ *  which would wake this release's waits: a carried poll never has. */
 export async function keepCarriedPage(input: {
   teamId: TeamId;
   adapterType: string;
   credentialsId: string | null;
   subscriptionId: string;
   page: readonly unknown[];
-  stableKey: string;
-}): Promise<string | null> {
+}): Promise<string> {
+  const arrivals = carriedPageSchema.safeParse(input.page);
+  if (!arrivals.success) throw new Error(`${input.adapterType}: a carried poll's page is not one this release reads as arrivals: ${arrivals.error.message}`);
   const id = randomUUID();
   const { kept } = await deliveryRowStore({ host: 'platform', teamId: input.teamId }).keepDelivery({
     subscriptionId: input.subscriptionId,
     credentialsId: input.credentialsId,
     delivery: {
       id,
-      externalId: input.stableKey,
+      externalId: null,
       receivedAt: new Date().toISOString(),
       source: 'poll',
       inline: false,
       events: [],
-      request: keptPage({ adapterType: input.adapterType, credentialsId: input.credentialsId, arrivals: keptPageSchema.shape.arrivals.parse(input.page) }),
+      request: keptPage({ adapterType: input.adapterType, credentialsId: input.credentialsId, arrivals: arrivals.data }),
     },
     work: [],
   });
-  return kept ? id : null;
+  if (!kept) throw new Error(`a carried poll's page was not kept as delivery ${id}, which names no external id`);
+  return id;
 }
 
 /** Whether a listen hears a delivery kept for `credentialsId` (null: the

@@ -10,7 +10,16 @@
 //   - a replay of one reruns it through 0.15's own reading, once, and run with
 //     this event runs it on its pin;
 //   - a poll that fails after its page was kept keeps none of it, and a page
-//     polled again is kept once and fires once.
+//     polled again fires nothing twice: its receipts are kept once, each
+//     named by the cursor polled from and the arrival's own key;
+//   - a page polled again from the same cursor, with an item the first
+//     lacked, fires that item once (a current poll names its page by no
+//     external id either, so nothing drops the page whole);
+//   - two carried listens sharing one poll each fire once from its one
+//     delivery, both listed with it, and why-didn't-this-fire judges it for
+//     each by 0.15's own judge;
+//   - a carried page is kept as this release reads arrivals, keeping what
+//     0.15 adds to them, and one in another shape is refused.
 
 import type { AddressInfo } from 'node:net';
 import { createServer, type Server } from 'node:http';
@@ -45,6 +54,7 @@ import { automationsUrl, recordSystemEvent } from '../../translation_graph/adapt
 import { pollEdgeHandler, pollSubscriptionId, sharedPolls, type SharedPoll } from '../../poll_source/worker';
 import * as carriedDelivery from '../carried_delivery';
 import { movementEventsImpl } from '../arrival_ledger';
+import { explainDeliveryArrival } from '../explain_arrival';
 import { replayThroughListen } from '../listen_replay';
 
 /** Project A's schedule: one tick a day, so a cursor a day old misses one. */
@@ -121,8 +131,18 @@ const deliveriesOf = (poll: SharedPoll) =>
     .orderBy('received_at')
     .execute();
 
+/** Whether a receipt is of the `Release Applied` of `version`: a carried poll's
+ *  receipt is named by the cursor its page was polled from and the arrival's
+ *  own key (its edge, record, identity and version). */
+const ofRelease = (version: string) => (receipt: { eventId: string | null }) => receipt.eventId?.endsWith(`:Events::release_applied:${version}:`) === true;
+
 const receiptsOf = (triggerId: TriggerId) =>
-  getAutomationsQb(['trigger_event']).selectFrom('trigger_event').where('trigger_id', '=', triggerId).select(['status', 'delivery_id as deliveryId']).orderBy('created_at').execute();
+  getAutomationsQb(['trigger_event'])
+    .selectFrom('trigger_event')
+    .where('trigger_id', '=', triggerId)
+    .select(['status', 'delivery_id as deliveryId', 'external_event_id as eventId'])
+    .orderBy('created_at')
+    .execute();
 
 const runsOf = (triggerId: TriggerId) =>
   getAutomationsQb(['trigger_run', 'movement_version'])
@@ -253,15 +273,109 @@ describe('a carried poll keeps its page as a delivery, as a current one does (re
     await drainAll();
     const kept = await deliveriesOf(system.poll);
     expect(kept).toHaveLength(deliveriesBefore + 1);
-    expect(await receiptsOf(system.triggerId)).toHaveLength(receiptsBefore + 1);
+    const receipts = await receiptsOf(system.triggerId);
+    expect(receipts).toHaveLength(receiptsBefore + 1);
+    expect(receipts.filter(ofRelease('0.16.2'))).toEqual([expect.objectContaining({ deliveryId: kept.at(-1)?.id })]);
     const runs = (await runsOf(system.triggerId)).length;
 
-    // Polled again from the cursor it was polled from: the same page.
+    // Polled again from the cursor it was polled from: the same page, kept
+    // again as a current poll keeps every page it judges, and judged again.
+    // What fires once is the receipt, kept once under its name.
     await keepCursor(system.poll, from);
     await pollOnce(system.poll);
     await drainAll();
-    expect(await deliveriesOf(system.poll)).toEqual(kept);
-    expect(await receiptsOf(system.triggerId)).toHaveLength(receiptsBefore + 1);
+    expect(await deliveriesOf(system.poll)).toHaveLength(kept.length + 1);
+    expect(await receiptsOf(system.triggerId)).toEqual(receipts);
     expect(await runsOf(system.triggerId)).toHaveLength(runs);
+  });
+
+  it('a page polled again from the cursor it was polled from fires the item the first page lacked, once', async () => {
+    const from = await cursorOf(system.poll);
+    const deliveriesBefore = (await deliveriesOf(system.poll)).length;
+    await released('0.16.3', minutesAgo(3));
+    await pollOnce(system.poll);
+    await drainAll();
+    // Back where it was polled from, as a module leaves it that answers the
+    // cursor it was asked from, or none: its next page is polled from it again,
+    // and holds what the first held and more.
+    await keepCursor(system.poll, from);
+    await released('0.16.4', minutesAgo(2));
+    await pollOnce(system.poll);
+    await drainAll();
+
+    const receipts = await receiptsOf(system.triggerId);
+    expect(receipts.filter(ofRelease('0.16.4'))).toHaveLength(1);
+    const deliveries = (await deliveriesOf(system.poll)).slice(deliveriesBefore).map((delivery) => delivery.id);
+    expect(deliveries).toHaveLength(2);
+    const [third, fourth] = deliveries;
+    expect(receipts.filter(ofRelease('0.16.3'))).toEqual([expect.objectContaining({ deliveryId: third })]);
+    expect(receipts.filter(ofRelease('0.16.4'))).toEqual([expect.objectContaining({ deliveryId: fourth })]);
+    const runs = await runsOf(system.triggerId);
+    expect(runs.filter((run) => run.deliveryId === third || run.deliveryId === fourth)).toEqual([
+      expect.objectContaining({ status: 'success', pin: '0.15.3', deliveryId: third }),
+      expect.objectContaining({ status: 'success', pin: '0.15.3', deliveryId: fourth }),
+    ]);
+    expect(await cursorOf(system.poll)).not.toEqual(from);
+  });
+
+  it("two carried listens sharing one poll each fire once from its one delivery, both listed with it; why-didn't-this-fire judges it for each by 0.15's judge", async () => {
+    const twin = await automation015('releases-too', SYSTEM_015);
+    expect(twin.poll.digest).toBe(system.poll.digest);
+    const from = await cursorOf(system.poll);
+    const deliveriesBefore = (await deliveriesOf(system.poll)).length;
+    await released('0.16.5', minutesAgo(1));
+
+    await pollOnce(system.poll);
+    await drainAll();
+    const deliveries = await deliveriesOf(system.poll);
+    expect(deliveries).toHaveLength(deliveriesBefore + 1);
+    const deliveryId = deliveries.at(-1)!.id;
+    for (const { movementId, triggerId } of [system, twin]) {
+      expect((await receiptsOf(triggerId)).filter(ofRelease('0.16.5'))).toEqual([expect.objectContaining({ deliveryId })]);
+      const runs = (await runsOf(triggerId)).filter((run) => run.deliveryId === deliveryId);
+      expect(runs).toEqual([expect.objectContaining({ status: 'success', pin: '0.15.3' })]);
+      expect((await movementEventsImpl({ teamId, movementId })).filter((event) => event.deliveryId === deliveryId)).toEqual([
+        expect.objectContaining({ status: 'ran', triggerId, arrivalIndex: 0 }),
+      ]);
+      expect((await restArrivals(movementId)).filter((arrival) => arrival['deliveryId'] === deliveryId)).toEqual([
+        expect.objectContaining({ listen: triggerId, runId: runs[0]?.id, arrivalIndex: 0 }),
+      ]);
+    }
+
+    // Polled again from where it was polled: each listen's receipt is kept once.
+    const receipts = [await receiptsOf(system.triggerId), await receiptsOf(twin.triggerId)];
+    await keepCursor(system.poll, from);
+    await pollOnce(system.poll);
+    await drainAll();
+    expect([await receiptsOf(system.triggerId), await receiptsOf(twin.triggerId)]).toEqual(receipts);
+
+    const explained = await runWithPrincipal(asAdmin(), () => explainDeliveryArrival({ teamId, deliveryId, arrivalIndex: 0 }));
+    if (!explained.ok) throw new Error(explained.errors.join('; '));
+    expect(explained).toEqual(expect.objectContaining({ deliveryId, arrivalIndex: 0, edge: 'Events' }));
+    expect([...explained.listens].sort((a, b) => a.listen.localeCompare(b.listen))).toEqual(
+      [
+        { automationId: system.movementId, automationName: 'releases', listen: system.triggerId, verdict: 'fires', hostAnswers: { used: false } },
+        { automationId: twin.movementId, automationName: 'releases-too', listen: twin.triggerId, verdict: 'fires', hostAnswers: { used: false } },
+      ].sort((a, b) => a.listen.localeCompare(b.listen)),
+    );
+  });
+
+  it("a carried page is kept as this release reads arrivals, with the member 0.15 adds (who acted); one this release cannot read is refused, and nothing is kept", async () => {
+    const [kept] = (await deliveriesOf(system.poll)).slice(-1);
+    const { rows } = await sql<{ request: unknown }>`select request from automations.delivery where id = ${kept?.id}::uuid`.execute(getAutomationsQb(['delivery']));
+    const page = z.object({ arrivals: z.array(z.record(z.string(), z.unknown())).min(1) }).parse(rows[0]?.request);
+    const actor = { identifier: 'ada@example.com', scheme: 'email' };
+    const subscriptionId = pollSubscriptionId(system.poll.digest);
+    const deliveriesBefore = (await deliveriesOf(system.poll)).length;
+
+    const id = await carriedDelivery.keepCarriedPage({ teamId, adapterType: 'system', credentialsId: null, subscriptionId, page: page.arrivals.map((arrival) => ({ ...arrival, actor })) });
+    const { rows: keptRows } = await sql<{ request: unknown }>`select request from automations.delivery where id = ${id}::uuid`.execute(getAutomationsQb(['delivery']));
+    expect(keptRows[0]?.request).toEqual({ adapter: 'system', arrivals: page.arrivals.map((arrival) => ({ ...arrival, actor })) });
+
+    const unread = [{ edge: 'Events', identity: 'release_applied:0.16.7', landing: { fields: 'not a record' } }];
+    await expect(carriedDelivery.keepCarriedPage({ teamId, adapterType: 'system', credentialsId: null, subscriptionId, page: unread })).rejects.toThrow(
+      "system: a carried poll's page is not one this release reads as arrivals",
+    );
+    expect(await deliveriesOf(system.poll)).toHaveLength(deliveriesBefore + 1);
   });
 });

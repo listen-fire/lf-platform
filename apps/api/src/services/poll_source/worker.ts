@@ -331,10 +331,12 @@ async function pollCarried(poll: SharedPoll): Promise<{ arrivals: number; armed:
     if (listens.length === 0 || !isDeepStrictEqual(await lockedCursorOf(key.teamId, subscriptionId), before)) return false;
     if (judging) {
       const answered = { teamId: key.teamId, adapterType: key.adapterType, credentialsId: key.credentialsId, page: polled.page };
-      // The cursor it was polled from names the page: polled again from it, it is the same page.
+      const deliveryId = await keepCarriedPage({ ...answered, subscriptionId });
+      // A receipt of an event with no id of its own is named by the cursor the
+      // page was polled from and the arrival's own key: polled again from it,
+      // an arrival fires once, and one the earlier page lacked fires.
       const stableKey = `${subscriptionId}:${createHash('sha256').update(JSON.stringify(before.cursor ?? null)).digest('hex').slice(0, 16)}`;
-      const deliveryId = await keepCarriedPage({ ...answered, subscriptionId, stableKey });
-      if (deliveryId !== null) await judgeCarriedPage({ ...answered, stableKey, listens, deliveryId });
+      await judgeCarriedPage({ ...answered, stableKey, listens, deliveryId });
     }
     await keepCursor(key.teamId, subscriptionId, polled.cursor);
     return true;
