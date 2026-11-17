@@ -191,6 +191,30 @@ describe('pollSystemEvents', () => {
     expect(next.arrivals.map((a) => [field(a, 'Kind'), field(a, 'Version')])).toEqual([['Release Applied', '0.13.0']]);
   });
 
+  it('two releases of one language version are two events, each named by its tag, and the mark moves past both', async () => {
+    const releases: Release[] = [];
+    const host = records({ releases });
+    const first = await pollSystemEvents(host, { edge: 'Events' }, SETTINGS, T0);
+    releases.push({ version: '0.16.0', tag: 'v0.16.1', at: at(5) }, { version: '0.16.0', tag: 'v0.16.2', at: at(8) });
+    const next = await pollSystemEvents(host, { edge: 'Events', cursor: first.cursor }, SETTINGS, T0 + 60_000);
+    expect(next.arrivals.map((a) => [Reflect.get(a, 'identity'), field(a, 'Version'), field(a, 'Reason')])).toEqual([
+      ['release_applied:v0.16.1', '0.16.0', 'release v0.16.1 is running, on language 0.16.0'],
+      ['release_applied:v0.16.2', '0.16.0', 'release v0.16.2 is running, on language 0.16.0'],
+    ]);
+    expect((next.cursor as SystemCursor).releases).toEqual({ at: at(8), version: '0.16.0' });
+    const again = await pollSystemEvents(host, { edge: 'Events', cursor: next.cursor }, SETTINGS, T0 + 120_000);
+    expect(again.arrivals).toEqual([]);
+  });
+
+  it('a release the host kept no tag for is named by its language version, as before', async () => {
+    const releases: Release[] = [];
+    const host = records({ releases });
+    const first = await pollSystemEvents(host, { edge: 'Events' }, SETTINGS, T0);
+    releases.push({ version: '0.15.9', at: at(5) });
+    const next = await pollSystemEvents(host, { edge: 'Events', cursor: first.cursor }, SETTINGS, T0 + 60_000);
+    expect(next.arrivals.map((a) => [Reflect.get(a, 'identity'), field(a, 'Reason')])).toEqual([['release_applied:0.15.9', 'release 0.15.9 is running']]);
+  });
+
   it('a Run Failed event links to the failed runs of its program; a run the host links itself keeps its link', async () => {
     const facts = { failed: [] as SettledRun[] };
     const base = { ...records(facts), webBaseUrl: async () => 'https://app.example/' };

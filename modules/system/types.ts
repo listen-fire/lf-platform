@@ -59,7 +59,7 @@ export const RELEASE_APPLIED: SystemEventKind = {
   name: 'Release Applied',
   id: 'release_applied',
   description:
-    'A new release is running. `Version` is the language version it runs, which on a hosted platform is not the platform\'s own release number. Not about one program: `Automation` and `Run Id` are empty.',
+    'A new release is running. `Version` is the language version it runs, which on a hosted platform is not the platform\'s own release number; `Reason` names the platform\'s release tag as well when the host keeps one ("release v0.16.2 is running, on language 0.16.0"). Two releases of one language version are two events. Not about one program: `Automation` and `Run Id` are empty.',
 };
 
 export const WAIT_LOST_ITS_RECORD: SystemEventKind = {

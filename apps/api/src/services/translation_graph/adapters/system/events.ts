@@ -56,6 +56,9 @@ export interface SystemEventPayload {
   runId: string;
   /** Empty when the event concerns no release. */
   version: string;
+  /** The platform release's tag, on a Release Applied event. Absent on rows
+   *  kept before it was recorded, and on every other kind. */
+  release?: string;
   reason: string;
   url: string;
   /** ISO 8601. */
@@ -67,6 +70,7 @@ const storedPayload = z.object({
   automationId: z.string(),
   runId: z.string(),
   version: z.string(),
+  release: z.string().optional(),
   reason: z.string(),
   url: z.string(),
   at: z.string(),
@@ -317,7 +321,7 @@ async function releases(teamId: TeamId, input: { after: ReleaseMark; limit: numb
     after: { ...input.after, id: input.after.version },
     limit: input.limit,
   });
-  return events.map(({ payload, at }) => ({ version: payload.version, at }));
+  return events.map(({ payload, at }) => ({ version: payload.version, ...(payload.release !== undefined ? { tag: payload.release } : {}), at }));
 }
 
 // ── Program notices the deploy check leaves ──────────────────────────────────

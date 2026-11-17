@@ -108,9 +108,14 @@ export interface UnjudgedArrival {
   attempt: number;
 }
 
-/** A release the host first ran under, and when. */
+/** A release the host first ran under, and when. `version` is the language
+ *  version it runs; `tag` is the host's own name for the release, which two
+ *  releases of one language version do not share. A host that kept no tag
+ *  (rows from before it did) leaves it out, and the release is named by its
+ *  version alone. */
 export interface Release {
   version: string;
+  tag?: string;
   at: string;
 }
 

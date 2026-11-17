@@ -140,7 +140,7 @@ function fakeStore(input: {
 }) {
   const upgradeDiagnostics = new Map<string, AuthoringDiagnostic[]>();
   const validity = new Map<string, LanguageVersion>();
-  const events: Array<{ teamId: string; kind: string; reason: string; version: string }> = [];
+  const events: Array<{ teamId: string; kind: string; reason: string; version: string; release?: string }> = [];
   const runs: Array<{ tag: string; languageRelease: string; summary: DeployCheckSummary }> = [];
   const validations: Array<Parameters<ValidateUnder>[0]> = [];
   const unprovisioned: string[] = [];
@@ -166,7 +166,7 @@ function fakeStore(input: {
       upgradeDiagnostics.set(m.id, diagnostics);
     },
     emit: async ({ teamId, kind, payload }) => {
-      events.push({ teamId, kind: kind.id, reason: payload.reason, version: payload.version });
+      events.push({ teamId, kind: kind.id, reason: payload.reason, version: payload.version, ...(payload.release !== undefined ? { release: payload.release } : {}) });
     },
     unprovision: async (m) => {
       unprovisioned.push(m.id);
@@ -341,6 +341,7 @@ describe('the deploy check', () => {
     const applied = store.events.filter((e) => e.kind === RELEASE_APPLIED.id);
     expect(applied.map((e) => e.teamId)).toEqual(['team-1', 'team-2']);
     expect(applied[1]?.reason).toContain('Release v0.8.0 applied');
+    expect(applied.map((e) => e.release)).toEqual(['v0.8.0', 'v0.8.0']);
     expect(applied[1]?.reason).toContain(`Clean under ${CUR}, upgraded when you ask: 1`);
     expect(applied[1]?.reason).toContain('Not clean under it: 1');
   });

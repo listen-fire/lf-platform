@@ -538,6 +538,7 @@ export async function runDeployCheck(deps: DeployCheckDeps): Promise<DeployCheck
         automationId: '',
         runId: '',
         version: summary.current.name,
+        release: release.tag,
         reason: releaseAppliedReason(release.tag, current, counts, stopped),
         url: automationsUrl(),
         at,
