@@ -10,7 +10,9 @@
 
 import { randomBytes, randomUUID } from 'node:crypto';
 
-const deliverArrivalsMock = jest.fn();
+// What the door answers for a kept delivery: the settle names it to a carried
+// version's runs.
+const deliverArrivalsMock = jest.fn().mockResolvedValue({ kept: { kept: true, arrivalMark: 1 }, deliveryId: 'kept-1', fires: [] });
 const notifyWorkMock = jest.fn();
 jest.mock('../../inbound/listen_door', () => ({
   ...jest.requireActual('../../inbound/listen_door'),
