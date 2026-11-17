@@ -67,12 +67,15 @@ async function released(teamId: TeamId, input: { tag: string; version: string; a
   });
 }
 
-async function firedFor(teamId: TeamId, triggerId: TriggerId): Promise<unknown[]> {
+/** The identities fired for the listen, sorted: the work rows come back in no order. */
+async function firedFor(teamId: TeamId, triggerId: TriggerId): Promise<string[]> {
   const rows = await getAutomationsQb(['work']).selectFrom('work').where('team_id', '=', teamId).where('kind', '=', 'fire_event').select('payload').execute();
-  return rows.flatMap(({ payload }) => {
-    const fire = fireRowSchema.parse(payload);
-    return fire.triggerId === triggerId ? [fire.arrival.identity] : [];
-  });
+  return rows
+    .flatMap(({ payload }) => {
+      const fire = fireRowSchema.parse(payload);
+      return fire.triggerId === triggerId ? [String(fire.arrival.identity)] : [];
+    })
+    .sort();
 }
 
 async function pollOnce(teamId: TeamId, triggerId: TriggerId): Promise<void> {
