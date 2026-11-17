@@ -257,8 +257,7 @@ export async function pollSystemEvents(records: SystemRecords, input: PollEdgeIn
     if (last !== undefined) next.releases = movedTo(previous.releases, { at: last.at, version: last.version });
     for (const release of settled) {
       // Keyed by the tag, not the language version: two releases of one
-      // version are two events, or a listen's receipt for the first would
-      // swallow the second.
+      // version are two events, and a run names the release it heard.
       const named = release.tag ?? release.version;
       const reason = release.tag === undefined ? `release ${release.version} is running` : `release ${release.tag} is running, on language ${release.version}`;
       arrivals.push(event({ kind: RELEASE_APPLIED, id: `${RELEASE_APPLIED.id}:${named}`, at: release.at, fields: { Version: release.version, Reason: reason }, taken: takenApplied }));
