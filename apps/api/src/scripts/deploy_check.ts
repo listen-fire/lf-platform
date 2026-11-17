@@ -97,6 +97,9 @@ export function renderSummary(summary: DeployCheckSummary): string {
     }
   }
   if (summary.automations.length === 0) lines.push('  No saved automations.');
+  if (summary.subscriptionSync !== undefined) {
+    lines.push(`  Queued the release's sync of listen subscriptions, which the api runs once it is up: work ${summary.subscriptionSync.workKey}`);
+  }
   return lines.join('\n');
 }
 

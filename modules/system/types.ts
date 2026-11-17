@@ -58,7 +58,8 @@ export const DEPRECATED_VERSION: SystemEventKind = {
 export const RELEASE_APPLIED: SystemEventKind = {
   name: 'Release Applied',
   id: 'release_applied',
-  description: 'A new release is running. `Version` names it. Not about one program: `Automation` and `Run Id` are empty.',
+  description:
+    'A new release is running. `Version` is the language version it runs, which on a hosted platform is not the platform\'s own release number. Not about one program: `Automation` and `Run Id` are empty.',
 };
 
 export const WAIT_LOST_ITS_RECORD: SystemEventKind = {

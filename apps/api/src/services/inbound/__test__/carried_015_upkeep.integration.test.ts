@@ -36,7 +36,8 @@ import type { ExternalServiceCredentialsId } from '../../../generated/kysely/aut
 import ExternalServiceType from '../../../generated/kysely/automations/ExternalServiceType';
 import { encryptToken } from '../../../lib/credentials';
 import { getAutomationsQb, getCoreQb } from '../../../lib/kysely';
-import { askIdSchema } from '../../asks/store';
+import { askIdSchema, type AskRecord } from '../../asks/store';
+import { deliverSettle } from '../../asks/in_process_notifier';
 import { cleanupTeam } from '../../../test/harness/cleanup';
 import { insertTestListen, takenEquals, testListenConfig } from '../../../test/harness/listens';
 import { ProvisioningService } from '../../provisioning';
@@ -420,6 +421,45 @@ describe("a 0.15 listen fires through 0.15's own module and judge, however its e
 
       expect(await delivered({ adapterType: 'ask', arrivals: [arrival], externalId: `answered:${id}` })).toEqual({ fires: [now], carried: 1 });
       expect(await receiptsOf(old)).toEqual([{ status: 'received' }]);
+      await clearWork();
+    });
+
+    it("an ask's settle told by its own door: 0.15's receipt names the delivery the door kept, as 0.16's run does", async () => {
+      const id = askIdSchema.parse(randomUUID());
+      const arrival = responseArrival({ id, family: 'Check', answer: true, state: 'answered' });
+      const to = arrival.landing.recordType;
+      const old = await insert015Listen({ adapterType: 'ask', edge: arrival.edge, ...(to !== undefined ? { to } : {}), delivery: 'connection', movement: 'tick' });
+      const now = await insert016Listen({ adapterType: 'ask', edge: arrival.edge, ...(to !== undefined ? { to } : {}), delivery: 'connection' });
+      const settled: AskRecord = {
+        id,
+        teamId,
+        family: 'Check',
+        answerType: null,
+        prompt: 'q',
+        detail: null,
+        options: null,
+        rows: null,
+        state: 'answered',
+        answer: true,
+        token: 'ask_t',
+        url: 'http://example.test/api/asks/ask_t',
+        tokenExpiresAt: new Date(),
+        provenance: {},
+        callbackUrl: null,
+        createdAt: new Date(),
+        answeredAt: new Date(),
+        expiredAt: null,
+      };
+
+      await deliverSettle(settled);
+      const kept = await getAutomationsQb(['delivery']).selectFrom('delivery').where('team_id', '=', teamId).where('external_id', '=', `answered:${id}`).select('id').executeTakeFirstOrThrow();
+      expect(await firesFor()).toContain(now);
+      expect(await getAutomationsQb(['trigger_event']).selectFrom('trigger_event').where('trigger_id', '=', old).select(['status', 'delivery_id as deliveryId']).execute()).toEqual([
+        { status: 'received', deliveryId: kept.id },
+      ]);
+      // Told again, it keeps nothing twice.
+      await deliverSettle(settled);
+      expect(await receiptsOf(old)).toHaveLength(1);
       await clearWork();
     });
 

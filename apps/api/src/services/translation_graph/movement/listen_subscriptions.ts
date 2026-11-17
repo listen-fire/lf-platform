@@ -892,8 +892,10 @@ const releaseSyncSchema = z.object({ release: z.string() });
  *  release: a release that versions a narrowed key renames its subscription
  *  (`takeOverEarlierRows`), and nothing else syncs a team until someone saves.
  *  The api's drain runs it once it is up; the release before never claims it. */
-export async function queueListenSubscriptionSyncAfterRelease(input: { release: string }): Promise<void> {
-  await enqueueWork({ kind: RELEASE_SYNC, key: `${RELEASE_SYNC}:${input.release}`, payload: { release: input.release } });
+export async function queueListenSubscriptionSyncAfterRelease(input: { release: string }): Promise<{ workKey: string }> {
+  const workKey = `${RELEASE_SYNC}:${input.release}`;
+  await enqueueWork({ kind: RELEASE_SYNC, key: workKey, payload: { release: input.release } });
+  return { workKey };
 }
 
 /** Every team the platform listens for synced once: each with a listen, and

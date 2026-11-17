@@ -176,6 +176,7 @@ function fakeStore(input: {
     },
     queueSubscriptionSync: async ({ tag }) => {
       subscriptionSyncs.push(tag);
+      return { workKey: `listen_subscription_release_sync:${tag}` };
     },
     now: () => new Date('2026-09-29T12:00:00.000Z'),
   };
@@ -314,7 +315,8 @@ describe('the deploy check', () => {
       verdicts: { warns: { [CUR]: [meaningChanged('changed meaning')] } },
     });
 
-    expect(await runDeployCheck(store.deps)).not.toBeNull();
+    // The first records the sync it queued, which its output names.
+    expect(await runDeployCheck(store.deps)).toEqual(expect.objectContaining({ subscriptionSync: { workKey: 'listen_subscription_release_sync:v0.8.0' } }));
     const eventsAfterFirst = store.events.length;
 
     expect(await runDeployCheck(store.deps)).toBeNull();

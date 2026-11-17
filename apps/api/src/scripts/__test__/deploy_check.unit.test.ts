@@ -41,6 +41,24 @@ describe('renderSummary', () => {
     expect(text).toContain('On the installed language: 2');
     expect(text).not.toContain('Digest');
     expect(text).toContain('- Intake (4) — line 3: changed meaning');
+    // A summary recorded before the check recorded its sync says nothing of one.
+    expect(text).not.toContain('sync of listen subscriptions');
+  });
+
+  it("says the release's sync of listen subscriptions was queued, with its work row's key", () => {
+    const text = renderSummary({
+      release: 'v0.16.2',
+      languageRelease: 'current=0.16.0;legacy=1,2,3,4',
+      current: INSTALLED,
+      ranAt: '2026-11-17T06:00:00.000Z',
+      counts: { upgradable: 0, current: 0, carried: 0, warned: 0, stopped: 0, refused: 0, unverified: 0 },
+      automations: [],
+      subscriptionSync: { workKey: 'listen_subscription_release_sync:v0.16.2' },
+    });
+
+    expect(text.split('\n').filter((line) => line.includes('sync of listen subscriptions'))).toEqual([
+      "  Queued the release's sync of listen subscriptions, which the api runs once it is up: work listen_subscription_release_sync:v0.16.2",
+    ]);
   });
 
   it('says of a paused run only what can still be done after the deploy', () => {

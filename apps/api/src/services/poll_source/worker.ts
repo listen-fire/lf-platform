@@ -14,8 +14,9 @@
 //
 // A listen pinned to a carried version is polled the same way, under keys of
 // its version's own (listen_edge.ts): its version's module answers the poll,
-// and its version's judge judges what it found (`judgePage`), each receipt
-// queued as a kept delivery's are (inbound/carried_delivery.ts).
+// what it found is kept as a delivery, as a current poll's page is, and its
+// version's judge judges it (`judgePage`), each receipt queued as a kept
+// delivery's are (inbound/carried_delivery.ts).
 //
 // A team whose engine is lf is not polled: a cloud lf polls for it. A switch
 // back to the platform forgets its cursors (`forgetPollProgress`), so the
@@ -289,16 +290,17 @@ export async function pollShared(poll: SharedPoll): Promise<{ arrivals: number; 
 }
 
 /** A carried version's key polled once by its own module: a first poll arms;
- *  a later one's page is judged by the key's listens with that version's own
- *  judge, its receipts and its cursor kept in one write, so a poll that fails
- *  before it is polled again from the same cursor. */
+ *  a later one's page is kept as a delivery, as a current poll's is, and judged
+ *  by the key's listens with that version's own judge, the delivery, its
+ *  receipts and its cursor kept in one write, so a poll that fails before it is
+ *  polled again from the same cursor. */
 async function pollCarried(poll: SharedPoll): Promise<{ arrivals: number; armed: boolean; pollAgainAt?: Date }> {
   const { key, digest } = poll;
   const [first] = poll.carried;
   if (first === undefined) return { arrivals: 0, armed: false };
   const { lane } = first;
   // Loaded when a carried key is polled: the carried run host reaches the catalog, which reaches this worker.
-  const [{ modulePlatform }, { judgeCarriedPage }] = await Promise.all([import('../translation_graph/movement/carried_run'), import('../inbound/carried_delivery')]);
+  const [{ modulePlatform }, { judgeCarriedPage, keepCarriedPage }] = await Promise.all([import('../translation_graph/movement/carried_run'), import('../inbound/carried_delivery')]);
   const subscriptionId = pollSubscriptionId(digest);
   const before = await carriedCursorOf(poll, subscriptionId);
   const polled = await lane.pollEdge(
@@ -328,15 +330,11 @@ async function pollCarried(poll: SharedPoll): Promise<{ arrivals: number; armed:
     const listens = await listensStillOn(poll);
     if (listens.length === 0 || !isDeepStrictEqual(await lockedCursorOf(key.teamId, subscriptionId), before)) return false;
     if (judging) {
-      await judgeCarriedPage({
-        teamId: key.teamId,
-        adapterType: key.adapterType,
-        credentialsId: key.credentialsId,
-        page: polled.page,
-        // The cursor it was polled from names the page: polled again from it, it is the same page.
-        stableKey: `${subscriptionId}:${createHash('sha256').update(JSON.stringify(before.cursor ?? null)).digest('hex').slice(0, 16)}`,
-        listens,
-      });
+      const answered = { teamId: key.teamId, adapterType: key.adapterType, credentialsId: key.credentialsId, page: polled.page };
+      // The cursor it was polled from names the page: polled again from it, it is the same page.
+      const stableKey = `${subscriptionId}:${createHash('sha256').update(JSON.stringify(before.cursor ?? null)).digest('hex').slice(0, 16)}`;
+      const deliveryId = await keepCarriedPage({ ...answered, subscriptionId, stableKey });
+      if (deliveryId !== null) await judgeCarriedPage({ ...answered, stableKey, listens, deliveryId });
     }
     await keepCursor(key.teamId, subscriptionId, polled.cursor);
     return true;

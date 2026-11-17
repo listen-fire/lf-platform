@@ -31,7 +31,7 @@ export async function deliverSettle(ask: AskRecord): Promise<void> {
     ask.state === 'answered'
       ? responseArrival({ id: ask.id, family: ask.family, answer: ask.answer, state: 'answered' })
       : { edge: RESPONSE_EDGE_NAME, key: ask.id, gone: true as const };
-  await deliverArrivals({
+  const delivered = await deliverArrivals({
     teamId: ask.teamId,
     delivered: { adapterType: ASK_ADAPTER_TYPE, credentialsId: null },
     subscriptionId: ASK_ADAPTER_TYPE,
@@ -40,8 +40,16 @@ export async function deliverSettle(ask: AskRecord): Promise<void> {
     arrivals: [arrival],
   });
   // A carried version's listens on `Response` judge the answer with their own
-  // judge, one receipt per listen however often the settle is told.
-  await judgeCarriedPage({ teamId: ask.teamId, adapterType: ASK_ADAPTER_TYPE, credentialsId: null, page: [arrival], stableKey: `${ask.state}:${ask.id}` });
+  // judge, one receipt per listen however often the settle is told, and their
+  // runs name the delivery it was kept as, as the current version's do.
+  await judgeCarriedPage({
+    teamId: ask.teamId,
+    adapterType: ASK_ADAPTER_TYPE,
+    credentialsId: null,
+    page: [arrival],
+    stableKey: `${ask.state}:${ask.id}`,
+    ...(delivered.kept.kept ? { deliveryId: delivered.deliveryId } : {}),
+  });
   notifyWork();
 }
 

@@ -54,7 +54,7 @@ import { dispatchWorkKey } from '../translation_graph/triggers/dispatch_event';
 import { storeTriggerEvent } from '../translation_graph/triggers/event_store';
 import { recordMovementFailureIssue } from '../translation_graph/movement/issues';
 import { mapRecordingTriggerType } from '../translation_graph/triggers/router';
-import { readKeptRequest, type KeptRequest } from './captured_request';
+import { keptPage, keptPageSchema, readKeptRequest, type KeptRequest } from './captured_request';
 import { unnarrowed } from './listen_edge';
 import { anyCarriedPin, carriedEdgeKeysOf, carriedListens, kindsOf, type CarriedListen } from './carried_listens';
 import { armCarriedForArrivals } from './listen_resolve';
@@ -403,6 +403,39 @@ export async function judgeCarriedPage(input: {
     await armCarriedForArrivals({ edges: judged.edges, listens: ofVersion });
   }
   return fresh;
+}
+
+/** A page a carried poll answered, kept as the current version's poll keeps its
+ *  own (listen_door.ts `deliverArrivals`): a delivery of the poll's subscription
+ *  holding the page, which its runs name, and which a replay or a run with one
+ *  of its events judges again. Its arrivals are not logged as a current page's
+ *  are: they are in its version's shape, not this one's. `stableKey` names the
+ *  page, so a page polled again from the same cursor is kept once: answers null
+ *  then, as it was judged with its first keep. */
+export async function keepCarriedPage(input: {
+  teamId: TeamId;
+  adapterType: string;
+  credentialsId: string | null;
+  subscriptionId: string;
+  page: readonly unknown[];
+  stableKey: string;
+}): Promise<string | null> {
+  const id = randomUUID();
+  const { kept } = await deliveryRowStore({ host: 'platform', teamId: input.teamId }).keepDelivery({
+    subscriptionId: input.subscriptionId,
+    credentialsId: input.credentialsId,
+    delivery: {
+      id,
+      externalId: input.stableKey,
+      receivedAt: new Date().toISOString(),
+      source: 'poll',
+      inline: false,
+      events: [],
+      request: keptPage({ adapterType: input.adapterType, credentialsId: input.credentialsId, arrivals: keptPageSchema.shape.arrivals.parse(input.page) }),
+    },
+    work: [],
+  });
+  return kept ? id : null;
 }
 
 /** Whether a listen hears a delivery kept for `credentialsId` (null: the

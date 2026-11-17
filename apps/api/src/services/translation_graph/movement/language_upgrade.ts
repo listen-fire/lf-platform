@@ -380,6 +380,9 @@ export interface DeployCheckSummary {
    *  names the runs paused on a question, a callback or a reply, which it
    *  cannot continue. */
   legacyStopped?: Array<{ name: string; pin: LanguageVersion; movementId: string; waitingRuns: string[]; remedy: string }>;
+  /** The release's sync of listen subscriptions this check queued: the key of
+   *  its work row. Absent on summaries recorded before v0.16.2. */
+  subscriptionSync?: { workKey: string };
 }
 
 /** The languages a platform release reads: the installed language's
@@ -434,8 +437,8 @@ export interface DeployCheckDeps {
   /** Record the run — what makes a second run on this release a no-op. */
   recordRun(input: { tag: string; languageRelease: string; summary: DeployCheckSummary }): Promise<void>;
   /** Queue the release's one sync of every team's subscriptions, which the api
-   *  runs once it is up (./listen_subscriptions.ts). */
-  queueSubscriptionSync(input: { tag: string }): Promise<void>;
+   *  runs once it is up (./listen_subscriptions.ts): answers its work row's key. */
+  queueSubscriptionSync(input: { tag: string }): Promise<{ workKey: string }>;
   now(): Date;
 }
 
@@ -464,8 +467,9 @@ export async function runDeployCheck(deps: DeployCheckDeps): Promise<DeployCheck
   if (await deps.alreadyRan({ tag: release.tag, languageRelease })) return null;
   // Before the sweep, so a check that cannot finish still leaves it queued; a
   // second check of the release queues it again only if this one recorded nothing.
+  let subscriptionSync: { workKey: string };
   try {
-    await deps.queueSubscriptionSync({ tag: release.tag });
+    subscriptionSync = await deps.queueSubscriptionSync({ tag: release.tag });
   } catch (cause) {
     throw new ReleaseSyncNotQueued({ cause });
   }
@@ -517,6 +521,7 @@ export async function runDeployCheck(deps: DeployCheckDeps): Promise<DeployCheck
     counts: countOutcomes(entries),
     automations: entries,
     ...(legacyStopped.length > 0 ? { legacyStopped } : {}),
+    subscriptionSync,
   };
 
   // One per workspace that has automations — a listener lives in a team, and
