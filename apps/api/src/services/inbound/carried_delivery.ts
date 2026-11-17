@@ -357,8 +357,9 @@ async function keepOwnRuns(input: {
 /** A page a door built, judged by each carried version with listens on its
  *  module, by its own judge, each receipt queued to start its run. Answers how
  *  many new receipts it kept: a page told again fires nothing new.
- *  `stableKey` names the page (its external id, or what the door names it
- *  by), so a page judged again keeps one receipt per arrival. `listens`: the
+ *  `stableKey` names the page (a push delivery's external id, the cursor a
+ *  poll read it from, or what the door names it by), so a page judged again
+ *  keeps one receipt per arrival. `listens`: the
  *  listens that judge it, when not every carried listen of the team on the
  *  module (a carried poll's are the listens sharing it). */
 export async function judgeCarriedPage(input: {

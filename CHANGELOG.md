@@ -17,6 +17,14 @@ versions are the git tags described in [`deploy/UPGRADING.md`](deploy/UPGRADING.
 
 <!-- add merged PRs here -->
 
+## [0.16.2] - 2026-11-17
+
+A patch on 0.16.1, with no schema change and no change to how you deploy: follow 0.16.1's order in `deploy/UPGRADING.md`.
+
+- **A carried listen's polls are listed with the automation's arrivals.** On 0.16.0 and 0.16.1, a listen pinned to 0.15 that polls (a schedule, the system events, a Gmail inbox) started its runs, but kept no delivery for the page that started them, so the arrivals list left them out and they could not be replayed. They are now kept as a current version's polls are, listed, and can be replayed or run again with their event. Runs before this release stay unlisted; the runs list still shows them.
+- **Release Applied names the platform release.** Its `Reason` reads `release v0.16.2 is running, on language 0.16.0`; it said only the language version, so a patch release read as the release before it. Each release is its own event, so two releases of one language version are two events. `Version` is still the language version. A release recorded before this one keeps the old wording.
+- The deploy check says when it has queued the release's subscription sync.
+
 ## [0.16.1] - 2026-11-16
 
 A patch on 0.16.0: an automation pinned to 0.15 keeps its listens' place across the release and across its upgrade to 0.16. Read `deploy/UPGRADING.md` before deploying: no 0.16.0 service, and no drain inside a 0.16.0 api, may still run once 0.16.1 starts.
@@ -2347,7 +2355,8 @@ Releases before v0.11 are kept one file per minor line, newest first:
 - [v0.2.x](docs/changelog/v0.2.md) (v0.2.0)
 - [v0.1.x](docs/changelog/v0.1.md) (v0.1.0 to v0.1.2)
 
-[Unreleased]: https://github.com/listen-fire/lf-platform/compare/v0.16.1...HEAD
+[Unreleased]: https://github.com/listen-fire/lf-platform/compare/v0.16.2...HEAD
+[0.16.2]: https://github.com/listen-fire/lf-platform/compare/v0.16.1...v0.16.2
 [0.16.1]: https://github.com/listen-fire/lf-platform/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/listen-fire/lf-platform/compare/v0.15.3...v0.16.0
 [0.15.3]: https://github.com/listen-fire/lf-platform/compare/v0.15.2...v0.15.3
